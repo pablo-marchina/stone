@@ -74,7 +74,6 @@ def router_for_authenticated_view(current_principal):
             }
             raw_posts = conn.execute(select(content_items.c.payload).where(
                 content_items.c.tenant_id == tenant,
-                content_items.c.origin == "synthetic_local",
             ).order_by(content_items.c.published_at.desc(), content_items.c.id.desc()).limit(8)).scalars().all()
             # Tenant scoping is explicit even on aggregates and cursor lookup.
             last_seq = conn.execute(select(func.max(domain_events.c.seq)).where(domain_events.c.tenant_id == tenant)).scalar()
@@ -89,7 +88,8 @@ def router_for_authenticated_view(current_principal):
         sanitized_events = [{key: event[key] for key in (
             "seq", "event_id", "aggregate_type", "aggregate_id", "event_type", "occurred_at")}
             for event in reversed(raw_events)]
-        return OverviewResponse(tenant_id=tenant, counts=OverviewCounts(**counts), recent_posts=posts,
+        scope = "authorized_metadata_and_synthetic" if any(p.origin != "synthetic_local" for p in posts) else "synthetic_local"
+        return OverviewResponse(tenant_id=tenant, data_scope=scope, counts=OverviewCounts(**counts), recent_posts=posts,
                                 recent_events=sanitized_events, last_event_seq=int(last_seq or 0))
 
     return router
