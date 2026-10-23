@@ -21,6 +21,7 @@ from .domain_api import dev_authorized
 from .identity import (IdentityFailure, IdentityStore, LoginRequest, SessionResponse,
                        MemberCreate, Principal, permitted)
 from .sa_store import SqlDomainStore, engine_for
+from .ingestion import IngestionStore, ConnectorError, router_for_ingestion
 from .ui import router_for_authenticated_view
 
 
@@ -38,12 +39,14 @@ def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_ht
     if initialize_schema:
         domain.initialize()  # EXPLICIT offline / test only; use a reviewed migration for deployed DB.
     identity=IdentityStore(engine)
+    ingestion=IngestionStore(engine)
     # Reuse existing validated domain endpoints but substitute trusted auth dependency.
     app=create_app(local_domain=True,dev_key="__secure_mode_never_use_as_key__123",db_path=":memory:")
     old_store=app.state.local_domain_store
     old_store.conn.close()
     app.state.local_domain_store=domain
     app.state.identity_store=identity
+    app.state.ingestion_store=ingestion
     app.state.secure_mode=True
     # First-party UI is served same-origin to avoid CORS, cookies or paid identity providers.
     # Static files carry no tenant data; all data APIs require revocable bearer sessions.
@@ -92,6 +95,14 @@ def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_ht
             media_type="application/problem+json")
 
     app.include_router(router_for_authenticated_view(current_principal))
+    app.include_router(router_for_ingestion(identity,ingestion))
+
+    @app.exception_handler(ConnectorError)
+    async def handle_connector_error(_request:Request,exc:ConnectorError):
+        return JSONResponse(status_code=exc.status,content={
+            "type":"about:blank","title":exc.code,"status":exc.status,
+            "detail":"official integration request was denied or failed", "code":exc.code},
+            media_type="application/problem+json")
 
     @app.post("/v1/auth/sessions",response_model=SessionResponse,tags=["Identity"])
     def login(request:LoginRequest):
