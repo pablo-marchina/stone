@@ -15,7 +15,7 @@ def status() -> dict:
         "gate0b": config["gate0b"],
         "global_release": config["architecture_global_release"],
         "source_operations_enabled": False,
-        "remote_repo_created": False,
+        "remote_repo_created": config["repo"].get("remote") == "REPO_GITHUB_EXISTENTE_ACESSIVEL",
         "expanded_scope_user_approved": True,
         "institutional_scope_confirmation": "UNVERIFIED",
         "financial_spend_ceiling_brl": 0,
