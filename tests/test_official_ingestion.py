@@ -91,6 +91,7 @@ def test_default_deny_and_admin_auth(tmp_path,monkeypatch):
 def test_instagram_official_normalization_and_multimodal_abstention(tmp_path,monkeypatch):
     app=setup(tmp_path)
     monkeypatch.setenv('TAPI_OFFICIAL_METADATA_READS','1')
+    monkeypatch.setenv('TAPI_ZERO_BILLING_CONFIRMED','1')
     monkeypatch.setenv('TAPI_INSTAGRAM_ACCESS_TOKEN','mocked-credentials-that-never-log')
     store=app.state.ingestion_store
     with TestClient(app) as client:
@@ -131,6 +132,7 @@ def test_instagram_official_normalization_and_multimodal_abstention(tmp_path,mon
 
 def test_youtube_missing_stats_are_unknown_and_not_zero(tmp_path,monkeypatch):
     monkeypatch.setenv('TAPI_OFFICIAL_METADATA_READS','1')
+    monkeypatch.setenv('TAPI_ZERO_BILLING_CONFIRMED','1')
     monkeypatch.setenv('TAPI_YOUTUBE_ACCESS_TOKEN','mocked-credentials-that-never-log')
     app=setup(tmp_path)
     with TestClient(app) as client:
@@ -152,6 +154,7 @@ def test_youtube_missing_stats_are_unknown_and_not_zero(tmp_path,monkeypatch):
 
 def test_provider_mismatch_prevents_all_writes(tmp_path,monkeypatch):
     monkeypatch.setenv('TAPI_OFFICIAL_METADATA_READS','1')
+    monkeypatch.setenv('TAPI_ZERO_BILLING_CONFIRMED','1')
     monkeypatch.setenv('TAPI_INSTAGRAM_ACCESS_TOKEN','mocked-credentials-that-never-log')
     app=setup(tmp_path)
     def wrong(_request):return httpx.Response(200,json={'id':'wrong','username':'hijack','followers_count':30})
@@ -168,6 +171,7 @@ def test_provider_mismatch_prevents_all_writes(tmp_path,monkeypatch):
 
 def test_grants_lease_and_secret_gates(tmp_path,monkeypatch):
     monkeypatch.setenv('TAPI_OFFICIAL_METADATA_READS','1')
+    monkeypatch.setenv('TAPI_ZERO_BILLING_CONFIRMED','1')
     monkeypatch.delenv('TAPI_INSTAGRAM_ACCESS_TOKEN',raising=False)
     app=setup(tmp_path)
     with TestClient(app) as client:
@@ -214,3 +218,17 @@ def test_official_routes_are_in_contract(tmp_path):
     spec=app.openapi()
     assert '/v1/ingestion/grants' in spec['paths']
     assert '/v1/ingestion/runs' in spec['paths']
+
+
+def test_billing_guard_fails_before_network(tmp_path,monkeypatch):
+    monkeypatch.setenv('TAPI_OFFICIAL_METADATA_READS','1')
+    monkeypatch.delenv('TAPI_ZERO_BILLING_CONFIRMED',raising=False)
+    app=setup(tmp_path)
+    with TestClient(app) as client:
+        h=bearer(client);grant(client,h,'instagram','178900')
+        r=client.post('/v1/ingestion/runs',json={'platform':'instagram',
+             'source_account_id':'178900','run_key':'requires-zero-bill'},headers=h)
+        assert r.status_code==403
+        assert r.json()['code']=='PROVIDER_ZERO_BILLING_NOT_CONFIRMED'
+        with app.state.ingestion_store.engine.connect() as db:
+            assert db.execute(select(func.count()).select_from(ingestion_runs)).scalar_one()==0
