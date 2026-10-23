@@ -122,3 +122,13 @@ database files, bearer tokens, passwords, or real third-party content.
 O modo seguro também serve `/app/`, um painel autenticado ligado ao endpoint `/v1/ui/overview` e aos eventos SSE reais. Execute o modo seguro conforme `docs/19_IDENTIDADE_PERSISTENCIA_EVENTOS.md` e abra `http://127.0.0.1:8000/app/` no computador local. Os tokens permanecem apenas em memória e todos os dados exibidos vêm do SQLite transacional local. Consulte `docs/20_FRONTEND_OPERACIONAL.md`.
 
 Validação local: `PYTHONPATH=src python -m pytest -q` e `node --test tests/frontend/*.mjs`.
+
+## Pipeline de aquisição oficial e rubrica multimodal conservadora
+
+A camada segura agora registra grants por conta, valida identidade técnica da fonte via APIs
+Meta/YouTube, normaliza metadados, aplica classificação parcial evidenciada e persiste
+registros/eventos transacionais (migração Alembic 0002). **Desligada por padrão**:
+nenhuma credencial foi configurada e nenhuma coleta externa real ocorreu.
+O adaptador opcional de quadros/OCR usa somente mídia local autorizada; áudio e
+inferência visual completa permanecem pendentes de validação.
+Detalhes, flags, limites e ressalvas de direitos: [aquisição oficial](docs/21_AQUISICAO_OFICIAL_MULTIMODAL.md).
