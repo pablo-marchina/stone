@@ -5,7 +5,7 @@
 ## Limites, conformidade e autorizações
 
 - O solicitante declarou a aprovação geral para fontes e operações, mas o uso de cada **conta e finalidade** é registrado por um administrador em `ingestion_source_grants` com referência à aprovação e validade. O registro é uma **atestação administrativa auditável, não uma assinatura ou prova legal automática**.
-- `TAPI_OFFICIAL_METADATA_READS` tem valor **desativado por padrão**. Sem `TAPI_OFFICIAL_METADATA_READS=1`, grant persistido, sessão com permissão e token correspondente em variáveis de ambiente, a leitura oficial falha antes de gerar tráfego.
+- `TAPI_OFFICIAL_METADATA_READS` tem valor **desativado por padrão**. Sem `TAPI_OFFICIAL_METADATA_READS=1`, `TAPI_ZERO_BILLING_CONFIRMED=1` (após verificação independente de ausência de cobrança no console do provedor), grant persistido, sessão com permissão e token correspondente em variáveis de ambiente, a leitura oficial falha antes de gerar tráfego.
 - A autorização de leitura de conta é checada em cada execução por uma requisição oficial. **Para YouTube, essa consulta confirma que o canal retornado corresponde ao ID solicitado, mas não comprova que o usuário OAuth é proprietário desse canal**; a legitimidade da coleta de terceiros deve continuar amparada por sua autorização registrada. No Instagram, a conta precisa ser profissional e acessível ao token conforme a API oficial.
 - **Instagram:** apenas `/{account-id}` e `/{account-id}/media` do Graph API; vídeos sem indicação `media_product_type=REELS` não são classificados automaticamente como Reels; imagens e carrosséis são tratados conforme mídia. Não há scraping, Business Discovery irrestrito ou coleta de contas pessoais.
 - **YouTube:** apenas `channels.list` e `videos.list` por IDs explicitamente autorizados; exige referência do operador identificando os vídeos como Shorts. A classificação de Shorts **não é provada somente pelo endpoint de metadados**, portanto precisa de verificação humana independente. Não há `search.list`, downloads ou captions de terceiros.
@@ -34,7 +34,7 @@ export TAPI_ALLOW_HTTP_LOOPBACK=1
 uvicorn tapi_gate0.secure_api:from_environment --factory --host 127.0.0.1 --port 8000
 ```
 
-Antes de habilitar qualquer acesso real: operador confirma direito de uso para **aquela conta e finalidade**, autenticação OAuth Meta/Google em sua própria conta, escopos concedidos e ausência de faturamento. Guarde o token num local seguro fora do repositório e configure `TAPI_INSTAGRAM_ACCESS_TOKEN` ou `TAPI_YOUTUBE_ACCESS_TOKEN` **apenas no ambiente protegido da execução**, assim como `TAPI_OFFICIAL_METADATA_READS=1`. Os testes nunca usam rede real: `httpx.MockTransport`.
+Antes de habilitar qualquer acesso real: operador confirma direito de uso para **aquela conta e finalidade**, autenticação OAuth Meta/Google em sua própria conta, escopos concedidos e ausência de faturamento. Guarde o token num local seguro fora do repositório e configure `TAPI_INSTAGRAM_ACCESS_TOKEN` ou `TAPI_YOUTUBE_ACCESS_TOKEN` **apenas no ambiente protegido da execução**, assim como `TAPI_OFFICIAL_METADATA_READS=1` e `TAPI_ZERO_BILLING_CONFIRMED=1` **somente depois de verificar no console do provedor que cobrança e overage estão impossibilitados**. A flag não fornece proteção técnica contra faturamento configurado na conta do provedor. Os testes nunca usam rede real: `httpx.MockTransport`.
 
 ## Adaptador visual offline opcional
 
