@@ -58,11 +58,15 @@ def synthetic_only(origin:Origin):
 
 
 @router.get("/domain/catalog")
-def catalog(tenant: Annotated[str,Depends(dev_authorized)]):
+def catalog(request:Request,tenant: Annotated[str,Depends(dev_authorized)]):
+    secure=bool(getattr(request.app.state,"secure_mode",False))
+    unavailable=["external_collection","publishing","paid_campaigns","crm","model_inference"]
+    if not secure: unavailable.append("production_auth")
     return {"tenant_id":tenant,"entities":DOMAIN_ENTITIES,"active_source":"synthetic_local",
             "external_actions_enabled":False,"budget_brl":0,
+            "identity_mode":"database_bearer" if secure else "local_dev_key",
             "working_operations":["creators","content","metrics","rubric","ranking","insights","creatives","lineage","events"],
-            "not_yet_operational":["external_collection","publishing","paid_campaigns","crm","production_auth","model_inference"]}
+            "not_yet_operational":unavailable}
 
 
 @router.post("/creators",response_model=Creator,status_code=status.HTTP_201_CREATED,
