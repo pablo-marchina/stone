@@ -18,3 +18,6 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+
+[tool.setuptools.package-data]
+tapi_gate0 = ["sql/*.sql"]
