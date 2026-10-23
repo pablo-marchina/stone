@@ -12,6 +12,7 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, Header, Request
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
@@ -20,6 +21,7 @@ from .domain_api import dev_authorized
 from .identity import (IdentityFailure, IdentityStore, LoginRequest, SessionResponse,
                        MemberCreate, Principal, permitted)
 from .sa_store import SqlDomainStore, engine_for
+from .ui import router_for_authenticated_view
 
 
 def _token(request:Request):
@@ -43,6 +45,11 @@ def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_ht
     app.state.local_domain_store=domain
     app.state.identity_store=identity
     app.state.secure_mode=True
+    # First-party UI is served same-origin to avoid CORS, cookies or paid identity providers.
+    # Static files carry no tenant data; all data APIs require revocable bearer sessions.
+    web_dir = Path(__file__).resolve().parent / "web"
+    if web_dir.is_dir():
+        app.mount("/app", StaticFiles(directory=web_dir, html=True), name="product-ui")
 
     @app.middleware("http")
     async def require_tls(request:Request,call_next):
@@ -53,6 +60,13 @@ def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_ht
                                     headers={"Cache-Control":"no-store"})
         response=await call_next(request)
         response.headers["Cache-Control"]="no-store"
+        response.headers["X-Content-Type-Options"]="nosniff"
+        response.headers["Referrer-Policy"]="no-referrer"
+        response.headers["X-Frame-Options"]="DENY"
+        response.headers["Content-Security-Policy"]=(
+            "default-src 'none'; script-src 'self'; style-src 'self'; "
+            "connect-src 'self'; img-src 'self' data:; font-src 'self'; "
+            "base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
         return response
     app.title="TAPI Stone — Secure Unified Domain"
     app.version="0.3.0"
@@ -76,6 +90,8 @@ def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_ht
             "detail":"authentication or authorization denied","code":exc.code},
             headers={"WWW-Authenticate":"Bearer"} if exc.status==401 else {},
             media_type="application/problem+json")
+
+    app.include_router(router_for_authenticated_view(current_principal))
 
     @app.post("/v1/auth/sessions",response_model=SessionResponse,tags=["Identity"])
     def login(request:LoginRequest):
