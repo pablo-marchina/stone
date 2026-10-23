@@ -7,7 +7,7 @@ name = "tapi-stone-gate0"
 version = "0.2.0"
 description = "Bootstrap do Gate 0 do TAPI Stone — nenhuma operação externa habilitada"
 requires-python = ">=3.11"
-dependencies = ["fastapi>=0.120,<1", "pydantic>=2.10,<3", "uvicorn>=0.30,<1", "sqlalchemy>=2.0,<3", "alembic>=1.15,<2", "argon2-cffi>=23,<26"]
+dependencies = ["fastapi>=0.120,<1", "pydantic>=2.10,<3", "uvicorn>=0.30,<1", "sqlalchemy>=2.0,<3", "alembic>=1.15,<2", "argon2-cffi>=23,<26", "httpx>=0.27,<1"]
 
 [project.optional-dependencies]
 production = ["psycopg[binary]>=3.2,<4"]
