@@ -408,209 +408,76 @@ DOMAIN_ENTITIES = (
     "conversion_event", "research_experiment", "evaluation_result", "agent_run", "domain_event",
 )
 
-# Unified-journey DTOs: specified and strictly typed, but NOT working endpoints.
-# Separate DTO declaration from runtime capability status to avoid fake readiness.
-
+# Additional canonical entities from the unified architecture, still disabled
+# until their corresponding capabilities have rights and evaluation evidence.
 class SourceUseGrant(DomainModel):
     grant_id: Id
     tenant_id: Id
     origin: Origin
     permitted_operations: list[NonBlank]
-    status: Literal["pending", "denied", "verified"] = "pending"
+    status: Literal["pending","denied","verified"] = "pending"
     approval_reference: str | None = None
-    authority_identity: str | None = None
-    permitted_purpose: str | None = None
-    retention_policy_reference: str | None = None
-
     @model_validator(mode="after")
-    def restrict_unsupported_claims(self):
-        if self.status == "verified" and not all((self.approval_reference, self.authority_identity, self.permitted_purpose, self.retention_policy_reference)):
-            raise ValueError("verified source rights require authority, scope, purpose, retention and approval")
+    def verified_has_evidence(self):
+        if self.status=="verified" and not self.approval_reference:
+            raise ValueError("source use requires verified approval")
         return self
-
-
-class AudienceSegment(DomainModel):
-    segment_id: Id
-    tenant_id: Id
-    label: NonBlank
-    selection_rule: NonBlank
-    describes_target_audience: bool = False
-
 
 class MediaAsset(DomainModel):
     asset_id: Id
     tenant_id: Id
     content_id: Id
-    media_kind: Literal["image", "video", "audio", "transcript", "thumbnail"]
-    storage_ref: str | None = None
-    use_rights_status: Literal["pending", "verified", "denied"] = "pending"
-    verified_use_grant_id: Id | None = None
-
+    media_kind: Literal["video","audio","image","text"]
+    storage_ref: NonBlank
+    use_rights_status: Literal["verified","pending","denied"]="pending"
+    rights_reference: str | None = None
     @model_validator(mode="after")
-    def source_rights_for_assets(self):
-        if self.storage_ref and self.use_rights_status != "verified":
-            raise ValueError("media cannot have storage reference without verified rights")
-        if self.use_rights_status == "verified" and not self.verified_use_grant_id:
-            raise ValueError("verified media requires specific use grant")
+    def require_rights(self):
+        if self.use_rights_status!="verified" or not self.rights_reference:
+            raise ValueError("unverified media must not be stored or processed")
         return self
-
-
-class SamplingPlan(DomainModel):
-    sampling_plan_id: Id
-    tenant_id: Id
-    eligible_population: NonBlank
-    stratification: list[NonBlank]
-    selection_method: NonBlank
-    random_seed: int | None = None
-    max_posts_per_creator: int | None = Field(default=None, gt=0)
-    primary_estimand: NonBlank
-    plan_version: NonBlank
-
-
-class DatasetManifest(DomainModel):
-    dataset_id: Id
-    tenant_id: Id
-    sampling_plan_id: Id
-    dataset_version: NonBlank
-    content_ids: list[Id]
-    content_hash: NonBlank
-    source_permissions_verified: bool = False
-    split: Literal["development", "validation", "sealed_test", "unassigned"] = "unassigned"
-
-
-class HumanAnnotation(DomainModel):
-    annotation_id: Id
-    tenant_id: Id
-    content_id: Id
-    assessment_id: Id
-    reviewer_ref: Id
-    review_kind: Literal["first_review", "second_review", "adjudication"]
-    completed_at: datetime
-
-    @model_validator(mode="after")
-    def ensure_time(self):
-        require_utc_date(self.completed_at)
-        return self
-
 
 class ContrastAnalysis(DomainModel):
     analysis_id: Id
     tenant_id: Id
     dataset_version: NonBlank
-    winning_group_size: int = Field(ge=0)
-    control_group_size: int = Field(ge=0)
-    labeled_winners: int = Field(ge=0)
-    labeled_controls: int = Field(ge=0)
-    interpretation: Literal["descriptive", "associative"]
-    effect_estimate: float | None = Field(default=None, allow_inf_nan=False)
-
+    winning_group_size: int=Field(ge=0)
+    control_group_size: int=Field(ge=0)
+    labeled_winners: int=Field(ge=0)
+    labeled_controls: int=Field(ge=0)
+    interpretation: Literal["descriptive","associative","causal"]="descriptive"
+    effect_estimate: float | None=None
     @model_validator(mode="after")
-    def control_sample_required(self):
-        if self.effect_estimate is not None and (self.labeled_winners == 0 or self.labeled_controls == 0):
-            raise ValueError("effect estimates require labeled winner and control groups")
+    def contrast_valid(self):
+        if self.labeled_winners>self.winning_group_size or self.labeled_controls>self.control_group_size:
+            raise ValueError("labeled counts exceed cohort size")
+        if self.effect_estimate is not None and (not self.labeled_winners or not self.labeled_controls):
+            raise ValueError("comparison requires labels for both cohorts")
+        if self.interpretation=="causal":raise ValueError("causal analysis requires separate experiment")
         return self
 
-
-class RetrievalQuery(DomainModel):
-    query_id: Id
+class ResourceUsage(DomainModel):
+    usage_id: Id
     tenant_id: Id
-    query: NonBlank
-    method: Literal["sql", "lexical", "vector", "hybrid"]
-    dataset_version: NonBlank
-    top_k: int = Field(ge=1, le=100)
-    permission_filter_ref: NonBlank
-
-
-class CreativeBrief(DomainModel):
-    brief_id: Id
-    tenant_id: Id
-    insight_ids: list[Id] = Field(min_length=1)
-    audience_segment_id: Id | None = None
-    brand_context_version: NonBlank
-    objective: NonBlank
-    editorial_hypothesis: NonBlank
-
-
-class EditorialReview(DomainModel):
-    review_id: Id
-    tenant_id: Id
-    creative_id: Id
-    reviewer_ref: Id
-    status: Literal["changes_requested", "approved", "rejected"]
-    evidence_ref: NonBlank
-    reviewed_at: datetime
-
+    component: NonBlank
+    cpu_seconds: float=Field(ge=0)
+    storage_bytes: int=Field(ge=0)
+    billed_cost_brl: Decimal=Field(default=Decimal("0"),ge=0)
     @model_validator(mode="after")
-    def timestamp_is_aware(self):
-        require_utc_date(self.reviewed_at)
+    def budget(self):
+        if self.billed_cost_brl!=0:raise ValueError("zero spend budget")
         return self
-
-
-class PredictionRun(DomainModel):
-    prediction_id: Id
-    tenant_id: Id
-    content_id: Id
-    model_version: NonBlank
-    predicted_metric: NonBlank
-    prediction: float = Field(allow_inf_nan=False)
-    prediction_time: datetime
-    training_dataset_version: NonBlank
-    evaluation_reference: NonBlank
-
-
-class EditorialCalendarEntry(DomainModel):
-    calendar_entry_id: Id
-    tenant_id: Id
-    creative_id: Id
-    planned_for: datetime
-    status: Literal["planning", "review", "approved", "cancelled"] = "planning"
-
-    @model_validator(mode="after")
-    def datetime_is_aware(self):
-        require_utc_date(self.planned_for)
-        return self
-
-
-class AttributionRun(DomainModel):
-    attribution_run_id: Id
-    tenant_id: Id
-    publication_ids: list[Id]
-    conversion_ids: list[Id]
-    model: NonBlank
-    source_grant_id: Id | None = None
-    result_status: Literal["not_authorized", "not_measured", "measured"] = "not_authorized"
-
 
 class AgentToolCall(DomainModel):
     call_id: Id
     tenant_id: Id
     run_id: Id
     tool_name: NonBlank
-    status: Literal["planned", "executed", "denied", "failed"] = "planned"
-    evidence_refs: list[Id] = Field(default_factory=list)
-    cost_brl: Decimal = Field(default=Decimal(0), ge=0)
-
+    cost_brl: Decimal=Field(default=Decimal("0"),ge=0)
     @model_validator(mode="after")
-    def zero_budget(self):
-        if self.cost_brl != 0:
-            raise ValueError("paid tool calls prohibited under R$0 project budget")
+    def zero_spend(self):
+        if self.cost_brl!=0:raise ValueError("paid tool call disabled")
         return self
-
-
-class ResourceUsage(DomainModel):
-    usage_id: Id
-    tenant_id: Id
-    component: NonBlank
-    cpu_seconds: float = Field(ge=0, allow_inf_nan=False)
-    storage_bytes: int = Field(ge=0)
-    billed_cost_brl: Decimal = Field(default=Decimal(0), ge=0)
-
-    @model_validator(mode="after")
-    def prohibit_billing(self):
-        if self.billed_cost_brl != 0:
-            raise ValueError("zero-spend policy prohibits billed cost")
-        return self
-
 
 class QualityEvidence(DomainModel):
     evidence_id: Id
@@ -618,15 +485,21 @@ class QualityEvidence(DomainModel):
     requirement_id: Id
     iso_25010_characteristic: NonBlank
     test_id: Id
-    evaluation_status: Literal["not_evaluated", "passed", "failed", "not_applicable"]
-    measurement_ref: str | None = None
-
+    evaluation_status: Literal["not_evaluated","failed","passed"]="not_evaluated"
+    execution_reference: str | None=None
     @model_validator(mode="after")
-    def require_proof(self):
-        if self.evaluation_status in {"passed", "failed"} and not self.measurement_ref:
-            raise ValueError("quality evaluation needs measurement evidence")
+    def no_unsubstantiated_pass(self):
+        if self.evaluation_status=="passed" and not self.execution_reference:
+            raise ValueError("pass requires execution evidence")
         return self
 
+class DatasetManifest(DomainModel):
+    dataset_id: Id
+    tenant_id: Id
+    source_grant_ids: list[Id]=Field(default_factory=list)
+    dataset_version: NonBlank
+    evaluated_status: Literal["not_evaluated","evaluated"]="not_evaluated"
+    evidence_refs: list[NonBlank]=Field(default_factory=list)
 
 class ReleaseManifest(DomainModel):
     release_id: Id
@@ -634,19 +507,15 @@ class ReleaseManifest(DomainModel):
     build_digest: NonBlank
     approved_feature_ids: list[Id]
     quality_evidence_ids: list[Id]
-    source_rights_checked: bool = False
-    production_ready: bool = False
-
+    production_ready: bool=False
     @model_validator(mode="after")
-    def do_not_claim_release_without_rights(self):
-        if self.production_ready and (not self.source_rights_checked or not self.quality_evidence_ids):
-            raise ValueError("production release requires rights verification and quality evidence")
+    def requires_release_evidence(self):
+        if self.production_ready and (not self.approved_feature_ids or not self.quality_evidence_ids):
+            raise ValueError("release without verifiable evidence")
         return self
 
-
-DOMAIN_ENTITIES = DOMAIN_ENTITIES + (
-    "source_use_grant", "audience_segment", "media_asset", "sampling_plan", "dataset_manifest",
-    "human_annotation", "contrast_analysis", "retrieval_query", "creative_brief", "editorial_review",
-    "prediction_run", "editorial_calendar_entry", "attribution_run", "agent_tool_call", "resource_usage",
-    "quality_evidence", "release_manifest",
-)
+DOMAIN_ENTITIES=(*DOMAIN_ENTITIES,
+    "source_use_grant","media_asset","contrast_analysis","resource_usage", "agent_tool_call",
+    "quality_evidence","dataset_manifest","release_manifest", "identity_user", "identity_membership",
+    "identity_session","event_outbox", "creator_comparison", "editorial_plan", "evaluation_dataset",
+    "adaptive_policy", "content_rights")
