@@ -1,8 +1,8 @@
 # TAPI Stone — Gate 0 / Engineering Readiness
 
-**Status:** bootstrap técnico local, não é a plataforma TAPI implementada. **NÃO APROVADO para produção nem coleta/publicação externa.**
+**Status:** bootstrap técnico com contratos operacionais do primeiro fluxo sintético local; ainda não é a plataforma TAPI completa. **NÃO APROVADO para produção nem coleta/publicação externa.**
 
-Este pacote materializa as decisões do responsável pelo projeto: **repositório novo e privado** (`pablo-marchina/stone`, criado pelo usuário, conexão GitHub com permissão de escrita confirmada), **comparar infraestrutura** (decisão aberta), **custo financeiro total R$ 0 (bloqueio obrigatório)**, **permissões pendentes**, **escopo ampliado aprovado pelo solicitante; autoridade institucional não comprovada**. Segue a Arquitetura Unificada v5.1 e o Plano Único, sem alterar o objetivo de **uma entrega final consolidada**.
+Este pacote materializa as decisões do responsável pelo projeto: **repositório privado** `pablo-marchina/stone` (existente e acessível), **comparar infraestrutura** (decisão aberta), **custo financeiro total R$ 0 (bloqueio obrigatório)**, **permissões pendentes**, **escopo ampliado aprovado pelo solicitante; autoridade institucional não comprovada**. Segue a Arquitetura Unificada v5.1 e o Plano Único, sem alterar o objetivo de **uma entrega final consolidada**.
 
 ## O que funciona agora
 
@@ -32,7 +32,7 @@ Não é necessário criar conta na nuvem ou possuir chaves para rodar. `docker c
 
 ## Situação de aprovação
 
-- **Gate 0A:** *PARCIAL — bootstrap técnico local pronto; identidade e contratos completos pendentes; o remoto privado já existe.* Pode iniciar engenharia local limitada.
+- **Gate 0A:** *PARCIAL — bootstrap técnico local pronto; definição de identidade de produção, permissões, contratos restantes e decisões tecnológicas pendentes.* Pode iniciar engenharia local limitada.
 - **Gate 0B:** *BLOQUEADO — não existem autorizações comprovadas de fonte/operação nem autoridade de aprovação confirmada.*
 - **Aceite global da arquitetura:** *NÃO INICIADO*; aprovação de Gate 0 não representa aceite da plataforma.
 
@@ -42,6 +42,16 @@ Comece em `docs/00_MAPA_E_STATUS.md`, depois `docs/01_ACOES_DO_RESPONSAVEL_E_STO
 
 - **Custo financeiro máximo: R$ 0**, em todo o produto. Não habilitar integração com serviços que possam gerar faturamento.
 - **Escopo ampliado aprovado pelo solicitante**, sem presumir aval institucional nem direitos sobre conteúdo externo.
-- **GitHub privado existente:** `https://github.com/pablo-marchina/stone` (fornecido pelo usuário e confirmado pelo conector); ver `docs/15_REPOSITORIO_GITHUB.md`.
+- **GitHub privado em uso**: `pablo-marchina/stone`; ver `docs/15_REPOSITORIO_GITHUB.md`.
 - Os testes automatizados são executados **localmente** com `bash scripts/ci_local.sh`; o workflow GitHub Actions foi movido para exemplo desativado para reduzir risco de custos.
 - Ver `docs/14_POLITICA_CUSTO_ZERO.md`, `docs/16_ESCOPO_APROVADO_E_AUTORIZACOES.md` e `docs/17_STATUS_GATE0_ATUALIZADO.md`.
+
+## Domínio e contratos executáveis (synthetic-only)
+
+O pacote possui agora modelos Pydantic da jornada única, persistência SQLite transacional local, autorização por chave de desenvolvimento e endpoints reais do primeiro fluxo, com OpenAPI gerado do código, ranking oficial e linagem até o criativo. **Somente dados `synthetic_local` são aceitos e todas as operações externas continuam bloqueadas.** Consulte [especificação técnica do domínio](docs/18_DOMINIO_E_CONTRATOS_EXECUTAVEIS.md).
+
+```bash
+python -m pip install -e ".[dev]"
+python -m pytest -q
+PYTHONPATH=src python scripts/export_local_openapi.py
+```
