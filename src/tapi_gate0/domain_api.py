@@ -166,25 +166,25 @@ class ExternalOperation(BaseModel):
     request_id: str = Field(min_length=1)
 
 
-@router.post("/collections",responses={403:{"model":ProblemDetail}})
+@router.post("/collections",status_code=403,responses={403:{"model":ProblemDetail}})
 def blocked_collect(payload:ExternalOperation,tenant:Annotated[str,Depends(dev_authorized)]):
     guard(payload,tenant)
     forbidden("no authorized third-party collection connector is configured")
 
 
-@router.post("/publications",responses={403:{"model":ProblemDetail}})
+@router.post("/publications",status_code=403,responses={403:{"model":ProblemDetail}})
 def blocked_publish(payload:ExternalOperation,tenant:Annotated[str,Depends(dev_authorized)]):
     guard(payload,tenant)
     forbidden("publishing requires verified platform rights and explicit per-action approval")
 
 
-@router.post("/campaigns",responses={403:{"model":ProblemDetail}})
+@router.post("/campaigns",status_code=403,responses={403:{"model":ProblemDetail}})
 def blocked_campaign(payload:ExternalOperation,tenant:Annotated[str,Depends(dev_authorized)]):
     guard(payload,tenant)
     forbidden("paid campaigns cannot run under the mandatory zero-spend policy")
 
 
-@router.post("/crm/conversions",responses={403:{"model":ProblemDetail}})
+@router.post("/crm/conversions",status_code=403,responses={403:{"model":ProblemDetail}})
 def blocked_crm(payload:ExternalOperation,tenant:Annotated[str,Depends(dev_authorized)]):
     guard(payload,tenant)
     forbidden("CRM access and personal data processing are not authorized")
