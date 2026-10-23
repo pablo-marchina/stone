@@ -232,3 +232,28 @@ def test_billing_guard_fails_before_network(tmp_path,monkeypatch):
         assert r.json()['code']=='PROVIDER_ZERO_BILLING_NOT_CONFIRMED'
         with app.state.ingestion_store.engine.connect() as db:
             assert db.execute(select(func.count()).select_from(ingestion_runs)).scalar_one()==0
+
+
+def test_authenticated_http_run_with_mock_provider(tmp_path,monkeypatch):
+    """Real API route -> grant gate -> provider adapter -> SQL commit -> UI event."""
+    import tapi_gate0.ingestion as ing
+    monkeypatch.setenv('TAPI_OFFICIAL_METADATA_READS','1')
+    monkeypatch.setenv('TAPI_ZERO_BILLING_CONFIRMED','1')
+    monkeypatch.setenv('TAPI_INSTAGRAM_ACCESS_TOKEN','mocked-credentials-that-never-log')
+    monkeypatch.setattr(ing,'OfficialHttp',lambda:mock_http(ig_responder))
+    app=setup(tmp_path)
+    with TestClient(app) as c:
+        h=bearer(c)
+        assert grant(c,h,'instagram','178900').status_code==201
+        posted=c.post('/v1/ingestion/runs',headers=h,json={
+            'platform':'instagram','source_account_id':'178900',
+            'run_key':'route-test-001','limit':3})
+        assert posted.status_code==200,posted.text
+        assert posted.json()['new_records']==1
+        overview=c.get('/v1/ui/overview',headers=h)
+        assert overview.status_code==200
+        assert overview.json()['counts']['posts']==1
+        assert overview.json()['recent_posts'][0]['origin']=='instagram'
+        assert overview.json()['data_scope']=='authorized_metadata_and_synthetic'
+        events=c.get('/v1/events',headers=h).json()['events']
+        assert events[-1]['event_type']=='ingestion.content_processed'
