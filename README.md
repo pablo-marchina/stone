@@ -55,3 +55,63 @@ python -m pip install -e ".[dev]"
 python -m pytest -q
 PYTHONPATH=src python scripts/export_local_openapi.py
 ```
+
+## Identity, PostgreSQL-compatible persistence, and transactional events (secure mode)
+
+This implementation adds a **separate secure application mode** in the same unified
+product. It does not authorize Instagram/YouTube/Stone ingest, publication, ads or CRM.
+**Financial budget remains strictly R$ 0.** The initial identity and test corpus are
+local; no hosted PostgreSQL service or paid identity provider has been provisioned.
+
+### Installation and migrations (local, no cloud cost)
+
+```bash
+python -m pip install -e '.[dev]'
+export TAPI_DATABASE_URL="sqlite:////absolute/path/to/local_secure.sqlite3"
+python -m alembic upgrade head
+python -m tapi_gate0.ops bootstrap-admin --tenant local-research --username admin
+# provide a unique 12+ character password at the prompt (never add it to Git)
+export TAPI_ALLOW_HTTP_LOOPBACK=1
+uvicorn tapi_gate0.secure_api:from_environment --factory --host 127.0.0.1 --port 8000
+```
+
+The bootstrap command does not print the password. Authentication uses Argon2id,
+revocable random opaque bearer sessions (SHA-256 hashes at rest, 1 hour TTL),
+role-based access from durable memberships and composite tenant-scoped FKs.
+Use `POST /v1/auth/sessions` to log in; pass `Authorization: Bearer ...` for
+other operations. In a deployed environment **HTTPS is mandatory**, without the
+loopback flag. Public registration and password reset are deliberately disabled
+until their workflows and evaluation are specified.
+
+PostgreSQL candidate: install the optional local driver with
+`python -m pip install -e '.[production]'` if available from a free or local
+source; set `TAPI_DATABASE_URL=postgresql+psycopg://...` with credentials obtained
+from a secrets manager. The same Alembic migration and SQLAlchemy models support
+this dialect. PostgreSQL DDL has been compiled, but **no live PostgreSQL
+integration, RLS, replication, backup/restore, or production workload test has
+been performed yet**. Do not call this a production-homologated deployment.
+
+### Transactional events
+
+Every successful domain write commits its event and event_outbox row in the same
+transaction. Read `GET /v1/events?after_seq=N` or connect to
+`GET /v1/events/stream` using a bearer token. SSE supports `Last-Event-ID`
+replay; keepalive and session validation apply. `EventDispatcher.deliver()`
+implements at-least-once processing, bounded attempts and a dead-letter state.
+Callbacks **must be idempotent using event_id**; there is intentionally no external
+broker or paid messaging service. Concurrent dispatcher leasing, operational
+monitoring, PII scrubbing policy and event-retention management remain to be
+hardened and tested before production release.
+
+### Validation
+
+```bash
+python -m pytest -q
+python scripts/check_gate0.py
+python scripts/verify_zero_spend.py
+# optional: export the secure OpenAPI locally through app.openapi()
+```
+
+Local API examples use only `synthetic_local` source. Data access and any
+external action stay deny-by-default regardless of user role. Never commit
+database files, bearer tokens, passwords, or real third-party content.
