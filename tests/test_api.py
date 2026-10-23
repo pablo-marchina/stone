@@ -25,4 +25,4 @@ def test_readiness_respects_zero_spend_and_user_scope():
     assert data['institutional_scope_confirmation'] == 'UNVERIFIED'
     assert data['financial_spend_ceiling_brl'] == 0
     assert data['source_use_grants'] == 'PENDING'
-    assert data['remote_repo_created'] is False
+    assert data['remote_repo_created'] is True
