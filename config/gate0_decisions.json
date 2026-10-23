@@ -1,0 +1,66 @@
+{
+  "project": "TAPI Stone — plataforma única (22 capacidades; 18 critérios; uma entrega final)",
+  "repo": {
+    "choice": "NOVO",
+    "local_scaffold": "CRIADO",
+    "remote": "REPO_GITHUB_EXISTENTE_ACESSIVEL",
+    "owner": "pablo-marchina",
+    "visibility": "PRIVADO",
+    "suggested_name": "stone",
+    "repo_creation_tool": "CRIADO_PELO_USUARIO_E_VERIFICADO_PELO_CONECTOR",
+    "name": "stone",
+    "url": "https://github.com/pablo-marchina/stone",
+    "remote_writable": true
+  },
+  "infrastructure": {
+    "choice": "COMPARAR",
+    "selected_provider": null,
+    "benchmark": "PENDENTE",
+    "cloud_provisioned": false
+  },
+  "budget": {
+    "choice": "ZERO_ABSOLUTO_DE_DESEMBOLSO",
+    "currency": "BRL",
+    "approved_total_ceiling_brl": 0,
+    "approved_monthly_ceiling_brl": 0,
+    "approved_per_operation_ceiling_brl": 0,
+    "paid_external_calls_allowed": false,
+    "paid_external_operations_allowed": false,
+    "paid_cloud_provisioning_allowed": false,
+    "financial_spend_authorized": false
+  },
+  "source_permissions": {
+    "status": "PENDENTE",
+    "source_use_registry": "config/source_permissions.json"
+  },
+  "approval_authority": {
+    "status": "ESCOPO_USUARIO_APROVADO_STONE_INTELI_NAO_CONFIRMADA",
+    "name": null,
+    "approval_process_reference": null
+  },
+  "brand_guidelines": {
+    "status": "PENDENTE"
+  },
+  "single_final_delivery": true,
+  "no_schedule_dates": true,
+  "gate0a": "PARCIAL_BOOTSTRAP_LOCAL_COM_CUSTO_ZERO",
+  "gate0b": "BLOQUEADO_DADOS_E_ACOES_EXTERNAS",
+  "architecture_global_release": "NAO_COMPROVADO",
+  "technical_notes": [
+    "Zero desembolso e requisito inegociável: qualquer componente pago deve ser excluído, trocado ou operar somente de forma local e gratuita",
+    "O escopo expandido foi aprovado pelo solicitante; a aprovação institucional Stone/Inteli não foi comprovada",
+    "Nenhuma aprovação de escopo implica autorização para acessar dados de terceiros ou executar ações externas",
+    "O repositório privado pablo-marchina/stone foi criado pelo usuário e sua permissão de escrita foi confirmada via conector",
+    "GitHub Actions automático suspenso; usar verificações locais para não consumir cotas potencialmente faturáveis",
+    "Nenhum provedor de nuvem nem serviço pago foi provisionado",
+    "Operar campanhas pagas reais não é compatível com gasto financeiro zero: somente planejamento e operações sem desembolso podem ser validados",
+    "Contrato funcional é candidato até teste de endpoints reais; jamais promover status documental a produção"
+  ],
+  "expanded_scope": {
+    "decision": "APROVADO_PELO_RESPONSAVEL_DO_PROJETO",
+    "scope": "ARQUITETURA_UNIFICADA_INTEGRAL",
+    "institutional_confirmation": "NAO_COMPROVADA",
+    "data_access_grants": "PENDENTES",
+    "external_publication_advertising_crm": "BLOQUEADOS_SEM_AUTORIZACAO_DA_OPERACAO"
+  }
+}

@@ -1,0 +1,23 @@
+feature_id,feature_name,scope_original,journey_stage,interface_candidate,state_gate0,external_permission,is_implemented
+CAP-001,Ingestão e documentação de posts,formal,acquisition,POST /v1/collections,PLANNED_NOT_IMPLEMENTED,CONFORME_FONTE_E_ACAO,false
+CAP-002,Ranking oficial top 10%,formal,analytics,POST /v1/analyses/rankings,PLANNED_NOT_IMPLEMENTED,CONFORME_FONTE_E_ACAO,false
+CAP-003,Rubrica multimodal 20 campos,formal,intelligence,POST /v1/classifications,PLANNED_NOT_IMPLEMENTED,CONFORME_FONTE_E_ACAO,false
+CAP-004,Revisão humana ≥50,formal,annotation,POST /v1/annotations,PLANNED_NOT_IMPLEMENTED,CONFORME_FONTE_E_ACAO,false
+CAP-005,Agente analisar/recomendar/gerar_criativo,formal,reasoning,POST /v1/agent/runs,PLANNED_NOT_IMPLEMENTED,CONFORME_FONTE_E_ACAO,false
+CAP-006,Python + MCP,formal,integrations,MCP tools + Python API,PLANNED_NOT_IMPLEMENTED,CONFORME_FONTE_E_ACAO,false
+CAP-007,Playbook e ≥5 criativos,formal,creation,POST /v1/creatives,PLANNED_NOT_IMPLEMENTED,CONFORME_FONTE_E_ACAO,false
+CAP-008,Comparação top/restante,optional,analytics,POST /v1/analyses/contrasts,PLANNED_NOT_IMPLEMENTED,CONFORME_FONTE_E_ACAO,false
+CAP-009,RAG/busca híbrida,optional,retrieval,POST /v1/retrieval/search,PLANNED_NOT_IMPLEMENTED,CONFORME_FONTE_E_ACAO,false
+CAP-010,Avaliação de criativos enviados,optional,creation,POST /v1/creatives/evaluations,PLANNED_NOT_IMPLEMENTED,CONFORME_FONTE_E_ACAO,false
+CAP-011,Intenções de comentários,optional,intelligence,POST /v1/comments/analyze,PLANNED_NOT_IMPLEMENTED,CONFORME_FONTE_E_ACAO,false
+CAP-012,Segmentação setorial,optional,analytics,POST /v1/analyses/segments,PLANNED_NOT_IMPLEMENTED,CONFORME_FONTE_E_ACAO,false
+CAP-013,Horários/frequência/calendário,optional,planning,POST /v1/editorial/plans,PLANNED_NOT_IMPLEMENTED,CONFORME_FONTE_E_ACAO,false
+CAP-014,Playbook para lojistas,optional,creation,POST /v1/playbooks/businesses,PLANNED_NOT_IMPLEMENTED,CONFORME_FONTE_E_ACAO,false
+CAP-015,Predição de engajamento,outside_original_scope,planning,POST /v1/predictions,PLANNED_NOT_IMPLEMENTED,NECESSARIA,false
+CAP-016,Produção final de imagem/vídeo,outside_original_scope,creation,POST /v1/assets/generations,PLANNED_NOT_IMPLEMENTED,NECESSARIA,false
+CAP-017,Publicação automática,outside_original_scope,distribution,POST /v1/publications,PLANNED_NOT_IMPLEMENTED,NECESSARIA,false
+CAP-018,Campanhas e mídia paga,outside_original_scope,distribution,POST /v1/campaigns,PLANNED_NOT_IMPLEMENTED,NECESSARIA,false
+CAP-019,CRM/leads/atribuição,outside_original_scope,outcomes,POST /v1/conversion-events,PLANNED_NOT_IMPLEMENTED,NECESSARIA,false
+CAP-020,Pesquisa competitiva e diferenciação,differentiator,research,POST /v1/research/benchmarks,PLANNED_NOT_IMPLEMENTED,CONFORME_FONTE_E_ACAO,false
+CAP-021,Otimização e roteamento adaptativo,differentiator,operations,POST /v1/optimization/experiments,PLANNED_NOT_IMPLEMENTED,CONFORME_FONTE_E_ACAO,false
+CAP-022,Quality/ISO/Live Trace,differentiator,quality,GET /v1/quality/trace/{run_id},PLANNED_NOT_IMPLEMENTED,CONFORME_FONTE_E_ACAO,false

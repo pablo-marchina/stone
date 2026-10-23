@@ -1,0 +1,47 @@
+{
+  "TAPI_Stone_Arquitetura_Unificada_v5_1_2026-10-22.md": {
+    "sha256": "ff5f0345f2604f5fbcb1a52fa68cfd041661def61d124343146ce03116a01a6c",
+    "role": "REFERENCE_ONLY",
+    "included_copy": false
+  },
+  "TAPI_Stone_Plano_Implementacao_Integral_Completo.zip": {
+    "sha256": "88f958f246e0c548d549f4619fc465f141a744da05a8f8aad52f850afbaf43ee",
+    "role": "REFERENCE_ONLY",
+    "included_copy": false
+  },
+  "TAPI_Stone_Metodologia_Cientifica_Engenharia_Produto_REVISADA_v2_2026-10-22.md": {
+    "sha256": "28bbf497a5b761219ee1ca82f49371cb1ddef522a7daaeef479c9c79d7f9ae1c",
+    "role": "REFERENCE_ONLY",
+    "included_copy": false
+  },
+  "TAPI_Stone_Auditoria_Geral_Alinhamento_Consolidado.md": {
+    "sha256": "bb98940156c1e5e752ace00aba188efdfe37c6bf963b66aa851ea207fae73085",
+    "role": "REFERENCE_ONLY",
+    "included_copy": false
+  },
+  "TAPI_Stone_Documento_Mestre_Referencia.md": {
+    "sha256": "d24e212118e899f8cc98dd550f6c0f690fcb7a369553f018bbab055ebc19d8df",
+    "role": "REFERENCE_ONLY",
+    "included_copy": false
+  },
+  "TAPI_Stone_Benchmark_Projetos_Solucoes_Similares_REVISADO_v2_2026-10-22.md": {
+    "sha256": "d3713cc7601cab0c0073c81e87d9c8628875784e016c364891d5fa5cd89c3960",
+    "role": "REFERENCE_ONLY",
+    "included_copy": false
+  },
+  "TAPI_Stone_Rubrica_20_Campos_Schema_v5_2026-10-22.json": {
+    "sha256": "cad106963cbfd7eec33b07381c849655b1c73f5c859e136f397ac3a3d5802521",
+    "role": "REFERENCE_ONLY",
+    "included_copy": false
+  },
+  "TAPI_Stone_Contratos_Candidatos_Corrigidos_v5_1_2026-10-22.json": {
+    "sha256": "54e8634a73ef19fa7ce7a8d56c75bacfa48fdd6525cfef6be9d06a99a55cf5cd",
+    "role": "REFERENCE_ONLY",
+    "included_copy": false
+  },
+  "Proposta de TAPI_Stone_Inteli_Academy (1).pdf": {
+    "sha256": "778404c2a14e8f3c303bd42cdb47093cfe982ddc67fcb0522dab46db36869495",
+    "role": "REFERENCE_ONLY",
+    "included_copy": false
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "scope": "TESTES_BOOTSTRAP_LOCAL",
+  "pytest_returncode": 0,
+  "pytest_summary": "102 passed in 1.41s",
+  "structural_returncode": 0,
+  "structural_passes": 11,
+  "healthz": {
+    "status": "ok",
+    "purpose": "local_gate0_bootstrap"
+  },
+  "gate0a": "PARCIAL_BOOTSTRAP_LOCAL_COM_CUSTO_ZERO",
+  "gate0b": "BLOQUEADO_DADOS_E_ACOES_EXTERNAS",
+  "external_sources_enabled": false,
+  "is_production_ready": false,
+  "repo_remote_created": false,
+  "cloud_provisioned": false,
+  "scope_not_tested": [
+    "external APIs",
+    "real media",
+    "actual production auth",
+    "ISO certification",
+    "model quality",
+    "real source grants",
+    "CI remote execution",
+    "cost incurred"
+  ],
+  "expanded_scope_user_approved": true,
+  "stone_inteli_approval": "UNVERIFIED",
+  "approved_total_spend_brl": 0,
+  "automated_github_workflow_enabled": false,
+  "source_grants": "PENDING",
+  "cost_incurred": "NOT_MEASURED_EXTERNAL_ACCOUNTS",
+  "zero_spend_policy_checks": "PASS",
+  "cost_spend_claim": "NO PAID SERVICE PROVISIONED; EXTERNAL BILLING NOT VERIFIED",
+  "verified_remote_repo": false
+}

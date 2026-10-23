@@ -1,0 +1,43 @@
+{
+  "strategy": "ZERO_SPEND_HARD_STOP",
+  "currency": "BRL",
+  "approved_total_budget": 0,
+  "paid_cloud_enabled": false,
+  "paid_api_per_run_max": 0,
+  "paid_api_monthly_max": 0,
+  "paid_storage_max": 0,
+  "deploy_target": "local_first_only_with_owned_hardware_and_zero_billing",
+  "alerts": [
+    "forecast_spend",
+    "observed_spend",
+    "failed_api_calls",
+    "storage_growth"
+  ],
+  "optimization_measurements": [
+    "cost_per_valid_post",
+    "cost_per_evaluated_field",
+    "cost_per_evidence_backed_insight",
+    "latency_p95",
+    "cpu_seconds",
+    "storage_bytes",
+    "quality_delta_vs_baseline"
+  ],
+  "never_optimize_away": [
+    "permissions",
+    "privacy",
+    "source_evidence",
+    "sealed_holdout",
+    "minimum_field_quality"
+  ],
+  "monthly_ceiling": 0,
+  "per_operation_ceiling": 0,
+  "allowed_billed_services": [],
+  "paid_ad_spend_max": 0,
+  "paid_video_generation_max": 0,
+  "github_actions_billed_minutes_max": 0,
+  "credit_card_required_for_development": false,
+  "automatic_cloud_provisioning": false,
+  "failure_behavior": "DENY_AND_STOP_BEFORE_ANY_FINANCIAL_COMMITMENT",
+  "exceptions": "NONE_WITHOUT_NEW_EXPLICIT_USER_INSTRUCTION",
+  "free_tier_rule": "No provider may be configured with overage billing; free quota alone is not a guarantee of financial cost zero"
+}

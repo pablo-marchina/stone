@@ -1,0 +1,66 @@
+{
+  "gate0a": [
+    {
+      "id": "G0A-01",
+      "criterion": "Objetivo e entrega única",
+      "status": "SPECIFIED",
+      "evidence": "config/gate0_decisions.json"
+    },
+    {
+      "id": "G0A-02",
+      "criterion": "Repositório local base e CI",
+      "status": "REMOTE_EXISTS_PRIVATE_WRITABLE_BOOTSTRAP_PUBLICATION_PENDING",
+      "evidence": "docs/15_REPOSITORIO_GITHUB.md"
+    },
+    {
+      "id": "G0A-03",
+      "criterion": "Infraestrutura e custos",
+      "status": "ZERO_BUDGET_DEFINED_PROVIDER_COMPARISON_OPEN",
+      "evidence": "config/budget_policy.json"
+    },
+    {
+      "id": "G0A-04",
+      "criterion": "Classificação das fontes",
+      "status": "PENDING_EXTERNAL_PERMISSIONS",
+      "evidence": "config/source_permissions.json"
+    },
+    {
+      "id": "G0A-05",
+      "criterion": "Contratos e rubrica preliminares",
+      "status": "CANDIDATE_NOT_APPROVED",
+      "evidence": "reference/rubric_candidate.schema.json"
+    },
+    {
+      "id": "G0A-06",
+      "criterion": "Plano EDD e baseline",
+      "status": "SPECIFIED_NOT_EXECUTED",
+      "evidence": "docs/05_EDD_E_AVALIACOES.md"
+    },
+    {
+      "id": "G0A-07",
+      "criterion": "Identidade e ameaça",
+      "status": "ARCHITECTURE_PENDING",
+      "evidence": "docs/06_SEGURANCA_E_IDENTIDADE.md"
+    }
+  ],
+  "gate0b": [
+    {
+      "id": "G0B-01",
+      "criterion": "Autoridade institucional e de operações externas confirmadas",
+      "status": "ESCOPO_USUARIO_APROVADO_INSTITUCIONAL_PENDENTE"
+    },
+    {
+      "id": "G0B-02",
+      "criterion": "Grant por fonte × operação comprovado",
+      "status": "PENDING"
+    },
+    {
+      "id": "G0B-03",
+      "criterion": "Termos, retenção e direito multimodal verificados",
+      "status": "PENDING"
+    }
+  ],
+  "global_delivery": "ONE_RELEASE_ONLY_AFTER_ALL_22_CAPABILITIES_AND_GATES_EVALUATED_AND_PERMISSIONS_VALIDATED",
+  "expanded_scope_authorization": "USER_APPROVED_NOT_SOURCE_PERMISSION",
+  "zero_cost_constraint": "HARD_STOP_ZERO_CASH_SPEND"
+}

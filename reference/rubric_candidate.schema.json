@@ -1,0 +1,217 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tapi.example.invalid/schemas/rubric-v1",
+  "title": "TAPI — classificação oficial 20 campos (contrato candidato)",
+  "description": "Campos oficiais transcritos do Documento Mestre; tipo boolean proposto onde PDF não fecha enum; null permitido somente com observabilidade explicada em envelope.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "tipo_post": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "reels",
+        "carrossel",
+        "imagem",
+        "short",
+        null
+      ]
+    },
+    "duracao_faixa": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Faixas operacionais devem ser aprovadas; PDF não fixa bins."
+    },
+    "formato_video": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "talking head",
+        "tutorial",
+        "bastidores",
+        "antes/depois",
+        "humor/esquete",
+        "depoimento",
+        "lista/dicas",
+        "trend",
+        null
+      ]
+    },
+    "hook_primeiros_3s": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "tipo_hook": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "pergunta",
+        "promessa",
+        "dor",
+        "número",
+        "polêmica",
+        "curiosidade",
+        null
+      ]
+    },
+    "forca_hook_0a10": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 10
+    },
+    "tema_principal": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "vendas",
+        "finanças",
+        "marketing",
+        "atendimento",
+        "gestão",
+        "motivação",
+        "ferramentas/maquininha",
+        "história de empreendedor",
+        null
+      ]
+    },
+    "tem_rosto": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "criador_e_empreendedor_real": {
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "description": "Verdadeiro apenas com evidencia externa; caso contrário null."
+    },
+    "prova_social": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "texto_na_tela": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "legenda_tamanho": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Categorias de tamanho não formalizadas pelo PDF."
+    },
+    "ritmo_cortes_0a10": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 10
+    },
+    "tom": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "informal",
+        "técnico",
+        "inspiracional",
+        "humorístico",
+        null
+      ]
+    },
+    "usa_linguagem_regional": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "clareza_mensagem_0a10": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 10
+    },
+    "tem_cta": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "tipo_cta": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "comentar",
+        "salvar",
+        "link na bio",
+        "DM",
+        "seguir",
+        null
+      ]
+    },
+    "oferta_ou_beneficio_explicito": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "elementos_top5": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "string"
+      },
+      "description": "Até cinco elementos fundamentados; se menos visíveis, não inventar."
+    }
+  },
+  "required": [
+    "tipo_post",
+    "duracao_faixa",
+    "formato_video",
+    "hook_primeiros_3s",
+    "tipo_hook",
+    "forca_hook_0a10",
+    "tema_principal",
+    "tem_rosto",
+    "criador_e_empreendedor_real",
+    "prova_social",
+    "texto_na_tela",
+    "legenda_tamanho",
+    "ritmo_cortes_0a10",
+    "tom",
+    "usa_linguagem_regional",
+    "clareza_mensagem_0a10",
+    "tem_cta",
+    "tipo_cta",
+    "oferta_ou_beneficio_explicito",
+    "elementos_top5"
+  ],
+  "$comment": "Os nomes de campos e categorias expressas no TAPI são preservados. Tipo boolean para marcadores e faixas livres são decisões de engenharia PROPOSTAS, sujeitas ao kickoff; JSON Schema ainda não é Pydantic em execução."
+}

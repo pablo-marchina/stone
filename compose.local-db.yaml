@@ -1,0 +1,12 @@
+# Opt-in apenas para PostgreSQL local. Configure TAPI_DB_PASSWORD no arquivo .env NÃO versionado.
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: tapi_local
+      POSTGRES_USER: tapi_local
+      POSTGRES_PASSWORD: ${TAPI_DB_PASSWORD:?Configure TAPI_DB_PASSWORD antes de habilitar o banco}
+    volumes: ["tapi_pgdata:/var/lib/postgresql/data"]
+    ports: ["127.0.0.1:5432:5432"]
+volumes:
+  tapi_pgdata:
