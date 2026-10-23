@@ -1,0 +1,151 @@
+"""Secure app mode with database-backed RBAC, revocable sessions and durable events.
+
+Local SQLite is a production-shaped test adapter. PostgreSQL uses the same
+SQLAlchemy model, but operational deployment still requires live verification.
+"""
+
+import asyncio
+import os
+from pathlib import Path
+from typing import Annotated
+
+from fastapi import Depends, FastAPI, Header, Request
+from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
+
+from .api import create_app
+from .domain_api import dev_authorized
+from .identity import (IdentityFailure, IdentityStore, LoginRequest, SessionResponse,
+                       MemberCreate, Principal, permitted)
+from .sa_store import SqlDomainStore, engine_for
+
+
+def _token(request:Request):
+    value=request.headers.get("authorization","")
+    scheme,_,token=value.partition(" ")
+    if scheme.lower()!="bearer" or not token or " " in token:
+        raise IdentityFailure()
+    return token
+
+
+def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_http_local:bool=False) -> FastAPI:
+    engine=engine_for(database_url)
+    domain=SqlDomainStore(engine)
+    if initialize_schema:
+        domain.initialize()  # EXPLICIT offline / test only; use a reviewed migration for deployed DB.
+    identity=IdentityStore(engine)
+    # Reuse existing validated domain endpoints but substitute trusted auth dependency.
+    app=create_app(local_domain=True,dev_key="__secure_mode_never_use_as_key__123",db_path=":memory:")
+    old_store=app.state.local_domain_store
+    old_store.conn.close()
+    app.state.local_domain_store=domain
+    app.state.identity_store=identity
+    app.state.secure_mode=True
+
+    @app.middleware("http")
+    async def require_tls(request:Request,call_next):
+        if request.url.scheme!="https":
+            if not allow_http_local or (request.client is not None and request.client.host not in
+                                        {"testclient","127.0.0.1","::1"}):
+                return JSONResponse(status_code=403, content={"code":"HTTPS_REQUIRED"},
+                                    headers={"Cache-Control":"no-store"})
+        response=await call_next(request)
+        response.headers["Cache-Control"]="no-store"
+        return response
+    app.title="TAPI Stone — Secure Unified Domain"
+    app.version="0.3.0"
+
+    def secure_identity(request:Request):
+        principal=identity.resolve(_token(request))
+        if not permitted(principal,request.method,request.url.path):
+            raise IdentityFailure("FORBIDDEN",403)
+        request.state.principal=principal
+        return principal.tenant_id
+
+    app.dependency_overrides[dev_authorized]=secure_identity
+
+    def current_principal(request:Request):
+        return identity.resolve(_token(request))
+
+    @app.exception_handler(IdentityFailure)
+    async def handle_identity_error(_request:Request,exc:IdentityFailure):
+        return JSONResponse(status_code=exc.status,content={
+            "type":"about:blank","title":exc.code,"status":exc.status,
+            "detail":"authentication or authorization denied","code":exc.code},
+            headers={"WWW-Authenticate":"Bearer"} if exc.status==401 else {},
+            media_type="application/problem+json")
+
+    @app.post("/v1/auth/sessions",response_model=SessionResponse,tags=["Identity"])
+    def login(request:LoginRequest):
+        return identity.login(request.username,request.password,request.tenant_id)
+
+    @app.get("/v1/auth/me",response_model=Principal,tags=["Identity"])
+    def me(principal:Annotated[Principal,Depends(current_principal)]):
+        return principal
+
+    @app.post("/v1/auth/logout",status_code=204,tags=["Identity"])
+    def logout(request:Request,principal:Annotated[Principal,Depends(current_principal)]):
+        identity.revoke(_token(request),principal)
+
+    @app.post("/v1/admin/members",status_code=201,tags=["Identity"])
+    def add_member(payload:MemberCreate,principal:Annotated[Principal,Depends(current_principal)]):
+        return identity.add_member(principal,payload)
+
+    @app.get("/v1/events/stream",tags=["Events"])
+    async def stream_events(request:Request,principal:Annotated[Principal,Depends(current_principal)],
+                            after_seq:int=0,max_events:int=0):
+        if after_seq<0 or max_events<0 or max_events>200:
+            return JSONResponse(status_code=422,content={"code":"INVALID_CURSOR"})
+        cursor=request.headers.get("last-event-id")
+        if cursor is not None:
+            if not cursor.isdecimal():return JSONResponse(status_code=422,content={"code":"INVALID_CURSOR"})
+            after_seq=max(after_seq,int(cursor))
+        async def events():
+            pos=after_seq; emitted=0; idle=0
+            while not await request.is_disconnected():
+                # Never trust stale session on an open stream: revalidate at each poll.
+                try: identity.resolve(_token(request))
+                except IdentityFailure:break
+                chunk=await run_in_threadpool(domain.events,principal.tenant_id,pos,100)
+                if chunk:
+                    for event in chunk:
+                        pos=event["seq"]
+                        # Event payload is intentionally constrained to synthetic metadata.
+                        import json
+                        item=json.dumps(event,ensure_ascii=False,separators=(",",":"))
+                        yield f"id: {pos}\nevent: domain_event\ndata: {item}\n\n"
+                        emitted+=1
+                        if max_events and emitted>=max_events:return
+                    idle=0
+                else:
+                    await asyncio.sleep(0.25)
+                    idle+=1
+                    if idle%60==0:yield ": keepalive\n\n"
+        return StreamingResponse(events(),media_type="text/event-stream",headers={
+            "Cache-Control":"no-cache, no-store", "X-Accel-Buffering":"no"})
+
+    def secure_openapi():
+        if app.openapi_schema is None:
+            spec=get_openapi(title=app.title,version=app.version,routes=app.routes)
+            spec.setdefault("components",{}).setdefault("securitySchemes",{})["BearerAuth"]={
+                "type":"http","scheme":"bearer","bearerFormat":"opaque"}
+            for url,actions in spec.get("paths",{}).items():
+                for method,operation in actions.items():
+                    if not isinstance(operation,dict):continue
+                    operation["parameters"]=[p for p in operation.get("parameters",[]) if
+                        p.get("name")!="x-tapi-local-key"]
+                    if url.startswith("/v1/") and url not in {"/v1/auth/sessions","/v1/gate0/status"}:
+                        operation["security"]=[{"BearerAuth":[]}]
+            app.openapi_schema=spec
+        return app.openapi_schema
+    app.openapi=secure_openapi
+    return app
+
+
+def from_environment():
+    url=os.environ.get("TAPI_DATABASE_URL")
+    if not url:raise RuntimeError("TAPI_DATABASE_URL is required for secure mode")
+    return create_secure_app(url,initialize_schema=False,
+        allow_http_local=os.environ.get("TAPI_ALLOW_HTTP_LOOPBACK")=="1")
