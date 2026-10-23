@@ -1,13 +1,13 @@
-# TAPI Stone — Gate 0 / Engineering Readiness
+# TAPI Stone — Plataforma unificada (implementação incremental)
 
-**Status:** bootstrap técnico com contratos operacionais do primeiro fluxo sintético local; ainda não é a plataforma TAPI completa. **NÃO APROVADO para produção nem coleta/publicação externa.**
+**Status:** domínio, autenticação, UI autenticada, eventos e conectores de **metadados oficiais** implementados e testados localmente; ainda não é a plataforma completa. **NÃO HOMOLOGADO para produção.** Nenhuma credencial ou coleta externa real foi utilizada.
 
-Este pacote materializa as decisões do responsável pelo projeto: **repositório privado** `pablo-marchina/stone` (existente e acessível), **comparar infraestrutura** (decisão aberta), **custo financeiro total R$ 0 (bloqueio obrigatório)**, **permissões pendentes**, **escopo ampliado aprovado pelo solicitante; autoridade institucional não comprovada**. Segue a Arquitetura Unificada v5.1 e o Plano Único, sem alterar o objetivo de **uma entrega final consolidada**.
+Este pacote materializa as decisões do responsável pelo projeto: **repositório privado** `pablo-marchina/stone` (existente e acessível), **comparar infraestrutura** (decisão aberta), **custo financeiro total R$ 0 (bloqueio obrigatório)**, **aprovação geral de dados e operações declarada pelo solicitante, com grants por conta ainda não registrados e acessos técnicos ainda não validados**, **escopo ampliado aprovado pelo solicitante; autoridade institucional não comprovada**. Segue a Arquitetura Unificada v5.1 e o Plano Único, sem alterar o objetivo de **uma entrega final consolidada**.
 
 ## O que funciona agora
 
-- API de bootstrap com health check e status de readiness, sem conectores a redes sociais.
-- Política **deny-by-default** avaliada localmente: todas as fontes/operações externas são negadas, inclusive publicação, CRM e anúncios; fixtures sintéticas internas permitidas somente para verificação.
+- API de bootstrap e API segura com identidade, domínio, eventos, UI e conectores oficiais condicionados a autorização específica; nenhum acesso real realizado.
+- Política **deny-by-default**: coleção externa só por `/v1/ingestion/runs`, com grant por conta, credencial, autenticação e atestação de custo zero; publicação, CRM e anúncios permanecem inativos.
 - Schemas candidatos da rubrica e contratos herdados sem declará-los homologados.
 - Testes automáticos de autorização, invariantes e integração leve do bootstrap; CI reproduzível.
 - Matrizes de autorização, decisões abertas, protocolo de experimentos de infraestrutura, restrições de gasto, governança de avaliações e registro de pendências.
@@ -33,7 +33,7 @@ Não é necessário criar conta na nuvem ou possuir chaves para rodar. `docker c
 ## Situação de aprovação
 
 - **Gate 0A:** *PARCIAL — bootstrap técnico local pronto; definição de identidade de produção, permissões, contratos restantes e decisões tecnológicas pendentes.* Pode iniciar engenharia local limitada.
-- **Gate 0B:** *BLOQUEADO — não existem autorizações comprovadas de fonte/operação nem autoridade de aprovação confirmada.*
+- **Gate 0B:** *PARCIAL — aprovação geral informada pelo solicitante, mas tokens, acesso técnico e registro de permissão por conta/operação continuam pendentes.*
 - **Aceite global da arquitetura:** *NÃO INICIADO*; aprovação de Gate 0 não representa aceite da plataforma.
 
 Comece em `docs/00_MAPA_E_STATUS.md`, depois `docs/01_ACOES_DO_RESPONSAVEL_E_STONE.md`. Os documentos `docs/` não contêm prazos nem divisão de entregas.
