@@ -220,6 +220,10 @@ class IngestionStore:
     def run(self,tenant:str,req:IngestionRequest,http:OfficialHttp | None=None)->IngestionResult:
         if os.getenv("TAPI_OFFICIAL_METADATA_READS")!="1":
             raise ConnectorError("OFFICIAL_READS_DISABLED",403)
+        # The operator must separately verify in the provider console that
+        # this API usage cannot create a monetary charge or overage.
+        if os.getenv("TAPI_ZERO_BILLING_CONFIRMED")!="1":
+            raise ConnectorError("PROVIDER_ZERO_BILLING_NOT_CONFIRMED",403)
         grant=self.read_grant(tenant,req.platform,req.source_account_id)
         token=credential_for(req.platform)
         self._reserve(tenant,req)
@@ -276,10 +280,12 @@ def router_for_ingestion(identity,store:IngestionStore):
         token_present=bool(os.getenv({Platform.INSTAGRAM:"TAPI_INSTAGRAM_ACCESS_TOKEN",
             Platform.YOUTUBE:"TAPI_YOUTUBE_ACCESS_TOKEN"}[platform]))
         flag=os.getenv("TAPI_OFFICIAL_METADATA_READS")=="1"
+        zero_bill=os.getenv("TAPI_ZERO_BILLING_CONFIRMED")=="1"
         return {"platform":platform.value,"source_account_id":account_id,
           "grant_recorded":True,"technical_verified_previously":bool(grant["technical_verified_at"]),
           "credential_present":token_present,"read_switch_enabled":flag,
-          "can_attempt_validation":token_present and flag,
+          "zero_billing_operator_confirmed":zero_bill,
+          "can_attempt_validation":token_present and flag and zero_bill,
           "note":"The check does not establish third-party media rights or grant OAuth scopes."}
 
     @router.get("/runs")
