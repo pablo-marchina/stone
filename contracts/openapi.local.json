@@ -1693,14 +1693,6 @@
           "required": true
         },
         "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
           "403": {
             "content": {
               "application/json": {
@@ -1709,7 +1701,7 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Successful Response"
           },
           "422": {
             "content": {
@@ -1760,14 +1752,6 @@
           "required": true
         },
         "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
           "403": {
             "content": {
               "application/json": {
@@ -1776,7 +1760,7 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Successful Response"
           },
           "422": {
             "content": {
@@ -2458,14 +2442,6 @@
           "required": true
         },
         "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
           "403": {
             "content": {
               "application/json": {
@@ -2474,7 +2450,7 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Successful Response"
           },
           "422": {
             "content": {
@@ -2835,14 +2811,6 @@
           "required": true
         },
         "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
           "403": {
             "content": {
               "application/json": {
@@ -2851,7 +2819,7 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Successful Response"
           },
           "422": {
             "content": {
