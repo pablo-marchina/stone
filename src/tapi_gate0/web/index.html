@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#111b22">
+    <meta name="description" content="TAPI Stone — inteligência de conteúdo com evidências verificáveis">
+    <title>TAPI Stone · Intelligence Console</title>
+    <link rel="stylesheet" href="/app/style.css">
+    <script type="module" src="/app/main.mjs"></script>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="rail" aria-label="Identificação da aplicação">
+        <div class="brand-icon" aria-hidden="true">S<span>.</span></div>
+        <span class="rail-vertical">STONE · TAPI / ENGINEERING CONSOLE</span>
+        <div class="rail-foot">01</div>
+      </aside>
+      <main class="main">
+        <header class="topbar">
+          <div class="brand-copy"><span class="eyebrow">INTELIGÊNCIA DE CONTEÚDO / PLATAFORMA ÚNICA</span><h1>TAPI <span>Stone.</span></h1></div>
+          <div class="header-right">
+            <span class="scope-tag" title="Somente dados locais autorizados">AMBIENTE LOCAL · DADOS SINTÉTICOS</span>
+            <span class="status-dot" id="connection-dot" aria-hidden="true"></span>
+            <span class="connection-label" id="connection-label" role="status">Desconectado</span>
+            <button id="logout" class="button ghost hidden" type="button">Sair</button>
+          </div>
+        </header>
+        <section id="login-view" class="login-layout" aria-labelledby="login-title">
+          <div class="login-intro"><span class="overline">OBSERVABILITY FIRST / 00</span><h2>Decisões melhores começam com <em>evidências.</em></h2><p>Uma visão verificável dos dados, execuções, controles e resultados do TAPI. Sem indicadores simulados.</p>
+          <div class="pill-row"><span>ZERO SPEND</span><span>RBAC</span><span>EVENTOS REAIS</span></div></div>
+          <form id="login-form" class="login-card">
+            <span class="overline">ACESSO AUTENTICADO</span><h3>Entrar na plataforma</h3><p>Identidade persistente com sessão temporária e permissões por organização.</p>
+            <label for="tenant">Organização</label><input id="tenant" name="tenant" autocomplete="organization" value="local-research" required maxlength="128">
+            <label for="username">Usuário</label><input id="username" name="username" autocomplete="username" required maxlength="128">
+            <label for="password">Senha</label><input id="password" name="password" autocomplete="current-password" type="password" required>
+            <button class="button primary" id="login-submit" type="submit">Acessar console <span aria-hidden="true">↗</span></button>
+            <p class="form-message" id="login-error" role="alert"></p>
+            <p class="security-note">Token mantido somente em memória. Nenhuma credencial é salva no navegador.</p>
+          </form>
+        </section>
+        <section id="dashboard" class="hidden" aria-label="Visão operacional">
+          <div class="dash-title"><div><span class="overline">OVERVIEW / 01</span><h2>Visão operacional</h2><p id="tenant-label">—</p></div><button id="refresh" class="button outline" type="button">Atualizar <span aria-hidden="true">↻</span></button></div>
+          <div class="notice"><span class="notice-symbol" aria-hidden="true">◆</span><div><strong>Pesquisa local — sem operação externa habilitada</strong><p>Somente atividades sintéticas aparecem aqui. Fontes e publicações externas dependem de configuração técnica e verificação por operação.</p></div></div>
+          <div class="kpi-grid" id="kpis" aria-live="polite"></div>
+          <div class="dashboard-grid">
+            <section class="panel flow-panel" aria-labelledby="flow-title"><div class="panel-head"><div><span class="overline">SISTEMA / 02</span><h3 id="flow-title">Fluxo de inteligência</h3></div><span class="mini-status">Linhagem operacional</span></div>
+              <div class="flow-layout" id="pipeline-graph" aria-label="Etapas da jornada"></div>
+              <p class="panel-foot">Os contadores vêm diretamente do banco. Etapas futuras aparecem como indisponíveis, não como execuções concluídas.</p>
+            </section>
+            <section class="panel" aria-labelledby="activity-title"><div class="panel-head"><div><span class="overline">EVENT STREAM / 03</span><h3 id="activity-title">Atividade em tempo real</h3></div><span class="live-tag" id="live-tag">OFFLINE</span></div><div class="event-stream" id="events" role="log" aria-live="polite" aria-relevant="additions text"><p class="empty-state">Entre para acompanhar os eventos.</p></div><p class="panel-foot" id="cursor-caption">Cursor —</p></section>
+          </div>
+          <section class="panel posts-panel" aria-labelledby="posts-title"><div class="panel-head"><div><span class="overline">DATA EXPLORER / 04</span><h3 id="posts-title">Conteúdos recentes</h3></div><span class="mini-status">Dados rastreáveis</span></div>
+            <div class="table-scroll"><table><thead><tr><th>Identificador</th><th>Criador</th><th>Formato</th><th>Publicação</th><th>Origem</th></tr></thead><tbody id="posts-table"><tr><td colspan="5">Sem dados disponíveis.</td></tr></tbody></table></div>
+          </section>
+          <footer><span>TAPI STONE / RESEARCH ENGINEERING</span><span id="footer-status">Estado não verificado</span><span>R$ 0 · PERMISSION-FIRST</span></footer>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

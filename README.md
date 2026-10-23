@@ -115,3 +115,10 @@ python scripts/verify_zero_spend.py
 Local API examples use only `synthetic_local` source. Data access and any
 external action stay deny-by-default regardless of user role. Never commit
 database files, bearer tokens, passwords, or real third-party content.
+
+
+## Interface operacional local (sem serviços externos)
+
+O modo seguro também serve `/app/`, um painel autenticado ligado ao endpoint `/v1/ui/overview` e aos eventos SSE reais. Execute o modo seguro conforme `docs/19_IDENTIDADE_PERSISTENCIA_EVENTOS.md` e abra `http://127.0.0.1:8000/app/` no computador local. Os tokens permanecem apenas em memória e todos os dados exibidos vêm do SQLite transacional local. Consulte `docs/20_FRONTEND_OPERACIONAL.md`.
+
+Validação local: `PYTHONPATH=src python -m pytest -q` e `node --test tests/frontend/*.mjs`.
