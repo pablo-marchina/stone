@@ -175,3 +175,13 @@ profissional, escopos de API ou tokens validados. Nenhuma configuração faturá
 foi habilitada. A situação anterior do Google Cloud permanece sem nova verificação
 nesta etapa. Não foram repetidos testes locais, pois esta continuação trata apenas
 da autenticação e do cadastro externo.
+
+## Cadastro: Register concluído; verificação de celular pendente
+
+Após a intervenção pessoal, o console mostrou Register completo, Verify account
+incompleto, Contact info e About you pendentes. A etapa atual exige número de
+celular e SMS; a Meta informa que o número será salvo no perfil do Facebook.
+A tela foi devolvida ao usuário para essa verificação pessoal. Nenhum número,
+código SMS ou dado de pagamento foi coletado ou registrado pelo agente.
+A alternativa de cartão de crédito não foi utilizada. Integrações e confirmação
+de ausência de faturamento continuam pendentes; nenhum recurso faturável ativado.
