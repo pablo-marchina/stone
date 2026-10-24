@@ -135,3 +135,24 @@ Não são testes end-to-end com Meta/Google nem uma execução da suíte complet
 
 As referências públicas não substituem evidência do console do projeto específico.
 O custo de cota em unidades não é um preço monetário e não autoriza ativar billing.
+
+## Continuação após autorização explícita do usuário
+
+O usuário autorizou o acesso necessário ao domínio work.meta.com. A tela de login
+pôde ser inspecionada: o bloqueio de observação anterior deixou de impedir esta etapa.
+O login organizacional, porém, não foi concluído. O formulário seguro recebeu o
+identificador sem expô-lo ao agente na solicitação; a página informou não haver
+conta gerenciada associada. Após nova escolha pessoal da mesma modalidade e nova
+submissão segura, a Meta retornou o mesmo erro. O endereço de e-mail foi omitido
+deste registro por minimização de dados.
+
+O Google Cloud foi novamente verificado e recarregado uma vez: permaneceu em
+“Site Unavailable / Unable to access this site”. Nenhum console autenticado,
+projeto, cota ou faturamento pôde ser inspecionado.
+
+Próxima intervenção pessoal: concluir o login no navegador na nuvem usando uma
+conta organizacional válida ou selecionar o login Facebook apropriado. Não há
+nova solicitação de autorização geral; a dependência agora é autenticação válida.
+Nenhum OAuth de integração foi consentido, token gerado, grant real cadastrado ou
+recurso faturável habilitado. Os resultados de testes anteriores permanecem
+históricos; não foram repetidos e não atestam conexão real nesta continuação.
