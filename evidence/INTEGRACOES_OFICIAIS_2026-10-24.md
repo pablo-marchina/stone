@@ -156,3 +156,22 @@ nova solicitação de autorização geral; a dependência agora é autenticaçã
 Nenhum OAuth de integração foi consentido, token gerado, grant real cadastrado ou
 recurso faturável habilitado. Os resultados de testes anteriores permanecem
 históricos; não foram repetidos e não atestam conexão real nesta continuação.
+
+## Login Facebook confirmado; cadastro de desenvolvedor pendente
+
+Após o usuário concluir pessoalmente o login, a página do Facebook apresentou
+sessão autenticada. A navegação para /apps/ no Meta for Developers redirecionou
+à página inicial com a opção “Começar”. Essa opção abriu
+https://developers.facebook.com/async/registration/ com o título
+“Crie uma conta do Meta for Developers”.
+
+A etapa Register está incompleta; Verify account, Contact info e About you
+aparecem pendentes. A página declara que continuar implica aceitar os Termos da
+Plataforma da Meta e as Políticas do Desenvolvedor. O botão não foi acionado pelo
+agente: a tela foi preparada para aceite e eventual verificação pessoal do usuário.
+
+O login no Facebook está confirmado, mas não há aplicativo, conta Instagram
+profissional, escopos de API ou tokens validados. Nenhuma configuração faturável
+foi habilitada. A situação anterior do Google Cloud permanece sem nova verificação
+nesta etapa. Não foram repetidos testes locais, pois esta continuação trata apenas
+da autenticação e do cadastro externo.
