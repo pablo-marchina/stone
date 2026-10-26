@@ -75,3 +75,17 @@ validado ou teste real contra provedores. Nenhum recurso faturável foi habilita
 As travas de ingestão e de confirmação de custo zero permanecem inalteradas;
 a ausência de cobrança ainda não foi confirmada nos consoles. Nenhuma alteração
 de código nem nova execução de testes locais nesta etapa.
+
+## Escopos configurados após autorização explícita
+
+Com autorização específica do usuário, adicionados `instagram_basic`,
+`pages_read_engagement` e `pages_show_list`. Cada linha do console confirmou
+`Pronto para teste`, com 0 chamadas. Isso não equivale à concessão OAuth pela conta.
+
+Aberto o Explorador oficial para o App ID 1763543721612277 e selecionados
+exatamente esses três escopos. Generate Access Token abriu o Login do Facebook
+para Empresas, com a etapa `Continuar como Pablo Marchina?`, informando acesso
+a nome/foto e acesso contínuo às informações compartilhadas. Preparado para
+consentimento pessoal; não confirmado pelo agente. Não foram capturados tokens.
+Nenhuma chamada real ao Graph ou backend foi executada. Google Cloud e
+verificação de custo zero permanecem pendentes conforme registro anterior.
