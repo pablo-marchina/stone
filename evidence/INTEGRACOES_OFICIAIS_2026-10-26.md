@@ -89,3 +89,25 @@ a nome/foto e acesso contínuo às informações compartilhadas. Preparado para
 consentimento pessoal; não confirmado pelo agente. Não foram capturados tokens.
 Nenhuma chamada real ao Graph ou backend foi executada. Google Cloud e
 verificação de custo zero permanecem pendentes conforme registro anterior.
+
+## Consentimento concluído e consultas reais no Explorador
+
+Após o usuário concluir o consentimento, executadas duas consultas GET no
+Explorador oficial, com o app TAPI Stone selecionado e Graph API v26.0:
+
+1. `me/permissions`: retornou `granted` para `pages_show_list`,
+   `instagram_basic`, `pages_read_engagement` e `public_profile`.
+2. `me/accounts?fields=id,name,instagram_business_account{id,username}&limit=10`:
+   retornou `{"data":[]}` sem erro apresentado (246 ms no console).
+
+A concessão dos escopos foi validada, mas nenhum ID de Página ou Instagram foi
+retornado. O resultado vazio não prova que o usuário não possui Páginas: pode
+refletir a seleção de ativos no consentimento ou os acessos disponíveis à conta.
+É necessário identificar a Página/Instagram pretendidos e verificar a vinculação
+e a seleção no OAuth. Nenhum token foi lido, copiado, registrado ou transferido
+para o backend; não foi solicitado o campo access_token nas consultas.
+
+Essas são consultas reais no Explorador, não testes de integração do backend.
+O backend permanece com as travas anteriores, e nenhuma confirmação de custo zero
+nos consoles foi obtida. Google Cloud/YouTube continuam pendentes. Nenhum recurso
+pago foi habilitado e nenhum código de produção foi alterado nesta continuação.
