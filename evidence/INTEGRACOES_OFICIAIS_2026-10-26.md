@@ -28,3 +28,20 @@ Após confirmação pessoal: verificar acesso ao painel e inventário de apps an
 de retomar a criação, evitando duplicação. Em seguida conferir permissões de
 leitura, conta profissional e evidência de ausência de cobrança antes de habilitar
 a integração no backend. Não contornar a verificação de identidade da Meta.
+
+## Acesso restaurado e criação preparada
+
+Na continuação, o checkpoint exibiu “Acesso restaurado ao Meta for Developers”.
+O painel confirmou “Nenhum app por enquanto”. O assistente foi preenchido com
+nome TAPI Stone e caso de uso “Gerenciar mensagens e conteúdo no Instagram”.
+Nenhum portfólio empresarial estava disponível; selecionado conectar mais tarde.
+A revisão mostra “Nenhuma empresa selecionada” e nenhum requisito identificado
+para o caso de uso atual. Isso não comprova permissões concedidas, acesso a contas
+ou dispensa de verificações futuras.
+
+A etapa final informa que Criar aplicativo aceita Termos da Plataforma,
+Políticas do Desenvolvedor e demais termos aplicáveis. O botão não foi acionado
+pelo agente: configuração preparada para aceite pessoal. App ID ainda indisponível;
+nenhum token, acesso real, serviço faturável ou publicação habilitado. A configuração
+do assistente pode não persistir se a aba for encerrada; verificar inventário antes
+de tentar criar novamente. Backend e Google Cloud sem novas alterações nesta etapa.
