@@ -284,7 +284,9 @@ class IngestionStore:
                     content_id=found, observed_at=created.isoformat(),
                     payload=snapshot.model_dump_json()))
                 # Preserve history and emit a separate event from post creation.
-                version = db.execute(select(func.count()).select_from(domain_events).where(
+                version = db.execute(select(
+                    func.coalesce(func.max(domain_events.c.aggregate_version), 0)
+                ).where(
                     domain_events.c.tenant_id == tenant,
                     domain_events.c.aggregate_type == "content",
                     domain_events.c.aggregate_id == found)).scalar_one() + 1
