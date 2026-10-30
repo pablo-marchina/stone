@@ -75,6 +75,11 @@ def test_refresh_preserves_old_snapshots_and_updates_ranking(tmp_path, monkeypat
             assert len(rows) == 2
             assert db.execute(select(func.count()).select_from(domain_events)).scalar_one() == 2
             assert db.execute(select(func.count()).select_from(outbox)).scalar_one() == 2
+            refreshed_in_ledger = db.execute(
+                select(__import__("tapi_gate0.ingestion", fromlist=["ingestion_runs"]).ingestion_runs.c.refreshed_records)
+                .where(__import__("tapi_gate0.ingestion", fromlist=["ingestion_runs"]).ingestion_runs.c.run_key == "run-refresh-4")
+            ).scalar_one()
+            assert refreshed_in_ledger == 1
             assert (db.execute(select(domain_events.c.event_type)
                 .order_by(domain_events.c.aggregate_version)).scalars().all()) == [
                     "ingestion.content_processed", "ingestion.metrics_refreshed"]
