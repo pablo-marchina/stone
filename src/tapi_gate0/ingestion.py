@@ -68,6 +68,20 @@ ingestion_records=Table("ingestion_records",metadata,
          "ingestion_source_grants.source_account_id"]))
 
 
+# Persist only provider cursors (never URLs or tokens) after successful page commits.
+# A separate table avoids retroactively changing migration 0002's run ledger.
+ingestion_page_checkpoints = Table("ingestion_page_checkpoints", metadata,
+    Column("tenant_id", String(128), primary_key=True),
+    Column("platform", String(32), primary_key=True),
+    Column("source_account_id", String(128), primary_key=True),
+    Column("next_cursor", String(512)),
+    Column("complete", Integer, nullable=False, default=0),
+    Column("updated_at", String(40), nullable=False),
+    ForeignKeyConstraint(["tenant_id", "platform", "source_account_id"],
+        ["ingestion_source_grants.tenant_id", "ingestion_source_grants.platform",
+         "ingestion_source_grants.source_account_id"]))
+
+
 class GrantCreate(BaseModel):
     model_config=ConfigDict(extra="forbid")
     platform: Platform
@@ -88,6 +102,8 @@ class IngestionRequest(BaseModel):
     source_account_id: str=Field(min_length=1,max_length=128,pattern=r"^[A-Za-z0-9_-]+$")
     run_key: str=Field(min_length=8,max_length=128,pattern=r"^[A-Za-z0-9_.:-]+$")
     limit:int=Field(default=10,ge=1,le=10)
+    min_age_days:int=Field(default=14,ge=14,le=3650)
+    resume:bool=False
     video_ids:list[str]=Field(default_factory=list,max_length=10)
     shorts_evidence_reference: str | None=Field(default=None,min_length=12,max_length=512)
 
@@ -95,6 +111,8 @@ class IngestionRequest(BaseModel):
     def scope(self):
         if self.platform==Platform.INSTAGRAM and (self.video_ids or self.shorts_evidence_reference):
             raise ValueError("Instagram collects bounded account media, not supplied video IDs")
+        if self.platform==Platform.YOUTUBE and self.resume:
+            raise ValueError("YouTube ID-list mode does not use an Instagram page checkpoint")
         if self.platform==Platform.YOUTUBE and (
             not self.video_ids or len(self.video_ids)>self.limit or not self.shorts_evidence_reference):
             raise ValueError("YouTube Shorts require explicit IDs and operator evidence reference")
@@ -107,6 +125,8 @@ class IngestionResult(BaseModel):
     source_account_id:str
     new_records:int
     duplicate_records:int
+    excluded_too_recent:int=0
+    next_page_available:bool=False
     metadata_only:bool=True
     missing_modalities:list[str]=Field(default_factory=lambda:["image","video","audio","transcript"])
     ranking_warning:str="Denominators may be current or rounded; historical exact ranking requires source-specific validation."
@@ -140,6 +160,37 @@ class IngestionStore:
         if not row or not row["enabled"] or datetime.fromisoformat(row["expires_at"])<=now_utc():
             raise ConnectorError("VALID_SOURCE_GRANT_REQUIRED",403)
         return dict(row)
+
+    def _resume_cursor(self, tenant: str, req: IngestionRequest) -> str:
+        """Use only a cursor persisted from a prior successful authorized read."""
+        with self.engine.connect() as db:
+            row = db.execute(select(ingestion_page_checkpoints).where(
+                ingestion_page_checkpoints.c.tenant_id == tenant,
+                ingestion_page_checkpoints.c.platform == req.platform.value,
+                ingestion_page_checkpoints.c.source_account_id == req.source_account_id,
+            )).mappings().first()
+        if not row:
+            raise ConnectorError("PAGINATION_CHECKPOINT_REQUIRED", 409)
+        if row["complete"] or not row["next_cursor"]:
+            raise ConnectorError("PAGINATION_COMPLETE", 409)
+        return row["next_cursor"]
+
+    def _save_checkpoint(self, tenant: str, req: IngestionRequest, cursor: str | None):
+        updated = now_utc().isoformat()
+        where = (
+            (ingestion_page_checkpoints.c.tenant_id == tenant) &
+            (ingestion_page_checkpoints.c.platform == req.platform.value) &
+            (ingestion_page_checkpoints.c.source_account_id == req.source_account_id)
+        )
+        with self.engine.begin() as db:
+            old = db.execute(select(ingestion_page_checkpoints.c.tenant_id).where(where)).first()
+            values = {"next_cursor": cursor, "complete": int(cursor is None), "updated_at": updated}
+            if old:
+                db.execute(update(ingestion_page_checkpoints).where(where).values(**values))
+            else:
+                db.execute(insert(ingestion_page_checkpoints).values(
+                    tenant_id=tenant, platform=req.platform.value,
+                    source_account_id=req.source_account_id, **values))
 
     def _reserve(self,tenant,req:IngestionRequest):
         """Reserve one of five bounded account reads per UTC day BEFORE network call."""
@@ -226,26 +277,40 @@ class IngestionStore:
             raise ConnectorError("PROVIDER_ZERO_BILLING_NOT_CONFIRMED",403)
         grant=self.read_grant(tenant,req.platform,req.source_account_id)
         token=credential_for(req.platform)
+        after = self._resume_cursor(tenant, req) if req.resume else None
         self._reserve(tenant,req)
         owns_http=http is None
         transport=http or OfficialHttp()
-        created=duplicate=0
+        created=duplicate=excluded_recent=0
+        next_cursor = None
         try:
             adapter=(InstagramOfficial(transport) if req.platform==Platform.INSTAGRAM
                      else YouTubeOfficial(transport))
             checked=adapter.verify(req.source_account_id,token)
-            items=adapter.fetch(req.source_account_id,token,checked,req.limit,req.video_ids)
+            if req.platform == Platform.INSTAGRAM:
+                items, next_cursor = adapter.fetch_page(
+                    req.source_account_id, token, checked, req.limit, after=after)
+            else:
+                items = adapter.fetch(req.source_account_id,token,checked,req.limit,req.video_ids)
             with self.engine.begin() as db:
                 db.execute(update(source_grants).where(source_grants.c.tenant_id==tenant,
                     source_grants.c.platform==req.platform.value,
                     source_grants.c.source_account_id==req.source_account_id).values(
                         technical_verified_at=now_utc().isoformat()))
             for item in items:
+                if (now_utc() - item.published_at).total_seconds() < req.min_age_days * 86400:
+                    excluded_recent += 1
+                    continue
                 if self._persist_item(tenant,item):created+=1
                 else:duplicate+=1
+            # Only advance a cursor after all eligible records were committed.
+            if req.platform == Platform.INSTAGRAM:
+                self._save_checkpoint(tenant, req, next_cursor)
             self._finish(tenant,req.run_key,"completed",created,duplicate)
             return IngestionResult(run_key=req.run_key,platform=req.platform,
-                source_account_id=req.source_account_id,new_records=created,duplicate_records=duplicate)
+                source_account_id=req.source_account_id,new_records=created,
+                duplicate_records=duplicate,excluded_too_recent=excluded_recent,
+                next_page_available=next_cursor is not None)
         except (ConnectorError, ValueError, IntegrityError) as exc:
             reason=exc.code if isinstance(exc,ConnectorError) else "INGESTION_VALIDATION_FAILED"
             self._finish(tenant,req.run_key,"failed",created,duplicate,reason)
