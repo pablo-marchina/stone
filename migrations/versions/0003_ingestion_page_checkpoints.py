@@ -19,8 +19,13 @@ def upgrade():
     if inspect(conn).has_table(ingestion_page_checkpoints.name):
         raise RuntimeError("checkpoint table already exists outside Alembic")
     conn.execute(CreateTable(ingestion_page_checkpoints))
-    op.add_column("ingestion_runs", Column(
-        "refreshed_records", Integer, nullable=False, server_default="0"))
+    # 0002 uses live table declarations. On fresh database installations,
+    # that revision may already contain the new counter; on older databases,
+    # 0003 must introduce it. Both paths must produce the same schema.
+    columns = {c["name"] for c in inspect(conn).get_columns("ingestion_runs")}
+    if "refreshed_records" not in columns:
+        op.add_column("ingestion_runs", Column(
+            "refreshed_records", Integer, nullable=False, server_default="0"))
 
 
 def downgrade():
