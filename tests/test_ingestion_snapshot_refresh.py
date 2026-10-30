@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 
 from tapi_gate0.connectors import OfficialHttp
 from tapi_gate0.domain import RankingRequest
-from tapi_gate0.ingestion import IngestionRequest, ingestion_records
+from tapi_gate0.ingestion import IngestionRequest, ingestion_records, ingestion_runs
 from tapi_gate0.sa_store import metrics_snapshots, content_items, domain_events, outbox
 from tapi_gate0.secure_api import create_secure_app
 
@@ -76,8 +76,8 @@ def test_refresh_preserves_old_snapshots_and_updates_ranking(tmp_path, monkeypat
             assert db.execute(select(func.count()).select_from(domain_events)).scalar_one() == 2
             assert db.execute(select(func.count()).select_from(outbox)).scalar_one() == 2
             refreshed_in_ledger = db.execute(
-                select(__import__("tapi_gate0.ingestion", fromlist=["ingestion_runs"]).ingestion_runs.c.refreshed_records)
-                .where(__import__("tapi_gate0.ingestion", fromlist=["ingestion_runs"]).ingestion_runs.c.run_key == "run-refresh-4")
+                select(ingestion_runs.c.refreshed_records)
+                .where(ingestion_runs.c.run_key == "run-refresh-4")
             ).scalar_one()
             assert refreshed_in_ledger == 1
             assert (db.execute(select(domain_events.c.event_type)
