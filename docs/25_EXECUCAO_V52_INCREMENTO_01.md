@@ -58,3 +58,19 @@ O Plano v5.2 integral fornecido à conversa foi conferido localmente, com todos 
 ## Próxima execução técnica
 
 Auditar a migração e os testes; implementar `IMP-168` (refresh versionado de snapshots), bloqueio contra corrida de dois jobs por conta e métricas de cobertura; completar `IMP-164` assim que o administrador Meta concluir as ações de autorização. Não iniciar descoberta externa fora dos direitos concedidos.
+
+## Atualização — IMP-168 e verificações locais (30/10/2026)
+
+**Implementado nesta branch (pendente de suite E2E):**
+
+- Em vez de descartar toda publicação conhecida, `_persist_item` grava um novo `metrics_snapshots` quando os valores de curtidas, comentários, seguidores ou visualizações mudam; mantém os snapshots anteriores e usa identificador novo.
+- Releituras sem mudanças permanecem `duplicate_records`; atualizações ficam em `refreshed_records` também no ledger persistido `ingestion_runs`.
+- Atualizações emitem `ingestion.metrics_refreshed`, com versão monotônica baseada na versão máxima anterior, e outbox transacional; métricas não observadas não apagam valores históricos.
+- A migração `0003` inclui `ingestion_runs.refreshed_records` e checa a existência da coluna, pois a revisão `0002` utiliza a definição corrente da tabela.
+- Novos testes: `tests/test_ingestion_snapshot_refresh.py` e `tests/test_ingestion_migration_v3.py`.
+
+**Testes realmente executados localmente no ambiente de análise:** dois smoke tests **isolados** com SQLAlchemy/Alembic e SQLite em memória, usando uma réplica da definição de tabela e a lógica da revisão `0003`. Foram aprovados: (1) upgrade/downgrade com ledger anterior preservado e (2) instalação cujo schema antigo já contém a coluna adicionada. Isso **não é execução da suíte do repositório**.
+
+**Bloqueio para homologação:** o ambiente de execução local não possui checkout do repositório privado e não consegue resolver o host GitHub para `git clone`; a conexão do GitHub permite leitura/escrita de arquivos e PRs, mas não disponibiliza o checkout diretamente à sessão Python. Para cumprir o pedido de testes completos, é necessário um ZIP do conteúdo da **branch do PR #11**, sem `.env`, tokens, senhas, arquivos de banco real ou credenciais, enviado ao chat. Nenhuma permissão de API Meta/YouTube é necessária para os testes offline. Até receber os arquivos ou obter outro acesso local autorizado, os testes de integração permanecem `NAO_EXECUTADO`.
+
+**Próximo gate:** rodar `pytest`, frontend Node, migrar 0002→0003 e base limpa por Alembic real, revisar idempotência, concorrência de ingests e `run_key`, corrigir falhas, atualizar PR. Não fazer merge ainda.
