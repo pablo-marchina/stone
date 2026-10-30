@@ -122,7 +122,6 @@ def test_cursor_resume_skips_recent_posts_and_never_follows_next_url(tmp_path, m
                 http=transport,
             )
         assert exc.value.code == "PAGINATION_COMPLETE"
-        assert db is not None
     assert all(host == "graph.facebook.com" for host, _, _ in seen)
     assert [after for _, path, after in seen if path.endswith("/media")] == [None, "CURSOR_2"]
 
