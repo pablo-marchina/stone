@@ -47,6 +47,7 @@ ingestion_runs = Table("ingestion_runs",metadata,
     Column("requested_at",String(40),nullable=False),
     Column("status",String(24),nullable=False),
     Column("new_records",Integer,nullable=False,default=0),
+    Column("refreshed_records",Integer,nullable=False,default=0),
     Column("duplicate_records",Integer,nullable=False,default=0),
     Column("reason_code",String(80)),
     ForeignKeyConstraint(["tenant_id","platform","source_account_id"],
@@ -211,13 +212,15 @@ class IngestionStore:
             if count>=5:raise ConnectorError("FREE_QUOTA_SAFETY_LIMIT",429)
             db.execute(insert(ingestion_runs).values(tenant_id=tenant,run_key=req.run_key,
                 platform=req.platform.value,source_account_id=req.source_account_id,
-                requested_at=now_utc().isoformat(),status="reserved",new_records=0,duplicate_records=0))
+                requested_at=now_utc().isoformat(),status="reserved",new_records=0,
+                refreshed_records=0,duplicate_records=0))
 
-    def _finish(self,tenant,run_key,status,added=0,duplicate=0,reason=None):
+    def _finish(self,tenant,run_key,status,added=0,duplicate=0,refreshed=0,reason=None):
         with self.engine.begin() as db:
             db.execute(update(ingestion_runs).where(ingestion_runs.c.tenant_id==tenant,
                 ingestion_runs.c.run_key==run_key).values(status=status,
-                  new_records=added,duplicate_records=duplicate,reason_code=reason))
+                  new_records=added,duplicate_records=duplicate,
+                  refreshed_records=refreshed,reason_code=reason))
 
     def _persist_item(self, tenant: str, item: NormalizedItem) -> str:
         """Store a new post or append a changed metric snapshot atomically.
@@ -397,7 +400,7 @@ class IngestionStore:
             # Only advance a cursor after all eligible records were committed.
             if req.platform == Platform.INSTAGRAM:
                 self._save_checkpoint(tenant, req, next_cursor)
-            self._finish(tenant,req.run_key,"completed",created,duplicate)
+            self._finish(tenant,req.run_key,"completed",created,duplicate,refreshed)
             return IngestionResult(run_key=req.run_key,platform=req.platform,
                 source_account_id=req.source_account_id,new_records=created,
                 duplicate_records=duplicate,refreshed_records=refreshed,
@@ -405,7 +408,7 @@ class IngestionStore:
                 next_page_available=next_cursor is not None)
         except (ConnectorError, ValueError, IntegrityError) as exc:
             reason=exc.code if isinstance(exc,ConnectorError) else "INGESTION_VALIDATION_FAILED"
-            self._finish(tenant,req.run_key,"failed",created,duplicate,reason)
+            self._finish(tenant,req.run_key,"failed",created,duplicate,refreshed,reason)
             if isinstance(exc,ConnectorError):raise
             raise ConnectorError(reason,422) from exc
         finally:
