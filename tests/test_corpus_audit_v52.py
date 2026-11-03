@@ -105,6 +105,8 @@ def test_authorized_mock_ingest_counts_only_mature_instagram(tmp_path,monkeypatc
         assert data['observed']['eligible_instagram_posts']==1
         assert data['observed']['eligible_instagram_profiles']==1
         assert data['instagram_posts_by_operator_sector']['commerce']==1
+        assert data['instagram_sampling_strata']['retail_micro_south']=={
+            'registered_profiles':1, 'eligible_profiles':1, 'eligible_posts':1}
         assert data['deficit']=={'profiles':29,'posts':1999}
         assert not data['target_reached']
         with app.state.ingestion_store.engine.begin() as db:
