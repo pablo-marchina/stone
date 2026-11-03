@@ -1,0 +1,39 @@
+{
+  "task_ids": [
+    "IMP-167",
+    "IMP-170"
+  ],
+  "executed_on": "2026-11-03",
+  "validation_type": "local_offline_mock_only",
+  "tests": {
+    "pytest_all": "182 passed, 0 failed",
+    "node_frontend": "3 passed, 0 failed",
+    "gate0": "PASS",
+    "zero_spend": "PASS",
+    "alembic_clean_upgrade_and_rollback": "PASS",
+    "tenant_isolation": "PASS",
+    "missing_grant_rejected": "PASS",
+    "expired_or_disabled_grant_excluded": "PASS",
+    "minimum_age_14_days": "PASS",
+    "youtube_kept_separate": "contract only; no real YouTube audit data"
+  },
+  "mock_coverage": {
+    "registered_instagram_profiles": 1,
+    "eligible_instagram_profiles": 1,
+    "eligible_instagram_posts": 1,
+    "minimum_required_profiles": 30,
+    "minimum_required_posts": 2000,
+    "deficit_profiles": 29,
+    "deficit_posts": 1999
+  },
+  "actual_external_coverage": "NOT_VERIFIED",
+  "production_data_card": "NOT_RUN",
+  "real_instagram_oauth": "NOT_VERIFIED",
+  "automated_discovery": "NOT_IMPLEMENTED",
+  "limitations": [
+    "Mock results are not real corpus",
+    "No Meta OAuth was performed",
+    "No third-party rights granted by registry",
+    "No payment or external calls"
+  ]
+}
