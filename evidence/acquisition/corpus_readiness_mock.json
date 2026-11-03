@@ -15,7 +15,8 @@
     "missing_grant_rejected": "PASS",
     "expired_or_disabled_grant_excluded": "PASS",
     "minimum_age_14_days": "PASS",
-    "youtube_kept_separate": "PASS (mocked YouTube post excluded from primary Instagram count)"
+    "youtube_kept_separate": "PASS (mocked YouTube post excluded from primary Instagram count)",
+    "instagram_reels_carousels_only": "PASS (static photo excluded from target)"
   },
   "mock_coverage": {
     "registered_instagram_profiles": 1,
