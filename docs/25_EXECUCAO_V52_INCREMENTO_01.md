@@ -74,3 +74,24 @@ Auditar a migração e os testes; implementar `IMP-168` (refresh versionado de s
 **Bloqueio para homologação:** o ambiente de execução local não possui checkout do repositório privado e não consegue resolver o host GitHub para `git clone`; a conexão do GitHub permite leitura/escrita de arquivos e PRs, mas não disponibiliza o checkout diretamente à sessão Python. Para cumprir o pedido de testes completos, é necessário um ZIP do conteúdo da **branch do PR #11**, sem `.env`, tokens, senhas, arquivos de banco real ou credenciais, enviado ao chat. Nenhuma permissão de API Meta/YouTube é necessária para os testes offline. Até receber os arquivos ou obter outro acesso local autorizado, os testes de integração permanecem `NAO_EXECUTADO`.
 
 **Próximo gate:** rodar `pytest`, frontend Node, migrar 0002→0003 e base limpa por Alembic real, revisar idempotência, concorrência de ingests e `run_key`, corrigir falhas, atualizar PR. Não fazer merge ainda.
+
+## Validação final em checkout local (03/11/2026)
+
+**Fonte local:** ZIP da branch fornecido no chat, extraído em área temporária sem arquivos `.env` nem credenciais reais. Esta seção **substitui** o bloqueio de checkout/testes descrito acima; a suíte agora foi executada de fato.
+
+**Falha inicial real:** `pytest` apresentou `175 passed, 2 failed`. Ambas as falhas vinham do versionamento histórico das migrações: `0001` criava tabelas de ingestão registradas dinamicamente no `metadata` atual; `0002` tentava criá-las novamente.
+
+**Correção feita e testada:** revisão `0001` restringida ao conjunto fixo de 13 tabelas de domínio e identidade originais; revisão `0002` congela a estrutura dos três objetos históricos de ingestão, sem dependência do esquema atual. Assim, `0003` adiciona checkpoint e contador de refresh. Incluído `path_separator=os` no `alembic.ini` para compatibilidade com Alembic atual.
+
+**Resultados executados localmente:**
+- `PYTHONPATH=src python -m pytest -q` → **178 passed, 0 failed**, sem warnings.
+- `node --test tests/frontend/*.mjs` → **3 passed, 0 failed**.
+- `PYTHONPATH=src python scripts/check_gate0.py` → **aprovado**.
+- `PYTHONPATH=src python scripts/verify_zero_spend.py` → **aprovado**.
+- `PYTHONPATH=src python -m compileall -q src migrations tests` → **aprovado**.
+- Alembic real SQLite: base vazia → `head` (0003), base 0002 → 0003, rollback 0003 → 0002, novo upgrade; sem perda do registro de execução anterior.
+- Teste `test_migrated_schema_persists_new_and_refreshed_metric_snapshots`: banco realmente migrado, um post criado, uma alteração de métricas gerando segundo snapshot e uma releitura idêntica sem duplicação.
+
+**Evidência formal da IMP-168:** `evidence/acquisition/refresh_contract_tests.json`. O critério de aceite da tarefa (histórico, denominador, `observed_at`, sem reescrever métricas anteriores) está comprovado **em SQLite com provider mock**.
+
+**Fronteiras ainda não homologadas:** PostgreSQL real, corrida de ingestões concorrentes, acesso Meta/YouTube real, coleta de múltiplos perfis e desempenho em volumes de milhares de posts. O módulo externo continua desativado por padrão e o custo zero foi verificado. O PR deve passar por revisão antes do merge na `main`.
