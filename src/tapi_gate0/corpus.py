@@ -103,6 +103,12 @@ def corpus_data_card(engine, tenant: str, *, as_of: datetime | None = None,
                   excluded_grant_or_technical=0, excluded_too_recent=0,
                   excluded_without_metrics=0, excluded_nonpositive_denominator=0)
     sectors = {sector: 0 for sector in ('commerce','food','services','beauty','other')}
+    strata = {}
+    for profile in profiles:
+        if profile['platform'] == Platform.INSTAGRAM.value:
+            entry = strata.setdefault(profile['sampling_stratum'],
+                                      {'registered_profiles':0, 'eligible_profiles':0, 'eligible_posts':0})
+            entry['registered_profiles'] += 1
     qualifying_instagram_accounts = set()
     for rec in records:
         key = (rec['platform'],rec['source_account_id'])
@@ -133,11 +139,14 @@ def corpus_data_card(engine, tenant: str, *, as_of: datetime | None = None,
         if rec['platform'] == Platform.INSTAGRAM.value:
             counts['eligible_instagram_posts'] += 1
             sectors[profile['sector']] += 1
+            strata[profile['sampling_stratum']]['eligible_posts'] += 1
             qualifying_instagram_accounts.add(key)
         else:
             counts['eligible_youtube_supplementary_posts'] += 1
 
     counts['eligible_instagram_profiles'] = len(qualifying_instagram_accounts)
+    for key in qualifying_instagram_accounts:
+        strata[registry[key]['sampling_stratum']]['eligible_profiles'] += 1
     active_grants = sum(bool((g:=grant_map.get((p['platform'],p['source_account_id'])))
         and g['enabled'] and datetime.fromisoformat(g['expires_at']) > as_of) for p in profiles)
     technically_checked = sum(bool((g:=grant_map.get((p['platform'],p['source_account_id'])))
@@ -155,6 +164,7 @@ def corpus_data_card(engine, tenant: str, *, as_of: datetime | None = None,
                            'with_prior_technical_verification': technically_checked},
         'observed': counts,
         'instagram_posts_by_operator_sector': sectors,
+        'instagram_sampling_strata': strata,
         'deficit': {'profiles': max(0, 30-good_profiles),
                     'posts': max(0, 2000-good_posts)},
         'target_reached': good_profiles>=30 and 2000<=good_posts<=5000,
