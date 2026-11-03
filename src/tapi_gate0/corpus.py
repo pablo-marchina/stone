@@ -14,7 +14,7 @@ from sqlalchemy import Table, Column, String, ForeignKeyConstraint, select, inse
 from sqlalchemy.exc import IntegrityError
 
 from .connectors import Platform, ConnectorError
-from .domain import ContentItem, MetricsCreate
+from .domain import ContentItem, MetricsCreate, MediaType
 from .identity import IdentityFailure
 from .ingestion import source_grants, ingestion_records
 from .sa_store import metadata, content_items, metrics_snapshots
@@ -101,7 +101,8 @@ def corpus_data_card(engine, tenant: str, *, as_of: datetime | None = None,
     counts = dict(eligible_instagram_posts=0, eligible_instagram_profiles=0,
                   eligible_youtube_supplementary_posts=0, excluded_unregistered=0,
                   excluded_grant_or_technical=0, excluded_too_recent=0,
-                  excluded_without_metrics=0, excluded_nonpositive_denominator=0)
+                  excluded_without_metrics=0, excluded_nonpositive_denominator=0,
+                  excluded_nonprimary_instagram_format=0)
     sectors = {sector: 0 for sector in ('commerce','food','services','beauty','other')}
     strata = {}
     for profile in profiles:
@@ -125,6 +126,10 @@ def corpus_data_card(engine, tenant: str, *, as_of: datetime | None = None,
         post = posts.get(rec['content_id'])
         if post is None or post.is_synthetic:
             counts['excluded_unregistered'] += 1
+            continue
+        if (rec['platform'] == Platform.INSTAGRAM.value and
+            post.media_type not in {MediaType.REELS, MediaType.CAROUSEL}):
+            counts['excluded_nonprimary_instagram_format'] += 1
             continue
         if (as_of - post.published_at).total_seconds() < min_age_days * 86400:
             counts['excluded_too_recent'] += 1
