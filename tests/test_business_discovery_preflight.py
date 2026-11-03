@@ -152,3 +152,55 @@ def test_cli_requires_explicit_execute_and_guards(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "DISCOVERY_SAMPLE_READ" in output
     assert TOKEN not in output
+
+
+def test_cursor_without_paging_next_is_used_for_nested_discovery():
+    # Business Discovery responses can expose only paging.cursors.after.
+    calls = []
+    def handler(req):
+        fields = req.url.params["fields"]
+        calls.append(fields)
+        if ".after(opaque_SAFE_cursor)" in fields:
+            return response(req, [media_item(2)])
+        return response(req, [media_item(1)], paging={
+            "cursors": {"after": "opaque_SAFE_cursor"},
+        })
+    result = probe(handler, limit=1, max_pages=2)
+    assert len(calls) == 2
+    assert "media.limit(1).after(opaque_SAFE_cursor)" in calls[1]
+    assert result["sample"]["eligible_14d"] == 2
+    assert result["pages_examined"] == 2
+    assert result["pagination_status"] == "PARTIAL_PAGE_NO_CURSOR"
+
+
+def test_full_page_without_cursor_must_not_claim_exhaustion():
+    result = probe(lambda req: response(req, [
+        media_item(1), media_item(2), media_item(3),
+    ]), limit=3, max_pages=1)
+    assert result["target"]["reported_media_count"] == 8634
+    assert result["sample"]["returned"] == 3
+    assert result["another_page_possible"] is False
+    assert result["pagination_status"] == "UNVERIFIED_FULL_PAGE_NO_CURSOR"
+    assert result["exhaustion_confirmed"] is False
+    assert result["persisted_posts"] == 0
+
+
+def test_explicit_next_without_cursor_is_invalid_paging():
+    with pytest.raises(ConnectorError) as exc:
+        probe(lambda req: response(req, [media_item(1)], paging={
+            "next": "https://graph.facebook.com/anything",
+        }), limit=1)
+    assert exc.value.code == "DISCOVERY_PAGING_CURSOR_MISSING"
+
+
+def test_cursor_on_partial_page_without_next_is_not_followed():
+    calls = []
+    def handler(req):
+        calls.append(req.url.path)
+        return response(req, [media_item(1)], paging={
+            "cursors": {"after": "opaque_SAFE_cursor"},
+        })
+    result = probe(handler, limit=3, max_pages=3)
+    assert len(calls) == 1
+    assert result["pagination_status"] == "PARTIAL_PAGE_NO_CURSOR"
+    assert result["another_page_possible"] is False
