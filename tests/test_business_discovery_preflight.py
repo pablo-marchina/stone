@@ -170,7 +170,7 @@ def test_cursor_without_paging_next_is_used_for_nested_discovery():
     assert "media.limit(1).after(opaque_SAFE_cursor)" in calls[1]
     assert result["sample"]["eligible_14d"] == 2
     assert result["pages_examined"] == 2
-    assert result["pagination_status"] == "PARTIAL_PAGE_NO_CURSOR"
+    assert result["pagination_status"] == "UNVERIFIED_FULL_PAGE_NO_CURSOR"
 
 
 def test_full_page_without_cursor_must_not_claim_exhaustion():
