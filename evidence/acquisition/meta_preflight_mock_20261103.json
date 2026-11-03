@@ -1,0 +1,25 @@
+{
+  "work_item": "IMP-164 — first official Meta access preflight",
+  "date": "2026-11-03",
+  "execution_context": "Local snapshot of the user-provided ingestion ZIP with historical Alembic fixes already merged into main applied for regression compatibility.",
+  "test_results": {
+    "new_meta_preflight_tests": "4 passed",
+    "python_regression_on_compatibility_snapshot": "181 passed, 0 failed",
+    "javascript_regression": "3 passed, 0 failed",
+    "gate0": "PASS",
+    "zero_spend": "PASS",
+    "python_compile": "PASS"
+  },
+  "live_meta_api": "NOT_EXECUTED — container cannot resolve graph.facebook.com",
+  "graph_explorer_user_report": "SUCCESS_REPORTED; no independent IG ID/scopes response inspected",
+  "covered_safety": [
+    "Read-only fixed Graph host",
+    "Expected Page ID and Instagram username must match",
+    "Opaque cursor validated, never fetch provider pagination URL",
+    "Requires explicit --execute and read/zero-billing flags",
+    "Does not persist token, media, grants or post data",
+    "Prints sanitized summary or error code"
+  ],
+  "status": "READY_FOR_OPERATOR_CONNECTED_PREFLIGHT",
+  "notes": "This is not completed OAuth verification and does not authorize third-party profiles."
+}
