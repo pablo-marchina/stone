@@ -152,3 +152,107 @@ def test_diagnostic_uses_only_fixed_graph_host_with_safe_cursor():
     assert all("untrusted.invalid" not in url for url in calls)
     assert result["expected_page_found"] is True
     assert result["visible_page_count_in_scan"] == 2
+
+
+
+def test_direct_known_page_bypasses_empty_me_accounts_safely():
+    expected_page = "1342848532252679"
+    expected_ig = "17841459971757521"
+    requests = []
+
+    def graph(req):
+        requests.append(req.url.path)
+        assert req.url.host == "graph.facebook.com"
+        assert req.headers["Authorization"] == "Bearer " + TOKEN
+        assert "access_token" not in req.url.params
+        assert not req.url.path.endswith("/me/accounts")
+        if req.url.path.endswith("/" + expected_page):
+            assert req.url.params["fields"] == "id,name,instagram_business_account"
+            return httpx.Response(200, json={
+                "id": expected_page, "name": "Stone Academy Case",
+                "instagram_business_account": {"id": expected_ig},
+                "access_token": "must-not-leak-page-token",
+            })
+        if req.url.path.endswith("/" + expected_ig):
+            return httpx.Response(200, json={
+                "id": expected_ig, "username": "academy_fellow_stone",
+                "followers_count": 210,
+            })
+        if req.url.path.endswith("/" + expected_ig + "/media"):
+            return httpx.Response(200, json={"data": []})
+        raise AssertionError("Unexpected Graph endpoint")
+
+    with httpx.Client(transport=httpx.MockTransport(graph)) as client:
+        result = check_meta_account(TOKEN, page_id=expected_page, client=client,
+                                    direct_page=True)
+    assert len(requests) == 3
+    assert result["status"] == "OFFICIAL_READ_CONFIRMED"
+    assert result["facebook_page_id"] == expected_page
+    assert result["instagram_user_id"] == expected_ig
+    assert result["page_resolution"] == "direct_id"
+    assert result["authorized_post_count_persisted"] == 0
+    assert TOKEN not in str(result)
+    assert "must-not-leak-page-token" not in str(result)
+
+
+def test_direct_page_rejects_wrong_page_id_before_ig_or_media_read():
+    requests = []
+
+    def wrong(req):
+        requests.append(req.url.path)
+        return httpx.Response(200, json={
+            "id": "999999999999", "instagram_business_account": {"id": IG},
+        })
+
+    with httpx.Client(transport=httpx.MockTransport(wrong)) as client:
+        try:
+            check_meta_account(TOKEN, page_id="1342848532252679",
+                               client=client, direct_page=True)
+        except MetaPreflightError as exc:
+            assert exc.code == "PROVIDER_ACCOUNT_MISMATCH"
+        else:
+            assert False, "Expected Page mismatch"
+    assert len(requests) == 1
+
+
+def test_direct_page_requires_matching_ig_username_before_media_read():
+    requests = []
+    page_id = "1342848532252679"
+
+    def wrong_username(req):
+        requests.append(req.url.path)
+        if req.url.path.endswith("/" + page_id):
+            return httpx.Response(200, json={
+                "id": page_id, "instagram_business_account": {"id": IG},
+            })
+        if req.url.path.endswith("/" + IG):
+            return httpx.Response(200, json={
+                "id": IG, "username": "different_account", "followers_count": 100,
+            })
+        raise AssertionError("Media must not be read when username differs")
+
+    with httpx.Client(transport=httpx.MockTransport(wrong_username)) as client:
+        try:
+            check_meta_account(TOKEN, page_id=page_id,
+                               client=client, direct_page=True)
+        except MetaPreflightError as exc:
+            assert exc.code == "IG_USERNAME_MISMATCH"
+        else:
+            assert False, "Expected username mismatch"
+    assert len(requests) == 2
+
+
+def test_direct_page_handles_missing_ig_link_without_media_read():
+    def unlinked(req):
+        assert req.url.path.endswith("/1342848532252679")
+        return httpx.Response(200, json={
+            "id": "1342848532252679", "name": "Stone Academy Case",
+        })
+    with httpx.Client(transport=httpx.MockTransport(unlinked)) as client:
+        try:
+            check_meta_account(TOKEN, page_id="1342848532252679",
+                               client=client, direct_page=True)
+        except MetaPreflightError as exc:
+            assert exc.code == "PAGE_WITHOUT_CONNECTED_IG_PROFESSIONAL"
+        else:
+            assert False, "Expected missing Instagram link"
