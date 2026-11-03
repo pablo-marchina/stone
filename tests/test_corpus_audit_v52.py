@@ -114,6 +114,13 @@ def test_authorized_mock_ingest_counts_only_mature_instagram(tmp_path,monkeypatc
         assert blocked['observed']['eligible_instagram_posts']==0
         assert blocked['observed']['excluded_grant_or_technical']==1
         assert blocked['deficit']['posts']==2000
+        # An expired grant also excludes historical posts from current sampling.
+        with app.state.ingestion_store.engine.begin() as db:
+            db.execute(update(source_grants).where(source_grants.c.tenant_id==TENANT)
+                       .values(enabled=1, expires_at='2020-01-01T00:00:00+00:00'))
+        expired=client.get('/v1/corpus/data-card',headers=headers).json()
+        assert expired['observed']['eligible_instagram_posts']==0
+        assert expired['observed']['excluded_grant_or_technical']==1
         assert corpus_data_card(app.state.ingestion_store.engine,'unknown-tenant')['observed']['eligible_instagram_posts']==0
 
 
@@ -134,3 +141,47 @@ def test_corpus_0004_upgrade_and_downgrade(tmp_path,monkeypatch):
     command.upgrade(cfg,'head')
     assert inspect(engine).has_table('corpus_profiles')
     engine.dispose()
+
+
+def test_youtube_remains_supplemental_not_part_of_instagram_target(tmp_path,monkeypatch):
+    app=setup(tmp_path)
+    channel='UC123456789'
+    monkeypatch.setenv('TAPI_OFFICIAL_METADATA_READS','1')
+    monkeypatch.setenv('TAPI_ZERO_BILLING_CONFIRMED','1')
+    monkeypatch.setenv('TAPI_YOUTUBE_ACCESS_TOKEN','mocked-credentials-no-network')
+    def responder(req):
+        assert req.url.host=='www.googleapis.com'
+        if req.url.path.endswith('/channels'):
+            return httpx.Response(200,json={'items':[{
+                'id':channel,'snippet':{'title':'Authorized channel'},
+                'statistics':{'subscriberCount':'1200'}}]})
+        assert req.url.path.endswith('/videos')
+        return httpx.Response(200,json={'items':[{
+            'id':'AZabcdef123',
+            'snippet':{'channelId':channel,'title':'Store tips',
+                       'publishedAt':'2024-01-01T00:00:00Z'},
+            'statistics':{'likeCount':'20','commentCount':'2','viewCount':'1000'}}]})
+    provider=OfficialHttp(httpx.Client(transport=httpx.MockTransport(responder)))
+    with TestClient(app) as client:
+        headers=logged_in(client)
+        assert client.post('/v1/ingestion/grants',headers=headers,json={
+            'platform':'youtube','source_account_id':channel,
+            'approval_reference':'approved mocked YouTube research grant',
+            'expires_at':(datetime.now(timezone.utc)+timedelta(days=10)).isoformat(),
+        }).status_code==201
+        assert client.post('/v1/corpus/profiles',headers=headers,json={
+            'platform':'youtube','source_account_id':channel,'sector':'services',
+            'sampling_stratum':'service_south',
+            'evidence_reference':'mock youtube sampling ref',
+        }).status_code==201
+        result=app.state.ingestion_store.run(TENANT,IngestionRequest(
+            platform='youtube',source_account_id=channel,run_key='youtube-corpus-1',
+            video_ids=['AZabcdef123'],
+            shorts_evidence_reference='human attests authorized shorts'),http=provider)
+        assert result.new_records==1
+        d=client.get('/v1/corpus/data-card',headers=headers).json()
+        assert d['observed']['eligible_instagram_posts']==0
+        assert d['observed']['eligible_instagram_profiles']==0
+        assert d['observed']['eligible_youtube_supplementary_posts']==1
+        assert d['deficit']=={'profiles':30,'posts':2000}
+        assert not d['target_reached']
