@@ -15,7 +15,7 @@
   "results": {
     "python_tests": {
       "command": "PYTHONPATH=src python -m pytest -q",
-      "passed": 178,
+      "passed": 179,
       "failed": 0
     },
     "node_tests": {
@@ -55,7 +55,8 @@
     "test_missing_metrics_do_not_erase_last_known_snapshot",
     "test_0002_to_0003_and_rollback_preserve_existing_run",
     "test_clean_database_upgrade_head",
-    "test_migrated_schema_persists_new_and_refreshed_metric_snapshots"
+    "test_migrated_schema_persists_new_and_refreshed_metric_snapshots",
+    "test_concurrent_account_reservation_is_rejected_before_network"
   ],
   "implementation_notes": [
     "Historical 0001 table set frozen",
@@ -63,13 +64,21 @@
     "0003 adds updated counter and pagination checkpoints",
     "No historical snapshot overwritten",
     "New metric snapshots retain denominators and observed_at timestamps",
-    "Event and outbox emitted transactionally with refresh"
+    "Event and outbox emitted transactionally with refresh",
+    "Account-level write lock on grant row serializes active ingestion reservations and prevents competing pagination cursors"
   ],
   "exclusions": [
     "No production PostgreSQL migration or concurrency benchmarking",
     "No real Meta/Instagram/YouTube OAuth or media read",
     "No billed service or publishing enabled",
     "No institutional signoff",
-    "No claim of 30 profiles or 2,000-5,000 real posts"
-  ]
+    "No claim of 30 profiles or 2,000-5,000 real posts",
+    "Unfinished reserved runs fail closed and require operator recovery; no automatic lease reclamation"
+  ],
+  "review": {
+    "reviewed_on": "2026-11-03",
+    "pr_number": 11,
+    "decision": "ACCEPT_LOCAL_INCREMENT_WITH_EXPLICIT_LIMITATIONS",
+    "local_tests_reexecuted": true
+  }
 }
