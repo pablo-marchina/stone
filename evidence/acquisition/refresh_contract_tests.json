@@ -1,0 +1,75 @@
+{
+  "task_id": "IMP-168",
+  "acceptance": "Recoleta altera snapshot temporal, não duplica post nem reescreve valor anterior; denominador e observed_at preservados.",
+  "measured_at_utc": "2026-11-03T12:17:18Z",
+  "source": "local checkout extracted from user-provided ZIP of feat/ingestion-pagination-v52-20261030",
+  "runtime": {
+    "python": "3.13.5",
+    "node": "22.16.0",
+    "pytest": "9.0.2",
+    "alembic": "1.18.4",
+    "sqlalchemy": "2.0.50",
+    "database": "temporary SQLite",
+    "provider": "httpx.MockTransport (no external calls)"
+  },
+  "results": {
+    "python_tests": {
+      "command": "PYTHONPATH=src python -m pytest -q",
+      "passed": 178,
+      "failed": 0
+    },
+    "node_tests": {
+      "command": "node --test tests/frontend/*.mjs",
+      "passed": 3,
+      "failed": 0
+    },
+    "gate0": {
+      "command": "PYTHONPATH=src python scripts/check_gate0.py",
+      "passed": true
+    },
+    "zero_spend": {
+      "command": "PYTHONPATH=src python scripts/verify_zero_spend.py",
+      "passed": true
+    },
+    "compile": {
+      "command": "PYTHONPATH=src python -m compileall -q src migrations tests",
+      "passed": true
+    },
+    "schema_migrations": {
+      "fresh_install_to_0003": "passed",
+      "upgrade_0002_to_0003": "passed",
+      "downgrade_0003_to_0002": "passed",
+      "reupgrade_to_0003": "passed",
+      "preserved_older_run_data": "passed"
+    },
+    "integration_on_migrated_schema": {
+      "new_posts": 1,
+      "refreshes": 1,
+      "identical_rereads": 1,
+      "snapshot_rows": 2,
+      "actual_network_calls": 0
+    }
+  },
+  "cases": [
+    "test_refresh_preserves_old_snapshots_and_updates_ranking",
+    "test_missing_metrics_do_not_erase_last_known_snapshot",
+    "test_0002_to_0003_and_rollback_preserve_existing_run",
+    "test_clean_database_upgrade_head",
+    "test_migrated_schema_persists_new_and_refreshed_metric_snapshots"
+  ],
+  "implementation_notes": [
+    "Historical 0001 table set frozen",
+    "0002 ingestion schema frozen instead of importing live models",
+    "0003 adds updated counter and pagination checkpoints",
+    "No historical snapshot overwritten",
+    "New metric snapshots retain denominators and observed_at timestamps",
+    "Event and outbox emitted transactionally with refresh"
+  ],
+  "exclusions": [
+    "No production PostgreSQL migration or concurrency benchmarking",
+    "No real Meta/Instagram/YouTube OAuth or media read",
+    "No billed service or publishing enabled",
+    "No institutional signoff",
+    "No claim of 30 profiles or 2,000-5,000 real posts"
+  ]
+}
