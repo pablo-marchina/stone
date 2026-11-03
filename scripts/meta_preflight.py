@@ -28,10 +28,15 @@ class MetaPreflightError(Exception):
         super().__init__(code)
 
 
-def _read_pages(client: httpx.Client, token: str, page_id: str) -> dict:
-    """At most three bounded pages; never follow provider-supplied URLs."""
+def _read_pages(client: httpx.Client, token: str, page_id: str | None) -> dict | list[dict]:
+    """Resolve one Page, or list sanitized visible Pages when page_id is None.
+
+    At most three bounded pages; never follow provider-supplied URLs.
+    The diagnostic never emits Graph access tokens or raw response bodies.
+    """
     cursor = None
     visited = set()
+    visible: list[dict] = []
     for _ in range(3):
         params = {"fields": "id,name,instagram_business_account", "limit": 50}
         if cursor is not None:
@@ -60,8 +65,18 @@ def _read_pages(client: httpx.Client, token: str, page_id: str) -> dict:
         if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
             raise MetaPreflightError("PROVIDER_RESPONSE_INVALID")
         for page in payload["data"]:
-            if isinstance(page, dict) and str(page.get("id")) == page_id:
+            if not isinstance(page, dict):
+                continue
+            if page_id is not None and str(page.get("id")) == page_id:
                 return page
+            if page_id is None and re.fullmatch(r"[0-9]{5,32}", str(page.get("id", ""))):
+                instagram = page.get("instagram_business_account")
+                ig_id = str(instagram.get("id", "")) if isinstance(instagram, dict) else ""
+                visible.append({
+                    "page_id": str(page["id"]),
+                    "page_name": str(page.get("name") or "")[:100],
+                    "instagram_user_id": ig_id if re.fullmatch(r"[0-9]{5,32}", ig_id) else None,
+                })
         paging = payload.get("paging") or {}
         if not isinstance(paging, dict):
             raise MetaPreflightError("PROVIDER_RESPONSE_INVALID")
@@ -77,7 +92,32 @@ def _read_pages(client: httpx.Client, token: str, page_id: str) -> dict:
             raise MetaPreflightError("INVALID_PAGE_CURSOR")
         cursor = next_cursor
         visited.add(cursor)
+    if page_id is None:
+        return visible
     raise MetaPreflightError("EXPECTED_PAGE_NOT_FOUND")
+
+
+def diagnose_visible_pages(token: str, *, client: httpx.Client) -> dict:
+    """List only IDs/names of Pages exposed by the current Facebook user token.
+
+    This makes a mismatched hard-coded Page ID diagnosable without requesting
+    any extra scope, probing another account, or reading Instagram media.
+    """
+    if not isinstance(token, str) or len(token) < 10:
+        raise MetaPreflightError("CREDENTIAL_MISSING")
+    pages = _read_pages(client, token, None)
+    assert isinstance(pages, list)
+    return {
+        "status": "VISIBLE_PAGES_DIAGNOSTIC",
+        "expected_page_id": EXPECTED_PAGE_ID,
+        "expected_page_found": any(p["page_id"] == EXPECTED_PAGE_ID for p in pages),
+        "visible_page_count_in_scan": len(pages),
+        "pages": pages[:20],
+        "results_truncated": len(pages) > 20,
+        "max_graph_pages_scanned": 3,
+        "media_requests_performed": 0,
+        "note": "Only Pages available to this Facebook User Access Token are shown.",
+    }
 
 
 def check_meta_account(token: str, *, page_id: str = EXPECTED_PAGE_ID,
@@ -135,6 +175,8 @@ def check_meta_account(token: str, *, page_id: str = EXPECTED_PAGE_ID,
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Read-only Meta Instagram Graph preflight")
     parser.add_argument("--execute", action="store_true", help="Explicitly perform bounded API reads")
+    parser.add_argument("--diagnose-pages", action="store_true",
+                        help="List visible Page IDs and linked Instagram IDs; no media read")
     parser.add_argument("--page-id", default=EXPECTED_PAGE_ID)
     parser.add_argument("--username", default=EXPECTED_USERNAME)
     parser.add_argument("--limit", type=int, default=3)
@@ -154,9 +196,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         with httpx.Client(timeout=httpx.Timeout(8), follow_redirects=False) as client:
-            result = check_meta_account(
-                token, page_id=args.page_id, expected_username=args.username,
-                limit=args.limit, client=client)
+            if args.diagnose_pages:
+                result = diagnose_visible_pages(token, client=client)
+            else:
+                result = check_meta_account(
+                    token, page_id=args.page_id, expected_username=args.username,
+                    limit=args.limit, client=client)
     except MetaPreflightError as exc:
         print(json.dumps({"status": "FAILED", "code": exc.code}))
         return 1
