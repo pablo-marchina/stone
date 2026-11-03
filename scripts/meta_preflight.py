@@ -97,7 +97,6 @@ def _read_pages(client: httpx.Client, token: str, page_id: str | None) -> dict |
     raise MetaPreflightError("EXPECTED_PAGE_NOT_FOUND")
 
 
-
 def _read_page_by_id(client: httpx.Client, token: str, page_id: str) -> dict:
     """Read only the explicitly supplied Page; never enumerate another account.
 
