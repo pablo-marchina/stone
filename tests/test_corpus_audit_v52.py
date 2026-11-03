@@ -91,7 +91,11 @@ def test_authorized_mock_ingest_counts_only_mature_instagram(tmp_path,monkeypatc
             {'id':'179002','media_type':'VIDEO','media_product_type':'REELS',
              'permalink':'https://www.instagram.com/reel/new/',
              'timestamp':datetime.now(timezone.utc).isoformat(),
-             'like_count':14,'comments_count':1}]})
+             'like_count':14,'comments_count':1},
+            {'id':'179003','media_type':'IMAGE',
+             'permalink':'https://www.instagram.com/p/photo/',
+             'timestamp':'2024-01-01T00:00:00Z',
+             'like_count':30,'comments_count':3}]})
     http=OfficialHttp(httpx.Client(transport=httpx.MockTransport(responder)))
     with TestClient(app) as client:
         headers=logged_in(client)
@@ -99,10 +103,11 @@ def test_authorized_mock_ingest_counts_only_mature_instagram(tmp_path,monkeypatc
         assert reg(client,headers).status_code==201
         result=app.state.ingestion_store.run(TENANT,IngestionRequest(
             platform='instagram',source_account_id=ACCOUNT,run_key='corpus-run-0001',limit=3),http=http)
-        assert result.new_records==1 and result.excluded_too_recent==1
+        assert result.new_records==2 and result.excluded_too_recent==1
         data=client.get('/v1/corpus/data-card',headers=headers).json()
         assert data['sampling_frame']['with_prior_technical_verification']==1
         assert data['observed']['eligible_instagram_posts']==1
+        assert data['observed']['excluded_nonprimary_instagram_format']==1
         assert data['observed']['eligible_instagram_profiles']==1
         assert data['instagram_posts_by_operator_sector']['commerce']==1
         assert data['instagram_sampling_strata']['retail_micro_south']=={
@@ -114,7 +119,7 @@ def test_authorized_mock_ingest_counts_only_mature_instagram(tmp_path,monkeypatc
                        .values(enabled=0))
         blocked=client.get('/v1/corpus/data-card',headers=headers).json()
         assert blocked['observed']['eligible_instagram_posts']==0
-        assert blocked['observed']['excluded_grant_or_technical']==1
+        assert blocked['observed']['excluded_grant_or_technical']==2
         assert blocked['deficit']['posts']==2000
         # An expired grant also excludes historical posts from current sampling.
         with app.state.ingestion_store.engine.begin() as db:
@@ -122,7 +127,7 @@ def test_authorized_mock_ingest_counts_only_mature_instagram(tmp_path,monkeypatc
                        .values(enabled=1, expires_at='2020-01-01T00:00:00+00:00'))
         expired=client.get('/v1/corpus/data-card',headers=headers).json()
         assert expired['observed']['eligible_instagram_posts']==0
-        assert expired['observed']['excluded_grant_or_technical']==1
+        assert expired['observed']['excluded_grant_or_technical']==2
         assert corpus_data_card(app.state.ingestion_store.engine,'unknown-tenant')['observed']['eligible_instagram_posts']==0
 
 
