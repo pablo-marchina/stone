@@ -41,6 +41,17 @@ Direitos continuam exigidos por operação e finalidade. Essa proposta NÃO libe
 - Ausência de dados financeiros/comerciais é `unknown`, **não zero**. Presença de CTA/um comentário não é lead observado.
 - Comparações top/restante são opcionais no case, mas metodologicamente úteis **somente** quando a base de comparação também tiver anotações. Clusterizar por criador, analisar heterogeneidade por estrato/período e declarar inferência não causal.
 
+## 3.1 Bloqueio de conteúdo observável no Business Discovery atual
+
+O método `BusinessDiscoveryProbe._fields` e o sampler `mpe_evidence.py` **não solicitam `caption`, thumbnail, frames, áudio ou transcrição**. Os campos efetivamente coletados identificam fonte/ID, URL, tipo, data, curtidas, comentários e seguidores, permitindo apenas elegibilidade **técnica de idade/métricas**. Eles **não demonstram** por si que o conteúdo da publicação é dirigido a MPEs, nem permitem classificar campos da rubrica multimodal que dependem de visualizar o post.
+
+Antes de contar um post no corpus de pesquisa, separar três estados:
+- `technical_metrics_eligible`: formato, idade, ID e métricas verificáveis;
+- `research_content_eligible`: conteúdo direcionado a MPEs comprovado por anotação/evidência autorizada;
+- `rubric_observable`: campos da rubrica com modalidades realmente acessíveis, os demais marcados `not_observable`.
+
+O uso de legendas, thumbnails, transcrições ou frames requer rota tecnicamente compatível e revisão específica de direitos. Não presumir que Business Discovery, por ter retornado seis mídias técnicas de @instagram, libera análise semântica/audiovisual de terceiros.
+
 ## 4. Rubrica, hipóteses e avaliação
 
 **Preservar como núcleo:** 20 campos JSON/Pydantic, pelo menos 50 publicações revisadas por humanos, agente com modos `analisar|recomendar|gerar_criativo`, Python+MCP, playbook com >=5 propostas vinculadas a referências reais, demo e README. Multimodal só quando mídia/legenda autorizada estiver de fato observável: rótulos `observed|not_observable|not_applicable`. Não atribuir nota de ritmo/cortes ou rosto com texto isolado.
