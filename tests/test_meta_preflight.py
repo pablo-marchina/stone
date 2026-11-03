@@ -154,7 +154,6 @@ def test_diagnostic_uses_only_fixed_graph_host_with_safe_cursor():
     assert result["visible_page_count_in_scan"] == 2
 
 
-
 def test_direct_known_page_bypasses_empty_me_accounts_safely():
     expected_page = "1342848532252679"
     expected_ig = "17841459971757521"
