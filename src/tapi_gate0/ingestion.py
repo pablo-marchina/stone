@@ -197,12 +197,32 @@ class IngestionStore:
     def _reserve(self,tenant,req:IngestionRequest):
         """Reserve one of five bounded account reads per UTC day BEFORE network call."""
         with self.engine.begin() as db:
+            # Acquire a per-account write/row lock before testing reservations.
+            # SQLite serializes writers; PostgreSQL locks this grant row.
+            locked = db.execute(update(source_grants).where(
+                source_grants.c.tenant_id == tenant,
+                source_grants.c.platform == req.platform.value,
+                source_grants.c.source_account_id == req.source_account_id,
+                source_grants.c.enabled == 1,
+            ).values(enabled=source_grants.c.enabled))
+            if locked.rowcount != 1:
+                raise ConnectorError("VALID_SOURCE_GRANT_REQUIRED", 403)
             old=db.execute(select(ingestion_runs).where(
                 ingestion_runs.c.tenant_id==tenant,ingestion_runs.c.run_key==req.run_key)).mappings().first()
             if old:
                 if old["platform"]!=req.platform.value or old["source_account_id"]!=req.source_account_id:
                     raise ConnectorError("RUN_KEY_CONFLICT",409)
                 raise ConnectorError("RUN_ALREADY_REGISTERED",409)
+            active = db.execute(select(ingestion_runs.c.run_key).where(
+                ingestion_runs.c.tenant_id == tenant,
+                ingestion_runs.c.platform == req.platform.value,
+                ingestion_runs.c.source_account_id == req.source_account_id,
+                ingestion_runs.c.status == "reserved",
+            ).limit(1)).first()
+            if active:
+                # Fail closed after crashes; reserved runs require an audited
+                # operator recovery procedure rather than silent expiry.
+                raise ConnectorError("ACCOUNT_INGESTION_IN_PROGRESS", 409)
             today=now_utc().date().isoformat()
             count=db.execute(select(func.count()).select_from(ingestion_runs).where(
                 ingestion_runs.c.tenant_id==tenant,
