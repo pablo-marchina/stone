@@ -133,32 +133,77 @@ class InstagramOfficial:
 
     def fetch(self, account_id: str, token: str, verified: dict, limit: int,
               item_ids: list[str] | None = None) -> list[NormalizedItem]:
-        if item_ids:raise ConnectorError("INSTAGRAM_LIST_MODE_ONLY")
-        payload=self.http.get(self.platform, f"{account_id}/media",
-            {"fields":"id,media_type,media_product_type,caption,timestamp,permalink,like_count,comments_count",
-             "limit":min(limit,25)},token)
-        if not isinstance(payload.get("data"),list):raise ConnectorError("PROVIDER_RESPONSE_INVALID",502)
-        out=[]
+        # Backwards-compatible single-page interface for existing callers.
+        items, _ = self.fetch_page(account_id, token, verified, limit, item_ids=item_ids)
+        return items
+
+    def fetch_page(self, account_id: str, token: str, verified: dict, limit: int,
+                   *, after: str | None = None,
+                   item_ids: list[str] | None = None) -> tuple[list[NormalizedItem], str | None]:
+        """One bounded official page. Never follow a provider-supplied 'next' URL.
+
+        Only the opaque cursor is used, as a query parameter on the fixed host.
+        Pages that contain ineligible formats can still have a next cursor.
+        """
+        if item_ids:
+            raise ConnectorError("INSTAGRAM_LIST_MODE_ONLY")
+        if not 1 <= limit <= 10:
+            raise ConnectorError("INVALID_PAGE_LIMIT")
+        if after is not None and not re.fullmatch(r"[A-Za-z0-9_+/=-]{1,512}", after):
+            raise ConnectorError("INVALID_PAGINATION_CURSOR", 422)
+        params = {
+            "fields": "id,media_type,media_product_type,caption,timestamp,permalink,like_count,comments_count",
+            "limit": limit,
+        }
+        if after is not None:
+            params["after"] = after
+        payload = self.http.get(self.platform, f"{account_id}/media", params, token)
+        if not isinstance(payload.get("data"), list):
+            raise ConnectorError("PROVIDER_RESPONSE_INVALID", 502)
+        out = []
         for x in payload["data"][:limit]:
-            if not isinstance(x,dict):continue
-            mid=str(x.get("id",""))
-            if not re.fullmatch(r"[0-9_]+",mid):continue
-            kind=x.get("media_type")
-            product=x.get("media_product_type")
-            if kind=="CAROUSEL_ALBUM": form=MediaType.CAROUSEL
-            elif product=="REELS":form=MediaType.REELS
-            elif kind=="IMAGE":form=MediaType.IMAGE
-            else:continue  # Avoid calling non-Reels video a Reel.
-            url=x.get("permalink")
-            if not isinstance(url,str) or not url.startswith("https://www.instagram.com/"):continue
-            out.append(NormalizedItem(platform=self.platform,source_account_id=account_id,
-                source_item_id=mid,creator_handle=verified["username"],media_type=form,
-                source_url=url,published_at=_date(x.get("timestamp")),
-                caption=(x.get("caption") or "")[:10000] or None,likes=_integer(x.get("like_count")),
-                comments=_integer(x.get("comments_count")),
-                follower_count=verified["followers_count"],denominator_quality="observed_current_only",
-                metadata_only=True))
-        return out
+            if not isinstance(x, dict):
+                continue
+            mid = str(x.get("id", ""))
+            if not re.fullmatch(r"[0-9_]+", mid):
+                continue
+            kind = x.get("media_type")
+            product = x.get("media_product_type")
+            if kind == "CAROUSEL_ALBUM":
+                form = MediaType.CAROUSEL
+            elif product == "REELS":
+                form = MediaType.REELS
+            elif kind == "IMAGE":
+                form = MediaType.IMAGE
+            else:
+                continue
+            url = x.get("permalink")
+            if not isinstance(url, str) or not url.startswith("https://www.instagram.com/"):
+                continue
+            out.append(NormalizedItem(
+                platform=self.platform, source_account_id=account_id,
+                source_item_id=mid, creator_handle=verified["username"], media_type=form,
+                source_url=url, published_at=_date(x.get("timestamp")),
+                caption=(x.get("caption") or "")[:10000] or None,
+                likes=_integer(x.get("like_count")), comments=_integer(x.get("comments_count")),
+                follower_count=verified["followers_count"],
+                denominator_quality="observed_current_only", metadata_only=True,
+            ))
+        paging = payload.get("paging") or {}
+        if not isinstance(paging, dict):
+            raise ConnectorError("PROVIDER_RESPONSE_INVALID", 502)
+        cursors = paging.get("cursors") or {}
+        if not isinstance(cursors, dict):
+            raise ConnectorError("PROVIDER_RESPONSE_INVALID", 502)
+        next_cursor = cursors.get("after") if paging.get("next") else None
+        if next_cursor is not None:
+            if not isinstance(next_cursor, str) or not re.fullmatch(
+                r"[A-Za-z0-9_+/=-]{1,512}", next_cursor
+            ):
+                raise ConnectorError("INVALID_PROVIDER_CURSOR", 502)
+            if next_cursor == after:
+                raise ConnectorError("PAGINATION_CURSOR_STALLED", 502)
+        return out, next_cursor
 
 
 class YouTubeOfficial:

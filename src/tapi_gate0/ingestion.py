@@ -47,6 +47,7 @@ ingestion_runs = Table("ingestion_runs",metadata,
     Column("requested_at",String(40),nullable=False),
     Column("status",String(24),nullable=False),
     Column("new_records",Integer,nullable=False,default=0),
+    Column("refreshed_records",Integer,nullable=False,default=0,server_default="0"),
     Column("duplicate_records",Integer,nullable=False,default=0),
     Column("reason_code",String(80)),
     ForeignKeyConstraint(["tenant_id","platform","source_account_id"],
@@ -65,6 +66,20 @@ ingestion_records=Table("ingestion_records",metadata,
     ForeignKeyConstraint(["tenant_id","content_id"],["content_items.tenant_id","content_items.id"]),
     ForeignKeyConstraint(["tenant_id","platform","source_account_id"],
         ["ingestion_source_grants.tenant_id","ingestion_source_grants.platform",
+         "ingestion_source_grants.source_account_id"]))
+
+
+# Persist only provider cursors (never URLs or tokens) after successful page commits.
+# A separate table avoids retroactively changing migration 0002's run ledger.
+ingestion_page_checkpoints = Table("ingestion_page_checkpoints", metadata,
+    Column("tenant_id", String(128), primary_key=True),
+    Column("platform", String(32), primary_key=True),
+    Column("source_account_id", String(128), primary_key=True),
+    Column("next_cursor", String(512)),
+    Column("complete", Integer, nullable=False, default=0),
+    Column("updated_at", String(40), nullable=False),
+    ForeignKeyConstraint(["tenant_id", "platform", "source_account_id"],
+        ["ingestion_source_grants.tenant_id", "ingestion_source_grants.platform",
          "ingestion_source_grants.source_account_id"]))
 
 
@@ -88,6 +103,8 @@ class IngestionRequest(BaseModel):
     source_account_id: str=Field(min_length=1,max_length=128,pattern=r"^[A-Za-z0-9_-]+$")
     run_key: str=Field(min_length=8,max_length=128,pattern=r"^[A-Za-z0-9_.:-]+$")
     limit:int=Field(default=10,ge=1,le=10)
+    min_age_days:int=Field(default=14,ge=14,le=3650)
+    resume:bool=False
     video_ids:list[str]=Field(default_factory=list,max_length=10)
     shorts_evidence_reference: str | None=Field(default=None,min_length=12,max_length=512)
 
@@ -95,6 +112,8 @@ class IngestionRequest(BaseModel):
     def scope(self):
         if self.platform==Platform.INSTAGRAM and (self.video_ids or self.shorts_evidence_reference):
             raise ValueError("Instagram collects bounded account media, not supplied video IDs")
+        if self.platform==Platform.YOUTUBE and self.resume:
+            raise ValueError("YouTube ID-list mode does not use an Instagram page checkpoint")
         if self.platform==Platform.YOUTUBE and (
             not self.video_ids or len(self.video_ids)>self.limit or not self.shorts_evidence_reference):
             raise ValueError("YouTube Shorts require explicit IDs and operator evidence reference")
@@ -107,6 +126,9 @@ class IngestionResult(BaseModel):
     source_account_id:str
     new_records:int
     duplicate_records:int
+    refreshed_records:int=0
+    excluded_too_recent:int=0
+    next_page_available:bool=False
     metadata_only:bool=True
     missing_modalities:list[str]=Field(default_factory=lambda:["image","video","audio","transcript"])
     ranking_warning:str="Denominators may be current or rounded; historical exact ranking requires source-specific validation."
@@ -141,15 +163,66 @@ class IngestionStore:
             raise ConnectorError("VALID_SOURCE_GRANT_REQUIRED",403)
         return dict(row)
 
+    def _resume_cursor(self, tenant: str, req: IngestionRequest) -> str:
+        """Use only a cursor persisted from a prior successful authorized read."""
+        with self.engine.connect() as db:
+            row = db.execute(select(ingestion_page_checkpoints).where(
+                ingestion_page_checkpoints.c.tenant_id == tenant,
+                ingestion_page_checkpoints.c.platform == req.platform.value,
+                ingestion_page_checkpoints.c.source_account_id == req.source_account_id,
+            )).mappings().first()
+        if not row:
+            raise ConnectorError("PAGINATION_CHECKPOINT_REQUIRED", 409)
+        if row["complete"] or not row["next_cursor"]:
+            raise ConnectorError("PAGINATION_COMPLETE", 409)
+        return row["next_cursor"]
+
+    def _save_checkpoint(self, tenant: str, req: IngestionRequest, cursor: str | None):
+        updated = now_utc().isoformat()
+        where = (
+            (ingestion_page_checkpoints.c.tenant_id == tenant) &
+            (ingestion_page_checkpoints.c.platform == req.platform.value) &
+            (ingestion_page_checkpoints.c.source_account_id == req.source_account_id)
+        )
+        with self.engine.begin() as db:
+            old = db.execute(select(ingestion_page_checkpoints.c.tenant_id).where(where)).first()
+            values = {"next_cursor": cursor, "complete": int(cursor is None), "updated_at": updated}
+            if old:
+                db.execute(update(ingestion_page_checkpoints).where(where).values(**values))
+            else:
+                db.execute(insert(ingestion_page_checkpoints).values(
+                    tenant_id=tenant, platform=req.platform.value,
+                    source_account_id=req.source_account_id, **values))
+
     def _reserve(self,tenant,req:IngestionRequest):
         """Reserve one of five bounded account reads per UTC day BEFORE network call."""
         with self.engine.begin() as db:
+            # Acquire a per-account write/row lock before testing reservations.
+            # SQLite serializes writers; PostgreSQL locks this grant row.
+            locked = db.execute(update(source_grants).where(
+                source_grants.c.tenant_id == tenant,
+                source_grants.c.platform == req.platform.value,
+                source_grants.c.source_account_id == req.source_account_id,
+                source_grants.c.enabled == 1,
+            ).values(enabled=source_grants.c.enabled))
+            if locked.rowcount != 1:
+                raise ConnectorError("VALID_SOURCE_GRANT_REQUIRED", 403)
             old=db.execute(select(ingestion_runs).where(
                 ingestion_runs.c.tenant_id==tenant,ingestion_runs.c.run_key==req.run_key)).mappings().first()
             if old:
                 if old["platform"]!=req.platform.value or old["source_account_id"]!=req.source_account_id:
                     raise ConnectorError("RUN_KEY_CONFLICT",409)
                 raise ConnectorError("RUN_ALREADY_REGISTERED",409)
+            active = db.execute(select(ingestion_runs.c.run_key).where(
+                ingestion_runs.c.tenant_id == tenant,
+                ingestion_runs.c.platform == req.platform.value,
+                ingestion_runs.c.source_account_id == req.source_account_id,
+                ingestion_runs.c.status == "reserved",
+            ).limit(1)).first()
+            if active:
+                # Fail closed after crashes; reserved runs require an audited
+                # operator recovery procedure rather than silent expiry.
+                raise ConnectorError("ACCOUNT_INGESTION_IN_PROGRESS", 409)
             today=now_utc().date().isoformat()
             count=db.execute(select(func.count()).select_from(ingestion_runs).where(
                 ingestion_runs.c.tenant_id==tenant,
@@ -159,63 +232,155 @@ class IngestionStore:
             if count>=5:raise ConnectorError("FREE_QUOTA_SAFETY_LIMIT",429)
             db.execute(insert(ingestion_runs).values(tenant_id=tenant,run_key=req.run_key,
                 platform=req.platform.value,source_account_id=req.source_account_id,
-                requested_at=now_utc().isoformat(),status="reserved",new_records=0,duplicate_records=0))
+                requested_at=now_utc().isoformat(),status="reserved",new_records=0,
+                refreshed_records=0,duplicate_records=0))
 
-    def _finish(self,tenant,run_key,status,added=0,duplicate=0,reason=None):
+    def _finish(self,tenant,run_key,status,added=0,duplicate=0,refreshed=0,reason=None):
         with self.engine.begin() as db:
             db.execute(update(ingestion_runs).where(ingestion_runs.c.tenant_id==tenant,
                 ingestion_runs.c.run_key==run_key).values(status=status,
-                  new_records=added,duplicate_records=duplicate,reason_code=reason))
+                  new_records=added,duplicate_records=duplicate,
+                  refreshed_records=refreshed,reason_code=reason))
 
-    def _persist_item(self,tenant:str,item:NormalizedItem):
-        creator_id=stable_id("creator",item.platform.value,item.source_account_id)
-        content_id=stable_id("content",item.platform.value,item.source_account_id,item.source_item_id)
-        snapshot_id=stable_id("metrics",item.platform.value,item.source_account_id,item.source_item_id)
-        created=now_utc()
-        creator=CreatorCreate(creator_id=creator_id,tenant_id=tenant,origin=Origin(item.platform.value),
-                              handle=item.creator_handle,source_profile_id=item.source_account_id)
-        content=ContentCreate(content_id=content_id,tenant_id=tenant,creator_id=creator_id,
-                              origin=Origin(item.platform.value),media_type=item.media_type,
-                              published_at=item.published_at,source_url=item.source_url,
-                              caption=item.caption,is_synthetic=False)
-        assessed=classify_metadata_caption(item,tenant,content_id)
+    def _persist_item(self, tenant: str, item: NormalizedItem) -> str:
+        """Store a new post or append a changed metric snapshot atomically.
+
+        Returns 'created', 'refreshed', or 'unchanged'. A second read never
+        overwrites a prior snapshot; unknown new values never erase history.
+        """
+        creator_id = stable_id("creator", item.platform.value, item.source_account_id)
+        content_id = stable_id("content", item.platform.value,
+                               item.source_account_id, item.source_item_id)
+        created = now_utc()
+        creator = CreatorCreate(
+            creator_id=creator_id, tenant_id=tenant, origin=Origin(item.platform.value),
+            handle=item.creator_handle, source_profile_id=item.source_account_id)
+        content = ContentCreate(
+            content_id=content_id, tenant_id=tenant, creator_id=creator_id,
+            origin=Origin(item.platform.value), media_type=item.media_type,
+            published_at=item.published_at, source_url=item.source_url,
+            caption=item.caption, is_synthetic=False)
+        assessed = classify_metadata_caption(item, tenant, content_id)
+        complete = all(x is not None for x in (
+            item.likes, item.comments, item.follower_count))
         with self.engine.begin() as db:
-            found=db.execute(select(ingestion_records.c.content_id).where(
-                ingestion_records.c.tenant_id==tenant,
-                ingestion_records.c.platform==item.platform.value,
-                ingestion_records.c.source_account_id==item.source_account_id,
-                ingestion_records.c.source_item_id==item.source_item_id)).scalar_one_or_none()
-            if found:return False
-            existing=db.execute(select(creators.c.id).where(creators.c.tenant_id==tenant,
-                                                           creators.c.id==creator_id)).scalar_one_or_none()
-            if not existing:
-                db.execute(insert(creators).values(tenant_id=tenant,id=creator_id,
-                    origin=item.platform.value,payload=Creator(**creator.model_dump(),created_at=created).model_dump_json()))
+            found = db.execute(select(ingestion_records.c.content_id).where(
+                ingestion_records.c.tenant_id == tenant,
+                ingestion_records.c.platform == item.platform.value,
+                ingestion_records.c.source_account_id == item.source_account_id,
+                ingestion_records.c.source_item_id == item.source_item_id,
+            )).scalar_one_or_none()
+            if found:
+                if not complete:
+                    return "unchanged"
+                snapshots = db.execute(select(metrics_snapshots.c.payload).where(
+                    metrics_snapshots.c.tenant_id == tenant,
+                    metrics_snapshots.c.content_id == found,
+                )).scalars().all()
+                previous = max(
+                    (MetricsCreate.model_validate_json(p) for p in snapshots),
+                    key=lambda m: (m.observed_at, m.snapshot_id),
+                    default=None,
+                )
+                # Public APIs may omit fields temporarily. Do not replace a
+                # previously known view count with null on refresh.
+                views = item.views if item.views is not None else (
+                    previous.views if previous else None)
+                if previous is not None and (
+                    previous.likes == item.likes
+                    and previous.comments == item.comments
+                    and previous.follower_count == item.follower_count
+                    and previous.views == views
+                ):
+                    return "unchanged"
+                snapshot = MetricsCreate(
+                    snapshot_id=stable_id("metrics", content_id, str(uuid4())),
+                    tenant_id=tenant, content_id=found, observed_at=created,
+                    followers_measured_at=created, likes=item.likes,
+                    comments=item.comments, follower_count=item.follower_count,
+                    views=views)
+                db.execute(insert(metrics_snapshots).values(
+                    tenant_id=tenant, id=snapshot.snapshot_id,
+                    content_id=found, observed_at=created.isoformat(),
+                    payload=snapshot.model_dump_json()))
+                # Preserve history and emit a separate event from post creation.
+                version = db.execute(select(
+                    func.coalesce(func.max(domain_events.c.aggregate_version), 0)
+                ).where(
+                    domain_events.c.tenant_id == tenant,
+                    domain_events.c.aggregate_type == "content",
+                    domain_events.c.aggregate_id == found)).scalar_one() + 1
+                ev = db.execute(insert(domain_events).values(
+                    event_id=str(uuid4()), tenant_id=tenant, aggregate_type="content",
+                    aggregate_id=found, event_type="ingestion.metrics_refreshed",
+                    aggregate_version=version, occurred_at=created.isoformat(),
+                    payload=json.dumps({
+                        "source": item.platform.value, "content_id": found,
+                        "snapshot_id": snapshot.snapshot_id,
+                        "denominator_quality": item.denominator_quality,
+                    })))
+                db.execute(insert(outbox).values(
+                    seq=ev.inserted_primary_key[0], attempts=0, dead_letter=0))
+                db.execute(update(ingestion_records).where(
+                    ingestion_records.c.tenant_id == tenant,
+                    ingestion_records.c.platform == item.platform.value,
+                    ingestion_records.c.source_account_id == item.source_account_id,
+                    ingestion_records.c.source_item_id == item.source_item_id,
+                ).values(processed_at=created.isoformat(),
+                         denominator_quality=item.denominator_quality))
+                return "refreshed"
+
+            existing_creator = db.execute(select(creators.c.id).where(
+                creators.c.tenant_id == tenant, creators.c.id == creator_id,
+            )).scalar_one_or_none()
+            if not existing_creator:
+                db.execute(insert(creators).values(
+                    tenant_id=tenant, id=creator_id, origin=item.platform.value,
+                    payload=Creator(**creator.model_dump(),
+                                    created_at=created).model_dump_json()))
             from .domain import ContentItem, RubricAssessment
-            saved_content=ContentItem(**content.model_dump(),created_at=created)
-            db.execute(insert(content_items).values(tenant_id=tenant,id=content_id,creator_id=creator_id,
-                origin=item.platform.value,published_at=item.published_at.isoformat(),
-                payload=saved_content.model_dump_json()))
-            if all(x is not None for x in (item.likes,item.comments,item.follower_count)):
-                metrics=MetricsCreate(snapshot_id=snapshot_id,tenant_id=tenant,content_id=content_id,
-                    observed_at=created,followers_measured_at=created,
-                    likes=item.likes,comments=item.comments,follower_count=item.follower_count,views=item.views)
-                db.execute(insert(metrics_snapshots).values(tenant_id=tenant,id=snapshot_id,
-                     content_id=content_id,observed_at=created.isoformat(),payload=metrics.model_dump_json()))
-            saved_assessment=RubricAssessment(**assessed.model_dump(),recorded_at=created)
-            db.execute(insert(rubric_assessments).values(tenant_id=tenant,id=saved_assessment.assessment_id,
-                content_id=content_id,recorded_at=created.isoformat(),payload=saved_assessment.model_dump_json()))
-            db.execute(insert(ingestion_records).values(tenant_id=tenant,platform=item.platform.value,
-                source_account_id=item.source_account_id,source_item_id=item.source_item_id,
-                content_id=content_id,denominator_quality=item.denominator_quality,
-                metadata_only=int(item.metadata_only),processed_at=created.isoformat()))
-            ev=db.execute(insert(domain_events).values(event_id=str(uuid4()),tenant_id=tenant,
-                aggregate_type="content",aggregate_id=content_id,
-                event_type="ingestion.content_processed",aggregate_version=1,
-                occurred_at=created.isoformat(),payload=json.dumps({"source":item.platform.value,
-                "content_id":content_id,"metadata_only":True,"denominator_quality":item.denominator_quality})))
-            db.execute(insert(outbox).values(seq=ev.inserted_primary_key[0],attempts=0,dead_letter=0))
-        return True
+            db.execute(insert(content_items).values(
+                tenant_id=tenant, id=content_id, creator_id=creator_id,
+                origin=item.platform.value, published_at=item.published_at.isoformat(),
+                payload=ContentItem(**content.model_dump(),
+                                    created_at=created).model_dump_json()))
+            if complete:
+                snapshot = MetricsCreate(
+                    snapshot_id=stable_id("metrics", content_id, str(uuid4())),
+                    tenant_id=tenant, content_id=content_id,
+                    observed_at=created, followers_measured_at=created,
+                    likes=item.likes, comments=item.comments,
+                    follower_count=item.follower_count, views=item.views)
+                db.execute(insert(metrics_snapshots).values(
+                    tenant_id=tenant, id=snapshot.snapshot_id,
+                    content_id=content_id, observed_at=created.isoformat(),
+                    payload=snapshot.model_dump_json()))
+            from .domain import RubricAssessment
+            saved_assessment = RubricAssessment(**assessed.model_dump(), recorded_at=created)
+            db.execute(insert(rubric_assessments).values(
+                tenant_id=tenant, id=saved_assessment.assessment_id,
+                content_id=content_id, recorded_at=created.isoformat(),
+                payload=saved_assessment.model_dump_json()))
+            db.execute(insert(ingestion_records).values(
+                tenant_id=tenant, platform=item.platform.value,
+                source_account_id=item.source_account_id,
+                source_item_id=item.source_item_id, content_id=content_id,
+                denominator_quality=item.denominator_quality,
+                metadata_only=int(item.metadata_only),
+                processed_at=created.isoformat()))
+            ev = db.execute(insert(domain_events).values(
+                event_id=str(uuid4()), tenant_id=tenant,
+                aggregate_type="content", aggregate_id=content_id,
+                event_type="ingestion.content_processed", aggregate_version=1,
+                occurred_at=created.isoformat(),
+                payload=json.dumps({
+                    "source": item.platform.value,
+                    "content_id": content_id, "metadata_only": True,
+                    "denominator_quality": item.denominator_quality,
+                })))
+            db.execute(insert(outbox).values(
+                seq=ev.inserted_primary_key[0], attempts=0, dead_letter=0))
+        return "created"
 
     def run(self,tenant:str,req:IngestionRequest,http:OfficialHttp | None=None)->IngestionResult:
         if os.getenv("TAPI_OFFICIAL_METADATA_READS")!="1":
@@ -226,29 +391,46 @@ class IngestionStore:
             raise ConnectorError("PROVIDER_ZERO_BILLING_NOT_CONFIRMED",403)
         grant=self.read_grant(tenant,req.platform,req.source_account_id)
         token=credential_for(req.platform)
+        after = self._resume_cursor(tenant, req) if req.resume else None
         self._reserve(tenant,req)
         owns_http=http is None
         transport=http or OfficialHttp()
-        created=duplicate=0
+        created=duplicate=refreshed=excluded_recent=0
+        next_cursor = None
         try:
             adapter=(InstagramOfficial(transport) if req.platform==Platform.INSTAGRAM
                      else YouTubeOfficial(transport))
             checked=adapter.verify(req.source_account_id,token)
-            items=adapter.fetch(req.source_account_id,token,checked,req.limit,req.video_ids)
+            if req.platform == Platform.INSTAGRAM:
+                items, next_cursor = adapter.fetch_page(
+                    req.source_account_id, token, checked, req.limit, after=after)
+            else:
+                items = adapter.fetch(req.source_account_id,token,checked,req.limit,req.video_ids)
             with self.engine.begin() as db:
                 db.execute(update(source_grants).where(source_grants.c.tenant_id==tenant,
                     source_grants.c.platform==req.platform.value,
                     source_grants.c.source_account_id==req.source_account_id).values(
                         technical_verified_at=now_utc().isoformat()))
             for item in items:
-                if self._persist_item(tenant,item):created+=1
-                else:duplicate+=1
-            self._finish(tenant,req.run_key,"completed",created,duplicate)
+                if (now_utc() - item.published_at).total_seconds() < req.min_age_days * 86400:
+                    excluded_recent += 1
+                    continue
+                status = self._persist_item(tenant,item)
+                if status == "created": created += 1
+                elif status == "refreshed": refreshed += 1
+                else: duplicate += 1
+            # Only advance a cursor after all eligible records were committed.
+            if req.platform == Platform.INSTAGRAM:
+                self._save_checkpoint(tenant, req, next_cursor)
+            self._finish(tenant,req.run_key,"completed",created,duplicate,refreshed)
             return IngestionResult(run_key=req.run_key,platform=req.platform,
-                source_account_id=req.source_account_id,new_records=created,duplicate_records=duplicate)
+                source_account_id=req.source_account_id,new_records=created,
+                duplicate_records=duplicate,refreshed_records=refreshed,
+                excluded_too_recent=excluded_recent,
+                next_page_available=next_cursor is not None)
         except (ConnectorError, ValueError, IntegrityError) as exc:
             reason=exc.code if isinstance(exc,ConnectorError) else "INGESTION_VALIDATION_FAILED"
-            self._finish(tenant,req.run_key,"failed",created,duplicate,reason)
+            self._finish(tenant,req.run_key,"failed",created,duplicate,refreshed,reason)
             if isinstance(exc,ConnectorError):raise
             raise ConnectorError(reason,422) from exc
         finally:
