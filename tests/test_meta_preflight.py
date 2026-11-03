@@ -2,7 +2,7 @@
 from datetime import datetime, timezone
 import httpx
 
-from scripts.meta_preflight import (MetaPreflightError, check_meta_account, main)
+from scripts.meta_preflight import (MetaPreflightError, check_meta_account, diagnose_visible_pages, main)
 
 TOKEN = "mock-token-meta-very-long-and-never-logged"
 PAGE = "61595867706725"
@@ -92,3 +92,63 @@ def test_cli_defaults_to_no_network(monkeypatch, capsys):
     assert "NOT_EXECUTED" in capsys.readouterr().out
     assert main(["--execute"]) == 2
     assert "OFFICIAL_READS_DISABLED" in capsys.readouterr().out
+
+
+
+def test_diagnostic_exposes_only_accessible_page_ids_not_graph_secrets():
+    unexpected_page = "61512345678901"
+    def fake(req):
+        assert req.url.host == "graph.facebook.com"
+        assert req.url.path.endswith("/me/accounts")
+        return httpx.Response(200, json={"data": [{
+            "id": unexpected_page, "name": "Different Page",
+            "instagram_business_account": {"id": IG},
+            "access_token": "provider-token-must-not-be-returned",
+            "tasks": ["ANALYZE"],
+        }]})
+    with httpx.Client(transport=httpx.MockTransport(fake)) as client:
+        result = diagnose_visible_pages(TOKEN, client=client)
+    assert result["status"] == "VISIBLE_PAGES_DIAGNOSTIC"
+    assert result["expected_page_found"] is False
+    assert result["visible_page_count_in_scan"] == 1
+    assert result["pages"] == [{
+        "page_id": unexpected_page,
+        "page_name": "Different Page",
+        "instagram_user_id": IG,
+    }]
+    assert result["media_requests_performed"] == 0
+    assert "provider-token-must-not-be-returned" not in str(result)
+    assert TOKEN not in str(result)
+
+
+def test_diagnostic_empty_list_is_distinct_from_page_mismatch():
+    def no_pages(req):
+        return httpx.Response(200, json={"data": []})
+    with httpx.Client(transport=httpx.MockTransport(no_pages)) as client:
+        result = diagnose_visible_pages(TOKEN, client=client)
+    assert result["visible_page_count_in_scan"] == 0
+    assert result["pages"] == []
+    assert not result["expected_page_found"]
+
+
+def test_diagnostic_uses_only_fixed_graph_host_with_safe_cursor():
+    calls = []
+    def paged(req):
+        calls.append(str(req.url))
+        assert req.url.host == "graph.facebook.com"
+        if req.url.params.get("after"):
+            assert req.url.params["after"] == "opaque-safe-123"
+            return httpx.Response(200, json={"data": [{"id": PAGE,
+                "name": "Expected Page",
+                "instagram_business_account": {"id": IG}}]})
+        return httpx.Response(200, json={
+            "data": [{"id": "61512345678901", "name": "Other Page"}],
+            "paging": {"next": "https://untrusted.invalid/forbidden",
+                       "cursors": {"after": "opaque-safe-123"}},
+        })
+    with httpx.Client(transport=httpx.MockTransport(paged)) as client:
+        result = diagnose_visible_pages(TOKEN, client=client)
+    assert len(calls) == 2
+    assert all("untrusted.invalid" not in url for url in calls)
+    assert result["expected_page_found"] is True
+    assert result["visible_page_count_in_scan"] == 2
