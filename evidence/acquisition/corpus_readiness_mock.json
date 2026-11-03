@@ -6,7 +6,7 @@
   "executed_on": "2026-11-03",
   "validation_type": "local_offline_mock_only",
   "tests": {
-    "pytest_all": "182 passed, 0 failed",
+    "pytest_all": "183 passed, 0 failed",
     "node_frontend": "3 passed, 0 failed",
     "gate0": "PASS",
     "zero_spend": "PASS",
@@ -15,7 +15,7 @@
     "missing_grant_rejected": "PASS",
     "expired_or_disabled_grant_excluded": "PASS",
     "minimum_age_14_days": "PASS",
-    "youtube_kept_separate": "contract only; no real YouTube audit data"
+    "youtube_kept_separate": "PASS (mocked YouTube post excluded from primary Instagram count)"
   },
   "mock_coverage": {
     "registered_instagram_profiles": 1,
