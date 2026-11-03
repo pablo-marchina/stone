@@ -12,7 +12,7 @@
 
 ## Dados e critérios auditados
 
-O relatório informa: perfis cadastrados, grants administrativos atuais, perfis anteriormente verificados por API, posts elegíveis do Instagram, perfis com ao menos um post elegível, posts complementares YouTube, exclusões por cadastro/autorização/idade/ausência de métricas/denominador inválido, distribuição por setor declarada pelo operador, diferença até as metas de **30 perfis** e **2.000–5.000 posts**, e limitações metodológicas.
+O relatório informa: perfis cadastrados, grants administrativos atuais, perfis anteriormente verificados por API, posts elegíveis do Instagram, perfis com ao menos um post elegível, posts complementares YouTube, exclusões por cadastro/autorização/idade/ausência de métricas/denominador inválido, distribuição por setor e por estrato declarados pelo operador, diferença até as metas de **30 perfis** e **2.000–5.000 posts**, e limitações metodológicas.
 
 A presença de `technical_verified_at` confirma **uma resposta passada**, não um token ainda válido nem autorização jurídica de acesso. Contagens de seguidores Instagram são observadas no momento da coleta; o resultado não autoriza inferência causal ou comparações entre plataformas.
 
