@@ -175,3 +175,25 @@ def test_age_floor_and_platform_contract():
                          run_key="bad-youtube-resume", resume=True,
                          video_ids=["AZabcdef123"],
                          shorts_evidence_reference="Human confirmation stored in log")
+
+
+def test_concurrent_account_reservation_is_rejected_before_network(tmp_path, monkeypatch):
+    """A pending run must not allow another cursor reader for the same account."""
+    monkeypatch.setenv("TAPI_OFFICIAL_METADATA_READS", "1")
+    monkeypatch.setenv("TAPI_ZERO_BILLING_CONFIRMED", "1")
+    monkeypatch.setenv("TAPI_INSTAGRAM_ACCESS_TOKEN", "mocked-credentials-that-never-log")
+    app = _app(tmp_path)
+    with TestClient(app) as client:
+        headers = _auth(client)
+        _grant(client, headers)
+        first = IngestionRequest(platform="instagram", source_account_id=ACCOUNT,
+                                 run_key="active-page-01")
+        second = IngestionRequest(platform="instagram", source_account_id=ACCOUNT,
+                                  run_key="active-page-02")
+        app.state.ingestion_store._reserve(TENANT, first)
+        with pytest.raises(ConnectorError) as exc:
+            app.state.ingestion_store.run(TENANT, second)
+        assert exc.value.code == "ACCOUNT_INGESTION_IN_PROGRESS"
+        with app.state.ingestion_store.engine.connect() as db:
+            rows = db.execute(select(ingestion_runs.c.run_key)).scalars().all()
+            assert rows == ["active-page-01"]
