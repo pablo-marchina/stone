@@ -58,6 +58,10 @@ Este texto **não é uma autorização em vigor**; seu conteúdo e versão devem
 - **Regras externas:** autorização do participante não substitui as políticas e permissões da plataforma nem análise dos direitos de terceiros eventualmente retratados nos posts.
 - **Decisão de aceite:** [NÃO PREENCHER ANTES DE RECEBER MANIFESTAÇÃO REAL], com data UTC, versão do termo, operações autorizadas, responsável, validade e prova arquivada em local privado.
 
+### Contrato técnico de operações (para o futuro manifesto privado)
+
+Se a revisão institucional/jurídica concluir que há base adequada e uso permitido pela plataforma, documentar individualmente os escopos `business_discovery_metadata_read`, `local_research_metadata_export` e `corpus_metadata_ingest`. O terceiro escopo controla persistência e **não decorre automaticamente** da leitura da Meta ou de uma mensagem inicial. Consentimento expresso pode ser uma das hipóteses aplicáveis, mas não é a única base legal; a escolha depende dos responsáveis e da finalidade concreta. Nenhuma caixa de autorização deve ser marcada sem uma manifestação real e verificável.
+
 ## 5. Regra de promoção no plano v5.2
 
 `candidate → review` é permitido por evidência documental; `review → approved` **só depois** de decisão verificável por operação, dados de porte, validade e revisão de tratamento. No código, aprovações locais precisam passar por `authorized_source`; a futura persistência permanece protegida por `TAPI_MPE_PERSISTENCE_ENABLED=0` até liberação e revisão do PR #20.
