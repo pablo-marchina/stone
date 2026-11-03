@@ -204,3 +204,19 @@ def test_cursor_on_partial_page_without_next_is_not_followed():
     assert len(calls) == 1
     assert result["pagination_status"] == "PARTIAL_PAGE_NO_CURSOR"
     assert result["another_page_possible"] is False
+
+
+def test_live_observed_shape_full_page_with_cursor_no_next_is_not_exhausted():
+    """Explorer v26 example: media limit=3, cursors.after, no paging.next."""
+    def handler(req):
+        return response(req, [
+            media_item(1), media_item(2),
+            media_item(3, media_type="CAROUSEL_ALBUM", media_product_type=None),
+        ], paging={"cursors": {"after": "OPAQUE_TEST_CURSOR_2026"}})
+    result = probe(handler, limit=3, max_pages=1)
+    assert result["sample"]["returned"] == 3
+    assert result["pages_examined"] == 1
+    assert result["another_page_possible"] is True
+    assert result["pagination_status"] == "CURSOR_AVAILABLE"
+    assert result["exhaustion_confirmed"] is False
+    assert result["persisted_posts"] == 0
