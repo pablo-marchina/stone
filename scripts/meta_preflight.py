@@ -97,6 +97,46 @@ def _read_pages(client: httpx.Client, token: str, page_id: str | None) -> dict |
     raise MetaPreflightError("EXPECTED_PAGE_NOT_FOUND")
 
 
+def _read_page_by_id(client: httpx.Client, token: str, page_id: str) -> dict:
+    """Read only the explicitly supplied Page; never enumerate another account.
+
+    A User token can expose a known Page directly even if /me/accounts is
+    empty. A verified Page->IG link is necessary, but not sufficient, for
+    media access; the IG username is independently checked before any fetch.
+    """
+    if not re.fullmatch(r"[0-9]{5,32}", page_id):
+        raise MetaPreflightError("INVALID_EXPECTED_PAGE_ID")
+    try:
+        response = client.get(
+            GRAPH_BASE + "/" + page_id,
+            params={"fields": "id,name,instagram_business_account"},
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+        )
+    except httpx.HTTPError as exc:
+        raise MetaPreflightError("GRAPH_UNAVAILABLE") from exc
+    if response.is_redirect:
+        raise MetaPreflightError("PROVIDER_REDIRECT_DENIED")
+    if response.status_code in (401, 403):
+        raise MetaPreflightError("PROVIDER_PERMISSION_DENIED")
+    if response.status_code == 429:
+        raise MetaPreflightError("PROVIDER_RATE_LIMITED")
+    if response.status_code == 404:
+        raise MetaPreflightError("EXPECTED_PAGE_NOT_FOUND")
+    if response.status_code >= 400:
+        raise MetaPreflightError("PROVIDER_REQUEST_FAILED")
+    if len(response.content) > 256_000:
+        raise MetaPreflightError("PROVIDER_RESPONSE_INVALID")
+    try:
+        page = response.json()
+    except ValueError as exc:
+        raise MetaPreflightError("PROVIDER_RESPONSE_INVALID") from exc
+    if not isinstance(page, dict):
+        raise MetaPreflightError("PROVIDER_RESPONSE_INVALID")
+    if str(page.get("id")) != page_id:
+        raise MetaPreflightError("PROVIDER_ACCOUNT_MISMATCH")
+    return page
+
+
 def diagnose_visible_pages(token: str, *, client: httpx.Client) -> dict:
     """List only IDs/names of Pages exposed by the current Facebook user token.
 
@@ -122,7 +162,8 @@ def diagnose_visible_pages(token: str, *, client: httpx.Client) -> dict:
 
 def check_meta_account(token: str, *, page_id: str = EXPECTED_PAGE_ID,
                        expected_username: str = EXPECTED_USERNAME,
-                       limit: int = 3, client: httpx.Client) -> dict:
+                       limit: int = 3, client: httpx.Client,
+                       direct_page: bool = False) -> dict:
     """Return a sanitized summary only; never return raw Graph JSON or the token."""
     if not re.fullmatch(r"[0-9]{5,32}", page_id):
         raise MetaPreflightError("INVALID_EXPECTED_PAGE_ID")
@@ -133,7 +174,10 @@ def check_meta_account(token: str, *, page_id: str = EXPECTED_PAGE_ID,
     if not isinstance(token, str) or len(token) < 10:
         raise MetaPreflightError("CREDENTIAL_MISSING")
 
-    page = _read_pages(client, token, page_id)
+    # Direct resolution is explicitly opt-in; the returned Page ID must
+    # match exactly. Never substitute a Page merely because it was listed.
+    page = (_read_page_by_id(client, token, page_id) if direct_page
+            else _read_pages(client, token, page_id))
     ig_link = page.get("instagram_business_account")
     if not isinstance(ig_link, dict) or not re.fullmatch(
         r"[0-9]{5,32}", str(ig_link.get("id", ""))
@@ -158,6 +202,7 @@ def check_meta_account(token: str, *, page_id: str = EXPECTED_PAGE_ID,
     return {
         "status": "OFFICIAL_READ_CONFIRMED",
         "facebook_page_id": page_id,
+        "page_resolution": "direct_id" if direct_page else "account_list",
         "instagram_user_id": ig_id,
         "instagram_username": verified["username"],
         "followers_observed_now": verified["followers_count"],
@@ -178,6 +223,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--diagnose-pages", action="store_true",
                         help="List visible Page IDs and linked Instagram IDs; no media read")
     parser.add_argument("--page-id", default=EXPECTED_PAGE_ID)
+    parser.add_argument("--direct-page", action="store_true",
+                        help="Resolve only --page-id directly; skip /me/accounts")
     parser.add_argument("--username", default=EXPECTED_USERNAME)
     parser.add_argument("--limit", type=int, default=3)
     args = parser.parse_args(argv)
@@ -201,7 +248,8 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 result = check_meta_account(
                     token, page_id=args.page_id, expected_username=args.username,
-                    limit=args.limit, client=client)
+                    limit=args.limit, client=client,
+                    direct_page=args.direct_page)
     except MetaPreflightError as exc:
         print(json.dumps({"status": "FAILED", "code": exc.code}))
         return 1
