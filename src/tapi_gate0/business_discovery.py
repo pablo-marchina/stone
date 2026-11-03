@@ -55,6 +55,7 @@ class BusinessDiscoveryProbe:
                      eligible_14d=0, duplicates=0)
         profile = None
         pages = 0
+        pagination_status = "NOT_CHECKED"
         for _ in range(max_pages):
             payload = self.http.get(Platform.INSTAGRAM, viewer_id,
                 {"fields": self._fields(target, limit, after)}, token)
@@ -138,13 +139,30 @@ class BusinessDiscoveryProbe:
             cursors = paging.get("cursors") or {}
             if not isinstance(cursors, dict):
                 raise ConnectorError("INVALID_DISCOVERY_PAGING", 502)
-            next_cursor = cursors.get("after") if paging.get("next") else None
+            # Nested Business Discovery media commonly exposes only
+            # paging.cursors.after, without a paging.next URL. A full page
+            # without either cursor is *not* proof of exhaustion.
+            cursor = cursors.get("after")
+            if cursor is not None and (
+                not isinstance(cursor, str) or not CURSOR.fullmatch(cursor)
+            ):
+                raise ConnectorError("INVALID_DISCOVERY_CURSOR", 502)
+            has_next = bool(paging.get("next"))
+            if has_next and cursor is None:
+                raise ConnectorError("DISCOVERY_PAGING_CURSOR_MISSING", 502)
+            page_is_full = len(media["data"]) >= limit
+            next_cursor = cursor if cursor is not None and (
+                has_next or page_is_full
+            ) else None
             if next_cursor is not None:
-                if not isinstance(next_cursor, str) or not CURSOR.fullmatch(next_cursor):
-                    raise ConnectorError("INVALID_DISCOVERY_CURSOR", 502)
                 if next_cursor in visited or next_cursor == after:
                     raise ConnectorError("DISCOVERY_CURSOR_STALLED", 502)
                 visited.add(next_cursor)
+                pagination_status = "CURSOR_AVAILABLE"
+            elif page_is_full:
+                pagination_status = "UNVERIFIED_FULL_PAGE_NO_CURSOR"
+            else:
+                pagination_status = "PARTIAL_PAGE_NO_CURSOR"
             after = next_cursor
             if after is None:
                 break
@@ -156,6 +174,8 @@ class BusinessDiscoveryProbe:
             "sample": count,
             "pages_examined": pages,
             "another_page_possible": after is not None,
+            "pagination_status": pagination_status,
+            "exhaustion_confirmed": False,
             "sample_only": True,
             "persisted_posts": 0,
             "rights_grant_recorded": False,
