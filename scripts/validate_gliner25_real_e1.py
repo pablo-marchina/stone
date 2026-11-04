@@ -80,6 +80,9 @@ def _run_inference(
         raise PermissionError("SYSTEM_ONE_EXPERIMENT_DISABLED")
     _not_inside_project(model_dir)
     checkpoint = validate_local_checkpoint(model_dir)
+    if (not checkpoint["manifest_present"] or not checkpoint["revision"]
+            or len(checkpoint["revision"]) != 40):
+        raise RuntimeError("PINNED_CHECKPOINT_MANIFEST_REQUIRED")
 
     try:
         import torch
@@ -141,6 +144,8 @@ def _run_inference(
                 if reading is not None:
                     peak_rss = max(peak_rss or 0, reading)
 
+    if responses_without_answer == total:
+        raise RuntimeError("REAL_MODEL_ALL_DECISIONS_ABSTAINED")
     with torch.inference_mode():
         paired = evaluate_paired(cases, {
             "baseline": DeterministicTextDecider(),
