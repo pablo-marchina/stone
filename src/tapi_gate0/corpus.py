@@ -212,7 +212,8 @@ def corpus_data_card(engine, tenant: str, *, as_of: datetime | None = None,
         if review['targeting_status'] != 'mpe_targeted':
             counts['excluded_uncertain_target_audience'] += 1
             continue
-        if review['evidence_quality'] != 'sufficient' or not review['observed_modalities']:
+        if (review['evidence_quality'] != 'sufficient' or not review['observed_modalities']
+            or not review['evidence_sha256']):
             counts['excluded_insufficient_content_evidence'] += 1
             continue
         counts['scientifically_eligible_instagram_posts'] += 1
