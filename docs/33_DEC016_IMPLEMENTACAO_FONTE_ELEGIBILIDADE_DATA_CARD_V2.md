@@ -11,14 +11,14 @@ O manifesto `evidence/acquisition/research_source_candidates_v2_20261103.json` c
 ## Filtro por publicação
 
 - **Elegibilidade técnica:** Reel/carrossel real, registrado sob perfil e grant válidos, com idade mínima de 14 dias e métricas disponíveis, incluindo denominador positivo.
-- **Elegibilidade científica:** condição técnica mais contexto documentado e revisão humana da publicação, com evidência de conteúdo observado apontando para `mpe_targeted`.
+- **Elegibilidade científica:** condição técnica mais contexto documentado e revisão humana da publicação, com evidência de conteúdo observado apontando para `mpe_targeted`, referência rastreável e hash SHA-256 do material efetivamente observado.
 - **Observabilidade da rubrica:** modalidades de conteúdo efetivamente acessadas, com revisão própria. Sem legenda, imagem ou vídeo observáveis, não se atribuem notas audiovisuais.
 
 A leitura Business Discovery atual não observa legenda, imagens ou vídeo. Seu resultado indica apenas elegibilidade técnica, não relevância do público-alvo.
 
 ## Persistência auditável e data card
 
-A migração `0005_scientific_corpus` adiciona `corpus_source_research_contexts` e `corpus_post_scientific_reviews`. São registros de contexto do produtor e revisões por item com referência, responsável, instante, tipo de evidência e status, respectivamente.
+A migração `0005_scientific_corpus` adiciona `corpus_source_research_contexts` e `corpus_post_scientific_reviews`. São registros de contexto do produtor e revisões por item com referência, hash da evidência para decisões positivas, responsável, instante, tipo de evidência e status, respectivamente. O hash detecta alterações mas não autoriza uso nem comprova a origem por si só.
 
 Endpoints seguros adicionais: `POST /v1/corpus/source-contexts` (admin) e `POST /v1/corpus/content-reviews` (admin/pesquisador). A revisão não coleta dados externos.
 
