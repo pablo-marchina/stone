@@ -240,3 +240,21 @@ def test_cli_synthetic_fixture_report_is_aggregate_only(tmp_path):
     assert report['n_cases'] == 4
     assert report['scientifically_validated'] is False
     assert 'Como vender mais?' not in output.read_text(encoding='utf-8')
+
+
+def test_evidence_fingerprint_binds_source_and_rights():
+    synthetic = evidence()
+    approved = evidence(source_kind="approved_local",
+        rights_reference="private-approval-reference-2026",
+        allowed_operations=["offline_classification"])
+    assert synthetic.fingerprint() != approved.fingerprint()
+    assert synthetic.fingerprint() != evidence(creator_id="different_creator").fingerprint()
+
+
+def test_benchmark_rejects_creator_leakage_across_dev_and_test():
+    dev = BenchmarkCase(evidence=evidence(content_id="dev_id",creator_id="shared"),
+        split="dev",gold={"tema_principal":"vendas"})
+    test = BenchmarkCase(evidence=evidence(content_id="test_id",creator_id="shared"),
+        split="test",gold={"tema_principal":"vendas"})
+    with pytest.raises(ValueError, match="CREATOR_SPLIT_LEAKAGE"):
+        evaluate_paired([dev,test])
