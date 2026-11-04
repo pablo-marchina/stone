@@ -179,7 +179,10 @@ def load_frame(path: Path) -> SourceFrame | ResearchSourceFrame:
     if path.stat().st_size > 128_000:
         raise SourceGateError("SOURCE_FRAME_TOO_LARGE")
     raw = path.read_text(encoding="utf-8")
-    version = json.loads(raw).get("schema_version")
+    decoded = json.loads(raw)
+    if not isinstance(decoded, dict):
+        raise SourceGateError("INVALID_SOURCE_FRAME")
+    version = decoded.get("schema_version")
     if version == "tapi-source-frame.v2":
         return ResearchSourceFrame.model_validate_json(raw)
     if version == "mpe-source-frame.v1":
