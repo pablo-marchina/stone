@@ -14,10 +14,16 @@
 Não confundir o commit do bootstrap com a entrega integral do TAPI Stone.
 
 
-## Atualização de declaração institucional — 04/11/2026 (DEC-018)
+## Atualização institucional confirmada — 04/11/2026 (DEC-018)
 
-O responsável comunicou que **todas as expansões condicionais, fontes e operações, uso de dados Stone e acesso às APIs/IDs** foram liberados institucionalmente; IDs e credenciais serão disponibilizados quando requisitados. Declarou também acordo institucional amplo de uso de conteúdo de terceiros e informou que **não haverá revisores humanos nem validação científica independente**.
+O responsável confirmou que **todas as expansões, fontes, operações, dados Stone, termos e direitos necessários — inclusive uso de terceiros — foram formalmente autorizados pela instituição**. APIs/IDs e credenciais estarão disponíveis quando solicitados. **Não haverá revisores humanos nem validação científica independente**. O restante da tabela acima é histórico do bootstrap inicial, anterior a esta decisão.
 
-**Consequência:** a pendência de aprovação institucional *genérica* do escopo está declarada resolvida. Isso não equivale a comprovação de grants técnicos por conta/operação, de direitos contratuais efetivos por terceiro ou de acesso já executado; a configuração de operações externas segue OFF por padrão até verificações operacionais. **Gate 0B permanece bloqueado tecnicamente para operações ainda não verificadas**, não por ausência declarada de anuência geral.
+| Critério Gate 0B | Nova leitura |
+|---|---|
+| G0B-01: autorização institucional e operações externas | **RESOLVIDO institucionalmente** |
+| G0B-02: fontes × operações | **RESOLVIDO quanto à aprovação formal**; provisão de IDs/escopos/grants técnicos ainda pendente |
+| G0B-03: termos, retenção e direitos multimodais | **RESOLVIDO quanto à aprovação institucional formal comunicada**; aplicação técnica das condições pertinentes ainda pendente |
 
-A exigência histórica de revisão humana no plano fica como **critério de aceite a substituir/dispensar formalmente**, jamais como teste aprovado. Registrar apenas validação técnica, sem alegação científica independente. Custos continuam R$ 0. Fonte e ressalvas: [DEC-018](41_DEC018_DECISOES_INSTITUCIONAIS_E_ACEITE_OPERACIONAL_2026-11-04.md).
+**Gate 0B técnico não foi liberado automaticamente.** `config/source_permissions.json` conserva 72 registros PENDING, `src/tapi_gate0/policy.py` continua deny-by-default e nenhuma operação real passa sem identidade, credencial, permissão efetiva, grant vinculado, limite de custos e teste. Essa pendência é **técnica/operacional**, não falta de nova aprovação institucional. Não solicitar novamente um acordo genérico ou deliberação sobre fontes/termos para avançar.
+
+O requisito histórico de 50 revisões humanas deve ser **dispensado/substituído no aceite formal**; os testes sintéticos não são validação científica. Custos continuam R$ 0. Ver [DEC-018](41_DEC018_DECISOES_INSTITUCIONAIS_E_ACEITE_OPERACIONAL_2026-11-04.md).
