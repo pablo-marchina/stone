@@ -69,7 +69,7 @@ def test_empty_card_and_no_auto_grants(tmp_path):
         pending=client.get('/v1/corpus/data-card',headers=headers).json()
         assert pending['sampling_frame']=={
             'registered_profiles':1,'with_current_administrative_grant':1,
-            'with_prior_technical_verification':0}
+            'with_prior_technical_verification':0,'with_reviewed_source_context':0}
         assert not pending['target_reached']
 
 
@@ -106,13 +106,18 @@ def test_authorized_mock_ingest_counts_only_mature_instagram(tmp_path,monkeypatc
         assert result.new_records==2 and result.excluded_too_recent==1
         data=client.get('/v1/corpus/data-card',headers=headers).json()
         assert data['sampling_frame']['with_prior_technical_verification']==1
-        assert data['observed']['eligible_instagram_posts']==1
+        assert data['observed']['eligible_instagram_posts']==0
+        assert data['observed']['technically_eligible_instagram_posts']==1
+        assert data['observed']['excluded_source_context_missing']==1
         assert data['observed']['excluded_nonprimary_instagram_format']==1
-        assert data['observed']['eligible_instagram_profiles']==1
-        assert data['instagram_posts_by_operator_sector']['commerce']==1
+        assert data['observed']['eligible_instagram_profiles']==0
+        assert data['observed']['technically_eligible_instagram_profiles']==1
+        assert data['instagram_posts_by_operator_sector']['commerce']==0
+        assert data['instagram_technical_posts_by_operator_sector']['commerce']==1
         assert data['instagram_sampling_strata']['retail_micro_south']=={
-            'registered_profiles':1, 'eligible_profiles':1, 'eligible_posts':1}
-        assert data['deficit']=={'profiles':29,'posts':1999}
+            'registered_profiles':1, 'eligible_profiles':0, 'eligible_posts':0,
+            'technically_eligible_profiles':1, 'technically_eligible_posts':1}
+        assert data['deficit']=={'profiles':30,'posts':2000}
         assert not data['target_reached']
         with app.state.ingestion_store.engine.begin() as db:
             db.execute(update(source_grants).where(source_grants.c.tenant_id==TENANT)
