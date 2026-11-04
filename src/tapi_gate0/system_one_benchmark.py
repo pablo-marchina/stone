@@ -57,6 +57,13 @@ def evaluate_paired(cases: list[BenchmarkCase], models: dict[str, DecisionModel]
     unique = [(c.evidence.tenant_id, c.evidence.content_id) for c in cases]
     if len(set(unique)) != len(unique):
         raise ValueError("DUPLICATE_E1_CONTENT")
+    creator_splits = {}
+    for case in cases:
+        if case.split in {"dev", "test"}:
+            key = (case.evidence.tenant_id, case.evidence.creator_id)
+            creator_splits.setdefault(key, set()).add(case.split)
+    if any(len(splits) > 1 for splits in creator_splits.values()):
+        raise ValueError("CREATOR_SPLIT_LEAKAGE")
     models = models or {"baseline": DeterministicTextDecider()}
     if not models:
         raise ValueError("NO_E1_MODELS")
