@@ -344,3 +344,24 @@ def test_e13_consolidated_head_histograms_in_ablation():
     assert result["head_value_histograms"]["tem_cta"]["joint"] == {"nao": 1}
     assert result["head_value_histograms"]["tem_cta"]["solo"] == {"sim": 1}
     assert result["head_value_histograms"]["tipo_cta"]["solo"] == {"comentar": 1}
+
+
+def test_e13_cli_rejects_fake_synthetic_label_before_any_inference(tmp_path):
+    cases = make_cases()
+    forged_evidence = cases[0].evidence.model_copy(update={
+        "content_id": "pretend_synthetic_private_item",
+    })
+    cases[0] = cases[0].model_copy(update={"evidence": forged_evidence})
+    fixture = tmp_path / "forged_synthetic.jsonl"
+    fixture.write_text(
+        "".join(case.model_dump_json() + "\n" for case in cases),
+        encoding="utf-8",
+    )
+    target = tmp_path / "out.json"
+    with pytest.raises(SystemExit) as failure:
+        diagnose_main([
+            "--input", str(fixture), "--output", str(target),
+            "--model", "baseline",
+        ])
+    assert failure.value.code == 2
+    assert not target.exists()
