@@ -116,9 +116,9 @@ def test_report_shape_with_mocked_inference_is_not_real_model_proof(monkeypatch,
     monkeypatch.setattr(runner, "_not_inside_project", lambda path: None)
     monkeypatch.setattr(runner, "validate_local_checkpoint", lambda path: {
         "repository":"fastino/GLiNER2.5-multi-Decide",
-        "revision": None, "architecture": "boundary",
+        "revision": "a"*40, "architecture": "boundary",
         "files":{"model.safetensors":{"sha256":"a"*64,"bytes":1_150_000_000}},
-        "tensor_count":500, "manifest_present":False,
+        "tensor_count":500, "manifest_present":True,
     })
     monkeypatch.setattr(runner, "LocalGLiNERDecider", StubDecider)
     monkeypatch.setattr(runner, "_rss_megabytes", lambda: 1024.0)
