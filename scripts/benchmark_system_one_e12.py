@@ -37,6 +37,8 @@ def main(argv=None) -> int:
     parser.add_argument("--input", required=True, help="Local synthetic or authorized double-reviewed JSONL")
     parser.add_argument("--output", required=True, help="Only aggregate metrics; no raw examples")
     parser.add_argument("--model", choices=("baseline", "both"), default="baseline")
+    parser.add_argument("--split", choices=("smoke", "dev", "test"),
+                        help="Required when input contains both dev and test")
     parser.add_argument("--model-dir", help="SHA-pinned local GLiNER2.5 weights; required for --model both")
     args = parser.parse_args(argv)
     input_path = Path(args.input).expanduser().resolve()
@@ -44,6 +46,17 @@ def main(argv=None) -> int:
     if input_path == output_path:
         parser.error("Output cannot overwrite input")
     cases = load_cases(input_path)
+    # The entire dataset is checked for creator/duplicate-text leakage before
+    # any inference is allowed on a selected split.
+    from tapi_gate0.system_one_e12 import validate_e12_dataset
+    validate_e12_dataset(cases)
+    available_splits = {case.split for case in cases}
+    if args.split is None and len(available_splits) != 1:
+        parser.error("E12_SPLIT_SELECTION_REQUIRED: choose --split dev or --split test")
+    selected = args.split if args.split is not None else next(iter(available_splits))
+    if selected not in available_splits:
+        parser.error("E12_SELECTED_SPLIT_EMPTY")
+    first_case = next(case for case in cases if case.split == selected)
     models = {"baseline": DeterministicTextDecider()}
     provenance = None
     load_ms = None
@@ -73,7 +86,7 @@ def main(argv=None) -> int:
         with torch.inference_mode():
             local._load()
             # Warm up model once. This is excluded from per-case latency.
-            local.evaluate(cases[0].evidence)
+            local.evaluate(first_case.evidence)
         load_ms = round((perf_counter()-start)*1000, 3)
         models["local_gliner"] = local
         provenance = {
@@ -88,7 +101,7 @@ def main(argv=None) -> int:
     else:
         guard = nullcontext()
     with guard:
-        report = evaluate_e12(cases, models)
+        report = evaluate_e12(cases, models, split=selected)
     report["checkpoint"] = provenance
     report["model_load_and_warmup_ms"] = load_ms
     # The same JSON schema is used for synthetics and authorized human data;
@@ -97,7 +110,7 @@ def main(argv=None) -> int:
     output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2)+"\n", encoding="utf-8")
     print(
         "E1.2 local aggregate PASS:",
-        len(cases), "cases;", ", ".join(models),
+        report["n_cases"], "cases on", selected + ";", ", ".join(models),
         "; scientifically_validated=false (exploratory)",
     )
     return 0
