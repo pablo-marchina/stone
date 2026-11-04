@@ -353,3 +353,32 @@ def test_separate_manual_review_makes_existing_technical_post_scientific(tmp_pat
     assert card["observed"]["technically_eligible_instagram_posts"] == 1
     assert card["observed"]["scientifically_eligible_instagram_posts"] == 1
     assert card["observed"]["eligible_instagram_posts"] == 1
+
+
+def test_source_frame_v2_context_mismatch_fails_before_network(tmp_path):
+    # A fintech cannot reuse a previously registered MPE producer context
+    # merely because it has the same Instagram user ID and a read grant.
+    store = setup_store(tmp_path)
+    src, proof_dir = source(tmp_path, creator_type="fintech", sector_context="finance")
+    calls = []
+    with httpx.Client(transport=httpx.MockTransport(graph({"likes": 3}, calls))) as c:
+        with pytest.raises(ConnectorError) as err:
+            DiscoveryCorpusService(store).ingest(
+                TENANT, src, proof_dir, request(), http=OfficialHttp(c), token=TOKEN)
+    assert err.value.code == "CORPUS_REGISTRATION_MISMATCH"
+    assert calls == []
+
+
+def test_source_context_audience_mismatch_fails_before_network(tmp_path):
+    from sqlalchemy import update
+    store = setup_store(tmp_path)
+    src, proof_dir = source(tmp_path)
+    with store.engine.begin() as db:
+        db.execute(update(source_research_contexts).values(audience_intent="uncertain"))
+    calls = []
+    with httpx.Client(transport=httpx.MockTransport(graph({"likes": 3}, calls))) as c:
+        with pytest.raises(ConnectorError) as err:
+            DiscoveryCorpusService(store).ingest(
+                TENANT, src, proof_dir, request(), http=OfficialHttp(c), token=TOKEN)
+    assert err.value.code == "SOURCE_RESEARCH_CONTEXT_MISMATCH"
+    assert calls == []
