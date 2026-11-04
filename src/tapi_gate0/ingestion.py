@@ -25,6 +25,7 @@ from .sa_store import (metadata, tenants, creators, content_items, metrics_snaps
                        rubric_assessments, domain_events, outbox)
 from .storage import now_utc
 from .identity import Principal, IdentityFailure
+from .gate0b_technical import assess_metadata_readiness
 
 
 source_grants = Table("ingestion_source_grants", metadata,
@@ -466,17 +467,26 @@ def router_for_ingestion(identity,store:IngestionStore):
 
     @router.get("/connections/{platform}/{account_id}")
     def connection_readiness(platform:Platform,account_id:str,p:Principal=Depends(principal)):
-        grant=store.read_grant(p.tenant_id,platform,account_id)
-        token_present=bool(os.getenv({Platform.INSTAGRAM:"TAPI_INSTAGRAM_ACCESS_TOKEN",
-            Platform.YOUTUBE:"TAPI_YOUTUBE_ACCESS_TOKEN"}[platform]))
-        flag=os.getenv("TAPI_OFFICIAL_METADATA_READS")=="1"
-        zero_bill=os.getenv("TAPI_ZERO_BILLING_CONFIRMED")=="1"
+        # Query only the authenticated tenant, including missing/expired grants;
+        # the endpoint reports eligibility for a PRE-FLIGHT, not access approval.
+        with store.engine.connect() as db:
+            grant=db.execute(select(source_grants).where(
+                source_grants.c.tenant_id==p.tenant_id,
+                source_grants.c.platform==platform.value,
+                source_grants.c.source_account_id==account_id,
+            )).mappings().first()
+        status=assess_metadata_readiness(
+            dict(grant) if grant is not None else None,
+            credential_present=bool(os.getenv({
+                Platform.INSTAGRAM:"TAPI_INSTAGRAM_ACCESS_TOKEN",
+                Platform.YOUTUBE:"TAPI_YOUTUBE_ACCESS_TOKEN",
+            }[platform])),
+            read_switch_enabled=os.getenv("TAPI_OFFICIAL_METADATA_READS")=="1",
+            zero_billing_operator_confirmed=os.getenv("TAPI_ZERO_BILLING_CONFIRMED")=="1",
+        )
         return {"platform":platform.value,"source_account_id":account_id,
-          "grant_recorded":True,"technical_verified_previously":bool(grant["technical_verified_at"]),
-          "credential_present":token_present,"read_switch_enabled":flag,
-          "zero_billing_operator_confirmed":zero_bill,
-          "can_attempt_validation":token_present and flag and zero_bill,
-          "note":"The check does not establish third-party media rights or grant OAuth scopes."}
+                **status.model_dump(),
+                "note":"A ready preflight is not a verified OAuth grant or production approval."}
 
     @router.get("/runs")
     def list_runs(p:Principal=Depends(principal)):
