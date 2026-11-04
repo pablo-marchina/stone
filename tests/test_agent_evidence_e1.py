@@ -100,3 +100,37 @@ def test_agent_rejects_duplicate_content_refs():
             _row("same", "c2", False, "0.1")]
     with pytest.raises(ValueError, match="AGENT_TOOL_DUPLICATE_CONTENT"):
         _analyze(SpyTool(_result(rows)))
+
+
+def test_secure_agent_api_uses_authenticated_tenant_and_abstains(tmp_path):
+    from fastapi.testclient import TestClient
+    from tapi_gate0.secure_api import create_secure_app
+
+    app = create_secure_app(
+        f"sqlite:///{tmp_path/'agent.sqlite'}",
+        initialize_schema=True, allow_http_local=True,
+    )
+    password = "safe-demo-password-for-local-test-42"
+    app.state.identity_store.bootstrap("tenantA", "Demo", "founder", password)
+    with TestClient(app) as client:
+        params = {
+            "origin": "synthetic_local",
+            "as_of": AS_OF.isoformat(),
+            "min_age_days": 14,
+        }
+        assert client.post("/v1/agent/analyze-ranking", json=params).status_code == 401
+        login = client.post("/v1/auth/sessions", json={
+            "username":"founder", "password":password, "tenant_id":"tenantA",
+        })
+        assert login.status_code == 200
+        hdr = {"Authorization":"Bearer " + login.json()["access_token"]}
+        response = client.post("/v1/agent/analyze-ranking", headers=hdr, json=params)
+        assert response.status_code == 200, response.text
+        result = response.json()
+        assert result["tenant_id"] == "tenantA"
+        assert result["n_eligible_posts"] == 0
+        assert result["action"] == "collect_more_evidence"
+        assert result["findings"][0]["citations"] == []
+        assert result["abstained_from_pattern_claim"] is True
+        assert client.post("/v1/agent/analyze-ranking", headers=hdr,
+                           json={**params,"tenant_id":"another"}).status_code == 422
