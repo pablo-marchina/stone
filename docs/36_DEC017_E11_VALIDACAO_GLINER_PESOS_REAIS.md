@@ -38,7 +38,7 @@ Esta etapa baixa cerca de 1,17 GB do Hugging Face e **não usa API de inferênci
 python scripts/prepare_gliner25_local_checkpoint.py --model-dir "C:\Models\tapi\gliner25-multi-decide" --confirm-public-download
 ~~~
 
-O comando fixa o commit SHA do repositório de pesos, baixa apenas arquivos necessários, verifica Safetensors e escreve tapi_e11_checkpoint_manifest.json com SHA-256 por arquivo. Não adicionar os pesos ao Git. Se o upstream mudar de revisão, usar outra pasta para evitar misturar versões.
+O comando fixa o commit SHA do repositório de pesos, baixa apenas arquivos necessários, verifica Safetensors e escreve tapi_e11_checkpoint_manifest.json com SHA-256 por arquivo. Além do hash local e do manifesto, confere os pesos contra o SHA-256 oficial publicado pelo Hugging Face (9efe0f88c99f2aa794452e9559dc60e98d60d9fa2bf1b60cf2710411b6da5b4e); se o fornecedor alterar os pesos em uma versão futura, a execução falha até que a revisão de segurança atualize o hash de referência. Não adicionar os pesos ao Git. Se o upstream mudar de revisão, usar outra pasta para evitar misturar versões.
 
 ## Passo 2 — inferência real inteiramente offline
 
