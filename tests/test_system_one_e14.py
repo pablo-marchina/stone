@@ -224,3 +224,45 @@ def test_e14_cannot_claim_scientific_precision_from_synthetic_labels():
     assert "no CTA in the video" in " ".join(report["limitations"])
     assert "raw" not in report
     assert "human_gold" not in report
+
+
+def test_e14_integrated_summary_whitelists_metrics_only(tmp_path):
+    from validate_dec017_e14_integrated import aggregate_report
+    path = tmp_path / "e14_report.json"
+    path.write_text(json.dumps({
+        "schema_version": "tapi-dec017-e14-caption-cta.v1",
+        "n_cases": 34,
+        "model_mode": "baseline",
+        "policies": {
+            "baseline_e1_original": {
+                "n_cases": 34,
+                "type_claims": 7,
+                "private_caption": "Comente sobre sua loja",
+                "strata": {"secret": "raw_user_text"},
+            },
+        },
+        "raw_text": "never publish this",
+    }, ensure_ascii=False), encoding="utf-8")
+    out = aggregate_report(path)
+    dumped = json.dumps(out, ensure_ascii=False)
+    assert out["policies"]["baseline_e1_original"]["type_claims"] == 7
+    assert out["scientifically_validated"] is False
+    assert out["decision"] == "NO_PRODUCTION_POLICY_SELECTED"
+    assert "private_caption" not in dumped
+    assert "Comente sobre sua loja" not in dumped
+    assert "raw_user_text" not in dumped
+    assert "never publish" not in dumped
+
+
+def test_e14_integrated_runner_refuses_in_repo_output(monkeypatch):
+    from validate_dec017_e14_integrated import main
+    with pytest.raises(SystemExit) as exc:
+        main(["--output-dir", str(ROOT / "validation_must_not_create")])
+    assert exc.value.code == 2
+    assert not (ROOT / "validation_must_not_create").exists()
+
+
+def test_e14_integrated_no_stale_metrics_after_failed_stage(tmp_path):
+    from validate_dec017_e14_integrated import aggregate_report
+    path = tmp_path / "missing.json"
+    assert aggregate_report(path) == {}
