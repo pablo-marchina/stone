@@ -133,6 +133,7 @@ def _review(client, headers, content_id, targeting="mpe_targeted", quality="suff
     return client.post("/v1/corpus/content-reviews",headers=headers,json={
         "content_id":content_id,"targeting_status":targeting,
         "evidence_quality":quality, "evidence_reference":"reviewed-official-caption-2026",
+        "evidence_sha256":sha256(b"observed caption fixture for item").hexdigest(),
         "observed_modalities":modes, "rubric_observability":"partial",
     })
 
@@ -158,6 +159,12 @@ def test_scientific_card_requires_post_review_not_producer_type(tmp_path, monkey
         assert bad.status_code == 422
         bad2=_review(c,headers,content_id,modes=[])
         assert bad2.status_code == 422
+        missing_hash=c.post("/v1/corpus/content-reviews",headers=headers,json={
+            "content_id": content_id, "targeting_status": "mpe_targeted",
+            "evidence_quality": "sufficient",
+            "evidence_reference": "observed-caption-document",
+            "observed_modalities": ["caption"]})
+        assert missing_hash.status_code == 422
         assert _review(c,headers,content_id).status_code == 201
         accepted=c.get("/v1/corpus/data-card",headers=headers).json()
         assert accepted["schema_version"] == "tapi-corpus-data-card.v2"
@@ -202,6 +209,7 @@ def test_scientific_0005_migration_upgrade_downgrade(tmp_path, monkeypatch):
     insp=inspect(engine)
     assert insp.has_table("corpus_source_research_contexts")
     assert insp.has_table("corpus_post_scientific_reviews")
+    assert "evidence_sha256" in {c["name"] for c in insp.get_columns("corpus_post_scientific_reviews")}
     command.downgrade(config,"0004_corpus_profiles")
     assert not inspect(engine).has_table("corpus_source_research_contexts")
     assert not inspect(engine).has_table("corpus_post_scientific_reviews")
