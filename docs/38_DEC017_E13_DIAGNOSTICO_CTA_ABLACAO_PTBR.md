@@ -132,3 +132,12 @@ O dataset artificial consolidado tem **34 casos**: 14 da E1.2, 14 do #28 e seis 
 **Validação ainda necessária no Windows/Miniforge, antes do merge:** instalar dependências existentes, executar `pytest -q tests/test_system_one_e13.py`, gerar fixtures com `build_e13_cta_challenges.py`, executar `diagnose_e13_cta.py` em modo baseline e depois `both --ablate-cta-heads` com o checkpoint SHA-pinned da E1.1. Reexecutar suíte completa, `scripts/check_gate0.py` e `scripts/verify_zero_spend.py`. **Nenhum desses resultados é presumido como PASS nesta consolidação; G0B e o uso real seguem bloqueados.**
 
 **Interpretação do relatório:** comparar `cta_head_isolation`, `n_cta_cascade_blocked`, `cta_evidence_crosscheck.cta_conflicts` e `head_value_histograms` antes de eleger ajuste de classificador. `baseline_negation_aware` e `gliner_rule_assisted_experimental` não são o baseline institucional nem evidência de superioridade generalizável.
+
+
+### Proteção de origem sintética do runner consolidado
+
+O runner `diagnose_e13_cta.py` compara o JSONL de entrada com o conjunto canônico
+produzido pelo gerador versionado. `source_kind="synthetic"` **não** basta:
+um arquivo com texto real rotulado artificialmente é recusado antes do
+carregamento dos pesos. O laboratório E1.3 não aceita corpus real; novos
+cenários artificiais exigem alteração auditável no gerador e nos testes.
