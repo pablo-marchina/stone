@@ -53,10 +53,13 @@ def aggregate_report(path: Path) -> dict:
 
 
 def _head_sha() -> str | None:
-    result = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=ROOT,
-        capture_output=True, text=True, check=False,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=ROOT,
+            capture_output=True, text=True, check=False,
+        )
+    except OSError:
+        return None
     value = result.stdout.strip()
     return value if result.returncode == 0 and len(value) == 40 else None
 
