@@ -112,3 +112,17 @@ Gate 0B deve continuar bloqueado. O experimento **não habilita** Meta Business 
 - https://github.com/fastino-ai/GLiNER2
 
 A revisão deste documento não constitui licença para conteúdo de terceiros nem homologa o experimento cientificamente.
+
+## Evidência de execução com checkpoint real — 04/11/2026
+
+**Registro fornecido pelo operador** (Windows / Miniforge, ambiente `tapi-s1`): a aquisição pública concluiu o download de 6 arquivos, com reconstrução de ~1,17 GB; o validador reportou `REAL LOCAL GLINER PASS — checkpoint loaded and inference executed` depois do pré-teste de `classify_text` e de 8 chamadas medidas de inferência sobre 4 exemplos sintéticos.
+
+- **Revisão imutável do modelo:** `e173bca1f0c4217d7a55b3b0c705d5ece8a0218d`.
+- **SHA-256 dos pesos:** `9efe0f88c99f2aa794452e9559dc60e98d60d9fa2bf1b60cf2710411b6da5b4e` (igual ao digest publicado pelo fornecedor).
+- **Inferências medidas:** 8.
+- **Latência end-to-end E1, p50:** 303,059 ms; **p95:** 313,277 ms. São tempos informados pelo runner, não tempos de processamento de vídeo ou estimativas para população real.
+- **Warnings não bloqueantes:** aviso `transformers` sobre mapeamento do checkpoint `gliner2` para `extractor` e `FutureWarning` de `torch.jit.script` depreciado. Necessário reavaliar compatibilidade ao atualizar dependências.
+- **Suíte E1.1:** 12 testes PASS no head com a correção de armazenamento, antes da execução real. **Suíte geral:** 264 PASS na versão anterior à última correção de armazenamento; rodar novamente no head atual para fechamento.
+- **Não verificado neste registro:** memória RSS, tempo de carregamento, versões de pacotes, número exato de abstenções e métricas por campo; recuperar esses campos do arquivo local `dec017_e11_real_report.json` antes do aceite final.
+
+**Conclusão restrita:** funcionamento técnico do checkpoint real com a integração E1 e dados sintéticos foi demonstrado. Isso **não** valida desempenho científico, qualidade semântica de rótulos, aplicação a vídeos completos nem capacidade de generalização.
