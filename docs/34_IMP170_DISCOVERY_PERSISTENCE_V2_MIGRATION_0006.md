@@ -59,3 +59,17 @@ A migração `0006_business_discovery_provenance` depende de `0005_scientific_co
 - Migração 0006 deve subir, descer até 0005 e reaplicar sem remover o contexto científico.
 
 **Situação de dados externos:** nenhum perfil aprovado e nenhum post científico real no banco. Todos os testes do PR são offline, com dados fictícios.
+
+## Validação no checkout atualizado
+
+Os testes do PR #23 passaram (220/220) no Windows/Miniforge do operador **antes** desta adaptação. Isso não valida automaticamente o serviço agora acrescentado. Antes de integração do PR #20, executar:
+
+```powershell
+python -m pip install -e ".[dev]"
+python -m pytest -q tests/test_discovery_corpus_ingestion.py tests/test_discovery_provenance_migration.py
+python -m pytest -q
+python scripts/check_gate0.py
+python scripts/verify_zero_spend.py
+```
+
+Confirmar separadamente os endpoints, rollback do ledger, fontes v2, instituto financeiro sem porte MPE, migração 0006 e contagens técnico/científico no data card. Qualquer falha mantém PR #20 em rascunho; `TAPI_MPE_PERSISTENCE_ENABLED` permanece desligado.
