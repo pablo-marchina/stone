@@ -89,7 +89,7 @@ Benchmark privado, apenas depois da montagem. Quando houver dev e test no mesmo 
 ~~~powershell
 $env:TAPI_SYSTEM_ONE_ENABLED = "1"
 try {
-    python scripts/benchmark_system_one_e12.py --input "C:\TAPI-Private\E12\gold_e12_v1.jsonl" --output "C:\TAPI-Private\E12\report_e12_v1.json" --model both --model-dir "C:\Models\tapi\gliner25-multi-decide"
+    python scripts/benchmark_system_one_e12.py --input "C:\TAPI-Private\E12\gold_e12_v1.jsonl" --output "C:\TAPI-Private\E12\report_e12_test_v1.json" --model both --split test --model-dir "C:\Models\tapi\gliner25-multi-decide"
 }
 finally {
     $env:TAPI_SYSTEM_ONE_ENABLED = "0"
