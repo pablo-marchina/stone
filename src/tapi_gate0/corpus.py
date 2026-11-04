@@ -131,7 +131,10 @@ def corpus_data_card(engine, tenant: str, *, as_of: datetime | None = None,
         eligible_instagram_posts=0, eligible_instagram_profiles=0,
         scientifically_eligible_instagram_posts=0, scientifically_eligible_instagram_profiles=0,
         technically_eligible_instagram_posts=0, technically_eligible_instagram_profiles=0,
-        eligible_youtube_supplementary_posts=0, excluded_unregistered=0,
+        eligible_youtube_supplementary_posts=0,
+        technically_eligible_youtube_supplementary_posts=0,
+        scientifically_eligible_youtube_supplementary_posts=0,
+        excluded_unregistered=0,
         excluded_grant_or_technical=0, excluded_too_recent=0,
         excluded_without_metrics=0, excluded_nonpositive_denominator=0,
         excluded_nonprimary_instagram_format=0, excluded_source_context_missing=0,
@@ -184,6 +187,7 @@ def corpus_data_card(engine, tenant: str, *, as_of: datetime | None = None,
             continue
         if rec['platform'] != Platform.INSTAGRAM.value:
             counts['eligible_youtube_supplementary_posts'] += 1
+            counts['technically_eligible_youtube_supplementary_posts'] += 1
             continue
 
         counts['technically_eligible_instagram_posts'] += 1
@@ -264,7 +268,7 @@ def corpus_data_card(engine, tenant: str, *, as_of: datetime | None = None,
             'An operator review reference does not independently establish legal reuse rights.',
             'Administrative grants and an API response do not independently establish legal rights.',
             'Instagram follower counts may reflect observation time, not publication time.',
-            'YouTube Shorts are complementary and do not count toward the primary Instagram target.',
+            'YouTube Shorts are complementary and currently counted as technical-only, not scientific.',
             'Rubric observability is a separate reviewed state; text-only metadata cannot prove video features.',
             'This is observational corpus coverage, not a causal engagement claim.',
         ],
