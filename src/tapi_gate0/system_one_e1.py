@@ -81,8 +81,10 @@ class EvidenceBundle(BaseModel):
     def fingerprint(self) -> str:
         item = self.observation
         evidence_hash = item.sha256 if item is not None else "none"
-        return sha256((self.tenant_id + ":" + self.content_id + ":" +
-                       evidence_hash + ":" + (item.modality if item else "none")).encode()).hexdigest()
+        parts = (self.tenant_id, self.content_id, self.creator_id, self.source_kind,
+                 self.rights_reference or "none", ",".join(sorted(self.allowed_operations)),
+                 evidence_hash, item.modality if item else "none")
+        return sha256("\x00".join(parts).encode("utf-8")).hexdigest()
 
 
 class Decision(BaseModel):
