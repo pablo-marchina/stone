@@ -1,4 +1,4 @@
-"""IMP-167/170: curate a source frame and capture first eligible MPE metadata.
+"""IMP-167/170: curate source candidates and preview technically eligible metadata.
 
 The only permitted persistent output is an explicit local, private audit report.
 Corpus DB is not written; register/create grants only through existing admin APIs.
@@ -27,7 +27,7 @@ def _print(obj):
 
 def main(argv=None, *, http=None):
     parser = argparse.ArgumentParser(description="Strictly gated MPE candidate corpus pilot")
-    parser.add_argument("--frame", required=True, help="Local JSON source frame (untracked)")
+    parser.add_argument("--frame", required=True, help="Source frame v2 (or legacy v1); read-only audit by default")
     parser.add_argument("--execute", action="store_true", help="Explicitly perform one bounded read")
     parser.add_argument("--source", help="Known candidate username in the frame")
     parser.add_argument("--evidence-dir", default="artifacts/private/mpe_approvals")
@@ -102,7 +102,8 @@ def main(argv=None, *, http=None):
             _print({"status": "BLOCKED", "code": "PRIVATE_REPORT_ALREADY_EXISTS"})
             return 2
         summary = {"status": "PRIVATE_EVIDENCE_SAVED", "source": report["source"]["username"],
-                   "eligible_14d": report["counts"]["eligible_14d"],
+                   "technically_eligible_14d": report["counts"]["technically_eligible_14d"],
+                   "scientifically_eligible_14d": 0,
                    "pages_examined": report["pages_examined"],
                    "report_path": str(out), "report_sha256": __import__("hashlib").sha256(payload).hexdigest(),
                    "corpus_posts_persisted": 0}
@@ -112,6 +113,7 @@ def main(argv=None, *, http=None):
         _print({"status": "EVIDENCE_PILOT_READ", "source": report["source"],
                 "counts": report["counts"], "pages_examined": report["pages_examined"],
                 "another_page_possible": report["another_page_possible"],
+                "scientific_eligibility_status": "UNREVIEWED_CONTENT",
                 "corpus_posts_persisted": 0, "record_exported": False})
     return 0
 
