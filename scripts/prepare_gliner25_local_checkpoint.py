@@ -14,6 +14,9 @@ from pathlib import Path
 import shutil
 
 REPO_ID = "fastino/GLiNER2.5-multi-Decide"
+# Published by the source repository for the original model.safetensors.
+# https://huggingface.co/fastino/GLiNER2.5-multi-Decide/blob/95f87c2984126e9a66db6bc3805847d09f00d415/model.safetensors
+PUBLISHED_WEIGHTS_SHA256 = "9efe0f88c99f2aa794452e9559dc60e98d60d9fa2bf1b60cf2710411b6da5b4e"
 ALLOW_PATTERNS = [
     "*.json", "*.safetensors", "*.model", "*.txt", "README.md", "LICENSE*",
 ]
@@ -56,6 +59,8 @@ def validate_local_checkpoint(directory: Path) -> dict:
     for name in REQUIRED_FILES:
         f = directory / name
         files[name] = {"sha256": _hash(f), "bytes": f.stat().st_size}
+    if files["model.safetensors"]["sha256"] != PUBLISHED_WEIGHTS_SHA256:
+        raise ValueError("CHECKPOINT_VENDOR_PUBLISHED_SHA256_MISMATCH")
     manifest_path = directory / MANIFEST_NAME
     recorded_revision = None
     if manifest_path.is_file():
