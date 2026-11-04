@@ -111,3 +111,18 @@ A ordem exata e os pré-requisitos de cada tarefa estão nos CSVs. Nenhuma etapa
 Volume de dados autorizado, direitos sobre audiovisual, capacidade local de render/VLM, licenças por peso/fonte/codec, permissões Meta/YouTube, parceiros para piloto, comparabilidade de métricas, conformidade legal e ausência de cobrança. Registro de déficit não é substituto automático do requisito institucional: depende de decisão explícita.
 
 **Regra final:** uma única liberação `ENTREGA-UNICA`, condicionada à comprovação dos gates aplicáveis e ao registro de impossibilidades. Jamais apresentar feature proposta, preview, teste com mocks ou publicação bloqueada como produção efetiva.
+
+
+---
+
+## Aditivo institucional comunicado em 04/11/2026 — DEC-018
+
+Consultar [DEC-018 — Premissas institucionais e aceite operacional](41_DEC018_DECISOES_INSTITUCIONAIS_E_ACEITE_OPERACIONAL_2026-11-04.md). Trata-se de decisões **informadas pelo responsável**, não de cópia de contrato, autorização técnica por token ou homologação dos resultados.
+
+- **Escopo:** todas as 23 capacidades, inclusive expansões anteriormente condicionais, foram declaradas institucionalmente liberadas para construção.
+- **APIs/IDs:** acesso institucional declarado liberado; insumos específicos serão disponibilizados quando requisitados. O código pode avançar, mas cada integração real precisa de autenticação/escopos e ensaio técnico reproduzível.
+- **Fontes e operações:** uso declarado institucionalmente liberado; direitos sobre terceiros comunicados como abrangidos por acordo de uso irrestrito e dados Stone liberados. Operacionalizar comprovação do acordo aplicável, políticas de plataformas, direitos de titulares, proteção de dados e grants técnicos por fonte/ação. **Não alterar automaticamente** a política deny-by-default nem afirmar que 72 grants técnicos PENDING viraram efetivos.
+- **Revisores/validação:** nenhum humano será disponibilizado e não haverá validação científica independente. O requisito histórico de **>=50 revisões humanas**, constante desta v5.2, passa a ter **pedido de dispensa/substituição de aceite**, ainda não satisfeito por código. Testes sintéticos e observabilidade substituem apenas a validação técnica; não constituem revisão humana nem qualidade científica independente.
+- **Custos:** orçamento R$ 0 e vedação de campanhas pagas reais continuam inalterados, salvo futura decisão formal específica.
+
+**Consequência no caminho crítico:** não bloquear desenvolvimento por repetição de pedido de aprovação institucional genérica nem de revisores inexistentes. Permanecem bloqueios de implementação e integração, provisionamento técnico seguro de acessos quando necessário, conformidade aplicável por fonte, recursos/hardware e aceite operacional. Os números 204 IMP/543 dependências/15 DEC originais não foram recalculados por este aditivo; o pacote de matrizes exigirá reconciliação formal.
