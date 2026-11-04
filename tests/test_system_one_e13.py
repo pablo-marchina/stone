@@ -137,3 +137,19 @@ def test_e13_cli_stays_off_when_flag_not_set(monkeypatch, tmp_path):
         ])
     assert exc.value.code == 2
     assert not (tmp_path / "report.json").exists()
+
+
+def test_mixed_negated_and_positive_actions_are_not_claimed_as_false_positives(
+    monkeypatch, tmp_path,
+):
+    monkeypatch.setenv("TAPI_SYSTEM_ONE_ENABLED", "1")
+    all_cases = make_cases()
+    negative_only = next(c for c in all_cases if
+        c.evidence.observation.text.startswith("Não siga este perfil: é um alerta sobre golpes"))
+    mixed = next(c for c in all_cases if
+        c.evidence.observation.text.startswith("Não comente sua senha; salve"))
+    report = diagnose_synthetic_cta([negative_only, mixed], ContradictoryModel(), tmp_path)
+    assert report["cta_conflicts"]["baseline_claims_cta_with_only_directly_negated_candidates"] == 1
+    assert report["cta_conflicts"]["mixed_negated_and_other_cta_candidates"] == 1
+    assert report["case_diagnostics"][0]["has_other_cta_regex_candidate"] is False
+    assert report["case_diagnostics"][1]["has_other_cta_regex_candidate"] is True
