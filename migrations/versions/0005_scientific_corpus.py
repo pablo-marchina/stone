@@ -50,6 +50,7 @@ def _tables():
         Column("targeting_status", String(32), nullable=False),
         Column("evidence_quality", String(20), nullable=False),
         Column("evidence_reference", String(512), nullable=False),
+        Column("evidence_sha256", String(64)),
         Column("observed_modalities", String(128), nullable=False),
         Column("rubric_observability", String(24), nullable=False),
         Column("reviewed_by", String(128), nullable=False),
