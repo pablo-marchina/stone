@@ -26,6 +26,13 @@ CHALLENGES = (
     ("Se quiser, poderá seguir esses passos; não é uma instrução para seguir o perfil.", None),
     ("Comente agora: qual sua dúvida sobre a maquininha?", "comentar"),
     ("Não salve esta mensagem; siga o nosso perfil oficial.", "seguir"),
+    # Additional edge cases retained from PR #27; no negative labels imply video-wide absence.
+    ("Não clique no link na bio: é um aviso de segurança.", None),
+    ("Você pode seguir a lista de tarefas da empresa.", None),
+    ("A palavra comente é um verbo no imperativo.", None),
+    ("Não esqueça de salvar este checklist financeiro.", "salvar"),
+    ("Não comente sua senha; salve estas dicas de segurança.", "salvar"),
+    ("O guia para sua lojinha está no link na bio.", "link na bio"),
 )
 
 
