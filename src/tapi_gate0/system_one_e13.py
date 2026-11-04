@@ -209,7 +209,9 @@ def diagnose_synthetic_cta(
         cases_report.append({
             "synthetic_case_ordinal": index,
             "gold_presence_status": gold["tem_cta"].status,
+            "gold_presence": gold["tem_cta"].value,
             "gold_type_status": gold["tipo_cta"].status,
+            "gold_type": gold["tipo_cta"].value,
             "raw_multi_presence": multi_presence,
             "raw_multi_type": multi_type,
             "isolated_presence": single_presence,
