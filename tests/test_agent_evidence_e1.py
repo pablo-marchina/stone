@@ -134,3 +134,51 @@ def test_secure_agent_api_uses_authenticated_tenant_and_abstains(tmp_path):
         assert result["abstained_from_pattern_claim"] is True
         assert client.post("/v1/agent/analyze-ranking", headers=hdr,
                            json={**params,"tenant_id":"another"}).status_code == 422
+
+
+def test_secure_agent_reads_real_database_snapshot_without_client_citations(tmp_path):
+    from fastapi.testclient import TestClient
+    from tapi_gate0.secure_api import create_secure_app
+
+    app = create_secure_app(
+        f"sqlite:///{tmp_path/'agent_with_records.sqlite'}",
+        initialize_schema=True, allow_http_local=True,
+    )
+    password = "safe-demo-password-for-local-test-42"
+    app.state.identity_store.bootstrap("tenantA", "Demo", "founder", password)
+    with TestClient(app) as client:
+        login = client.post("/v1/auth/sessions", json={
+            "username":"founder", "password":password, "tenant_id":"tenantA",
+        })
+        hdr = {"Authorization":"Bearer " + login.json()["access_token"]}
+        creator = client.post("/v1/creators", headers=hdr, json={
+            "creator_id":"creator1", "tenant_id":"tenantA",
+            "origin":"synthetic_local", "handle":"fictional_creator",
+        })
+        assert creator.status_code == 201, creator.text
+        content = client.post("/v1/content", headers=hdr, json={
+            "content_id":"post1", "tenant_id":"tenantA", "creator_id":"creator1",
+            "origin":"synthetic_local", "media_type":"reels",
+            "published_at":"2026-10-01T12:00:00+00:00",
+            "is_synthetic":True,
+        })
+        assert content.status_code == 201, content.text
+        metrics = client.post("/v1/content/post1/metrics", headers=hdr, json={
+            "snapshot_id":"snapshot1", "tenant_id":"tenantA", "content_id":"post1",
+            "observed_at":"2026-11-01T12:00:00+00:00",
+            "followers_measured_at":"2026-11-01T12:00:00+00:00",
+            "likes":20, "comments":5, "follower_count":1000,
+        })
+        assert metrics.status_code == 201, metrics.text
+        response = client.post("/v1/agent/analyze-ranking", headers=hdr, json={
+            "origin":"synthetic_local", "as_of":AS_OF.isoformat(),
+        })
+        assert response.status_code == 200, response.text
+        output = response.json()
+        assert output["n_eligible_posts"] == 1
+        refs = output["findings"][0]["citations"]
+        assert len(refs) == 1
+        assert refs[0]["content_id"] == "post1"
+        assert refs[0]["snapshot_id"] == "snapshot1"
+        assert refs[0]["engagement_rate"] == "0.025"
+        assert output["abstained_from_pattern_claim"] is True
