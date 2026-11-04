@@ -22,6 +22,7 @@ from tapi_gate0.system_one_e14 import CTAChoice, _choice
 from tapi_gate0.system_one_e15 import (
     AuthorizationEvidence, CTAHumanFinding, CTAReviewedCase, FrozenStudyProtocol,
     IndependentCTAReview, rehearse_e15_synthetic, validate_e15_study,
+    e15_split_manifest_sha256,
 )
 from tapi_gate0.system_one_e1 import DeterministicTextDecider
 from tapi_gate0.system_one_e13 import NegationAwareTextDecider
@@ -72,6 +73,7 @@ def test_e15_first_and_second_must_be_distinct_reviewers():
     with pytest.raises(ValidationError, match="E15_INDEPENDENT_REVIEWER_IDS_REQUIRED"):
         CTAReviewedCase(
             evidence=example.evidence, split=example.split,
+            canonical_creator_group=example.canonical_creator_group,
             first=example.first, second=copy,
         )
 
@@ -82,6 +84,7 @@ def test_e15_unresolved_disagreement_fails_closed():
     with pytest.raises(ValidationError, match="E15_DISAGREEMENT_REQUIRES_THIRD_REVIEWER"):
         CTAReviewedCase(
             evidence=contested.evidence, split=contested.split,
+            canonical_creator_group=contested.canonical_creator_group,
             first=contested.first, second=contested.second,
         )
 
@@ -96,6 +99,7 @@ def test_e15_extraneous_or_early_adjudication_rejected():
     with pytest.raises(ValidationError, match="E15_UNNECESSARY_ADJUDICATION"):
         CTAReviewedCase(
             evidence=agreed.evidence, split=agreed.split,
+            canonical_creator_group=agreed.canonical_creator_group,
             first=agreed.first, second=agreed.second, adjudication=arb,
         )
     contested = cases[4]
@@ -103,6 +107,7 @@ def test_e15_extraneous_or_early_adjudication_rejected():
     with pytest.raises(ValidationError, match="E15_ADJUDICATION_MUST_FOLLOW_PRIMARY_REVIEWS"):
         CTAReviewedCase(
             evidence=contested.evidence, split=contested.split,
+            canonical_creator_group=contested.canonical_creator_group,
             first=contested.first, second=contested.second, adjudication=early,
         )
 
@@ -138,6 +143,7 @@ def test_e15_review_requires_blind_model_agnostic_input_and_evidence_locator():
     with pytest.raises(ValidationError, match="E15_REVIEW_LOCATOR_MUST_MATCH_OBSERVED_TEXT"):
         CTAReviewedCase(
             evidence=one.evidence, split=one.split,
+            canonical_creator_group=one.canonical_creator_group,
             first=forged, second=one.second,
         )
 
@@ -151,11 +157,16 @@ def test_e15_creator_and_duplicate_text_leakage_blocked():
     fp = same_creator.fingerprint()
     changed = CTAReviewedCase(
         evidence=same_creator, split="test",
+        canonical_creator_group=one_dev.canonical_creator_group,
         first=one_test.first.model_copy(update={"evidence_fingerprint": fp}),
         second=one_test.second.model_copy(update={"evidence_fingerprint": fp}),
     )
+    altered_creator_cases = [*cases[:3], changed, *cases[4:]]
+    changed_protocol = protocol.model_copy(update={
+        "frozen_split_manifest_sha256": e15_split_manifest_sha256(altered_creator_cases),
+    })
     with pytest.raises(ValueError, match="E15_CREATOR_DEV_TEST_LEAKAGE"):
-        validate_e15_study([*cases[:3], changed, *cases[4:]], protocol)
+        validate_e15_study(altered_creator_cases, changed_protocol)
 
     # Text hash leakage, even when item IDs and creator IDs are distinct.
     source = one_dev.evidence.observation
@@ -166,11 +177,16 @@ def test_e15_creator_and_duplicate_text_leakage_blocked():
     fp2 = duplicate.fingerprint()
     revised = CTAReviewedCase(
         evidence=duplicate, split="test",
+        canonical_creator_group=one_test.canonical_creator_group,
         first=one_test.first.model_copy(update={"evidence_fingerprint": fp2}),
         second=one_test.second.model_copy(update={"evidence_fingerprint": fp2}),
     )
+    altered_text_cases = [*cases[:3], revised, *cases[4:]]
+    changed_protocol = protocol.model_copy(update={
+        "frozen_split_manifest_sha256": e15_split_manifest_sha256(altered_text_cases),
+    })
     with pytest.raises(ValueError, match="E15_TEXT_DEV_TEST_LEAKAGE"):
-        validate_e15_study([*cases[:3], revised, *cases[4:]], protocol)
+        validate_e15_study(altered_text_cases, changed_protocol)
 
 
 def test_e15_protocol_preceding_review_and_exact_policy_names_enforced():
@@ -215,6 +231,7 @@ def test_e15_real_data_blocked_even_with_operator_attested_rights():
     )
     swapped = CTAReviewedCase(
         evidence=evidence, split=original.split,
+        canonical_creator_group=original.canonical_creator_group,
         first=original.first.model_copy(update={"evidence_fingerprint": fp}),
         second=original.second.model_copy(update={"evidence_fingerprint": fp}),
         authorization=proof,
@@ -263,3 +280,27 @@ def test_e15_cli_refuses_output_inside_repository():
         rehearsal_main(["--output", str(ROOT / "e15_unauthorized.json")])
     assert result.value.code == 2
     assert not (ROOT / "e15_unauthorized.json").exists()
+
+
+def test_e15_split_manifest_prevents_posthoc_split_or_creator_changes():
+    protocol, cases = make_rehearsal()
+    changed = cases[0].model_copy(update={"split": "test"})
+    with pytest.raises(ValueError, match="E15_FROZEN_SPLIT_MANIFEST_MISMATCH"):
+        validate_e15_study([changed, *cases[1:]], protocol)
+    changed_group = cases[0].model_copy(update={"canonical_creator_group": "invented_alias"})
+    with pytest.raises(ValueError, match="E15_FROZEN_SPLIT_MANIFEST_MISMATCH"):
+        validate_e15_study([changed_group, *cases[1:]], protocol)
+
+
+def test_e15_related_campaign_cannot_leak_across_splits():
+    protocol, cases = make_rehearsal()
+    campaign_cases = [
+        c.model_copy(update={"campaign_group": "fictional_campaign_group"})
+        if i in (0, 3) else c
+        for i, c in enumerate(cases)
+    ]
+    changed_protocol = protocol.model_copy(update={
+        "frozen_split_manifest_sha256": e15_split_manifest_sha256(campaign_cases),
+    })
+    with pytest.raises(ValueError, match="E15_CAMPAIGN_DEV_TEST_LEAKAGE"):
+        validate_e15_study(campaign_cases, changed_protocol)
