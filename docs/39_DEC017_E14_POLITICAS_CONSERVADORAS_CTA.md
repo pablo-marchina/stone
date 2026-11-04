@@ -74,3 +74,29 @@ O modo GLiNER requer manifesto do checkpoint validado na E1.1. O runner fixa mod
 - [ ] PR E1.3 integrado ou PR E1.4 retargetado após o merge; revisão de diff isolado.
 
 **Proibido concluir superioridade científica ou produção a partir destas fixtures.** Um passo posterior, com corpus externo formalmente autorizado, escopo de mídia observável e duas revisões humanas independentes, poderá comparar política com validação adequada por criador. Até lá, rubrica, grants e Gate 0B continuam sem mudança.
+
+
+## Validação integrada em comando único
+
+O script `scripts/validate_dec017_e14_integrated.py` reutiliza o executor local
+seguro da E1.3 e registra: pytest focado, comparação baseline, comparação
+GLiNER real, pytest completo, Gate 0 e zero-spend. Salva logs privados e
+`summary.json` com somente métricas agregadas permitidas; elimina arquivos
+de comparação de execução anterior antes de iniciar, evitando resultados
+obsoletos. O `summary.json` inclui o SHA local do checkout quando Git existe.
+
+No PowerShell (com a branch E1.4 no HEAD), executar:
+
+```powershell
+python scripts/validate_dec017_e14_integrated.py `
+  --model-dir "C:\Models\tapi\gliner25-multi-decide" `
+  --output-dir "$env:USERPROFILE\tapi-e14-validation"
+
+git rev-parse HEAD
+Get-Content "$env:USERPROFILE\tapi-e14-validation\summary.json" -Raw
+```
+
+`all_checks_pass=true` exige todas as seis etapas PASS; sem checkpoint
+real o comparativo GLiNER é BLOCKED, nunca marcado como aprovado. A execução
+não cria autorização para dados externos nem muda qualquer classificador
+institucional. A revisão deve comparar métricas e sua procedência antes do merge.
