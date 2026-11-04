@@ -126,10 +126,6 @@ class CTAReviewedCase(BaseModel):
             raise ValueError("E15_REVIEW_EVIDENCE_FINGERPRINT_MISMATCH")
         if any(r.finding.evidence_locator != item.locator for r in reviews):
             raise ValueError("E15_REVIEW_LOCATOR_MUST_MATCH_OBSERVED_TEXT")
-        if self.first.reviewed_at > self.second.reviewed_at:
-            # Review packets can arrive out of order; independence is by IDs
-            # and model blinding, not chronology between primary reviewers.
-            pass
         if self.adjudication is not None and self.adjudication.reviewed_at < max(
             self.first.reviewed_at, self.second.reviewed_at
         ):
