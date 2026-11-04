@@ -104,6 +104,8 @@ class CTAReviewedCase(BaseModel):
     model_config = ConfigDict(extra="forbid")
     evidence: EvidenceBundle
     split: Literal["dev", "test"]
+    canonical_creator_group: Id
+    campaign_group: Id | None = None
     first: IndependentCTAReview
     second: IndependentCTAReview
     adjudication: IndependentCTAReview | None = None
@@ -174,6 +176,7 @@ class FrozenStudyProtocol(BaseModel):
     model_config = ConfigDict(extra="forbid")
     study_id: Id
     registered_at: datetime
+    frozen_split_manifest_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     policy_names: list[str] = Field(min_length=1, max_length=7)
     selected_on_dev_only: Literal[True] = True
     holdout_test_locked: Literal[True] = True
@@ -195,6 +198,19 @@ class FrozenStudyProtocol(BaseModel):
         return self
 
 
+def e15_split_manifest_sha256(cases: list[CTAReviewedCase]) -> str:
+    """Commit to exact observed bytes, split, creator group and campaign group."""
+    rows = sorted(
+        (
+            c.evidence.fingerprint(), c.split,
+            c.canonical_creator_group, c.campaign_group or "none",
+        )
+        for c in cases
+    )
+    joined = "\n".join("\x1f".join(row) for row in rows)
+    return sha256(joined.encode("utf-8")).hexdigest()
+
+
 def validate_e15_study(
     cases: list[CTAReviewedCase], protocol: FrozenStudyProtocol,
 ) -> None:
@@ -208,19 +224,25 @@ def validate_e15_study(
         raise ValueError("E15_DUPLICATE_FINGERPRINT")
     if {c.split for c in cases} != {"dev", "test"}:
         raise ValueError("E15_REQUIRES_BOTH_DEV_AND_TEST")
-    by_creator: dict[tuple[str, str], set[str]] = {}
+    if e15_split_manifest_sha256(cases) != protocol.frozen_split_manifest_sha256:
+        raise ValueError("E15_FROZEN_SPLIT_MANIFEST_MISMATCH")
+    by_creator: dict[str, set[str]] = {}
+    by_campaign: dict[str, set[str]] = {}
     by_text: dict[str, set[str]] = {}
     for c in cases:
         if min(c.first.reviewed_at, c.second.reviewed_at) <= protocol.registered_at:
             raise ValueError("E15_REGISTRATION_MUST_PRECEDE_BLINDED_REVIEWS")
-        key = (c.evidence.tenant_id, c.evidence.creator_id)
-        by_creator.setdefault(key, set()).add(c.split)
+        by_creator.setdefault(c.canonical_creator_group, set()).add(c.split)
+        if c.campaign_group is not None:
+            by_campaign.setdefault(c.campaign_group, set()).add(c.split)
         obs = c.evidence.observation
         by_text.setdefault(obs.sha256, set()).add(c.split)
         if c.adjudication is not None and c.adjudication.reviewed_at <= protocol.registered_at:
             raise ValueError("E15_ADJUDICATION_PRECEDES_PROTOCOL")
     if any(len(splits) > 1 for splits in by_creator.values()):
         raise ValueError("E15_CREATOR_DEV_TEST_LEAKAGE")
+    if any(len(splits) > 1 for splits in by_campaign.values()):
+        raise ValueError("E15_CAMPAIGN_DEV_TEST_LEAKAGE")
     if any(len(splits) > 1 for splits in by_text.values()):
         raise ValueError("E15_TEXT_DEV_TEST_LEAKAGE")
 
@@ -345,9 +367,7 @@ def rehearse_e15_synthetic(
             scores[name] = _policy_scores(subset, predictions[name])
         results[split] = {
             "n_cases": len(subset),
-            "n_creators": len({
-                (c.evidence.tenant_id, c.evidence.creator_id) for c in subset
-            }),
+            "n_creators": len({c.canonical_creator_group for c in subset}),
             "reviewer_agreement": _agreement(subset),
             "policies": scores,
         }
