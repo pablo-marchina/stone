@@ -68,6 +68,8 @@ def main(argv=None):
             "excluded_too_recent":result.excluded_too_recent,
             "next_page_available":result.next_page_available,
             "metadata_only":result.metadata_only,
+            "research_corpus_accepted":False,
+            "scientific_eligible_count":0,
             "scientifically_validated":False,
             "production_approved":False,
         }, separators=(",", ":")))
