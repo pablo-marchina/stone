@@ -141,3 +141,21 @@ produzido pelo gerador versionado. `source_kind="synthetic"` **não** basta:
 um arquivo com texto real rotulado artificialmente é recusado antes do
 carregamento dos pesos. O laboratório E1.3 não aceita corpus real; novos
 cenários artificiais exigem alteração auditável no gerador e nos testes.
+
+
+### Correções de regressão da heurística PT-BR experimental
+
+A análise dos padrões do #28 identificou exemplos sintéticos com CTA
+metalinguístico ou ação que não segue uma conta (por exemplo,
+`A palavra 'siga' aparece`, `seguir a lista de tarefas`) sendo
+considerados CTAs positivos pela regex. O padrão institucional para
+`salvar` também não reconhece o infinitivo `salvar`; sua extensão
+foi adicionada **somente** ao experimento E1.3, sem modificar
+`classification.py`.
+
+O detector agora abstém de inferência positiva nos casos explícitos de
+citação, menção metalinguística, instrução negada e `seguir passos/listas`.
+O reconhecimento de `não esqueça de salvar` e `não deixe de seguir`
+fica separado da negação direta. A regra é deliberadamente restrita,
+não equivale a interpretação semântica nem prova a ausência de CTA.
+Há testes focados para essas entradas; ainda não há gold humano de posts reais.
