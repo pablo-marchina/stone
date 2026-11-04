@@ -140,7 +140,9 @@ class ResearchSourceEntry(BaseModel):
         if len(operations) != len(self.allowed_operations) or not operations <= REQUIRED_SCOPES | OPTIONAL_SCOPES:
             raise ValueError("INVALID_OPERATION_SCOPE")
         if self.creator_type == "mpe_business" and self.status == "approved":
-            if self.business_size_class not in {"micro", "small"} or not self.business_size_evidence_reference:
+            if (self.business_size_class not in {"micro", "small"}
+                or not self.business_size_evidence_reference
+                or len(self.business_size_evidence_reference) < 12):
                 raise ValueError("MPE_SIZE_EVIDENCE_REQUIRED")
         if self.status == "approved":
             if self.creator_type == "unverified" or self.audience_intent == "not_mpe_targeted":
