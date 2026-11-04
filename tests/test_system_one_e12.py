@@ -278,3 +278,22 @@ def test_cli_real_model_requires_opt_in_not_a_download(tmp_path, monkeypatch):
                   "--model", "both", "--model-dir", str(tmp_path/"absent")])
     assert err.value.code == 2
     assert not (tmp_path/"out.json").exists()
+
+
+def test_dev_and_test_metrics_must_be_selected_separately():
+    dev = _human_case(creator="creator_dev", content="post_dev", split="dev",
+                      text="Conteúdo de vendas para empreendedor local")
+    test = _human_case(creator="creator_test", content="post_test", split="test",
+                       text="Dicas de vendas específicas para o comércio")
+    with pytest.raises(ValueError, match="E12_SPLIT_SELECTION_REQUIRED"):
+        evaluate_e12([dev, test])
+    result = evaluate_e12([dev, test], split="test")
+    assert result["n_cases"] == 1
+    assert result["n_total_input_cases"] == 2
+    assert result["scored_split"] == "test"
+    assert result["splits"] == {"dev": 1, "test": 1}
+
+
+def test_explicit_unavailable_split_is_rejected():
+    with pytest.raises(ValueError, match="E12_SELECTED_SPLIT_EMPTY"):
+        evaluate_e12(make_cases(), split="test")
