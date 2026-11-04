@@ -221,7 +221,10 @@ def authorized_source(source: SourceEntry | ResearchSourceEntry, evidence_dir: P
         raise SourceGateError("APPROVAL_PROOF_HASH_MISMATCH")
     return {
         "username": source.username,
-        "sector": source.sector,
+        # v1 uses "sector", v2 uses "sector_context". Preserve the
+        # legacy key for preview consumers without requiring a business to
+        # be an MPE or hiding the v2 sector information.
+        "sector": getattr(source, "sector_context", getattr(source, "sector", "other")),
         "creator_type": getattr(source, "creator_type", "mpe_business"),
         "business_size_class": getattr(source, "business_size_class", getattr(source, "size_band", "unknown")),
         "audience_intent": getattr(source, "audience_intent", "uncertain"),
