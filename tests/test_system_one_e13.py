@@ -261,3 +261,26 @@ def test_ablation_requires_real_model_opt_in(tmp_path):
             "--model", "baseline", "--ablate-cta-heads",
         ])
     assert err.value.code == 2
+
+
+def test_head_isolation_compares_joint_and_solo_without_exposing_text():
+    from diagnose_e13_cta import _ablate_individual_cta_heads
+
+    class IsolatedHeadClassifier:
+        def classify_text(self, text, schema):
+            if list(schema) == ["tem_cta"]:
+                return {"tem_cta": "sim"}
+            if list(schema) == ["tipo_cta"]:
+                return {"tipo_cta": "comentar"}
+            raise AssertionError("only isolated heads should be queried")
+
+    case = next(x for x in make_cases() if x.evidence.content_id == "e13_003")
+    joint = [{
+        "synthetic_case_id": case.evidence.content_id,
+        "joint_raw_tem_cta": "nao",
+        "joint_raw_tipo_cta": "comentar",
+    }]
+    report = _ablate_individual_cta_heads(IsolatedHeadClassifier(), [case], joint)
+    assert report["joint_vs_solo_changed"] == {"tem_cta": 1, "tipo_cta": 0}
+    assert report["n_cases"] == 1
+    assert "Comente aqui" not in json.dumps(report)
