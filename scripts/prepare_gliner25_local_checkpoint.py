@@ -39,9 +39,7 @@ def validate_local_checkpoint(directory: Path) -> dict:
         if not file.is_file() or file.is_symlink():
             raise ValueError("CHECKPOINT_REQUIRED_FILE_MISSING: " + name)
     cfg = json.loads((directory / "config.json").read_text(encoding="utf-8"))
-    if cfg.get("architecture") != "boundary" or cfg.get("model_name") not in {
-        "microsoft/mdeberta-v3-base", "microsoft/mdeberta-v3-base",
-    }:
+    if cfg.get("architecture") != "boundary" or cfg.get("model_name") != "microsoft/mdeberta-v3-base":
         raise ValueError("UNEXPECTED_GLINER_CHECKPOINT_ARCHITECTURE")
     weights = directory / "model.safetensors"
     if weights.stat().st_size < 800_000_000:
@@ -91,7 +89,10 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     if not args.confirm_public_download:
         parser.error("Download not authorized: pass --confirm-public-download explicitly")
-    destination = Path(args.model_dir).expanduser().resolve()
+    raw_destination = Path(args.model_dir).expanduser()
+    if raw_destination.is_symlink():
+        parser.error("Checkpoint target cannot be a symlink")
+    destination = raw_destination.resolve()
     _not_inside_project(destination)
     if destination.is_symlink():
         parser.error("Checkpoint target cannot be a symlink")
@@ -104,6 +105,9 @@ def main(argv=None) -> int:
 
     info = HfApi().model_info(REPO_ID)
     revision = info.sha
+    license_tag = getattr(getattr(info, "card_data", None), "license", None)
+    if license_tag not in (None, "apache-2.0"):
+        raise RuntimeError("MODEL_LICENSE_CHANGED_REVIEW_REQUIRED")
     if not revision or len(revision) != 40:
         raise RuntimeError("CHECKPOINT_IMMUTABLE_REVISION_REQUIRED")
     manifest_file = destination / MANIFEST_NAME
