@@ -1,13 +1,13 @@
 """Append-only third-party Business Discovery acquisition provenance.
 
-Revision ID: 0006_business_discovery_provenance
+Revision ID: 0006_discovery_provenance
 Revises: 0005_scientific_corpus
 """
 from alembic import op
 from sqlalchemy import (MetaData, Table, Column, String, ForeignKeyConstraint, inspect)
 from sqlalchemy.schema import CreateTable, DropTable
 
-revision = "0006_business_discovery_provenance"
+revision = "0006_discovery_provenance"
 down_revision = "0005_scientific_corpus"
 branch_labels = None
 depends_on = None
