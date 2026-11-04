@@ -1,5 +1,6 @@
 """DEC-017 E1: offline contracts, evidence integrity, safe abstention and paired metrics."""
 from hashlib import sha256
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -221,3 +222,21 @@ def test_benchmark_computes_paired_different_model_metrics(monkeypatch, tmp_path
     assert report["models"]["baseline"]["field_metrics"]["tema_principal"]["accuracy_over_all"] == 1
     assert report["models"]["local"]["field_metrics"]["tema_principal"]["accuracy_over_all"] == 0
     assert not report["scientifically_validated"]
+
+
+def test_cli_synthetic_fixture_report_is_aggregate_only(tmp_path):
+    import json
+    import subprocess
+    import sys
+    root = Path(__file__).resolve().parents[1]
+    fixture = root / 'evidence' / 'experiments' / 'dec017_e1_synthetic_smoke.jsonl'
+    output = tmp_path / 'report.json'
+    proc = subprocess.run([
+        sys.executable, str(root / 'scripts' / 'benchmark_system_one_e1.py'),
+        '--input', str(fixture), '--output', str(output), '--model', 'baseline',
+    ], cwd=root, capture_output=True, text=True, check=True)
+    report = json.loads(output.read_text(encoding='utf-8'))
+    assert 'n=4' in proc.stdout
+    assert report['n_cases'] == 4
+    assert report['scientifically_validated'] is False
+    assert 'Como vender mais?' not in output.read_text(encoding='utf-8')
