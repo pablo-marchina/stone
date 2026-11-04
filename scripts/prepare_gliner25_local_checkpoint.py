@@ -34,9 +34,10 @@ def _hash(path: Path) -> str:
 
 def validate_local_checkpoint(directory: Path) -> dict:
     """Validate existence, source architecture, hashes and provenance, no network."""
-    directory = directory.resolve(strict=True)
+    directory = Path(directory).expanduser()
     if not directory.is_dir():
-        raise ValueError("CHECKPOINT_DIRECTORY_REQUIRED")
+        raise ValueError("LOCAL_CHECKPOINT_NOT_FOUND: download weights with prepare_gliner25_local_checkpoint.py first; --model-dir=" + str(directory))
+    directory = directory.resolve(strict=True)
     for name in REQUIRED_FILES:
         file = directory / name
         if not file.is_file() or file.is_symlink():
@@ -86,6 +87,44 @@ def _not_inside_project(destination: Path) -> None:
         raise ValueError("CHECKPOINT_DIR_MUST_BE_OUTSIDE_PROJECT")
 
 
+MIN_FREE_DISK_BYTES = 3_000_000_000
+
+
+def _nearest_existing_directory(destination: Path) -> Path:
+    """Find the real destination volume even if its parent folders do not exist."""
+    probe = Path(destination).expanduser()
+    while not probe.exists():
+        parent = probe.parent
+        if parent == probe:
+            raise ValueError("CHECKPOINT_TARGET_VOLUME_NOT_FOUND: " + str(destination))
+        probe = parent
+    if not probe.is_dir():
+        raise ValueError("CHECKPOINT_TARGET_PARENT_NOT_DIRECTORY: " + str(probe))
+    return probe
+
+
+def check_destination_disk_space(destination: Path, required_bytes: int = MIN_FREE_DISK_BYTES) -> dict:
+    """Fail closed with actionable capacity information, never use the home drive as fallback."""
+    probe = _nearest_existing_directory(destination)
+    free = shutil.disk_usage(probe).free
+    volume = probe.anchor or str(probe)
+    summary = {
+        "volume": volume,
+        "free_bytes": free,
+        "required_bytes": required_bytes,
+        "free_gib": round(free / 1024**3, 2),
+        "required_gib": round(required_bytes / 1024**3, 2),
+    }
+    if free < required_bytes:
+        raise ValueError(
+            "CHECKPOINT_DISK_SPACE_INSUFFICIENT: "
+            + str(summary["free_gib"]) + " GiB free on " + volume
+            + "; " + str(summary["required_gib"]) + " GiB required. "
+            + "Free space or choose a different volume with --model-dir."
+        )
+    return summary
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Explicit public GLiNER checkpoint download")
     parser.add_argument("--model-dir", required=True)
@@ -101,8 +140,13 @@ def main(argv=None) -> int:
     _not_inside_project(destination)
     if destination.is_symlink():
         parser.error("Checkpoint target cannot be a symlink")
-    if shutil.disk_usage(destination.parent if destination.parent.exists() else Path.home()).free < 3_000_000_000:
-        parser.error("At least 3 GB free disk is required")
+    try:
+        disk_status = check_destination_disk_space(destination)
+    except (OSError, ValueError) as exc:
+        parser.error(str(exc))
+    print("Checkpoint destination volume:", disk_status["volume"],
+          "| free:", disk_status["free_gib"], "GiB",
+          "| required:", disk_status["required_gib"], "GiB")
     try:
         from huggingface_hub import HfApi, snapshot_download
     except ImportError as exc:
