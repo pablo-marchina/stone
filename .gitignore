@@ -15,3 +15,5 @@ logs/
 *.sqlite3
 artifacts/private/
 secrets/
+# DEC-017: never commit local benchmark reports containing research aggregates.
+dec017_e1_*_report.json
