@@ -301,10 +301,16 @@ class IngestionStore:
                 source_grants.c.platform==item.platform.value,
                 source_grants.c.source_account_id==item.source_account_id,
                 source_grants.c.enabled==1,
-                source_grants.c.expires_at>now_utc().isoformat(),
             ).values(enabled=source_grants.c.enabled))
             if active.rowcount!=1:
                 raise ConnectorError("SOURCE_GRANT_REVOKED_BEFORE_PERSIST",403)
+            grant_expiry=db.execute(select(source_grants.c.expires_at).where(
+                source_grants.c.tenant_id==tenant,
+                source_grants.c.platform==item.platform.value,
+                source_grants.c.source_account_id==item.source_account_id,
+            )).scalar_one()
+            if datetime.fromisoformat(grant_expiry)<=now_utc():
+                raise ConnectorError("SOURCE_GRANT_EXPIRED_BEFORE_PERSIST",403)
             found = db.execute(select(ingestion_records.c.content_id).where(
                 ingestion_records.c.tenant_id == tenant,
                 ingestion_records.c.platform == item.platform.value,
