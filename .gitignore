@@ -17,3 +17,7 @@ artifacts/private/
 secrets/
 # DEC-017: never commit local benchmark reports containing research aggregates.
 dec017_e1_*_report.json
+# DEC-017 E1.1: keep model weights and local inference reports out of Git.
+*.safetensors
+tapi_e11_checkpoint_manifest.json
+dec017_e11_*_report.json
