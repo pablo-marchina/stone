@@ -104,3 +104,22 @@ Não usar posts reais nem nomes de revisores reais nos testes. O executor se rec
 A homologação de engenharia deste PR não pode ser interpretada como validação científica, conformidade certificada ou permissão para ingerir dados externos.
 
 Referências metodológicas: Protocolo Científico TAPI v2 (anexo do projeto); DEC-017 E1.2; [mlr3: grouped resampling](https://mlr3book.mlr-org.com/chapters/chapter3/evaluation_and_benchmarking.html); [CASRAI: agreement and Krippendorff alpha](https://casrai.org/guides/krippendorffs-alpha).
+
+
+## 8. Verificação única integrada, sem dados reais
+
+O validador de engenharia executa pytest focado, ensaio sintético com seis
+exemplos, pytest completo, Gate 0 e zero-spend, na mesma revisão do repositório.
+O relatório summary.json é agregado e registra o SHA de checkout quando o
+executável Git está disponível. Nunca importa posts externos nem carrega
+checkpoint; as duas avaliações humanas do ensaio são ficcionais.
+
+~~~powershell
+python scripts/validate_dec017_e15_integrated.py --output-dir "$env:USERPROFILE\tapi-e15-validation"
+git rev-parse HEAD
+Get-Content "$env:USERPROFILE\tapi-e15-validation\summary.json" -Raw
+~~~
+
+Mesmo se all_checks_pass=true, a única conclusão é que os contratos e os
+controles do ensaio sintético passaram. O runner informa explicitamente
+real_human_review_conducted=false e gate0b_authorized_by_this_runner=false.
