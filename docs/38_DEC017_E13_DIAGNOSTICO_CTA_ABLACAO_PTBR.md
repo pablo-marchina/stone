@@ -109,3 +109,26 @@ python scripts/verify_zero_spend.py
 **Não é aceite científico:** um vencedor por F1 em exemplos artificiais, precisão na população brasileira, acesso a publicações reais, fine-tuning, produção ou mudança da rubrica. O E1.2 segue como base do futuro gold humano independente com direitos comprovados e splits por criador.
 
 A decisão sobre mudar o adaptador E1 requer primeiro analisar as respostas brutas **dos pesos reais**, executar ablação e manter uma bateria de negativos para não trocar falsas abstenções por falsos positivos.
+
+
+## Consolidação dos PRs #27 e #28 (04/11/2026)
+
+**Branch canônica de consolidação:** `feat/dec017-e13-unified-cta-pr27-pr28-20261104`, derivada do PR #28.
+Os PRs #27 e #28 eram variantes concorrentes com os mesmos caminhos
+`src/tapi_gate0/system_one_e13.py` e `tests/test_system_one_e13.py`.
+Não fazer merge direto dos dois sem resolver essa sobreposição.
+
+| Capacidade | Origem | Resolução |
+|---|---|---|
+| Comparador baseline/GLiNER e ablação heads isolados | #27 e #28 | Mantido o runner único do #28 com histograma joint/solo |
+| Cascata `tem_cta → tipo_cta`, saída crua sanitizada | Ambos | Preservado o adaptador E1 intacto e gerado resumo de conflitos |
+| Negação explícita de imperativos, contexto misto | #27 e #28 | Função diagnóstica incorporada; correção de dupla negação `não deixe de` |
+| Variantes experimentais por regra e fallback | #28 | Mantidas isoladas da classificação de produção |
+| Casos PT-BR de dupla negação, uso metalinguístico e aviso de segurança | #27 | Incorporados seis novos casos sem criar rótulos falsos de CTA ausente |
+| Métricas, abstenção e matriz de confusão | Ambos | Saída E1.2 e matrizes do #28; histograma e conflitos adicionados |
+
+O dataset artificial consolidado tem **34 casos**: 14 da E1.2, 14 do #28 e seis situações distintas do #27. Todos permanecem sintéticos, sem gold humano e sem validade científica. A normalização temporal e multimodal permanece proibida quando não há evidência observável. As variantes experimentais não alteram `DeterministicTextDecider`, `LocalGLiNERDecider` ou `classification.py`.
+
+**Validação ainda necessária no Windows/Miniforge, antes do merge:** instalar dependências existentes, executar `pytest -q tests/test_system_one_e13.py`, gerar fixtures com `build_e13_cta_challenges.py`, executar `diagnose_e13_cta.py` em modo baseline e depois `both --ablate-cta-heads` com o checkpoint SHA-pinned da E1.1. Reexecutar suíte completa, `scripts/check_gate0.py` e `scripts/verify_zero_spend.py`. **Nenhum desses resultados é presumido como PASS nesta consolidação; G0B e o uso real seguem bloqueados.**
+
+**Interpretação do relatório:** comparar `cta_head_isolation`, `n_cta_cascade_blocked`, `cta_evidence_crosscheck.cta_conflicts` e `head_value_histograms` antes de eleger ajuste de classificador. `baseline_negation_aware` e `gliner_rule_assisted_experimental` não são o baseline institucional nem evidência de superioridade generalizável.
