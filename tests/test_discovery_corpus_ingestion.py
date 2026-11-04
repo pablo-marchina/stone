@@ -382,3 +382,37 @@ def test_source_context_audience_mismatch_fails_before_network(tmp_path):
                 TENANT, src, proof_dir, request(), http=OfficialHttp(c), token=TOKEN)
     assert err.value.code == "SOURCE_RESEARCH_CONTEXT_MISMATCH"
     assert calls == []
+
+
+def test_admin_route_requires_session_and_private_source_frame(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from tapi_gate0.secure_api import create_secure_app
+
+    monkeypatch.delenv("TAPI_MPE_APPROVED_FRAME_PATH", raising=False)
+    monkeypatch.delenv("TAPI_MPE_APPROVAL_PROOFS_DIR", raising=False)
+    app = create_secure_app(
+        "sqlite:///" + str(tmp_path / "api-rbac.sqlite3"),
+        initialize_schema=True, allow_http_local=True)
+    app.state.identity_store.bootstrap(
+        "tenant-rbac", "Org for tests", "admin",
+        "long-mock-password-no-provider-2026")
+    request_body = {
+        "username": "first_mpe_test",
+        "expected_ig_id": TARGET,
+        "run_key": "rbac-local-no-meta-001",
+        "limit": 5, "max_pages": 1,
+    }
+    with TestClient(app) as client:
+        denied = client.post("/v1/ingestion/business-discovery/runs",
+                             json=request_body)
+        assert denied.status_code == 401
+        signed_in = client.post("/v1/auth/sessions", json={
+            "tenant_id": "tenant-rbac", "username": "admin",
+            "password": "long-mock-password-no-provider-2026"})
+        assert signed_in.status_code == 200, signed_in.text
+        allowed_to_check = client.post(
+            "/v1/ingestion/business-discovery/runs",
+            headers={"Authorization": "Bearer " + signed_in.json()["access_token"]},
+            json=request_body)
+        assert allowed_to_check.status_code == 403
+        assert allowed_to_check.json()["code"] == "APPROVED_SOURCE_FRAME_NOT_CONFIGURED"
