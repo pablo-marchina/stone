@@ -26,6 +26,12 @@ O data card `tapi-corpus-data-card.v2` distingue posts tecnicamente elegíveis e
 
 O novo data card exige migração aplicada. O PR #20 (Business Discovery para persistência) está separado e apresenta outra migração identificada como 0005: precisará ser rebaseado, renumerado e revisado antes de integração.
 
+## Dependências de desenvolvimento
+
+O teste `tests/test_offline_visual.py::test_offline_scan_real_image` depende dos módulos locais `cv2` e `numpy`. Eles foram adicionados ao extra de desenvolvimento em `pyproject.toml` como `opencv-python-headless` e `numpy` (sem acesso a provedores nem serviço pago). Em PowerShell/Conda, execute `python -m pip install -e ".[dev]"` no ambiente ativo antes da suíte.
+
+O adaptador visual é opcional em runtime; a aplicação não deve carregar OpenCV para operações que não fazem análise visual local.
+
 ## Verificação sem rede
 
 ```powershell
