@@ -13,7 +13,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from tapi_gate0.system_one_e1 import EvidenceBundle
-from tapi_gate0.system_one_e12 import E12Case, HumanReview, evaluate_e12
+from tapi_gate0.system_one_e12 import E12Case, HumanReview, validate_e12_dataset
 
 
 class SplitAssignment(BaseModel):
@@ -75,9 +75,8 @@ def assemble_gold(evidence: list[EvidenceBundle],
             gold_kind="human_consensus", gold_reference=record.gold_reference,
             human_reviews=reviews,
         ))
-    # Also checks duplicate posts, same creator or exact same text spanning
-    # development/test. Baseline is local-only and no results are exported here.
-    evaluate_e12(cases)
+    # Validate held-out split integrity without evaluating any model.
+    validate_e12_dataset(cases)
     return cases
 
 
