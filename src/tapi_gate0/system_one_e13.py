@@ -22,6 +22,30 @@ NEGATORS = frozenset({"não", "nao", "nunca", "jamais", "nem"})
 CTA_FIELDS = ("tem_cta", "tipo_cta")
 
 
+def _is_directly_negated(prefix: str) -> bool:
+    """Narrow PT-BR clause-local negation check for diagnostic use only.
+
+    Double-negated imperatives ("não deixe de seguir") are not prohibitions.
+    This is deliberately not a linguistic entailment model.
+    """
+    lowered = prefix.casefold()
+    if re.search(r"\b(?:não|nao)\s+(?:deixe|esqueça|esqueca)\s+de\s*$", lowered):
+        return False
+    words = re.findall(r"\b[\wÀ-ÿ]+\b", lowered)
+    return bool(NEGATORS.intersection(words[-3:]))
+
+
+def directly_negated_cta_types(text: str) -> tuple[str, ...]:
+    """PR #27 diagnostic retained: report direct negative CTA matches, not claims of CTA absence."""
+    negatives = set()
+    for field, pattern in CTA.items():
+        for match in re.finditer(pattern, text, flags=re.IGNORECASE):
+            prefix = re.split(r"[.!?;:,\n]", text[:match.start()])[-1]
+            if _is_directly_negated(prefix):
+                negatives.add(field)
+    return tuple(sorted(negatives))
+
+
 def explicit_nonnegated_cta_types(text: str) -> tuple[str, ...]:
     """Small, deliberately high-precision Portuguese CTA positive detector.
 
@@ -32,8 +56,7 @@ def explicit_nonnegated_cta_types(text: str) -> tuple[str, ...]:
     for field, pattern in CTA.items():
         for match in re.finditer(pattern, text, flags=re.IGNORECASE):
             prefix = re.split(r"[.!?;:,\n]", text[:match.start()])[-1]
-            words = re.findall(r"\b[\wÀ-ÿ]+\b", prefix.casefold())
-            if NEGATORS.intersection(words[-3:]):
+            if _is_directly_negated(prefix):
                 continue
             # A quoted or discussed CTA may still be ambiguous; this detector
             # intentionally abstains from judging broader discourse context.
@@ -313,3 +336,75 @@ def evaluate_e13_synthetic(
         "No raw text, reviewer data or real content can be exported by this runner.",
     ]
     return report
+
+
+def summarize_e13_cta_evidence(cases: list[E12Case], report: dict) -> dict:
+    """Consolidated #27/#28 cross-check; raw schema labels and synthetic ordinals only.
+
+    This reuses E1.3 recorded joint heads and re-evaluates only the existing
+    deterministic baseline. It must never judge CTA absence in unobserved video.
+    """
+    trace = report.get("synthetic_cta_trace")
+    if not isinstance(trace, list) or len(trace) != len(cases):
+        raise ValueError("E13_CTA_TRACE_REQUIRED")
+    joint_presence = Counter()
+    joint_type = Counter()
+    adapter_reasons = Counter()
+    conflicts = Counter()
+    rows = []
+    baseline = DeterministicTextDecider()
+    for index, (case, row) in enumerate(zip(cases, trace), start=1):
+        if case.gold_kind != "synthetic_fixture" or case.evidence.source_kind != "synthetic":
+            raise ValueError("E13_SYNTHETIC_INPUT_ONLY")
+        if row["synthetic_case_id"] != case.evidence.content_id:
+            raise ValueError("E13_CTA_TRACE_CASE_MISMATCH")
+        observation = case.evidence.observation
+        if observation is None:
+            raise ValueError("E13_OBSERVED_TEXT_REQUIRED")
+        negated = directly_negated_cta_types(observation.text)
+        positive = explicit_nonnegated_cta_types(observation.text)
+        raw_presence = row.get("joint_raw_tem_cta") or ABSTAIN
+        raw_type = row.get("joint_raw_tipo_cta") or ABSTAIN
+        gate = row.get("post_adapter_tipo_cta_reason") or ABSTAIN
+        joint_presence[raw_presence] += 1
+        joint_type[raw_type] += 1
+        adapter_reasons[gate] += 1
+        blocked = bool(row.get("cta_cascade_blocked"))
+        conflicts["suppressed_by_presence_dependency"] += int(blocked)
+        conflicts["direct_negated_imperatives"] += int(bool(negated))
+        conflicts["mixed_negated_and_other_cta_candidates"] += int(bool(negated and positive))
+        original = {d.field_id: d for d in baseline.evaluate(case.evidence).decisions}
+        baseline_claims_presence = (
+            "tem_cta" in original
+            and not original["tem_cta"].abstained
+            and original["tem_cta"].value is True
+        )
+        bad_negative_claim = bool(
+            negated and not positive and baseline_claims_presence
+        )
+        conflicts["baseline_cta_with_only_directly_negated_candidates"] += int(
+            bad_negative_claim
+        )
+        rows.append({
+            "synthetic_case_ordinal": index,
+            "has_direct_negated_imperative": bool(negated),
+            "has_nonnegated_cta_candidate": bool(positive),
+            "adapter_type_suppressed_by_presence": blocked,
+            "baseline_claims_presence_with_only_direct_negation": bad_negative_claim,
+        })
+    return {
+        "source_kind": "synthetic_only",
+        "scientifically_validated": False,
+        "joint_head_histograms": {
+            "tem_cta": dict(sorted(joint_presence.items())),
+            "tipo_cta": dict(sorted(joint_type.items())),
+            "adapter_tipo_cta_reason": dict(sorted(adapter_reasons.items())),
+        },
+        "cta_conflicts": dict(sorted(conflicts.items())),
+        "case_flags": rows,
+        "limitations": [
+            "Direct negation is a clause-local heuristic and may miss nested contexts.",
+            "The synthetic fixture's negative evidence never means the video lacks CTA.",
+            "No raw captions, creators or non-schema model text are exported.",
+        ],
+    }
