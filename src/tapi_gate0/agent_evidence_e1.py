@@ -98,7 +98,7 @@ def analyze_with_ranking(
     refs = [
         EvidenceCitation(
             content_id=row.content_id, creator_id=row.creator_id,
-            snapshot_id=row.snapshot_id, engagement_rate=str(row.engagement_rate),
+            snapshot_id=row.snapshot_id, engagement_rate=format(row.engagement_rate, "f"),
         ) for row in top[:5]
     ]
     # A single top publication is a candidate to inspect, not a validated
@@ -125,6 +125,7 @@ def analyze_with_ranking(
             "Seguidores e interações podem ter tempos de medição diferentes.",
             "A elegibilidade por idade e a integridade de snapshots dependem do dataset consultado.",
             "Nenhuma revisão científica independente ou desempenho populacional foi alegado.",
+            "O ranking técnico não comprova que cada publicação vise MPEs ou possua rubrica multimodal revisada.",
         ] + (["Amostra pequena ou baixa diversidade de criadores; não generalizar."]
              if limited else []),
     )
