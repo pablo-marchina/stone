@@ -18,7 +18,7 @@ from tapi_gate0.system_one_e13 import NegationAwareTextDecider
 from tapi_gate0.system_one_e14 import _choice
 from tapi_gate0.system_one_e15 import (
     CTAHumanFinding, CTAReviewedCase, FrozenStudyProtocol,
-    IndependentCTAReview, rehearse_e15_synthetic,
+    IndependentCTAReview, rehearse_e15_synthetic, e15_split_manifest_sha256,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,10 +40,6 @@ EXAMPLES = (
 
 
 def make_rehearsal() -> tuple[FrozenStudyProtocol, list[CTAReviewedCase]]:
-    protocol = FrozenStudyProtocol(
-        study_id="e15_rehearsal_fake_001", registered_at=T0,
-        policy_names=["baseline_e1_original", "rule_negation_e13"],
-    )
     cases: list[CTAReviewedCase] = []
     for i, (text, state, cta_type, split) in enumerate(EXAMPLES, 1):
         cid = f"e15_fake_{i:03d}"
@@ -88,9 +84,15 @@ def make_rehearsal() -> tuple[FrozenStudyProtocol, list[CTAReviewedCase]]:
                 finding=finding,
             )
         cases.append(CTAReviewedCase(
-            evidence=evidence, split=split, first=first, second=second,
-            adjudication=third,
+            evidence=evidence, split=split,
+            canonical_creator_group=f"fictional_group_{i:03d}",
+            first=first, second=second, adjudication=third,
         ))
+    protocol = FrozenStudyProtocol(
+        study_id="e15_rehearsal_fake_001", registered_at=T0,
+        frozen_split_manifest_sha256=e15_split_manifest_sha256(cases),
+        policy_names=["baseline_e1_original", "rule_negation_e13"],
+    )
     return protocol, cases
 
 
