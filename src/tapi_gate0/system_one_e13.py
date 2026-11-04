@@ -21,20 +21,24 @@ TYPE_HEAD = (*E1_LABELS["tipo_cta"], "indefinido")
 NEGATION = re.compile(r"\b(?:não|nunca|jamais)\s*$", flags=re.IGNORECASE)
 
 
-def direct_negative_imperative(text: str) -> list[str]:
-    """Flag direct 'não siga', 'nunca comente', etc., not infer video-wide absence.
-
-    Not an NLP negation solver; 'não deixe de seguir' is deliberately not
-    flagged. Reports need independent manual review before changing a baseline.
-    """
+def _cta_match_disposition(text: str) -> tuple[list[str], list[str]]:
+    """Positive-looking regex matches and directly negated matches, separately."""
     low = text.casefold()
-    flagged = set()
+    negated, not_directly_negated = set(), set()
     for kind, pattern in CTA.items():
         for match in re.finditer(pattern, low):
             before = low[max(0, match.start() - 36):match.start()]
             if NEGATION.search(before):
-                flagged.add(kind)
-    return sorted(flagged)
+                negated.add(kind)
+            else:
+                not_directly_negated.add(kind)
+    return sorted(negated), sorted(not_directly_negated)
+
+
+def direct_negative_imperative(text: str) -> list[str]:
+    """Flag only direct negation; do not infer any video's CTA absence."""
+    negated, _ = _cta_match_disposition(text)
+    return negated
 
 
 def label_bucket(value, field: str, schema: dict) -> str:
@@ -175,7 +179,7 @@ def diagnose_synthetic_cta(
         baseline = deterministic.evaluate(case.evidence)
         local_responses[ehash] = adapter_result
         baseline_responses[ehash] = baseline
-        negations = direct_negative_imperative(observation.text)
+        negations, other_cta_candidates = _cta_match_disposition(observation.text)
 
         for name, value in (
             ("multi_presence", multi_presence), ("multi_type", multi_type),
@@ -196,8 +200,10 @@ def diagnose_synthetic_cta(
         if negations:
             conflict_counts["direct_negated_imperatives"] += 1
         base_decisions = {d.field_id:d for d in baseline.decisions}
-        if negations and (not base_decisions["tem_cta"].abstained):
-            conflict_counts["baseline_claims_cta_despite_direct_negation"] += 1
+        if negations and other_cta_candidates:
+            conflict_counts["mixed_negated_and_other_cta_candidates"] += 1
+        if negations and not other_cta_candidates and (not base_decisions["tem_cta"].abstained):
+            conflict_counts["baseline_claims_cta_with_only_directly_negated_candidates"] += 1
 
         gold, _ = case.resolved()
         cases_report.append({
@@ -213,6 +219,7 @@ def diagnose_synthetic_cta(
             "adapter_presence_reason": presence.reason,
             "adapter_type_reason": cta_kind.reason,
             "has_direct_negated_imperative": bool(negations),
+            "has_other_cta_regex_candidate": bool(other_cta_candidates),
             "baseline_claims_cta": not base_decisions["tem_cta"].abstained,
         })
 
