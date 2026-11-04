@@ -365,3 +365,26 @@ def test_e13_cli_rejects_fake_synthetic_label_before_any_inference(tmp_path):
         ])
     assert failure.value.code == 2
     assert not target.exists()
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ("Não esqueça de salvar.", ("salvar",)),
+    ("Não deixe de seguir este perfil.", ("seguir",)),
+    ("A palavra 'siga' aparece no exemplo de gramática.", ()),
+    ("A palavra comente é um verbo no imperativo.", ()),
+    ("Você pode seguir a lista de tarefas da empresa.", ()),
+    ("Se quiser, poderá seguir esses passos; não é uma instrução para seguir o perfil.", ()),
+    ("Não clique no link na bio: é um aviso de segurança.", ()),
+    ("Siga esta loja e comente aqui!", ("comentar", "seguir")),
+    ("Não comente sua senha; salve estas dicas de segurança.", ("salvar",)),
+])
+def test_e13_regressions_in_ptbr_cta_context(text, expected):
+    assert explicit_nonnegated_cta_types(text) == expected
+
+
+def test_e13_new_experimental_patterns_do_not_mutate_institutional_cta():
+    from tapi_gate0.classification import CTA
+    from tapi_gate0.system_one_e13 import E13_CTA_PATTERNS
+    assert CTA["salvar"] == r"\bsalv[ea]\b"
+    assert E13_CTA_PATTERNS["salvar"] != CTA["salvar"]
+    assert "salvar" in explicit_nonnegated_cta_types("Não esqueça de salvar.")
