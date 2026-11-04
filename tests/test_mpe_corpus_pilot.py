@@ -138,6 +138,11 @@ def test_two_realistic_pages_with_eligible_records_and_integrity(tmp_path):
     assert len(seen) == 2
     assert result["pages_examined"] == 2
     assert result["counts"]["eligible_14d"] == 2
+    assert result["counts"]["technically_eligible_14d"] == 2
+    assert result["counts"]["scientifically_eligible_14d"] == 0
+    assert result["scientific_eligibility_status"] == "UNREVIEWED_CONTENT"
+    assert all(not row["scientific_eligible"] and row["observed_content_modalities"] == []
+               for row in result["eligible_media"])
     assert result["counts"]["too_recent"] == 1
     assert result["counts"]["duplicates"] == 1
     assert result["corpus_posts_persisted"] == 0
