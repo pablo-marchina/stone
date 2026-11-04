@@ -176,7 +176,7 @@ def _metrics_for_field(field: str, observed: list[tuple[object, object]], not_ob
     answered = sum(p is not None for p in predicted)
     correct = sum(g == p for g, p in observed)
     per_class = {}
-    for label in E1_LABELS[field]:  # temporary field passed below
+    for label in E1_LABELS[field]:
         support = sum(g == label for g in gold)
         if not support:
             continue
@@ -204,12 +204,8 @@ def _metrics_for_field(field: str, observed: list[tuple[object, object]], not_ob
     }
 
 
-def evaluate_e12(cases: list[E12Case], models: dict[str, DecisionModel] | None = None) -> dict:
-    """Paired macro-F1 / precision / recall with explicit no-observation safeguards.
-
-    Outputs aggregate-only statistics. All results remain exploratory until a
-    registered, independently verified human test set is reviewed.
-    """
+def validate_e12_dataset(cases: list[E12Case]) -> None:
+    """Check identities and disjoint dev/test creator/text evidence before scoring."""
     if not 1 <= len(cases) <= 2000:
         raise ValueError("E12_EXPECTS_1_TO_2000_CASES")
     identities = [(c.evidence.tenant_id, c.evidence.content_id) for c in cases]
@@ -229,16 +225,34 @@ def evaluate_e12(cases: list[E12Case], models: dict[str, DecisionModel] | None =
     if any(len(v) > 1 for v in split_by_text.values()):
         raise ValueError("E12_DUPLICATE_TEXT_SPLIT_LEAKAGE")
 
-    gold_resolved = [c.resolved() for c in cases]
-    gold_mix = dict(Counter(c.gold_kind for c in cases))
+
+def evaluate_e12(cases: list[E12Case], models: dict[str, DecisionModel] | None = None,
+                 *, split: Split | None = None) -> dict:
+    """Aggregate paired metrics for exactly ONE split, after verifying all splits.
+
+    Never mix dev (tuning) and test (held out) metrics into a global headline.
+    """
+    validate_e12_dataset(cases)
+    all_splits = dict(Counter(c.split for c in cases))
+    if split is None:
+        if len(all_splits) != 1:
+            raise ValueError("E12_SPLIT_SELECTION_REQUIRED")
+        split = next(iter(all_splits))
+    if split not in all_splits:
+        raise ValueError("E12_SELECTED_SPLIT_EMPTY")
+    scored_cases = [case for case in cases if case.split == split]
+    gold_resolved = [c.resolved() for c in scored_cases]
+    gold_mix = dict(Counter(c.gold_kind for c in scored_cases))
     models = {"baseline": DeterministicTextDecider()} if models is None else models
     if not models:
         raise ValueError("E12_MODELS_REQUIRED")
     results: dict = {
         "schema_version": E12_SCHEMA,
-        "n_cases": len(cases),
-        "n_unique_creators": len(set((c.evidence.tenant_id,c.evidence.creator_id) for c in cases)),
-        "splits": dict(Counter(c.split for c in cases)),
+        "n_cases": len(scored_cases),
+        "n_total_input_cases": len(cases),
+        "scored_split": split,
+        "n_unique_creators": len(set((c.evidence.tenant_id,c.evidence.creator_id) for c in scored_cases)),
+        "splits": all_splits,
         "gold_kinds": gold_mix,
         "scientifically_validated": False,
         "note": "Exploratory evidence; synthetic smoke is not a scientific benchmark. Human gold requires independent audit.",
@@ -248,7 +262,7 @@ def evaluate_e12(cases: list[E12Case], models: dict[str, DecisionModel] | None =
     for field in E1_FIELDS:
         reviews = [
             (c.human_reviews[0], c.human_reviews[1])
-            for c in cases if c.gold_kind == "human_consensus"
+            for c in scored_cases if c.gold_kind == "human_consensus"
         ]
         matches = sum(
             (_by_field(a.labels)[field].status,
@@ -267,7 +281,7 @@ def evaluate_e12(cases: list[E12Case], models: dict[str, DecisionModel] | None =
         measures = {field: {"pairs": [], "unknown": 0, "claims_without_gold": 0}
                     for field in E1_FIELDS}
         duration = []
-        for case, (reference, _) in zip(cases, gold_resolved):
+        for case, (reference, _) in zip(scored_cases, gold_resolved):
             start = perf_counter()
             response = model.evaluate(case.evidence)
             duration.append((perf_counter()-start)*1000)
