@@ -56,13 +56,15 @@ def assess_metadata_readiness(
     else:
         try:
             expires = datetime.fromisoformat(str(grant["expires_at"]))
-            active = bool(grant["enabled"]) and expires.utcoffset() is not None and expires > now
+            active = (grant["enabled"] == 1 and expires.utcoffset() is not None
+                      and expires > now)
             previous = bool(grant.get("technical_verified_at"))
         except (KeyError, ValueError, TypeError):
             active = False
         if not active:
             blockers.append("SOURCE_GRANT_EXPIRED_OR_DISABLED")
-        if not str(grant.get("approval_reference", "")).strip():
+        if (not isinstance(grant.get("approval_reference"), str)
+                or not grant["approval_reference"].strip()):
             blockers.append("SOURCE_GRANT_REFERENCE_REQUIRED")
             active = False
     if not credential_present:
