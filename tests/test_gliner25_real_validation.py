@@ -18,7 +18,8 @@ SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from prepare_gliner25_local_checkpoint import (
-    _not_inside_project, validate_local_checkpoint, main as prepare_main,
+    _not_inside_project, _nearest_existing_directory, check_destination_disk_space,
+    validate_local_checkpoint, main as prepare_main,
 )
 from validate_gliner25_real_e1 import (
     _load_synthetic, _run_inference, _percentile,
@@ -138,3 +139,47 @@ def test_report_shape_with_mocked_inference_is_not_real_model_proof(monkeypatch,
     assert set(report["paired_synthetic_smoke"]["models"]) == {
         "baseline", "local_gliner",
     }
+
+
+def test_disk_probe_uses_nearest_existing_parent_not_home_drive(tmp_path, monkeypatch):
+    # Before this fix, C:\\Models\\tapi could incorrectly probe Path.home().
+    import prepare_gliner25_local_checkpoint as checkpoint
+    absent = tmp_path / "new_folder" / "nested" / "checkpoint"
+    assert _nearest_existing_directory(absent) == tmp_path
+    observed = []
+    monkeypatch.setattr(checkpoint.shutil, "disk_usage", lambda directory: (
+        observed.append(directory) or SimpleNamespace(free=3_500_000_000)
+    ))
+    status = check_destination_disk_space(absent)
+    assert observed == [tmp_path]
+    assert status["free_bytes"] == 3_500_000_000
+    assert status["required_bytes"] == 3_000_000_000
+
+
+def test_disk_space_error_reports_available_required_and_target_volume(tmp_path, monkeypatch):
+    import prepare_gliner25_local_checkpoint as checkpoint
+    monkeypatch.setattr(checkpoint.shutil, "disk_usage", lambda path: SimpleNamespace(free=500_000_000))
+    with pytest.raises(ValueError, match="CHECKPOINT_DISK_SPACE_INSUFFICIENT") as err:
+        check_destination_disk_space(tmp_path / "not-created")
+    message = str(err.value)
+    assert "GiB free" in message
+    assert "GiB required" in message
+    assert "choose a different volume" in message
+
+
+def test_no_network_attempt_when_target_has_low_space(tmp_path, monkeypatch, capsys):
+    import prepare_gliner25_local_checkpoint as checkpoint
+    monkeypatch.setattr(checkpoint.shutil, "disk_usage", lambda path: SimpleNamespace(free=100_000_000))
+    target = tmp_path / "not-created" / "weights"
+    with pytest.raises(SystemExit) as exc:
+        prepare_main(["--model-dir", str(target), "--confirm-public-download"])
+    assert exc.value.code == 2
+    assert "CHECKPOINT_DISK_SPACE_INSUFFICIENT" in capsys.readouterr().err
+    assert not target.exists()
+
+
+def test_missing_local_model_error_explains_download_required(tmp_path):
+    path = tmp_path / "checkpoint-not-downloaded"
+    with pytest.raises(ValueError, match="LOCAL_CHECKPOINT_NOT_FOUND") as exc:
+        validate_local_checkpoint(path)
+    assert "prepare_gliner25_local_checkpoint.py" in str(exc.value)
