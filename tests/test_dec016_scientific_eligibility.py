@@ -52,7 +52,11 @@ def test_v2_creator_type_is_not_mpe_size(tmp_path):
     saved.write_text(frame.model_dump_json(), encoding="utf-8")
     restored = load_frame(saved)
     assert isinstance(restored, ResearchSourceFrame)
-    assert authorized_source(restored.sources[0], tmp_path)["creator_type"] == "financial_institution"
+    approval = authorized_source(restored.sources[0], tmp_path)
+    assert approval["creator_type"] == "financial_institution"
+    assert approval["sector"] == "finance"  # legacy consumer key, mapped from v2
+    assert approval["sector_context"] == "finance"
+    assert approval["business_size_class"] == "not_applicable"
     report = audit_source_frame(restored)
     assert report["counts_by_creator_type"]["financial_institution"] == 1
     assert report["actual_eligible_posts"] == 0
