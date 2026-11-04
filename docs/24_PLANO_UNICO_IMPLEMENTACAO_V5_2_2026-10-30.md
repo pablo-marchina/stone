@@ -115,14 +115,15 @@ Volume de dados autorizado, direitos sobre audiovisual, capacidade local de rend
 
 ---
 
-## Aditivo institucional comunicado em 04/11/2026 — DEC-018
+## Aditivo institucional confirmado pelo responsável em 04/11/2026 — DEC-018
 
-Consultar [DEC-018 — Premissas institucionais e aceite operacional](41_DEC018_DECISOES_INSTITUCIONAIS_E_ACEITE_OPERACIONAL_2026-11-04.md). Trata-se de decisões **informadas pelo responsável**, não de cópia de contrato, autorização técnica por token ou homologação dos resultados.
+Consultar [DEC-018 — Autorização institucional e Gate 0B técnico](41_DEC018_DECISOES_INSTITUCIONAIS_E_ACEITE_OPERACIONAL_2026-11-04.md). O responsável informou **aprovação institucional formal abrangente de todas as fontes, operações, expansões, termos e direitos necessários**, incluindo uso de terceiros e todos os dados Stone. A aprovação é premissa do desenvolvimento, não pendência a pedir novamente.
 
-- **Escopo:** todas as 23 capacidades, inclusive expansões anteriormente condicionais, foram declaradas institucionalmente liberadas para construção.
-- **APIs/IDs:** acesso institucional declarado liberado; insumos específicos serão disponibilizados quando requisitados. O código pode avançar, mas cada integração real precisa de autenticação/escopos e ensaio técnico reproduzível.
-- **Fontes e operações:** uso declarado institucionalmente liberado; direitos sobre terceiros comunicados como abrangidos por acordo de uso irrestrito e dados Stone liberados. Operacionalizar comprovação do acordo aplicável, políticas de plataformas, direitos de titulares, proteção de dados e grants técnicos por fonte/ação. **Não alterar automaticamente** a política deny-by-default nem afirmar que 72 grants técnicos PENDING viraram efetivos.
-- **Revisores/validação:** nenhum humano será disponibilizado e não haverá validação científica independente. O requisito histórico de **>=50 revisões humanas**, constante desta v5.2, passa a ter **pedido de dispensa/substituição de aceite**, ainda não satisfeito por código. Testes sintéticos e observabilidade substituem apenas a validação técnica; não constituem revisão humana nem qualidade científica independente.
-- **Custos:** orçamento R$ 0 e vedação de campanhas pagas reais continuam inalterados, salvo futura decisão formal específica.
+- **Escopo:** todas as 23 capacidades, incluindo condicionais, estão liberadas para execução.
+- **Fontes, operações, termos e direitos:** resolvidos quanto à autorização institucional comunicada. Não converter essa aprovação em confirmação de token, conta, escopo e grants técnicos já operacionais. Cumprir condições e restrições efetivamente aplicáveis de plataformas e direitos dos titulares durante a integração; não exigir nova autorização institucional genérica.
+- **APIs e IDs:** disponíveis institucionalmente sob demanda; solicitá-los apenas para cada integração, sem armazenar credenciais no Git.
+- **Gate 0B:** G0B-01 resolvido institucionalmente; G0B-02 e G0B-03 resolvidos em aprovação formal, com provisionamento/execução técnica ainda pendentes. Não alterar 72 estados PENDING do sistema como se já existissem credenciais, grants técnicos ou operações bem-sucedidas.
+- **Ciência:** não haverá revisores humanos nem validação científica independente. A exigência original de **>=50 revisões humanas** fica como **DISPENSA/SUBSTITUIÇÃO FORMAL DE ACEITE A PROPAGAR ÀS MATRIZES**, não como tarefa concluída. Os resultados de modelos e testes serão declarados técnicos/exploratórios.
+- **Finanças:** o orçamento R$ 0 e a vedação de mídia paga real permanecem até decisão específica contrária.
 
-**Consequência no caminho crítico:** não bloquear desenvolvimento por repetição de pedido de aprovação institucional genérica nem de revisores inexistentes. Permanecem bloqueios de implementação e integração, provisionamento técnico seguro de acessos quando necessário, conformidade aplicável por fonte, recursos/hardware e aceite operacional. Os números 204 IMP/543 dependências/15 DEC originais não foram recalculados por este aditivo; o pacote de matrizes exigirá reconciliação formal.
+**Caminho crítico revisado:** provisionar acesso técnico e grants auditáveis quando necessários, validar primeiro lote real com limites/linhagem, desenvolver as capacidades ainda ausentes, reconciliar as 13 matrizes v5.2 e testar entrega única. Não repetir solicitações de aprovação institucional já atendidas. A revisão deste aditivo não recalcula por si só as 204 tarefas, 543 dependências, 15 DEC históricas ou sete gates.
