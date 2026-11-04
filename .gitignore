@@ -25,3 +25,7 @@ dec017_e11_*_report.json
 # DEC-017 E1.2 local synthetic inputs and aggregate benchmark reports
 dec017_e12_*.jsonl
 dec017_e12_*report*.json
+
+# DEC-017 E1.3: generated synthetic-only diagnostics
+dec017_e13_*.jsonl
+dec017_e13_*report*.json
