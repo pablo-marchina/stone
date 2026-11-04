@@ -20,6 +20,8 @@ from .system_one_e12 import E12Case, evaluate_e12
 ABSTAIN = "__abstain__"
 NEGATORS = frozenset({"não", "nao", "nunca", "jamais", "nem"})
 CTA_FIELDS = ("tem_cta", "tipo_cta")
+# Lab-only extension. The institutional classification.CTA patterns are untouched.
+E13_CTA_PATTERNS = {**CTA, "salvar": r"\bsalv[ea]\b|\bsalvar\b"}
 
 
 def _is_directly_negated(prefix: str) -> bool:
@@ -35,13 +37,42 @@ def _is_directly_negated(prefix: str) -> bool:
     return bool(NEGATORS.intersection(words[-3:]))
 
 
+def _cta_is_mentioned_not_requested(text: str, start: int, end: int) -> bool:
+    """Conservative syntactic evidence of citation/metalinguistic CTA use.
+
+    It does not assert full semantic disambiguation; it only abstains from
+    known misleading surface forms used in synthetic diagnostic cases.
+    """
+    prefix = re.split(r"[.!?;:,\n]", text[:start])[-1].casefold()
+    suffix = re.split(r"[.!?;:,\n]", text[end:])[0].casefold()
+    if any(prefix.count(q) % 2 for q in ("'", '"', "“")):
+        return True
+    if re.search(r"\b(?:a palavra|o verbo|o termo)\s+$", prefix):
+        return True
+    if re.search(
+        r"\b(?:não|nao)\s+(?:é|e)\s+(?:uma\s+)?instrução\s+para\s+$",
+        prefix,
+    ):
+        return True
+    if re.match(
+        r"\s+(?:(?:a|o|os|as|essas|esses|esta|este|seus|suas)\s+)?"
+        r"(?:lista|passos|orientações|orientacoes|instruções|instrucoes|"
+        r"procedimentos|regras)\b",
+        suffix,
+    ):
+        return True
+    return False
+
+
 def directly_negated_cta_types(text: str) -> tuple[str, ...]:
     """PR #27 diagnostic retained: report direct negative CTA matches, not claims of CTA absence."""
     negatives = set()
-    for field, pattern in CTA.items():
+    for field, pattern in E13_CTA_PATTERNS.items():
         for match in re.finditer(pattern, text, flags=re.IGNORECASE):
             prefix = re.split(r"[.!?;:,\n]", text[:match.start()])[-1]
-            if _is_directly_negated(prefix):
+            if _is_directly_negated(prefix) and not _cta_is_mentioned_not_requested(
+                text, match.start(), match.end()
+            ):
                 negatives.add(field)
     return tuple(sorted(negatives))
 
@@ -53,13 +84,13 @@ def explicit_nonnegated_cta_types(text: str) -> tuple[str, ...]:
     candidate. This is NOT a general-purpose negation or intent model.
     """
     positives: list[str] = []
-    for field, pattern in CTA.items():
+    for field, pattern in E13_CTA_PATTERNS.items():
         for match in re.finditer(pattern, text, flags=re.IGNORECASE):
             prefix = re.split(r"[.!?;:,\n]", text[:match.start()])[-1]
             if _is_directly_negated(prefix):
                 continue
-            # A quoted or discussed CTA may still be ambiguous; this detector
-            # intentionally abstains from judging broader discourse context.
+            if _cta_is_mentioned_not_requested(text, match.start(), match.end()):
+                continue
             positives.append(field)
             break
     return tuple(sorted(set(positives)))
