@@ -125,6 +125,7 @@ class DiscoveryCorpusService:
             raise ConnectorError("SOURCE_RESEARCH_CONTEXT_REQUIRED", 403)
         if (context["creator_type"] != source.creator_type or
             context["business_size_class"] != source.business_size_class or
+            context["business_size_evidence_reference"] != source.business_size_evidence_reference or
             context["sector_context"] != source.sector_context or
             context["audience_intent"] != source.audience_intent or
             context["audience_rationale_reference"] != source.audience_rationale_reference):
