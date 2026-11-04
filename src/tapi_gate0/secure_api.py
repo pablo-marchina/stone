@@ -22,6 +22,7 @@ from .identity import (IdentityFailure, IdentityStore, LoginRequest, SessionResp
                        MemberCreate, Principal, permitted)
 from .sa_store import SqlDomainStore, engine_for
 from .ingestion import IngestionStore, ConnectorError, router_for_ingestion
+from .discovery_ingestion import router_for_discovery_ingestion
 from .corpus import router_for_corpus
 from .ui import router_for_authenticated_view
 
@@ -97,6 +98,7 @@ def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_ht
 
     app.include_router(router_for_authenticated_view(current_principal))
     app.include_router(router_for_ingestion(identity,ingestion))
+    app.include_router(router_for_discovery_ingestion(identity,ingestion))
     app.include_router(router_for_corpus(identity,engine))
 
     @app.exception_handler(ConnectorError)

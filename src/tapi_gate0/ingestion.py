@@ -242,7 +242,7 @@ class IngestionStore:
                   new_records=added,duplicate_records=duplicate,
                   refreshed_records=refreshed,reason_code=reason))
 
-    def _persist_item(self, tenant: str, item: NormalizedItem) -> str:
+    def _persist_item(self, tenant: str, item: NormalizedItem, *, provenance_writer=None) -> str:
         """Store a new post or append a changed metric snapshot atomically.
 
         Returns 'created', 'refreshed', or 'unchanged'. A second read never
@@ -272,6 +272,8 @@ class IngestionStore:
             )).scalar_one_or_none()
             if found:
                 if not complete:
+                    if provenance_writer is not None:
+                        provenance_writer(db, found)
                     return "unchanged"
                 snapshots = db.execute(select(metrics_snapshots.c.payload).where(
                     metrics_snapshots.c.tenant_id == tenant,
@@ -292,6 +294,8 @@ class IngestionStore:
                     and previous.follower_count == item.follower_count
                     and previous.views == views
                 ):
+                    if provenance_writer is not None:
+                        provenance_writer(db, found)
                     return "unchanged"
                 snapshot = MetricsCreate(
                     snapshot_id=stable_id("metrics", content_id, str(uuid4())),
@@ -328,6 +332,8 @@ class IngestionStore:
                     ingestion_records.c.source_item_id == item.source_item_id,
                 ).values(processed_at=created.isoformat(),
                          denominator_quality=item.denominator_quality))
+                if provenance_writer is not None:
+                    provenance_writer(db, found)
                 return "refreshed"
 
             existing_creator = db.execute(select(creators.c.id).where(
@@ -380,6 +386,8 @@ class IngestionStore:
                 })))
             db.execute(insert(outbox).values(
                 seq=ev.inserted_primary_key[0], attempts=0, dead_letter=0))
+            if provenance_writer is not None:
+                provenance_writer(db, content_id)
         return "created"
 
     def run(self,tenant:str,req:IngestionRequest,http:OfficialHttp | None=None)->IngestionResult:
