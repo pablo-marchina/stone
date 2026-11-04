@@ -1,0 +1,60 @@
+{
+  "schema_version": "tapi-source-frame.v2",
+  "sources": [
+    {
+      "username": "vaicomeroquee",
+      "creator_type": "unverified",
+      "business_size_class": "unknown",
+      "sector_context": "food",
+      "sampling_stratum": "food_candidate",
+      "audience_intent": "uncertain",
+      "audience_rationale_reference": "https://ba.agenciasebrae.com.br/cultura-empreendedora/analise-gratuita-do-instagram-ajuda-chef-de-cozinha-a-conquistar-mais-clientes/",
+      "source_evidence_reference": "https://ba.agenciasebrae.com.br/cultura-empreendedora/analise-gratuita-do-instagram-ajuda-chef-de-cozinha-a-conquistar-mais-clientes/",
+      "status": "candidate"
+    },
+    {
+      "username": "solmaior_supermercado",
+      "creator_type": "unverified",
+      "business_size_class": "unknown",
+      "sector_context": "commerce",
+      "sampling_stratum": "commerce_candidate",
+      "audience_intent": "uncertain",
+      "audience_rationale_reference": "https://agendapolitica.polemicaparaiba.com.br/superacao-e-reinvencao-mulheres-paraibanas-encontram-nas-redes-sociais-impulso-para-sucesso-no-empreendedorismo/",
+      "source_evidence_reference": "https://agendapolitica.polemicaparaiba.com.br/superacao-e-reinvencao-mulheres-paraibanas-encontram-nas-redes-sociais-impulso-para-sucesso-no-empreendedorismo/",
+      "status": "candidate"
+    },
+    {
+      "username": "usecairos",
+      "creator_type": "unverified",
+      "business_size_class": "unknown",
+      "sector_context": "commerce",
+      "sampling_stratum": "commerce_candidate",
+      "audience_intent": "uncertain",
+      "audience_rationale_reference": "https://www.publicacoes.unirios.edu.br/index.php/revistarios/article/download/922/916/3322",
+      "source_evidence_reference": "https://www.publicacoes.unirios.edu.br/index.php/revistarios/article/download/922/916/3322",
+      "status": "candidate"
+    },
+    {
+      "username": "comuniquedigital_",
+      "creator_type": "unverified",
+      "business_size_class": "unknown",
+      "sector_context": "services",
+      "sampling_stratum": "services_candidate",
+      "audience_intent": "uncertain",
+      "audience_rationale_reference": "https://sebrae.com.br/Sebrae/Portal%20Sebrae/Arquivos/ebook_sebrae_dicas-para-usar-destaques-do-instagram-favor-do-seu-negocio.pdf",
+      "source_evidence_reference": "https://sebrae.com.br/Sebrae/Portal%20Sebrae/Arquivos/ebook_sebrae_dicas-para-usar-destaques-do-instagram-favor-do-seu-negocio.pdf",
+      "status": "candidate"
+    },
+    {
+      "username": "volkstore",
+      "creator_type": "unverified",
+      "business_size_class": "unknown",
+      "sector_context": "commerce",
+      "sampling_stratum": "commerce_candidate",
+      "audience_intent": "uncertain",
+      "audience_rationale_reference": "https://www1.folha.uol.com.br/mercado/2016/01/1716399-instagram-vira-vitrine-gratuita-para-novas-lojas.shtml",
+      "source_evidence_reference": "https://www1.folha.uol.com.br/mercado/2016/01/1716399-instagram-vira-vitrine-gratuita-para-novas-lojas.shtml",
+      "status": "candidate"
+    }
+  ]
+}

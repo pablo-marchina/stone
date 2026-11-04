@@ -155,6 +155,10 @@ class FirstEligibleSampler:
                     "follower_count": followers,
                     "denominator_quality": "observed_current_only",
                     "eligible_age_days": 14,
+                    "technical_metrics_eligible": True,
+                    "scientific_eligible": False,
+                    "scientific_review_status": "NOT_ASSESSED",
+                    "observed_content_modalities": [],
                 }
                 record["integrity_sha256"] = canonical_hash(record)
                 media_records.append(record)
@@ -188,8 +192,13 @@ class FirstEligibleSampler:
             "as_of": as_of.isoformat(),
             "selection_policy": {"min_age_days": 14, "formats": ["reels", "carrossel"],
                                  "requires_positive_observed_denominator": True},
-            "counts": counts,
+            "counts": {**counts,
+                       "technically_eligible_14d": counts["eligible_14d"],
+                       "scientifically_eligible_14d": 0,
+                       "pending_content_review": counts["eligible_14d"]},
             "eligible_media": media_records,
+            "scientific_eligibility_status": "UNREVIEWED_CONTENT",
+            "rubric_observability": "NOT_OBSERVED",
             "pages_examined": pages_examined,
             "page_metadata_sha256": page_hashes,
             "another_page_possible": after is not None,
@@ -202,5 +211,7 @@ class FirstEligibleSampler:
                 "Contemporaneous followers are not historical followers at publication.",
                 "Metadata export is not enrollment in the corpus database.",
                 "Small bounded sample is not evidence that the profile was exhaustively read.",
+                "ID, timestamp, format and metrics alone do NOT establish that a post targets MPEs.",
+                "No caption, video, audio or images are retrieved for the scientific rubric.",
             ],
         }
