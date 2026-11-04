@@ -6,6 +6,7 @@ before inference, never accesses providers, and exports *no raw captions*.
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from contextlib import nullcontext
 import json
 import os
@@ -17,7 +18,7 @@ from tapi_gate0.system_one_e1 import (
 )
 from tapi_gate0.system_one_e13 import (
     HybridTextCTADecider, NegationAwareTextDecider, SyntheticRawRecorder,
-    evaluate_e13_synthetic,
+    evaluate_e13_synthetic, summarize_e13_cta_evidence,
 )
 from benchmark_system_one_e12 import load_cases
 
@@ -57,6 +58,17 @@ def _ablate_individual_cta_heads(extractor, cases: list, joint_trace: list) -> d
     return {
         "n_cases": len(cases),
         "joint_vs_solo_changed": differences,
+        "head_value_histograms": {
+            field: {
+                "joint": dict(sorted(Counter(
+                    row["joint_" + field] for row in cases_out
+                ).items())),
+                "solo": dict(sorted(Counter(
+                    row["solo_" + field] for row in cases_out
+                ).items())),
+            }
+            for field in options
+        },
         "per_synthetic_case": cases_out,
         "note": "Head isolation uses extra inference calls with the same public checkpoint; synthetic only.",
     }
@@ -134,6 +146,8 @@ def main(argv=None) -> int:
     guard = torch.inference_mode() if args.model == "both" else nullcontext()
     with guard:
         report = evaluate_e13_synthetic(cases, models, raw_recorder=recorder)
+        if recorder is not None:
+            report["cta_evidence_crosscheck"] = summarize_e13_cta_evidence(cases, report)
         if args.ablate_cta_heads:
             report["cta_head_isolation"] = _ablate_individual_cta_heads(
                 extractor, cases, report["synthetic_cta_trace"],
