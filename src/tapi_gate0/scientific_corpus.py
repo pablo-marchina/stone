@@ -46,6 +46,7 @@ post_scientific_reviews = Table("corpus_post_scientific_reviews", metadata,
     Column("targeting_status", String(32), nullable=False),
     Column("evidence_quality", String(20), nullable=False),
     Column("evidence_reference", String(512), nullable=False),
+    Column("evidence_sha256", String(64)),
     Column("observed_modalities", String(128), nullable=False),
     Column("rubric_observability", String(24), nullable=False),
     Column("reviewed_by", String(128), nullable=False),
@@ -90,6 +91,7 @@ class PostScientificReviewCreate(BaseModel):
     targeting_status: Literal["mpe_targeted", "uncertain", "not_mpe_targeted"]
     evidence_quality: Literal["sufficient", "partial", "unobservable"]
     evidence_reference: str = Field(min_length=12, max_length=512)
+    evidence_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     observed_modalities: list[Literal["caption", "image", "video", "audio", "transcript"]] = Field(
         default_factory=list, max_length=5)
     rubric_observability: Literal["not_assessed", "partial", "reviewed"] = "not_assessed"
@@ -100,6 +102,7 @@ class PostScientificReviewCreate(BaseModel):
             raise ValueError("DUPLICATE_EVIDENCE_MODALITY")
         if self.targeting_status == "mpe_targeted" and (
             self.evidence_quality != "sufficient" or not self.observed_modalities
+            or not self.evidence_sha256
         ):
             raise ValueError("MPE_TARGETING_OBSERVATION_REQUIRED")
         if self.evidence_quality == "unobservable" and self.observed_modalities:
@@ -183,6 +186,7 @@ def record_scientific_post_review(engine, tenant: str, actor: str,
             targeting_status=payload.targeting_status,
             evidence_quality=payload.evidence_quality,
             evidence_reference=payload.evidence_reference,
+            evidence_sha256=payload.evidence_sha256,
             observed_modalities=",".join(sorted(payload.observed_modalities)),
             rubric_observability=payload.rubric_observability,
             reviewed_by=actor, reviewed_at=now_utc().isoformat()))
