@@ -132,7 +132,7 @@ def test_e15_negative_text_not_video_absence_and_unique_type_rule():
 def test_e15_review_requires_blind_model_agnostic_input_and_evidence_locator():
     _, cases = make_rehearsal()
     one = cases[0]
-    with pytest.raises(ValidationError, match="Literal"):
+    with pytest.raises(ValidationError, match="Input should be True|literal_error"):
         IndependentCTAReview(
             reviewer_id="fake_blinded", reviewed_at=T1,
             evidence_fingerprint=one.evidence.fingerprint(),
@@ -236,8 +236,14 @@ def test_e15_real_data_blocked_even_with_operator_attested_rights():
         second=original.second.model_copy(update={"evidence_fingerprint": fp}),
         authorization=proof,
     )
+    changed_cases = [swapped, *cases[1:]]
+    fake_refrozen_protocol = protocol.model_copy(update={
+        "frozen_split_manifest_sha256": e15_split_manifest_sha256(changed_cases),
+    })
     with pytest.raises(PermissionError, match="E15_REAL_DATA_BLOCKED_PENDING_GATE0B"):
-        rehearse_e15_synthetic([swapped, *cases[1:]], protocol, _predictions(cases))
+        rehearse_e15_synthetic(
+            changed_cases, fake_refrozen_protocol, _predictions(cases)
+        )
 
 
 def test_e15_never_accepts_incomplete_or_unpaired_predictions():
