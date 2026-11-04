@@ -310,3 +310,23 @@ def test_e15_related_campaign_cannot_leak_across_splits():
     })
     with pytest.raises(ValueError, match="E15_CAMPAIGN_DEV_TEST_LEAKAGE"):
         validate_e15_study(campaign_cases, changed_protocol)
+
+
+def test_e15_integrated_runner_is_out_of_repo_and_never_accepts_real_input():
+    from validate_dec017_e15_integrated import main as integrated_main
+    with pytest.raises(SystemExit) as failure:
+        integrated_main(["--output-dir", str(ROOT / "e15_never_create_private")])
+    assert failure.value.code == 2
+    assert not (ROOT / "e15_never_create_private").exists()
+
+
+def test_e15_rehearsal_report_has_no_actual_human_or_rights_approval():
+    protocol, cases = make_rehearsal()
+    report = rehearse_e15_synthetic(cases, protocol, _predictions(cases))
+    assert report["decision"] == "NO_SCIENTIFIC_OR_PRODUCTION_APPROVAL"
+    assert report["external_data_used"] is False
+    assert report["rights_independently_verified_by_software"] is False
+    assert report["rehearsal_support_thresholds_would_pass"] is False
+    assert all(
+        report[split]["n_creators"] == 3 for split in ("dev", "test")
+    )
