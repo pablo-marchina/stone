@@ -84,7 +84,7 @@ python scripts/assemble_e12_human_gold.py --evidence "C:\TAPI-Private\E12\eviden
 
 Se não houver divergências, omitir --adjudication. Não versionar arquivos com texto real ou identificação de revisores.
 
-Benchmark privado, apenas depois da montagem:
+Benchmark privado, apenas depois da montagem. Quando houver dev e test no mesmo arquivo, selecionar explicitamente apenas um split para evitar contaminação de métricas:
 
 ~~~powershell
 $env:TAPI_SYSTEM_ONE_ENABLED = "1"
