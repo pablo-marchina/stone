@@ -2,6 +2,8 @@
 
 **Data:** 03/11/2026. **Prioridade:** P0 do Plano Único v5.2, base documentada.
 
+> **Atualização DEC-016 / IMP-170:** este arquivo registra o piloto histórico de MPEs produtoras. O universo científico é de **publicações direcionadas a MPEs** (independentemente de seu autor ser MPE). O contrato atual é `tapi-source-frame.v2`; o frame `mpe-source-frame.v1` abaixo é histórico. Elegibilidade técnica de metadados não implica elegibilidade científica.
+ 
 ## O que foi provado
 
 O perfil de diagnóstico `@instagram` foi consultado com sucesso e a API retornou seis mídias em duas páginas; cinco eram recentes demais e **zero** cumpriram o critério de ≥14 dias. O endpoint Business Discovery e a paginação aninhada funcionam com dados reais. A conta `@academy_fellow_stone` é o sujeito autenticado, não uma fonte elegível automática. Não confundir `@instagram` com uma MPE, nem incluir os seus posts no corpus.
@@ -36,7 +38,7 @@ O arquivo `evidence/acquisition/mpe_candidate_frame_20261103.json` registra cinc
    ```
 
 6. **Revisar o pacote:** `artifacts/private/mpe_corpus/mpe-primeira-coleta-20261103.json`. Cada item elegível contém ID do perfil e da mídia, link oficial, formato Reel/carrossel, data UTC da publicação, métricas observadas, momento da observação, qualidade do denominador e hash de integridade. Digest do JSON e páginas do resultado, sem token. A saída indica `corpus_posts_persisted=0`: este é um pacote de **evidência preliminar**, não importação automática no corpus.
-7. **Aprovar persistência:** somente após revisar proveniência e direitos, usar o registro de grant administrativo `POST /v1/ingestion/grants` e o registro do perfil `POST /v1/corpus/profiles` com ID do Instagram verificado. O fluxo atual `/v1/ingestion/runs` lê `/IG_ID/media` da **própria** conta autorizada; não o apontar para o ID do terceiro. Integrar adaptador Business Discovery a esse pipeline requer uma etapa específica de código, com idempotência e snapshots preservados. **Nunca** criar conteúdo como sintético e apresentar como real.
+7. **Aprovar persistência:** somente após revisar proveniência e direitos, usar o registro de grant administrativo `POST /v1/ingestion/grants` e o registro do perfil `POST /v1/corpus/profiles` com ID do Instagram verificado. O fluxo original `/v1/ingestion/runs` segue lendo `/IG_ID/media` apenas da própria conta autorizada. O PR #20 adiciona a rota experimental `/v1/ingestion/business-discovery/runs` sob flag `TAPI_MPE_PERSISTENCE_ENABLED=0` por padrão, com manifesto aprovado **v2**, contexto de criador por fonte, grant por IG ID, snapshots e ledger técnico Alembic `0006`. A operação não marca post como científico sem avaliação humana observável e não substitui revisão de direito de uso. **Nunca** criar conteúdo como sintético e apresentar como real.
 
 ## Critérios de aceite e bloqueios
 
