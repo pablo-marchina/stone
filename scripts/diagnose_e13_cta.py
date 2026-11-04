@@ -21,6 +21,7 @@ from tapi_gate0.system_one_e13 import (
     evaluate_e13_synthetic, summarize_e13_cta_evidence,
 )
 from benchmark_system_one_e12 import load_cases
+from build_e13_cta_challenges import make_cases as builtin_synthetic_cases
 
 
 def _safe_raw(raw, field: str, candidates: list[str]) -> str:
@@ -88,6 +89,13 @@ def main(argv=None) -> int:
     if input_path == output_path:
         parser.error("E13_INPUT_OUTPUT_MUST_DIFFER")
     cases = load_cases(input_path)
+    # E1.3 permits only the exact published artificial fixtures. Merely
+    # asserting source_kind="synthetic" in a JSONL is not proof of origin.
+    expected = builtin_synthetic_cases()
+    if [case.model_dump(mode="json") for case in cases] != [
+        case.model_dump(mode="json") for case in expected
+    ]:
+        parser.error("E13_ONLY_BUILTIN_SYNTHETIC_FIXTURES")
     if any(
         case.gold_kind != "synthetic_fixture"
         or case.split != "smoke"
