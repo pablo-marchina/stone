@@ -1,42 +1,50 @@
-# DEC-018 — Atualização de premissas institucionais e aceite (04/11/2026)
+# DEC-018 — Decisões institucionais consolidadas e execução do Gate 0B (04/11/2026)
 
-**Procedência:** decisões comunicadas pelo responsável do TAPI Stone nesta conversa. Este registro documenta a declaração institucional, mas **não é** cópia de contrato, prova de abrangência jurídica, acesso técnico já testado nem desbloqueio automático de grants. Gate 0B técnico e controles operacionais preservados.
+**Registro de proveniência:** o responsável do TAPI Stone confirmou que a instituição aprovou **formalmente, de modo abrangente, todas as fontes, operações, expansões, termos e direitos necessários**, incluindo conteúdo de terceiros e dados Stone. Este documento incorpora essa informação como **premissa institucional aprovada** de planejamento e implementação. Não constitui reprodução, auditoria jurídica independente ou alteração das regras técnicas de uma API.
 
-## Decisões informadas
+## 1. Decisões institucionais vigentes
 
-| Assunto | Nova premissa | Consequência |
+| Tema | Confirmação do responsável | Tratamento no plano |
 |---|---|---|
-| Escopo | Todas as expansões condicionais foram institucionalmente liberadas. | As 23 capacidades do v5.2 continuam no escopo de desenvolvimento integral; não repetir pedido genérico de aprovação do escopo. |
-| APIs e IDs | Acesso institucionalmente liberado; recursos serão fornecidos quando requisitados. | Pedir insumos específicos apenas na integração relevante, com armazenamento local seguro. Não presumir que uma API já foi autenticada ou testada. |
-| Fontes e operações | Todas institucionalmente liberadas para uso, segundo o responsável. | A autorização geral declarada deixa de ser pendência de decisão institucional; grants técnicos e identificadores por fonte/ação ainda precisam ser materializados. |
-| Uso de terceiros | Foi informado acordo institucional de uso de conteúdo de terceiros com escopo descrito como irrestrito. | Registrar essa declaração; o texto, a abrangência, direitos efetivamente abrangidos e obrigações legais/de plataforma precisam ser conferidos na operação concreta. Acordo institucional não equivale automaticamente a dispensar restrições de terceiros não signatários. |
-| Dados Stone | Foi informado acesso e uso liberados institucionalmente. | Projetar integrações com dados internos; extrações, mapeamento, privacidade e testes continuam pendentes. |
-| Revisores humanos | Não serão disponibilizados. | Não condicionar o avanço de engenharia à existência de revisores humanos. |
-| Ciência | Não haverá validação científica independente. | Não prometer revisão científica independente, gold humano, estimativa científica de precisão/FPR ou promoção com base nesses artefatos. |
-| Financeiro | Restrição existente R$ 0, sem revisão informada. | Continuam proibidos desembolsos, serviços faturáveis e campanhas pagas reais. |
+| Escopo integral | As 23 capacidades e expansões condicionais estão formalmente liberadas. | **APROVADO institucionalmente**; não solicitar novamente autorização genérica de expansão. |
+| Fontes e operações | Todas as fontes e operações estão formalmente liberadas. | **APROVADO institucionalmente**; não solicitar novas aprovações genéricas por fonte/ação. |
+| Termos e direitos | A aprovação institucional abrange todos os termos e direitos necessários, inclusive acordo amplo de uso de terceiros. | **APROVADO, conforme declaração expressa do responsável**; não repetir a pendência documental como impedimento para desenvolver. Direitos/termos imperativos de plataformas e terceiros permanecem obrigações aplicáveis à execução, sem implicar necessidade de nova deliberação institucional genérica. |
+| Dados Stone | Todos os dados Stone estão liberados para uso. | **APROVADO institucionalmente**; disponibilização técnica e mapeamento dos dados são tarefas de integração. |
+| APIs/IDs | Acesso liberado; IDs, recursos e credenciais serão fornecidos sob demanda. | **AUTORIZADO e A DISPONIBILIZAR na hora do teste**; não confundir disponibilidade futura com token/escopo atualmente testado. Guardar segredos fora do Git e do chat. |
+| Pessoas | Nenhum humano será disponibilizado para revisão de dados. | Retirar execução da dupla revisão humana do caminho crítico. |
+| Ciência | Não haverá validação científica independente. | Não reivindicar gold independente, acurácia/FPR real validada cientificamente ou revisão humana inexistente. |
+| Financeiro | Nenhuma alteração na restrição de caixa R$ 0 foi comunicada. | Continuar bloqueando serviços faturáveis e desembolso, inclusive campanha paga real. |
 
-## Colisão com o plano original
+## 2. Gate 0B — separar autorização institucional e execução técnica
 
-O Plano Único v5.2 mantém como critério de negócio do núcleo: rubrica de 20 atributos, JSON e evidências por publicação, abstenções e revisão humana de pelo menos 50 publicações.
+**G0B-01 — Autoridade e operações externas:** **RESOLVIDO no âmbito da autorização institucional comunicada**. O operador e a equipe não devem reabrir esse pedido de decisão.
 
-A indisponibilidade de pessoas e a decisão de não realizar validação independente exigem **mudança formal do critério de aceite**, não permitem marcá-lo como realizado nem reescrever retroativamente o case original. Proposta de substituição institucional de processo:
+**G0B-02 — Grant por fonte × operação:** **aprovação institucional abrangente resolvida; execução técnica ainda pendente**. O software precisa mapear a autorização já concedida aos IDs, contas, tenants, operações e credenciais reais. Um registro verificável por operação mantém isolamento, expiração, revogação e trilha de auditoria; não representa nova solicitação de autorização à instituição.
 
-- Preservar os 20 atributos, modalidade/locator/hash observáveis, outputs estruturados, rastreabilidade, cobertura e abstenção, testes unitários, regressão, integração, adversariais e invariantes.
-- Retirar da execução a etapa de duas revisões humanas, arbitragem, 50 publicações revistas e validação independente, registrando-as como **dispensadas por decisão institucional**, não concluídas.
-- Usar testes e conjuntos artificiais claramente identificados. Avaliação exploratória com dados reais pode medir volume, cobertura, abstenção, consistência e falhas verificáveis; sem referência independente, não calcular acurácia populacional como se houvesse gold confiável.
-- Não converter ausência de CTA na legenda em ausência de CTA no vídeo. Não selecionar GLiNER ou heurísticas para produção só pelo desempenho nos 34 exemplos artificiais.
-- Manter os seis entregáveis e as 23 capacidades como metas de implementação, mas documentar divergências entre aceite técnico operacional e exigência científica do documento acadêmico original. Caso esse documento exija a revisão humana para aceite formal, a sua dispensa deve ser incorporada ao termo de aceite aplicável.
+**G0B-03 — Termos, retenção e direitos multimodais:** **resolvido no nível de confirmação formal institucional informado pelo responsável**. Na implementação, aplicar a política de armazenamento/retenção e os requisitos de provedores/privacidade correspondentes; isso é trabalho de configuração/conformidade operacional, não nova aprovação institucional.
 
-## Bloqueios que permanecem
+**Resultado:** para uma primeira integração real, resta **Gate 0B técnico por operação**: configurar identidade e credencial, confirmar os escopos efetivos na API, associar a fonte/conta/grant no sistema, testar operação limitada e registrar resultado. O Gate 0B global não deve ser marcado como tecnicamente PASS antes dessas evidências. Do mesmo modo, não se devem inverter automaticamente as 72 entradas PENDING nem ativar todas as operações de uma vez, porque elas representam **estado de provisionamento técnico**, e não desaprovação institucional.
 
-1. **Operação concreta:** identidade do app, tokens/IDs, escopos efetivamente concedidos, vínculo de contas e grants verificáveis por fonte/operação; a futura disponibilização de credenciais não comprova integração já funcionando.
-2. **Direitos e conformidade:** operacionalizar, com referência auditável, quais dados/modalidades/contas o acordo informado cobre e quaisquer regras aplicáveis de privacidade, retenção e termos das plataformas. Não usar este registro como token ou autorização técnica genérica.
-3. **Implementação:** agente Python/MCP, editor CAP-023/DesignDocument, render, geração de criativos, playbook, ingestão robusta e testes ponta a ponta.
-4. **Qualidade:** o laboratório E1.5 permanece um ensaio técnico com revisores fictícios. Validação científica independente não será executada; portanto não haverá alegações científicas independentes.
-5. **Custos e governança:** teto de caixa R$ 0; sincronização do pacote integral de matrizes v5.2, rastreabilidade por tarefa IMP e integração dos PRs empilhados #29, #30 e #31.
+## 3. Mudança obrigatória no critério histórico de revisão humana
 
-## Guardas preservadas
+O Plano Único v5.2 exige rubrica de 20 campos, evidências por publicação, abstenção e revisão humana de >=50 publicações. A parte de revisão humana **não será executada**, por decisão comunicada pelo responsável. Registrar como **DISPENSADO POR DECISÃO INSTITUCIONAL**, nunca CONCLUÍDO.
 
-Nenhuma alteração automática em config/source_permissions.json, em credenciais, nas flags de ingestão ou no Gate 0B. A política deny-by-default continua até operação concreta tecnicamente comprovada. Este documento **não aprova recursos remunerados** e não promove modelos a produção.
+O aceite substitutivo é **técnico e operacional**, com testes automatizados, fixtures sintéticas versionadas, integridade de dados, citações/linhagem, invariantes, privacidade, segurança, testes de integração real e medição descritiva de cobertura e abstenção. Não usar pseudo-gold gerado pelo próprio modelo para alegar validação independente. Manter distinção de modalidade: não observar CTA na legenda não demonstra ausência no vídeo.
 
-**Natureza do registro:** aditivo DEC-018 de decisões informado pelo responsável, sem alterar a numeração das 15 decisões históricas ou das 204 tarefas do plano v5.2. A reconciliação das 13 matrizes com os novos critérios é trabalho documental pendente.
+O laboratório E1.5 de revisores fictícios não representa pessoas reais. Seus ensaios podem ser usados para verificar software, não para declarar precisão científica. A alteração de aceite deve ser propagada às matrizes da v5.2 e ao termo de aceite final do projeto sem apagar seu histórico.
+
+## 4. Bloqueios remanescentes — estritamente técnicos/operacionais
+
+1. **Conectividade real e segredos:** IDs, endpoints, OAuth/tokens, escopos efetivos, papéis, quotas e vinculação de contas, quando cada integração os exigir.
+2. **Provisionamento de grants técnicos:** mapear contas/fontes e operações no sistema autenticado, implementar/liberar seletivamente a política de acesso, registrar auditabilidade, expiração e revogação, sem autorizações em massa por simples edição de JSON.
+3. **Ingestão/qualidade:** executar primeiro lote permitido, persistir proveniência, snapshot e resultados, com testes de falha/reprocessamento e limites de quota. Acordo declarado não substitui requisitos técnicos de APIs de terceiros.
+4. **Produto:** agente, CreativeSpec, DesignDocument, Creative Studio, editor multimodal, playbook, criativos e integração ponta a ponta.
+5. **Governança/finanças:** reconciliar 204 IMP/543 dependências/13 matrizes v5.2, integrar PRs #29/#30/#31 e manter custo financeiro R$ 0.
+
+**Não são mais bloqueios institucionais a serem solicitados:** aprovação das expansões, autorização genérica por fonte/operação, uso de dados Stone, termo genérico de uso de terceiros ou disponibilização de revisores humanos.
+
+## 5. Controles preservados
+
+Esta atualização é documental, sem modificar `config/source_permissions.json`, `src/tapi_gate0/policy.py`, flags de produção, banco, credenciais ou Gate 0B automatizado. A alteração futura da lógica deve ocorrer por PR próprio com regressões e liberação seletiva. Não presume que termos obrigatórios de APIs externas possam ser anulados por acordo institucional. Nunca permitir cobrança real sob a restrição financeira vigente.
+
+**DEC-018** é aditivo à matriz histórica de 15 decisões do Plano v5.2, sem renumerar as decisões anteriores.
