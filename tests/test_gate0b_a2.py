@@ -96,7 +96,7 @@ def test_meta_runner_is_denied_by_default(capsys, monkeypatch):
     text = capsys.readouterr().out
     assert "BLOCKED" in text
     assert "TAPI_INSTAGRAM_ACCESS_TOKEN" in text
-    assert "access_token" not in text.lower()
+    assert "local-test-placeholder" not in text
 
 
 def test_preconditions_require_read_switch_and_no_billing():
