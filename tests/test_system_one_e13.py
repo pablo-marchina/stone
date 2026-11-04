@@ -284,3 +284,63 @@ def test_head_isolation_compares_joint_and_solo_without_exposing_text():
     assert report["joint_vs_solo_changed"] == {"tem_cta": 1, "tipo_cta": 0}
     assert report["n_cases"] == 1
     assert "Comente aqui" not in json.dumps(report)
+
+
+def test_e13_consolidated_direct_negative_and_double_negative():
+    from tapi_gate0.system_one_e13 import directly_negated_cta_types
+    assert directly_negated_cta_types("Não siga este perfil.") == ("seguir",)
+    assert directly_negated_cta_types("Nunca comente sua senha.") == ("comentar",)
+    assert directly_negated_cta_types("Não deixe de seguir este perfil.") == ()
+    assert explicit_nonnegated_cta_types("Não deixe de seguir este perfil.") == ("seguir",)
+    assert directly_negated_cta_types("Não comente sua senha; salve o guia.") == ("comentar",)
+    assert explicit_nonnegated_cta_types("Não comente sua senha; salve o guia.") == ("salvar",)
+
+
+def test_e13_consolidated_includes_unique_pr27_synthetic_cases():
+    cases = make_cases()
+    assert len(cases) == 34  # 14 E1.2 + 14 original PR28 + 6 PR27-only edge cases
+    assert any(
+        "Não clique no link na bio" in case.evidence.observation.text
+        for case in cases
+    )
+    assert all(c.resolved()[0]["tem_cta"].value is not False for c in cases)
+
+
+def test_e13_consolidated_cta_conflict_histograms_no_captions(monkeypatch, tmp_path):
+    from tapi_gate0.system_one_e13 import summarize_e13_cta_evidence
+    monkeypatch.setenv("TAPI_SYSTEM_ONE_ENABLED", "1")
+    case = next(c for c in make_cases() if c.evidence.content_id == "e13_003")
+    recorder = SyntheticRawRecorder(StaticCTAClassifier(
+        raw_presence="nao", raw_kind="comentar"
+    ))
+    gliner = LocalGLiNERDecider(tmp_path, _test_model=recorder)
+    report = evaluate_e13_synthetic([case], {
+        "baseline_original": DeterministicTextDecider(),
+        "gliner": gliner,
+    }, raw_recorder=recorder)
+    consolidated = summarize_e13_cta_evidence([case], report)
+    assert consolidated["scientifically_validated"] is False
+    assert consolidated["joint_head_histograms"]["tem_cta"] == {"nao": 1}
+    assert consolidated["joint_head_histograms"]["tipo_cta"] == {"comentar": 1}
+    assert consolidated["cta_conflicts"]["suppressed_by_presence_dependency"] == 1
+    assert consolidated["case_flags"][0]["adapter_type_suppressed_by_presence"] is True
+    assert "Comente aqui" not in json.dumps(consolidated)
+
+
+def test_e13_consolidated_head_histograms_in_ablation():
+    from diagnose_e13_cta import _ablate_individual_cta_heads
+
+    class IsolatedClassifier:
+        def classify_text(self, text, schema):
+            key = next(iter(schema))
+            return {key: "sim" if key == "tem_cta" else "comentar"}
+
+    case = next(c for c in make_cases() if c.evidence.content_id == "e13_003")
+    result = _ablate_individual_cta_heads(IsolatedClassifier(), [case], [{
+        "synthetic_case_id": case.evidence.content_id,
+        "joint_raw_tem_cta": "nao",
+        "joint_raw_tipo_cta": "comentar",
+    }])
+    assert result["head_value_histograms"]["tem_cta"]["joint"] == {"nao": 1}
+    assert result["head_value_histograms"]["tem_cta"]["solo"] == {"sim": 1}
+    assert result["head_value_histograms"]["tipo_cta"]["solo"] == {"comentar": 1}
