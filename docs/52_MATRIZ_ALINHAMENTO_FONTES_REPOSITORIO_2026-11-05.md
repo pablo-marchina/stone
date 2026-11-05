@@ -112,7 +112,7 @@ ab9651300d0f289df51f21a2158aa08bfebbf20db223baa23dde40ba09a91b60  TAPI_Stone_Arq
 - Qualquer PR de mudança de escopo, fonte, política, métrica, contrato ou aceitação deve atualizar **51 (decisões)** e **52 (matriz)**, associando SHA, diff e prova de teste; um PR puramente técnico atualiza os componentes atingidos.
 - Estados **por capacidade** precisam indicar fonte, condição, commit, teste e gate; não converter a matriz histórica `NAO_IMPLEMENTADO` para `CONCLUIDO` em lote.
 - Em divergência, abrir `DEC-XXX` ou ADR correspondente, sem silenciar a divergência. Não marcar direitos/aceite como resolvidos com base apenas em uma declaração.
-- A sincronização foi registrada como **deltas CSV versionados em Git + gerador determinístico** em `planning/v5_2/audit_2026-11-05/` e `scripts/sync_plano_v52_audit.py`; os **13 CSVs completos** estão no pacote gerado nesta conversa, mas **não foram versionados como arquivos completos nesta branch**. Conferir [docs/54](54_SINCRONIZACAO_MATRIZES_V52_DEC018_2026-11-05.md).
+- A sincronização agora inclui **quatro matrizes completas de capacidades/tarefas/decisões/gates e `DEPENDENCIAS.csv` no Git**, além dos deltas versionados e gerador determinístico em `planning/v5_2/audit_2026-11-05/` e `scripts/sync_plano_v52_audit.py`. Os **13 CSVs completos** constam do ZIP gerado nesta conversa; os outros oito não modificados permanecem disponíveis no ZIP, sem alegar que foram todos versionados individualmente. Conferir [docs/54](54_SINCRONIZACAO_MATRIZES_V52_DEC018_2026-11-05.md).
 - O produto segue **uma entrega única** e não uma sequência de entregáveis independentes; as fases são gates internos.
 
 ## 8. Checklist verificável no próximo corte
@@ -122,7 +122,7 @@ ab9651300d0f289df51f21a2158aa08bfebbf20db223baa23dde40ba09a91b60  TAPI_Stone_Arq
 - [x] Separação do material Stone (C2–C4) em relação ao corpus externo (C1) documentada.
 - [x] PR #32 e #27–31 tratados como abertos, sem antecipar efeito na `main`.
 - [x] DEC-018 documentada como dispensa de revisão humana **confirmada pelo responsável** (não requisito cumprido); confirmação documental institucional independente não disponível neste corte.
-- [x] Criados deltas CSV para CAP, IMP, DEC e gates, além de gerador verificador para reconstruir as quatro matrizes a partir do ZIP original.
+- [x] Commitados **quatro CSVs integrais**, o arquivo das **543 dependências**, seus deltas, manifesto e gerador reprodutível.
 - [ ] Comprovar universo científico representativo, 20 atributos observados/avaliados, agente de três modos e cinco criativos.
 - [ ] Rodar suíte e CI com HEAD exato, integrar testes E8 ausentes, verificar backup/migrações do banco real, E2E, direitos e release.
 
