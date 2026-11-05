@@ -1,0 +1,8 @@
+gate_id,audit_execution_status,evidence_pr_urls,audit_note,as_of
+G0-PERMISSIONS,NAO_LIBERADO_GRANTS_ESPECIFICOS,https://github.com/pablo-marchina/stone/pull/33;https://github.com/pablo-marchina/stone/pull/36,Grants tecnicos Meta A3 nao liberam direitos e operacoes globais,2026-11-05
+G1-CONTRACT,PARCIAL_NAO_LIBERADO,https://github.com/pablo-marchina/stone/pull/34;https://github.com/pablo-marchina/stone/pull/35;https://github.com/pablo-marchina/stone/pull/40,Contrato completo e testes de release nao homologados,2026-11-05
+G2-REPRODUCIBILITY,PARCIAL_NAO_LIBERADO,https://github.com/pablo-marchina/stone/pull/33;https://github.com/pablo-marchina/stone/pull/36;https://github.com/pablo-marchina/stone/pull/40,Snapshots e hashes locais; corpus/release incompletos,2026-11-05
+G3-EVAL,NAO_LIBERADO_DEC018,https://github.com/pablo-marchina/stone/pull/24;https://github.com/pablo-marchina/stone/pull/26;https://github.com/pablo-marchina/stone/pull/32;https://github.com/pablo-marchina/stone/pull/40,DEC018 altera aceite humano; QA nao equivale a validacao cientifica,2026-11-05
+G4-SECURITY,PARCIAL_NAO_LIBERADO,https://github.com/pablo-marchina/stone/pull/33;https://github.com/pablo-marchina/stone/pull/34;https://github.com/pablo-marchina/stone/pull/39;https://github.com/pablo-marchina/stone/pull/40,RBAC direitos/revogações locais; release nao homologado,2026-11-05
+G5-OPS,NAO_LIBERADO,https://github.com/pablo-marchina/stone/pull/39;https://github.com/pablo-marchina/stone/pull/40,"Worker local, sem operacao sustentada SLO e restore real",2026-11-05
+G6-ISO,NAO_LIBERADO,https://github.com/pablo-marchina/stone/pull/39;https://github.com/pablo-marchina/stone/pull/40,"Matriz ISO planejada, sem auditoria de aceite completa",2026-11-05
