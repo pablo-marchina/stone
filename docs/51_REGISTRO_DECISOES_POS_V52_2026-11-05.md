@@ -12,7 +12,7 @@
 4. **Evidência de software:** PRs mesclados e arquivos da `main` demonstram presença de implementação; descrição de PR e testes locais reportados não provam operação contínua, autorização jurídica ou avaliação em dados científicos.
 5. **Decisão comunicada:** declaração atribuída ao responsável, preservada como declaração até que o instrumento de autoridade e seus limites possam ser verificados. Não alterar automaticamente políticas, critérios do case ou status de um gate.
 
-**Estados deste registro:** `ORIENTACAO_ADOTADA` (regra metodológica/arquitetural registrada), `IMPLEMENTACAO_VERIFICADA_NO_CODIGO` (arquivos/PR presentes), `TESTE_REPORTADO` (evidência descrita em PR, não reexecutada nesta auditoria), `DECLARACAO_PENDENTE_COMPROVACAO`, `DECISAO_ABERTA`, `ACEITE_PENDENTE`. Os estados podem coexistir.
+**DEC-018 atualizada em 05/11:** [decisão do responsável, alcance e mudança de aceite](53_DEC018_CONFIRMACAO_ALCANCE_E_CRITERIO_REVISAO_2026-11-05.md); [matrizes v5.2 sincronizadas](54_SINCRONIZACAO_MATRIZES_V52_DEC018_2026-11-05.md). A dispensa de revisão independente está confirmada como decisão do responsável, não como cumprimento literal do case original.\n\n**Estados deste registro:** `ORIENTACAO_ADOTADA` (regra metodológica/arquitetural registrada), `IMPLEMENTACAO_VERIFICADA_NO_CODIGO` (arquivos/PR presentes), `TESTE_REPORTADO` (evidência descrita em PR, não reexecutada nesta auditoria), `DECLARACAO_PENDENTE_COMPROVACAO`, `DECISAO_ABERTA`, `ACEITE_PENDENTE`. Os estados podem coexistir.
 
 ## 2. Log de decisões novas e materializadas
 
@@ -42,13 +42,13 @@
 
 | Questão | Já se sabe | Falta para encerrar | Responsável/artefato de aceite |
 |---|---|---|---|
-| DEC-018 e alcance das permissões | A declaração está no PR #32, **não integrada** | Conferir instrumentos, fontes, operações, limites, requisitos do programa e reflexos nos critérios de avaliação; incorporar decisão coerente | Responsável + Stone/Inteli quando aplicável; PR/documento assinado ou referência auditável |
-| Validação humana ≥50 | O TAPI original e a matriz CAP-004 a exigem; PR #32 diz que seria dispensada | Evidência de substituição formal do aceite, ou executar o requisito vigente | Registro de decisão formal e atualização controlada da matriz |
+| DEC-018 e alcance das permissões | O responsável confirmou em 04/11 aprovação abrangente e dispensa da revisão independente; PR #32 permanece aberto | Decisão incorporada em docs/53; instrumento institucional externo não anexado; manter grants por operação | DEC-018; docs/53 e PR #32 |
+| Validação humana ≥50 | Requisito original ≥50 permanece historicamente; DEC-018 determina **não executar** revisores humanos/validação científica independente | Registrar `DISPENSADO_POR_DEC018`, jamais `CUMPRIDO`; relatar ausência de avaliação científica independente e limites | Docs/53, CAP-004 e IMP-062 nas matrizes atualizadas |
 | Corpus e direitos | Coleta técnica oficial restrita e 3 posts persistidos | Admissão por conteúdo, relevância MPE, licença/uso, observabilidade e amostra compatível | Data card, fontes revisadas, snapshots/avaliações |
 | Conclusão do agente | Tools de ranking/retrieval/MCP local presentes | Três modos, geração fundamentada, LangGraph ou decisão substitutiva validada, avaliações | Testes de contrato, trajetória e casos reais |
 | Homologação do Studio | Edição/render local funcionando no escopo limitado | Avaliação integrada de marca/direitos, usabilidade, carga, aprovação por versão, render operacional e export final | CT-STUDIO, E2E e gates aplicáveis |
 | CI/release | PR #40 registra regressão local por árvore | Restabelecer testes auxiliares E8 e checks reproduzíveis no HEAD; validar migração em cópia segura | Logs assinados/artefatos de execução, commit SHA e checks |
-| Plano Único e status | Pacote v5.2 possui 23 CAP, 204 IMP, 15 DEC, 7 gates; código avançou | Publicar/atualizar matrizes com rastreabilidade por item, sem apagar histórico nem inflar conclusões | Matriz de execução verificável, integridade e revisão |
+| Plano Único e status | Baseline v5.2: 23 CAP, 204 IMP, 15 DEC, 7 gates | Incremento auditado: **18 DEC**, 67 IMP com evidências e 543 dependências preservadas; conferir artefato e reproduzir o gerador no checkout | Docs/54 e planning/v5_2/audit_2026-11-05/ |
 
 ## 4. Regras de manutenção deste registro
 
