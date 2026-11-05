@@ -45,6 +45,8 @@
       <button id="version-diff">Comparar versões</button>
       <pre id="diff-result" class="version-diff" aria-live="polite"></pre>
       <h2>4. Camadas</h2>
+      <p class="hint" id="layer-help">Navegação por teclado: use Tab nos botões de camadas, depois as setas no canvas para mover a seleção. Shift + seta move 1 pixel. Todas as alterações são versionadas.</p>
+      <div id="layer-nav" role="group" aria-label="Camadas editáveis da página" aria-describedby="layer-help"></div>
       <label>Selecionada <output id="selected">Nenhuma</output></label>
       <label>Texto <textarea id="layer-text" disabled></textarea></label>
       <div class="buttons"><button id="save-text" disabled>Salvar texto</button></div>
@@ -84,7 +86,7 @@
     </aside>
     <section class="preview">
       <div class="preview-bar"><h2>Prévia editável</h2><span id="revision">Sem documento</span></div>
-      <canvas id="canvas" width="1080" height="1350" tabindex="0" aria-label="Canvas de rascunho editável"></canvas>
+      <canvas id="canvas" width="1080" height="1350" tabindex="0" aria-label="Canvas de rascunho editável" aria-describedby="layer-help"></canvas>
       <p class="hint">Visualização raster derivada. O JSON do DesignDocument permanece a fonte da verdade; a exportação só usa os ativos carregados.</p>
     </section>
   </main>

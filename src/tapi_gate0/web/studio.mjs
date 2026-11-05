@@ -139,7 +139,7 @@ function showDocument(doc, {history=true, resetHistory=false}={}) {
   $('diff-to').value=String(doc.version);
   $('selected').textContent = 'Clique em uma camada';
   $('layer-text').value = '';
-  renderPages();controls();draw();
+  renderPages();renderLayerNavigation();controls();draw();
 }
 function activePage() {return model.doc?.pages.find(page=>page.id===model.pageId) || null;}
 async function selectPage(pageId) {
@@ -147,7 +147,7 @@ async function selectPage(pageId) {
   if (model.pendingText && !(await flushText())) return;
   model.pageId=pageId;model.selection=null;model.drag=null;model.preview=null;
   $('selected').textContent='Clique em uma camada';$('layer-text').value='';
-  renderPages();controls();draw();
+  renderPages();renderLayerNavigation();controls();draw();
 }
 function renderPages() {
   const host=$('pages');host.replaceChildren();
@@ -233,6 +233,19 @@ async function open() {
   } catch(error){status('Não foi possível abrir: '+error.message);}
 }
 function layerList() { return activePage()?.layers || []; }
+function renderLayerNavigation() {
+  const host=$('layer-nav');host.replaceChildren();
+  for(const layer of layerList()) {
+    const button=document.createElement('button');
+    button.type='button';
+    button.className='layer-nav-button';
+    button.textContent=(layer.kind==='text'?'Texto: ':'Imagem: ')+layer.id;
+    button.setAttribute('aria-pressed', String(model.selection?.id===layer.id));
+    button.addEventListener('click',()=>{selectLayer(layer);canvas.focus();});
+    host.appendChild(button);
+  }
+}
+
 function selectLayer(layer) {
   model.proposal=null;$('confirm-proposal').checked=false;$('proposal-preview').textContent='';
   model.selection = layer || null;
@@ -240,7 +253,7 @@ function selectLayer(layer) {
   $('layer-text').value = layer?.kind === 'text' ? layer.text : '';
   for (const [control, field] of [['geom-x','x'],['geom-y','y'],['geom-w','w'],['geom-h','h']])
     $(control).value = layer ? String(layer[field]) : '';
-  controls(); draw();
+  renderLayerNavigation(); controls(); draw();
 }
 function wrapText(text, x, y, width, lineHeight, maxHeight) {
   let offset=0;
@@ -325,6 +338,30 @@ canvas.addEventListener('pointerup', async event => {
   } catch(error){status('Edição rejeitada: '+error.message);}
 });
 canvas.addEventListener('pointercancel',()=>{model.drag=null;model.preview=null;draw();});
+// Accessible alternative to pointer drag. One deliberate keypress = one
+// optimistic versioned mutation; held keys do not flood the backend.
+canvas.addEventListener('keydown', async event => {
+  const dirs={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]};
+  const delta=dirs[event.key];
+  if (!delta || !canWrite() || !model.doc || !model.selection) return;
+  event.preventDefault();
+  if (event.repeat || model.saving) return;
+  const layer=model.selection,step=event.shiftKey?1:10;
+  const x=Math.min(model.doc.canvas.width-layer.w,Math.max(0,layer.x+delta[0]*step));
+  const y=Math.min(model.doc.canvas.height-layer.h,Math.max(0,layer.y+delta[1]*step));
+  if (x===layer.x && y===layer.y)return;
+  model.saving=true;
+  try {
+    const doc=await api(docPath()+'/geometry',{method:'POST',payload:{
+      expected_version:model.doc.version,page_id:model.pageId,
+      layer_id:layer.id,x,y}});
+    showDocument(doc);
+    selectLayer(layerList().find(item=>item.id===layer.id));
+    canvas.focus();status('Camada movida por teclado. Versão '+doc.version);
+  }catch(error){status('Movimento não aplicado: '+error.message);}
+  finally{model.saving=false;}
+});
+
 function trackTextInput() {
   if (!model.doc || model.selection?.kind!=='text' || !canWrite())return;
   const text=$('layer-text').value;

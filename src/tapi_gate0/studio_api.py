@@ -9,6 +9,8 @@ from .studio_e1 import CreativeSpec, DesignDocument, StudioError, StudioStore, T
 from .studio_canvas_c2 import (StudioCanvasStore, UploadPNG, AssetRecord, PlaceImage, MoveLayer, LayerOrder)
 from .studio_pages_e3 import StudioPagesService, DuplicatePage, DeletePage, ReorderPage, RestoreVersion
 from .studio_video_e5 import (StoryboardStore, StoryboardDocument, CreateStoryboard, UpdateStoryboard)
+from .studio_render_e6 import (LocalDraftRenderer, AttestRights, UploadAudio, QueueDraftVideo, RenderJobInfo)
+from .studio_evidence_edits_e6 import StudioEvidenceEditService, EvidenceEditProposal, ConfirmEvidenceEdit
 from .studio_e4 import (studio_etag, assert_etag, version_diff, ProposedTextEdit,
                         ApplyTextProposal, preview_text_proposal, apply_text_proposal)
 
@@ -24,6 +26,8 @@ def router_for_studio(identity, store: StudioStore):
     canvas_store = StudioCanvasStore(store.engine)
     pages_service = StudioPagesService(store.engine)
     video = StoryboardStore(store.engine)
+    renderer = LocalDraftRenderer(store.engine)
+    evidence_edits = StudioEvidenceEditService(store.engine)
 
     def principal(request: Request) -> Principal:
         value = request.headers.get("Authorization", "")
@@ -265,5 +269,71 @@ def router_for_studio(identity, store: StudioStore):
             return video.update(p.tenant_id, p.actor_id, storyboard_id, payload)
         except StudioError as exc:
             as_http(exc)
+
+    @router.post("/documents/{document_id}/evidence-edits/preview")
+    def preview_evidence_edit(document_id: str,payload: EvidenceEditProposal,
+                              p: Principal = Depends(principal)):
+        if p.role not in {"admin","editor"}: raise IdentityFailure("FORBIDDEN",403)
+        try: return evidence_edits.preview(p.tenant_id,document_id,payload)
+        except StudioError as exc: as_http(exc)
+
+    @router.post("/documents/{document_id}/evidence-edits/apply",response_model=DesignDocument)
+    def apply_evidence_edit(document_id: str,payload: ConfirmEvidenceEdit,
+                            response: Response,
+                            if_match: str | None = Header(default=None,alias="If-Match"),
+                            p: Principal = Depends(principal)):
+        if p.role not in {"admin","editor"}: raise IdentityFailure("FORBIDDEN",403)
+        try: return with_etag(evidence_edits.apply(p.tenant_id,p.actor_id,document_id,
+            payload,if_match),response)
+        except StudioError as exc: as_http(exc)
+
+    @router.post("/assets/draft-render-rights")
+    def attest_render_rights(payload: AttestRights, p: Principal = Depends(principal)):
+        if p.role != "admin": raise IdentityFailure("FORBIDDEN",403)
+        try: return renderer.attest_png(p.tenant_id,p.actor_id,payload)
+        except StudioError as exc: as_http(exc)
+
+    @router.post("/assets/{asset_id}/draft-render-rights/revoke")
+    def revoke_render_rights(asset_id: str,p: Principal = Depends(principal)):
+        if p.role != "admin": raise IdentityFailure("FORBIDDEN",403)
+        try: return renderer.revoke(p.tenant_id,p.actor_id,asset_id)
+        except StudioError as exc: as_http(exc)
+
+    @router.post("/audio/wav",status_code=201)
+    def upload_draft_audio(payload: UploadAudio,p: Principal = Depends(principal)):
+        if p.role != "admin": raise IdentityFailure("FORBIDDEN",403)
+        try: return renderer.upload_audio(p.tenant_id,p.actor_id,payload)
+        except StudioError as exc: as_http(exc)
+
+    @router.post("/render-jobs",response_model=RenderJobInfo,status_code=201)
+    def queue_draft(payload: QueueDraftVideo,p: Principal = Depends(principal)):
+        if p.role not in {"admin","editor"}: raise IdentityFailure("FORBIDDEN",403)
+        try: return renderer.queue(p.tenant_id,p.actor_id,payload)
+        except StudioError as exc: as_http(exc)
+
+    @router.get("/render-jobs/{job_id}",response_model=RenderJobInfo)
+    def render_job(job_id: str,p: Principal = Depends(principal)):
+        try: return renderer.get(p.tenant_id,job_id)
+        except StudioError as exc: as_http(exc)
+
+    @router.post("/render-jobs/{job_id}/cancel",response_model=RenderJobInfo)
+    def cancel_draft(job_id: str,p: Principal = Depends(principal)):
+        if p.role not in {"admin","editor"}: raise IdentityFailure("FORBIDDEN",403)
+        try: return renderer.cancel(p.tenant_id,p.actor_id,job_id)
+        except StudioError as exc: as_http(exc)
+
+    @router.post("/render-jobs/{job_id}/retry",response_model=RenderJobInfo)
+    def retry_draft(job_id: str,p: Principal = Depends(principal)):
+        if p.role not in {"admin","editor"}: raise IdentityFailure("FORBIDDEN",403)
+        try: return renderer.retry(p.tenant_id,p.actor_id,job_id)
+        except StudioError as exc: as_http(exc)
+
+    @router.get("/render-artifacts/{artifact_id}")
+    def get_draft_video(artifact_id: str,p: Principal = Depends(principal)):
+        try: data=renderer.artifact(p.tenant_id,artifact_id)
+        except StudioError as exc: as_http(exc)
+        return Response(content=data,media_type="video/mp4",headers={
+            "Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff",
+            "Content-Disposition":"attachment; filename=tapi-rascunho.mp4"})
 
     return router
