@@ -41,7 +41,7 @@ def parse(data):
 
 def dump(rows, cols):
     io_out = io.StringIO(newline="")
-    writer = csv.DictWriter(io_out, fieldnames=cols, lineterminator="\\n", extrasaction="ignore")
+    writer = csv.DictWriter(io_out, fieldnames=cols, lineterminator="\n", extrasaction="ignore")
     writer.writeheader()
     writer.writerows(rows)
     return io_out.getvalue().encode("utf-8-sig")
@@ -156,7 +156,7 @@ def main(archive, outdir):
     for name,data in result.items():
         if name.endswith(".csv"): (out/name).write_bytes(data)
     (out/"MANIFESTO_AUDITORIA_2026-11-05.json").write_text(
-        json.dumps(audit_meta, ensure_ascii=False, indent=2)+"\\n", encoding="utf-8")
+        json.dumps(audit_meta, ensure_ascii=False, indent=2)+"\n", encoding="utf-8")
     with ZipFile(out.parent/"TAPI_Stone_Matrizes_v5_2_Sincronizadas.zip","w",ZIP_DEFLATED,compresslevel=9) as z:
         for item in sorted(out.iterdir()): z.write(item, arcname="tapi_plano_unico_v5_2_atualizado/"+item.name)
     print(json.dumps(audit_meta,ensure_ascii=False))
