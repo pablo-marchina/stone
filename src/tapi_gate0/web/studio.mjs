@@ -5,10 +5,40 @@ const model = {
   token: null, principal: null, doc: null, selection: null, drag: null,
   preview: null, bitmaps: new Map(), pendingImages: new Map(),
   pageId: null, dragPageId: null, undoStack: [], redoStack: [],
+  etag: null, pendingText: null, saveTimer: null, saving: false, proposal:null,
 };
 const canvas = $('canvas');
 const ctx = canvas.getContext('2d');
 
+// Tab-scoped recovery (not cross-session storage): only an uncommitted text draft,
+// never OAuth/session tokens or media. Entries expire after 24h.
+function recoveryKey() {
+  if (!model.principal || !model.doc) return null;
+  return 'stone-draft-v1:'+model.principal.tenant_id+':'+model.doc.document_id;
+}
+function recoveryStore(value) {
+  const key=recoveryKey();if(!key)return;
+  try {
+    if(value)sessionStorage.setItem(key,JSON.stringify({ ...value,at:Date.now() }));
+    else sessionStorage.removeItem(key);
+  }catch(_){ /* private browsing can disable sessionStorage; server saves remain primary */ }
+}
+function recoverUnsavedText() {
+  const key=recoveryKey();if(!key)return;
+  try {
+    const raw=sessionStorage.getItem(key);if(!raw)return;
+    const previous=JSON.parse(raw);
+    if(Date.now()-previous.at>86400000){sessionStorage.removeItem(key);return;}
+    const page=model.doc.pages.find(x=>x.id===previous.page_id);
+    const layer=page?.layers.find(x=>x.id===previous.layer_id && x.kind==='text');
+    if(layer && model.doc.version===previous.version && canWrite()) {
+      model.pageId=page.id;renderPages();selectLayer(layer);
+      $('layer-text').value=previous.text;
+      model.pendingText=previous;
+      status('Texto local não salvo recuperado. Confira e clique Salvar texto.');
+    } else status('Existe texto local anterior, mas a versão mudou. Não será aplicado automaticamente.');
+  }catch(_) { /* corrupt local recovery entry never bypasses server validation */ }
+}
 function status(message) { $('status').textContent = message; }
 function canWrite() { return ['admin','editor'].includes(model.principal?.role); }
 function controls() {
@@ -22,6 +52,11 @@ function controls() {
   $('file').disabled = !editing;
   $('rights').disabled = !editing;
   $('export').disabled = !logged || !model.doc;
+  $('export-zip').disabled = !logged || !model.doc || model.doc.platform_intent!=='instagram_carousel';
+  $('preview-proposal').disabled=!editing || model.selection?.kind!=='text';
+  $('confirm-proposal').disabled=!editing || !model.proposal;
+  $('apply-proposal').disabled=!editing || !model.proposal || !$('confirm-proposal').checked;
+  $('storyboard-create').disabled=!editing;
   const pages=model.doc?.pages || [], index=pages.findIndex(page=>page.id===model.pageId);
   const carousel=editing && model.doc.platform_intent==='instagram_carousel';
   $('duplicate-page').disabled = !carousel || pages.length>=10;
@@ -36,18 +71,29 @@ function controls() {
 }
 async function api(path, { method = 'GET', payload } = {}) {
   const headers = { Accept:'application/json' };
+  if (method !== 'GET' && payload?.expected_version && model.etag &&
+      path.startsWith('/v1/studio/documents/')) headers['If-Match']=model.etag;
   if (model.token) headers.Authorization = 'Bearer ' + model.token;
   if (payload !== undefined) headers['Content-Type'] = 'application/json';
   const response = await fetch(path, { method, headers,
     body: payload === undefined ? undefined : JSON.stringify(payload),
     cache:'no-store' });
-  if (!response.ok) throw new Error('HTTP ' + response.status + ' — ' + path);
-  return response.json();
+  if (!response.ok) {
+    let detail='';try {detail=(await response.json()).detail||'';}catch(_){}
+    throw new Error('HTTP '+response.status+(detail?' — '+detail:'')+' — '+path);
+  }
+  const data=await response.json();
+  if (data?.document_id && data?.version && response.headers.get('ETag')) {
+    model.etag=response.headers.get('ETag');
+  }
+  return data;
 }
 function reset() {
+  recoveryStore(null);
   model.token = null; model.principal = null; model.doc = null;
   model.selection = null; model.drag = null; model.preview = null;
   model.pageId=null;model.dragPageId=null;model.undoStack=[];model.redoStack=[];
+  model.etag=null;model.pendingText=null;model.proposal=null;clearTimeout(model.saveTimer);model.saveTimer=null;
   for (const bitmap of model.bitmaps.values()) bitmap.close?.();
   model.bitmaps.clear(); model.pendingImages.clear();
   $('password').value = ''; $('selected').textContent = 'Nenhuma';
@@ -83,17 +129,22 @@ function showDocument(doc, {history=true, resetHistory=false}={}) {
   } else if (history && previous.version!==doc.version) {
     model.undoStack.push(previous.version);model.redoStack=[];
   }
+  model.pendingText=null;model.proposal=null;$('confirm-proposal').checked=false;
+  $('proposal-preview').textContent='';clearTimeout(model.saveTimer);model.saveTimer=null;
   model.doc = doc; model.selection = null; model.drag = null;
   model.preview = null;
   if (!doc.pages.some(page=>page.id===model.pageId)) model.pageId=doc.pages[0].id;
   $('revision').textContent = doc.document_id + ' · versão ' + doc.version;
+  $('diff-from').value=String(Math.max(1,doc.version-1));
+  $('diff-to').value=String(doc.version);
   $('selected').textContent = 'Clique em uma camada';
   $('layer-text').value = '';
   renderPages();controls();draw();
 }
 function activePage() {return model.doc?.pages.find(page=>page.id===model.pageId) || null;}
-function selectPage(pageId) {
+async function selectPage(pageId) {
   if (!model.doc?.pages.some(page=>page.id===pageId)) return;
+  if (model.pendingText && !(await flushText())) return;
   model.pageId=pageId;model.selection=null;model.drag=null;model.preview=null;
   $('selected').textContent='Clique em uma camada';$('layer-text').value='';
   renderPages();controls();draw();
@@ -107,7 +158,7 @@ function renderPages() {
     button.className='page-chip'+(page.id===model.pageId?' is-active':'');
     button.setAttribute('aria-current',page.id===model.pageId?'page':'false');
     button.draggable=canWrite() && model.doc.platform_intent==='instagram_carousel';
-    button.addEventListener('click',()=>selectPage(page.id));
+    button.addEventListener('click',()=>{void selectPage(page.id);});
     button.addEventListener('dragstart',event=>{
       if (!button.draggable) {event.preventDefault();return;}
       model.dragPageId=page.id;event.dataTransfer.effectAllowed='move';
@@ -152,6 +203,7 @@ async function reorderPage(targetIndex,pageId=model.pageId) {
 }
 async function restoreRevision(direction) {
   if (!model.doc)return;
+  if (model.pendingText && !(await flushText()))return;
   const undo=direction==='undo', stack=undo?model.undoStack:model.redoStack;
   if (!stack.length)return;
   const target=stack[stack.length-1],previous=model.doc.version;
@@ -177,11 +229,12 @@ async function create() {
 async function open() {
   try {
     const doc = await api('/v1/studio/documents/'+encodeURIComponent($('document-id').value.trim()));
-    showDocument(doc,{resetHistory:true});status('Rascunho aberto do banco.');
+    showDocument(doc,{resetHistory:true});status('Rascunho aberto do banco.');recoverUnsavedText();
   } catch(error){status('Não foi possível abrir: '+error.message);}
 }
 function layerList() { return activePage()?.layers || []; }
 function selectLayer(layer) {
+  model.proposal=null;$('confirm-proposal').checked=false;$('proposal-preview').textContent='';
   model.selection = layer || null;
   $('selected').textContent = layer ? layer.id+' · '+layer.kind : 'Nenhuma';
   $('layer-text').value = layer?.kind === 'text' ? layer.text : '';
@@ -224,30 +277,15 @@ async function bitmapFor(assetId) {
 }
 function draw() {
   const doc=model.doc;
-  const w=doc?.canvas.width||1080, h=doc?.canvas.height||1350;
-  if (canvas.width!==w) canvas.width=w;
-  if (canvas.height!==h) canvas.height=h;
-  ctx.fillStyle=doc?.canvas.background||'#FFFFFF';ctx.fillRect(0,0,w,h);
-  for (const layer of layerList()) {
-    const delta = model.preview?.id===layer.id ? model.preview : {dx:0,dy:0};
-    const x=layer.x+delta.dx, y=layer.y+delta.dy;
-    if (layer.kind==='text') {
-      ctx.fillStyle=layer.style.color;
-      ctx.textBaseline='top'; ctx.font=layer.style.font_size+'px sans-serif';
-      wrapText(layer.text,x,y,layer.w,layer.style.font_size*1.2,layer.h);
-    } else if (layer.kind==='image') {
-      if (!model.bitmaps.has(layer.asset_id)) {
-        void bitmapFor(layer.asset_id).catch(e=>status(e.message));
-        ctx.fillStyle='#E6EFE9';ctx.fillRect(x,y,layer.w,layer.h);
-      } else {
-        ctx.drawImage(model.bitmaps.get(layer.asset_id),x,y,layer.w,layer.h);
-      }
-    }
-    if (model.selection?.id===layer.id) {
-      ctx.save(); ctx.lineWidth=3;ctx.strokeStyle='#158654';
-      ctx.setLineDash([14,8]);ctx.strokeRect(x,y,layer.w,layer.h);
-      ctx.restore();
-    }
+  if(!doc){ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);return;}
+  for(const layer of layerList())if(layer.kind==='image'&&!model.bitmaps.has(layer.asset_id))
+    void bitmapFor(layer.asset_id).catch(e=>status(e.message));
+  StoneExport.drawTo(ctx,doc,activePage(),model.bitmaps,model.preview);
+  const layer=model.selection;
+  if(layer){
+    const move=model.preview?.id===layer.id?model.preview:{dx:0,dy:0};
+    ctx.save();ctx.lineWidth=3;ctx.strokeStyle='#158654';ctx.setLineDash([14,8]);
+    ctx.strokeRect(layer.x+move.dx,layer.y+move.dy,layer.w,layer.h);ctx.restore();
   }
 }
 function canvasPoint(evt) {
@@ -287,8 +325,42 @@ canvas.addEventListener('pointerup', async event => {
   } catch(error){status('Edição rejeitada: '+error.message);}
 });
 canvas.addEventListener('pointercancel',()=>{model.drag=null;model.preview=null;draw();});
+function trackTextInput() {
+  if (!model.doc || model.selection?.kind!=='text' || !canWrite())return;
+  const text=$('layer-text').value;
+  if (text===model.selection.text){model.pendingText=null;clearTimeout(model.saveTimer);return;}
+  model.pendingText={document_id:model.doc.document_id,page_id:model.pageId,
+    layer_id:model.selection.id,version:model.doc.version,text};
+  recoveryStore(model.pendingText);
+  clearTimeout(model.saveTimer);
+  model.saveTimer=setTimeout(()=>{void flushText();},800);
+  status('Edição pendente; salvamento automático…');
+}
+async function flushText() {
+  if (!model.pendingText)return true;
+  if (model.saving)return false;
+  const pending=model.pendingText;
+  if (!model.doc || pending.document_id!==model.doc.document_id ||
+      pending.version!==model.doc.version) {
+    status('Conflito: edição local preservada no campo; reabra a versão.');return false;
+  }
+  model.saving=true;clearTimeout(model.saveTimer);
+  try {
+    const doc=await api('/v1/studio/documents/'+encodeURIComponent(pending.document_id)+'/text-patches',
+      {method:'POST',payload:{page_id:pending.page_id,layer_id:pending.layer_id,
+        expected_version:pending.version,text:pending.text}});
+    recoveryStore(null);showDocument(doc);
+    status('Salvamento automático confirmado. Versão '+doc.version);
+    return true;
+  }catch(error){
+    status('Edição NÃO salva: '+error.message+' — texto mantido no campo.');
+    return false;
+  }finally{model.saving=false;}
+}
 async function saveText() {
   if(model.selection?.kind!=='text') return;
+  if (model.pendingText) {await flushText();return;}
+  if ($('layer-text').value===model.selection.text)return;
   try {
     const doc=await api('/v1/studio/documents/'+encodeURIComponent(model.doc.document_id)+'/text-patches',
       {method:'POST',payload:{page_id:model.pageId,layer_id:model.selection.id,
@@ -334,9 +406,7 @@ async function insertImage() {
     });
     const asset=await api('/v1/studio/assets/png',{method:'POST',
       payload:{data_base64:data,rights_attested:true}});
-    // The draft template reserves space beneath the CTA. Place new images
-    // there at their intrinsic aspect ratio instead of obscuring the headline.
-    // The operator can subsequently resize or drag them anywhere on canvas.
+    // Preserve the intrinsic aspect ratio and initially place the asset below CTA.
     const availableWidth=Math.max(1,model.doc.canvas.width-140);
     const scale=Math.min(1,availableWidth/asset.width,160/asset.height);
     const imageWidth=Math.max(1,Math.round(asset.width*scale));
@@ -352,31 +422,73 @@ async function insertImage() {
     status('Imagem validada e inserida. Hash SHA-256: '+asset.sha256.slice(0,12)+'…');
   }catch(error){status('Não foi possível salvar a imagem: '+error.message);}
 }
-async function exportPNG() {
+async function exportSelection(archive=false) {
   if(!model.doc)return;
+  if(model.pendingText && !(await flushText())) {
+    status('Salve o texto pendente antes de exportar.');return;
+  }
+  const doc=structuredClone(model.doc),pageId=model.pageId;
+  const pages=archive?doc.pages:doc.pages.filter(p=>p.id===pageId);
+  const ids=[...new Set(pages.flatMap(p=>p.layers.filter(l=>l.kind==='image').map(l=>l.asset_id)))];
+  const fmt=$('export-format').value;
+  const buttons=['export','export-zip'].map($);
+  buttons.forEach(b=>b.disabled=true);
+  $('export-progress').textContent='Preparando '+pages.length+' página(s) da versão '+doc.version;
   try {
-    const ids=[...new Set(layerList().filter(l=>l.kind==='image').map(l=>l.asset_id))];
     await Promise.all(ids.map(bitmapFor));
-    // Render without selection outlines or UI handles.
-    const current=model.selection; model.selection=null;draw();
-    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
-    model.selection=current;draw();
-    if(!blob)throw new Error('Falha ao renderizar PNG');
-    const url=URL.createObjectURL(blob);const link=document.createElement('a');
-    link.href=url;link.download=model.doc.document_id+'-v'+model.doc.version+'.png';
-    link.click();setTimeout(()=>URL.revokeObjectURL(url),5000);
-    status('PNG exportado localmente. Documento persistido não foi modificado.');
+    const result=await StoneExport.exportDocument(doc,pageId,model.bitmaps,fmt,archive);
+    const url=URL.createObjectURL(result.blob),link=document.createElement('a');
+    link.href=url;link.download=result.filename;link.click();
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+    $('export-progress').textContent=result.manifest.pages.length+' arquivo(s) gerado(s)';
+    status('Prévia RASCUNHO exportada com hashes. Não há aprovação de publicação.');
   }catch(error){status('Exportação bloqueada: '+error.message);}
+  finally{controls();}
+}
+async function previewProposal() {
+  if(!model.doc || model.selection?.kind!=='text')return;
+  if(model.pendingText && !(await flushText()))return;
+  const proposal={expected_version:model.doc.version,page_id:model.pageId,
+    layer_id:model.selection.id,text:$('proposal-text').value,origin:'operator'};
+  try {
+    const preview=await api(docPath()+'/edit-proposals/preview',{method:'POST',payload:proposal});
+    model.proposal={...proposal,preview_sha256:preview.preview_sha256};
+    $('confirm-proposal').checked=false;
+    $('proposal-preview').textContent=preview.changes.map(c=>c.path+' : '+JSON.stringify(c.before)+' → '+JSON.stringify(c.after)).join('\n');
+    status('Proposta em prévia. Nenhuma edição foi aplicada.');controls();
+  }catch(error){model.proposal=null;status('Prévia rejeitada: '+error.message);controls();}
+}
+async function applyProposal() {
+  if(!model.proposal || !$('confirm-proposal').checked)return;
+  try {
+    const doc=await api(docPath()+'/edit-proposals/apply',{method:'POST',
+      payload:{...model.proposal,operator_confirmed:true}});
+    showDocument(doc);status('Patch confirmado e salvo na versão '+doc.version);
+  }catch(error){status('Patch não aplicado: '+error.message);}
+}
+async function createStoryboard() {
+  if(!model.doc)return;
+  if(model.pendingText && !(await flushText()))return;
+  try {
+    const identifier='story.'+crypto.randomUUID().replaceAll('-','').slice(0,18);
+    const sb=await api('/v1/studio/storyboards',{method:'POST',payload:{
+      storyboard_id:identifier,source_document_id:model.doc.document_id,
+      platform_intent:$('storyboard-format').value}});
+    $('storyboard-preview').textContent='Storyboard '+sb.storyboard_id+' · v'+sb.version+' · '+sb.scenes.length+' cena(s) · '+sb.clips.reduce((sum,c)=>sum+c.duration_ms,0)+' ms';
+    status('Storyboard textual versionado salvo. Render de vídeo não disponível.');
+  }catch(error){status('Storyboard rejeitado: '+error.message);}
 }
 $('login').addEventListener('click',login);
 $('logout').addEventListener('click',logout);
 $('create').addEventListener('click',create);
 $('open').addEventListener('click',open);
 $('save-text').addEventListener('click',saveText);
-// Also persist text on blur (the server version check prevents silent overwrites).
-$('layer-text').addEventListener('change',()=>{
-  if (canWrite() && model.selection?.kind==='text' &&
-      $('layer-text').value!==model.selection.text) void saveText();
+// Save edited text on blur as well as explicit Save, without silently overwriting
+// concurrent edits: the version check in the server remains authoritative.
+$('layer-text').addEventListener('input', trackTextInput);
+$('layer-text').addEventListener('blur',()=>{if(model.pendingText)void flushText();});
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='hidden' && model.pendingText)void flushText();
 });
 $('duplicate-page').addEventListener('click',duplicatePage);
 $('delete-page').addEventListener('click',deletePage);
@@ -384,11 +496,29 @@ $('page-left').addEventListener('click',()=>reorderPage(model.doc.pages.findInde
 $('page-right').addEventListener('click',()=>reorderPage(model.doc.pages.findIndex(p=>p.id===model.pageId)+1));
 $('undo').addEventListener('click',()=>restoreRevision('undo'));
 $('redo').addEventListener('click',()=>restoreRevision('redo'));
+$('version-diff').addEventListener('click',async()=>{
+  if (!model.doc)return;
+  const left=Number($('diff-from').value),right=Number($('diff-to').value);
+  if (!Number.isInteger(left)||left<1||!Number.isInteger(right)||right<1)return;
+  try {
+    const diff=await api(docPath()+'/versions/diff?from_version='+left+'&to_version='+right);
+    const paths=diff.changes.map(c=>c.path+' : '+JSON.stringify(c.before)+' → '+JSON.stringify(c.after));
+    $('diff-result').textContent=paths.join('\n')||'Nenhuma diferença';
+  }catch(error){status('Falha ao comparar versões: '+error.message);}
+});
 $('save-geometry').addEventListener('click',applyGeometry);
 $('bring-forward').addEventListener('click',()=>reorder('forward'));
 $('send-backward').addEventListener('click',()=>reorder('backward'));
 $('file').addEventListener('change',controls);
 $('rights').addEventListener('change',controls);
 $('insert-image').addEventListener('click',insertImage);
-$('export').addEventListener('click',exportPNG);
+$('preview-proposal').addEventListener('click',previewProposal);
+$('proposal-text').addEventListener('input',()=>{
+  model.proposal=null;$('confirm-proposal').checked=false;controls();
+});
+$('confirm-proposal').addEventListener('change',controls);
+$('apply-proposal').addEventListener('click',applyProposal);
+$('storyboard-create').addEventListener('click',createStoryboard);
+$('export').addEventListener('click',()=>exportSelection(false));
+$('export-zip').addEventListener('click',()=>exportSelection(true));
 controls();draw();
