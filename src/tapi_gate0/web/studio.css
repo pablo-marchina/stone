@@ -8,3 +8,9 @@
 .page-chip:focus-visible{outline:3px solid #39a37e;outline-offset:2px}
 
 .version-diff{white-space:pre-wrap;max-height:160px;overflow:auto;font-size:11px;word-break:break-all}
+
+/* E6 IMP-186: accessible layer list for pointer-free navigation. */
+#layer-nav{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.layer-nav-button{font-size:0.85rem;background:#edf4ef;color:#184f38;border:1px solid #658f77}
+.layer-nav-button[aria-pressed="true"]{background:#184f38;color:white}
+.layer-nav-button:focus-visible,#canvas:focus-visible{outline:3px solid #ffd166;outline-offset:3px}

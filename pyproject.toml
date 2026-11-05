@@ -13,6 +13,8 @@ dependencies = ["fastapi>=0.120,<1", "pydantic>=2.10,<3", "uvicorn>=0.30,<1", "s
 production = ["psycopg[binary]>=3.2,<4"]
 dev = ["pytest>=8,<10", "httpx>=0.27,<1", "jsonschema>=4,<5", "numpy>=1.26,<3", "opencv-python-headless>=4.10,<5"]
 
+local_render = ["Pillow>=11,<13"]
+
 system_one_local = ["gliner2[local]==2.1.0", "huggingface-hub>=0.34,<2", "psutil>=5.9,<8"]
 
 [tool.setuptools.packages.find]
