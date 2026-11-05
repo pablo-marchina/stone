@@ -77,7 +77,12 @@ def _date(value):
 
 class OfficialHttp:
     """Never accepts caller-specified hosts, redirects or generic fetch URLs."""
-    def __init__(self, client: httpx.Client | None = None):
+    def __init__(self, client: httpx.Client | None = None, *,
+                 instagram_version: str = "v23.0"):
+        # Explicit allowlist: no caller-controlled paths, hosts or versions.
+        if instagram_version not in {"v23.0", "v26.0"}:
+            raise ValueError("UNSUPPORTED_META_GRAPH_VERSION")
+        self.instagram_version = instagram_version
         self.client = client or httpx.Client(timeout=httpx.Timeout(8), follow_redirects=False)
         self._owned = client is None
 
@@ -88,7 +93,7 @@ class OfficialHttp:
     def get(self, platform: Platform, path: str, params: dict, token: str) -> dict:
         if not token or len(token) < 10:
             raise ConnectorError("CREDENTIAL_MISSING", 403)
-        base = {Platform.INSTAGRAM: "https://graph.facebook.com/v23.0/",
+        base = {Platform.INSTAGRAM: f"https://graph.facebook.com/{self.instagram_version}/",
                 Platform.YOUTUBE: "https://www.googleapis.com/youtube/v3/"}[platform]
         if not re.fullmatch(r"[A-Za-z0-9_./-]+", path) or path.startswith("/") or ".." in path:
             raise ConnectorError("UNSAFE_PROVIDER_PATH", 403)
