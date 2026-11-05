@@ -88,7 +88,7 @@ def test_denials_no_partial_writes_and_page_limit(tmp_path):
         lambda: service.duplicate("tenantA", "founder", "design.carousel", DuplicatePage(
             expected_version=10, page_id="page.1", new_page_id="page.11")),
         lambda: service.reorder("tenantA", "founder", "design.carousel", ReorderPage(
-            expected_version=10, page_id="page.2", target_index=10)),
+            expected_version=10, page_id="page.10", target_index=9)),
         lambda: service.duplicate("tenantA", "founder", "design.carousel", DuplicatePage(
             expected_version=9, page_id="page.1", new_page_id="page.X")),
     ]:
