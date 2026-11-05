@@ -10,6 +10,7 @@ from .studio_canvas_c2 import (StudioCanvasStore, UploadPNG, AssetRecord, PlaceI
 from .studio_pages_e3 import StudioPagesService, DuplicatePage, DeletePage, ReorderPage, RestoreVersion
 from .studio_video_e5 import (StoryboardStore, StoryboardDocument, CreateStoryboard, UpdateStoryboard)
 from .studio_render_e6 import (LocalDraftRenderer, AttestRights, UploadAudio, QueueDraftVideo, RenderJobInfo)
+from .studio_advanced_e7 import (AdvancedStudioRenderer, UploadVideoSource, QueueAdvancedDraft, AdvancedJobStatus)
 from .studio_evidence_edits_e6 import StudioEvidenceEditService, EvidenceEditProposal, ConfirmEvidenceEdit
 from .studio_e4 import (studio_etag, assert_etag, version_diff, ProposedTextEdit,
                         ApplyTextProposal, preview_text_proposal, apply_text_proposal)
@@ -27,6 +28,7 @@ def router_for_studio(identity, store: StudioStore):
     pages_service = StudioPagesService(store.engine)
     video = StoryboardStore(store.engine)
     renderer = LocalDraftRenderer(store.engine)
+    advanced = AdvancedStudioRenderer(store.engine)
     evidence_edits = StudioEvidenceEditService(store.engine)
 
     def principal(request: Request) -> Principal:
@@ -335,5 +337,54 @@ def router_for_studio(identity, store: StudioStore):
         return Response(content=data,media_type="video/mp4",headers={
             "Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff",
             "Content-Disposition":"attachment; filename=tapi-rascunho.mp4"})
+
+    @router.post("/video-sources/mp4",status_code=201)
+    def upload_source_video(payload: UploadVideoSource,p: Principal=Depends(principal)):
+        if p.role!="admin":raise IdentityFailure("FORBIDDEN",403)
+        try:return advanced.upload_video(p.tenant_id,p.actor_id,payload)
+        except StudioError as exc:as_http(exc)
+
+    @router.post("/video-sources/{asset_id}/revoke")
+    def revoke_source_video(asset_id:str,p: Principal=Depends(principal)):
+        if p.role!="admin":raise IdentityFailure("FORBIDDEN",403)
+        try:return advanced.revoke_video(p.tenant_id,p.actor_id,asset_id)
+        except StudioError as exc:as_http(exc)
+
+    @router.post("/video-sources/{asset_id}/embedded-audio/revoke")
+    def revoke_video_source_audio(asset_id: str,p: Principal=Depends(principal)):
+        if p.role!="admin":raise IdentityFailure("FORBIDDEN",403)
+        try:return advanced.revoke_embedded_audio(p.tenant_id,p.actor_id,asset_id)
+        except StudioError as exc:as_http(exc)
+
+    @router.post("/advanced-render-jobs",response_model=AdvancedJobStatus,status_code=201)
+    def queue_advanced_video(payload:QueueAdvancedDraft,p: Principal=Depends(principal)):
+        if p.role not in {"admin","editor"}:raise IdentityFailure("FORBIDDEN",403)
+        try:return advanced.queue(p.tenant_id,p.actor_id,payload)
+        except StudioError as exc:as_http(exc)
+
+    @router.get("/advanced-render-jobs/{job_id}",response_model=AdvancedJobStatus)
+    def get_advanced_job(job_id:str,p: Principal=Depends(principal)):
+        try:return advanced.get(p.tenant_id,job_id)
+        except StudioError as exc:as_http(exc)
+
+    @router.post("/advanced-render-jobs/{job_id}/cancel",response_model=AdvancedJobStatus)
+    def cancel_advanced_job(job_id:str,p: Principal=Depends(principal)):
+        if p.role not in {"admin","editor"}:raise IdentityFailure("FORBIDDEN",403)
+        try:return advanced.cancel(p.tenant_id,p.actor_id,job_id)
+        except StudioError as exc:as_http(exc)
+
+    @router.post("/advanced-render-jobs/{job_id}/retry",response_model=AdvancedJobStatus)
+    def retry_advanced_job(job_id:str,p: Principal=Depends(principal)):
+        if p.role not in {"admin","editor"}:raise IdentityFailure("FORBIDDEN",403)
+        try:return advanced.retry(p.tenant_id,p.actor_id,job_id)
+        except StudioError as exc:as_http(exc)
+
+    @router.get("/advanced-render-artifacts/{artifact_id}")
+    def download_advanced_video(artifact_id:str,p: Principal=Depends(principal)):
+        try:data=advanced.artifact(p.tenant_id,artifact_id)
+        except StudioError as exc:as_http(exc)
+        return Response(content=data,media_type="video/mp4",headers={
+            "Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff",
+            "Content-Disposition":"attachment; filename=tapi-rascunho-e7.mp4"})
 
     return router

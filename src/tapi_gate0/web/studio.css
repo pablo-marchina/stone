@@ -14,3 +14,17 @@
 .layer-nav-button{font-size:0.85rem;background:#edf4ef;color:#184f38;border:1px solid #658f77}
 .layer-nav-button[aria-pressed="true"]{background:#184f38;color:white}
 .layer-nav-button:focus-visible,#canvas:focus-visible{outline:3px solid #ffd166;outline-offset:3px}
+
+/* E8: accessible, visually proportional storyboard timeline. */
+.timeline-visual{padding:10px;margin:8px 0;border:1px solid #c5d4cc;border-radius:8px;background:#f4f8f4;overflow-x:auto}
+.timeline-scene-lane,.timeline-overlay-lane{display:flex;min-width:260px;gap:3px;margin:5px 0}
+.timeline-scene{border:1px solid #6c8876;background:#c5dfcf;color:#153c28;min-width:60px;padding:9px 3px;cursor:grab;font-size:.75rem;overflow-wrap:anywhere}
+.timeline-scene.selected{background:#17684a;color:white;border-color:#104d36}
+.timeline-scene:focus-visible{outline:3px solid #e5a126;outline-offset:2px}
+.timeline-overlay-clip{min-width:60px;background:#e8dcc7;border:1px solid #baa16f;padding:6px 2px;text-align:center;font-size:.7rem}
+.timeline-caption{font-size:.8rem;color:#466454;margin:4px 0 6px}
+.timeline-fields{border:1px solid #d2ded4;border-radius:8px;margin:10px 0;padding:10px}
+.timeline-fields legend{font-weight:650;color:#20533c}
+.timeline-fields label{display:block;margin:6px 0}
+.timeline-fields textarea,.timeline-fields input,.timeline-fields select{max-width:100%}
+#timeline-job-status{display:block;font-size:.85rem;overflow-wrap:anywhere}
