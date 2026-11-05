@@ -60,7 +60,7 @@
 
 ## 5. Referências rastreáveis
 
-- [Documento Mestre e regras de precedência](../README.md) — consultar também os arquivos-fonte externos originalmente fornecidos.
+- [Origens, referências e limites](09_ORIGENS_REFERENCIAS_E_LIMITES.md) — o Documento Mestre original permanece no conjunto externo de fontes do projeto.
 - [Arquitetura v5.2](23_ARQUITETURA_UNIFICADA_REVISADA_V5_2_2026-10-30.md) e [Plano Único v5.2](24_PLANO_UNICO_IMPLEMENTACAO_V5_2_2026-10-30.md).
 - [DEC-016 e fonte v2](33_DEC016_IMPLEMENTACAO_FONTE_ELEGIBILIDADE_DATA_CARD_V2.md), [DEC-017](35_DEC017_E1_SYSTEM_ONE_LAB.md), [A3 real](45_A3_BUSINESS_DISCOVERY_PRIMEIRO_LOTE_TECNICO.md), [agente B2](43_TRILHA_B_AGENT_EVIDENCE_E1.md).
 - [Studio E6](48_CAP023_E6_RENDER_EVIDENCIA_DIREITOS_TESTES.md), [E7](49_CAP023_E7_EDICAO_VIDEO_MULTIFAIXA_RECUPERACAO.md), [E8](50_CAP023_E8_TIMELINE_AUDIO_HQ.md), [PR #40](https://github.com/pablo-marchina/stone/pull/40).
