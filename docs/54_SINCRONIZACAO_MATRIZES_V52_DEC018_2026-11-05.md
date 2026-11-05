@@ -24,7 +24,7 @@ Versionamos as evidências incrementais na pasta `planning/v5_2/audit_2026-11-05
 - `MATRIZ_DECISOES_EVIDENCIAS.csv` — decisões com evidência nova;
 - `MATRIZ_GATES_EVIDENCIAS.csv` — 7 linhas.
 
-O gerador `scripts/sync_plano_v52_audit.py` aplica esses overlays ao **ZIP original exato**, valida contagens, IDs, dependências e ciclos, e reconstrói os CSVs completos com um manifesto. O ZIP completo atualizado também foi disponibilizado como artefato na conversa, **não como blob no GitHub**. Isto mantém rastreabilidade entre baseline externo e deltas em Git.
+**Além dos overlays, os quatro CSVs completos e `DEPENDENCIAS.csv` foram versionados em `planning/v5_2/audit_2026-11-05/synced/`.** O conteúdo dos cinco arquivos foi comparado diretamente com os arquivos gerados e conferiu integralmente. A prova de identificação desses blobs está em `MANIFESTO_SINCRONIZACAO_GIT.json`. O gerador `scripts/sync_plano_v52_audit.py` também aplica overlays ao **ZIP original exato** e revalida contagens, IDs, dependências e ciclos. O ZIP com os 13 CSVs foi disponibilizado como artefato da conversa, **não como um blob ZIP no GitHub**; os demais oito CSVs permanecem inalterados no pacote externo.
 
 ### Reproduzir localmente
 
@@ -53,6 +53,6 @@ Assim, CAP-004 e IMP-062 apresentam a dispensa DEC-018 de forma visível, com `G
 - [x] Decisões DEC-016 a DEC-018 incorporadas sem renumerar IDs.
 - [x] Status de CAP, IMP, DEC e gates relacionados a PRs e evidências.
 - [x] Dependências e matrizes de referência preservadas e verificadas no pacote local.
-- [x] Código gerador e deltas de evidência versionados no Git.
-- [ ] Rodar a reconstrução no checkout do PR usando o ZIP original.
+- [x] Quatro matrizes CSV completas, `DEPENDENCIAS.csv`, manifesto de blobs, gerador e deltas de evidência versionados no Git.
+- [ ] Rodar o gerador no checkout do PR com o ZIP original; as matrizes completas já foram geradas localmente e seus conteúdos conferidos após o envio ao Git.
 - [ ] Aceite da entrega única permanece condicionado aos gates restantes.
