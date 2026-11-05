@@ -108,8 +108,8 @@ def test_instagram_official_normalization_and_multimodal_abstention(tmp_path,mon
         with store.engine.connect() as db:
             row=db.execute(select(ingestion_records)).mappings().one()
             assert row['denominator_quality']=='observed_current_only'
-            assert db.execute(select(func.count()).select_from(domain_events)).scalar_one()==1
-            assert db.execute(select(func.count()).select_from(outbox)).scalar_one()==1
+            assert db.execute(select(func.count()).select_from(domain_events)).scalar_one()==2
+            assert db.execute(select(func.count()).select_from(outbox)).scalar_one()==2
         cid=row['content_id']
         assessment=client.get(f'/v1/content/{cid}/assessments/latest',headers=hdr)
         assert assessment.status_code==200,assessment.text

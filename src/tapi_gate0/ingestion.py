@@ -25,6 +25,7 @@ from .sa_store import (metadata, tenants, creators, content_items, metrics_snaps
                        rubric_assessments, domain_events, outbox)
 from .storage import now_utc
 from .identity import Principal, IdentityFailure
+from .gate0b_technical import assess_metadata_readiness
 
 
 source_grants = Table("ingestion_source_grants", metadata,
@@ -151,8 +152,37 @@ class IngestionStore:
                 source_account_id=payload.source_account_id,approval_reference=payload.approval_reference,
                 approved_by=actor_id,approved_at=now_utc().isoformat(),
                 expires_at=payload.expires_at.isoformat(),enabled=1))
+            self._audit_grant(db,tenant_id,actor_id,payload.platform.value,
+                              payload.source_account_id,"ingestion.grant.created",1)
         return {"platform":payload.platform.value,"source_account_id":payload.source_account_id,
                 "authorization_recorded":True,"technical_verified":False}
+
+    @staticmethod
+    def _audit_grant(db, tenant, actor, platform, account, event_type, version):
+        ev=db.execute(insert(domain_events).values(
+            event_id=str(uuid4()),tenant_id=tenant,aggregate_type="ingestion_source_grant",
+            aggregate_id=stable_id("grant",platform,account),
+            event_type=event_type,aggregate_version=version,
+            occurred_at=now_utc().isoformat(),
+            payload=json.dumps({"platform":platform,"source_account_id":account,
+                                "actor_id":actor},separators=(",",":"))))
+        db.execute(insert(outbox).values(seq=ev.inserted_primary_key[0],
+                                         attempts=0,dead_letter=0))
+
+    def revoke_grant(self,tenant,actor,platform,account):
+        """Admin caller, atomic revocation with durable audit event."""
+        with self.engine.begin() as db:
+            changed=db.execute(update(source_grants).where(
+                source_grants.c.tenant_id==tenant,
+                source_grants.c.platform==platform.value,
+                source_grants.c.source_account_id==account,
+                source_grants.c.enabled==1).values(enabled=0))
+            if changed.rowcount!=1:
+                raise ConnectorError("ACTIVE_SOURCE_GRANT_REQUIRED",404)
+            self._audit_grant(db,tenant,actor,platform.value,account,
+                              "ingestion.grant.revoked",2)
+        return {"platform":platform.value,"source_account_id":account,
+                "revoked":True,"audit_recorded":True}
 
     def read_grant(self,tenant,platform,account):
         with self.engine.connect() as db:
@@ -264,6 +294,23 @@ class IngestionStore:
         complete = all(x is not None for x in (
             item.likes, item.comments, item.follower_count))
         with self.engine.begin() as db:
+            # Serialize persistence against administrative revocation. A no-op
+            # UPDATE holds the account row lock through the content transaction.
+            active=db.execute(update(source_grants).where(
+                source_grants.c.tenant_id==tenant,
+                source_grants.c.platform==item.platform.value,
+                source_grants.c.source_account_id==item.source_account_id,
+                source_grants.c.enabled==1,
+            ).values(enabled=source_grants.c.enabled))
+            if active.rowcount!=1:
+                raise ConnectorError("SOURCE_GRANT_REVOKED_BEFORE_PERSIST",403)
+            grant_expiry=db.execute(select(source_grants.c.expires_at).where(
+                source_grants.c.tenant_id==tenant,
+                source_grants.c.platform==item.platform.value,
+                source_grants.c.source_account_id==item.source_account_id,
+            )).scalar_one()
+            if datetime.fromisoformat(grant_expiry)<=now_utc():
+                raise ConnectorError("SOURCE_GRANT_EXPIRED_BEFORE_PERSIST",403)
             found = db.execute(select(ingestion_records.c.content_id).where(
                 ingestion_records.c.tenant_id == tenant,
                 ingestion_records.c.platform == item.platform.value,
@@ -414,12 +461,20 @@ class IngestionStore:
                     req.source_account_id, token, checked, req.limit, after=after)
             else:
                 items = adapter.fetch(req.source_account_id,token,checked,req.limit,req.video_ids)
+            if self.read_grant(tenant,req.platform,req.source_account_id)["approval_reference"]!=grant["approval_reference"]:
+                raise ConnectorError("SOURCE_GRANT_CHANGED_DURING_READ",403)
             with self.engine.begin() as db:
-                db.execute(update(source_grants).where(source_grants.c.tenant_id==tenant,
+                updated=db.execute(update(source_grants).where(
+                    source_grants.c.tenant_id==tenant,
                     source_grants.c.platform==req.platform.value,
-                    source_grants.c.source_account_id==req.source_account_id).values(
+                    source_grants.c.source_account_id==req.source_account_id,
+                    source_grants.c.enabled==1,
+                    source_grants.c.approval_reference==grant["approval_reference"]).values(
                         technical_verified_at=now_utc().isoformat()))
+                if updated.rowcount!=1:
+                    raise ConnectorError("SOURCE_GRANT_REVOKED_DURING_READ",403)
             for item in items:
+                self.read_grant(tenant,req.platform,req.source_account_id)
                 if (now_utc() - item.published_at).total_seconds() < req.min_age_days * 86400:
                     excluded_recent += 1
                     continue
@@ -459,6 +514,11 @@ def router_for_ingestion(identity,store:IngestionStore):
         if p.role!="admin":raise IdentityFailure("FORBIDDEN",403)
         return store.grant(p.tenant_id,p.actor_id,payload)
 
+    @router.post("/grants/{platform}/{account_id}/revoke")
+    def revoke_source_grant(platform:Platform,account_id:str,p:Principal=Depends(principal)):
+        if p.role!="admin":raise IdentityFailure("FORBIDDEN",403)
+        return store.revoke_grant(p.tenant_id,p.actor_id,platform,account_id)
+
     @router.post("/runs",response_model=IngestionResult)
     def run_ingestion(payload:IngestionRequest,p:Principal=Depends(principal)):
         if p.role not in {"admin","researcher","service"}:raise IdentityFailure("FORBIDDEN",403)
@@ -466,17 +526,26 @@ def router_for_ingestion(identity,store:IngestionStore):
 
     @router.get("/connections/{platform}/{account_id}")
     def connection_readiness(platform:Platform,account_id:str,p:Principal=Depends(principal)):
-        grant=store.read_grant(p.tenant_id,platform,account_id)
-        token_present=bool(os.getenv({Platform.INSTAGRAM:"TAPI_INSTAGRAM_ACCESS_TOKEN",
-            Platform.YOUTUBE:"TAPI_YOUTUBE_ACCESS_TOKEN"}[platform]))
-        flag=os.getenv("TAPI_OFFICIAL_METADATA_READS")=="1"
-        zero_bill=os.getenv("TAPI_ZERO_BILLING_CONFIRMED")=="1"
+        # Query only the authenticated tenant, including missing/expired grants;
+        # the endpoint reports eligibility for a PRE-FLIGHT, not access approval.
+        with store.engine.connect() as db:
+            grant=db.execute(select(source_grants).where(
+                source_grants.c.tenant_id==p.tenant_id,
+                source_grants.c.platform==platform.value,
+                source_grants.c.source_account_id==account_id,
+            )).mappings().first()
+        status=assess_metadata_readiness(
+            dict(grant) if grant is not None else None,
+            credential_present=bool(os.getenv({
+                Platform.INSTAGRAM:"TAPI_INSTAGRAM_ACCESS_TOKEN",
+                Platform.YOUTUBE:"TAPI_YOUTUBE_ACCESS_TOKEN",
+            }[platform])),
+            read_switch_enabled=os.getenv("TAPI_OFFICIAL_METADATA_READS")=="1",
+            zero_billing_operator_confirmed=os.getenv("TAPI_ZERO_BILLING_CONFIRMED")=="1",
+        )
         return {"platform":platform.value,"source_account_id":account_id,
-          "grant_recorded":True,"technical_verified_previously":bool(grant["technical_verified_at"]),
-          "credential_present":token_present,"read_switch_enabled":flag,
-          "zero_billing_operator_confirmed":zero_bill,
-          "can_attempt_validation":token_present and flag and zero_bill,
-          "note":"The check does not establish third-party media rights or grant OAuth scopes."}
+                **status.model_dump(),
+                "note":"A ready preflight is not a verified OAuth grant or production approval."}
 
     @router.get("/runs")
     def list_runs(p:Principal=Depends(principal)):
