@@ -73,16 +73,22 @@ def test_refresh_preserves_old_snapshots_and_updates_ranking(tmp_path, monkeypat
             assert db.execute(select(func.count()).select_from(ingestion_records)).scalar_one() == 1
             rows = db.execute(select(metrics_snapshots.c.payload)).scalars().all()
             assert len(rows) == 2
-            assert db.execute(select(func.count()).select_from(domain_events)).scalar_one() == 2
-            assert db.execute(select(func.count()).select_from(outbox)).scalar_one() == 2
+            # A2 includes one audited grant-creation event in addition to
+            # the two content lifecycle events, all with transactional outbox.
+            assert db.execute(select(func.count()).select_from(domain_events)).scalar_one() == 3
+            assert db.execute(select(func.count()).select_from(outbox)).scalar_one() == 3
             refreshed_in_ledger = db.execute(
                 select(ingestion_runs.c.refreshed_records)
                 .where(ingestion_runs.c.run_key == "run-refresh-4")
             ).scalar_one()
             assert refreshed_in_ledger == 1
             assert (db.execute(select(domain_events.c.event_type)
+                .where(domain_events.c.aggregate_type == "content")
                 .order_by(domain_events.c.aggregate_version)).scalars().all()) == [
                     "ingestion.content_processed", "ingestion.metrics_refreshed"]
+            assert db.execute(select(domain_events.c.event_type).where(
+                domain_events.c.aggregate_type == "ingestion_source_grant"
+            )).scalar_one() == "ingestion.grant.created"
         rank = app.state.local_domain_store.ranking(RankingRequest(
             tenant_id=TENANT, origin="instagram", min_age_days=14,
             as_of=datetime.now(timezone.utc)))
