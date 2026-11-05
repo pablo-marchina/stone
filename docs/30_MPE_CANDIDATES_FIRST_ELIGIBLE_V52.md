@@ -1,5 +1,8 @@
 # IMP-167 → IMP-170 — Seleção de fontes MPE e primeiras evidências elegíveis
 
+> **Atualização de execução — 05/11/2026:** esta página documenta o piloto histórico de candidatos e o estado anterior à persistência A3. O [PR #36](https://github.com/pablo-marchina/stone/pull/36) e [docs/45](45_A3_BUSINESS_DISCOVERY_PRIMEIRO_LOTE_TECNICO.md) registram **3 publicações técnicas reais persistidas** e atualização de snapshots; **nenhuma admissão científica é demonstrada**. O universo correto segue sendo conteúdo *voltado a* MPEs, não apenas negócios MPEs. Ver [51](51_REGISTRO_DECISOES_POS_V52_2026-11-05.md) e [52](52_MATRIZ_ALINHAMENTO_FONTES_REPOSITORIO_2026-11-05.md).
+
+
 **Data:** 03/11/2026. **Prioridade:** P0 do Plano Único v5.2, base documentada.
 
 > **Atualização DEC-016 / IMP-170:** este arquivo registra o piloto histórico de MPEs produtoras. O universo científico é de **publicações direcionadas a MPEs** (independentemente de seu autor ser MPE). O contrato atual é `tapi-source-frame.v2`; o frame `mpe-source-frame.v1` abaixo é histórico. Elegibilidade técnica de metadados não implica elegibilidade científica.
