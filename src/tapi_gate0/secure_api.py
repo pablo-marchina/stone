@@ -27,6 +27,8 @@ from .discovery_technical import router_for_discovery_technical
 from .corpus import router_for_corpus
 from .ui import router_for_authenticated_view
 from .agent_api_e1 import router_for_evidence_agent
+from .studio_e1 import StudioStore  # registers studio tables before schema initialization
+from .studio_api import router_for_studio
 
 
 def _token(request:Request):
@@ -104,6 +106,7 @@ def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_ht
     app.include_router(router_for_discovery_technical(identity,ingestion))
     app.include_router(router_for_corpus(identity,engine))
     app.include_router(router_for_evidence_agent(identity,domain))
+    app.include_router(router_for_studio(identity,StudioStore(engine)))
 
     @app.exception_handler(ConnectorError)
     async def handle_connector_error(_request:Request,exc:ConnectorError):

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>TAPI Stone — Creative Studio C2</title>
+  <link rel="stylesheet" href="./studio.css">
+  <script type="module" src="./studio.mjs"></script>
+</head>
+<body>
+  <header class="top">
+    <div><a class="back" href="/app/">← Painel TAPI</a><h1>Creative Studio <span>C2</span></h1></div>
+    <p>Rascunho editável · armazenamento privado · PNG local</p>
+  </header>
+  <main class="workspace">
+    <aside class="panel">
+      <h2>1. Acesso</h2>
+      <label>Tenant <input id="tenant" value="tenant.demo" autocomplete="organization"></label>
+      <label>Usuário <input id="username" value="founder" autocomplete="username"></label>
+      <label>Senha <input id="password" type="password" autocomplete="current-password"></label>
+      <div class="buttons"><button id="login">Entrar</button><button id="logout" disabled>Sair</button></div>
+      <h2>2. Criar ou abrir</h2>
+      <label>ID do documento <input id="document-id" value="design.demo"></label>
+      <label>Objetivo <input id="objective" value="Criar exemplo educativo de finanças"></label>
+      <label>Título <input id="headline" value="Organize seu caixa"></label>
+      <label>Corpo <textarea id="body-text">Separe receitas e despesas por categoria.</textarea></label>
+      <label>CTA <input id="cta" value="Reveja seu orçamento."></label>
+      <div class="buttons"><button id="create" disabled>Criar rascunho</button><button id="open" disabled>Abrir existente</button></div>
+      <h2>3. Camadas</h2>
+      <label>Selecionada <output id="selected">Nenhuma</output></label>
+      <label>Texto <textarea id="layer-text" disabled></textarea></label>
+      <div class="buttons"><button id="save-text" disabled>Salvar texto</button></div>
+      <div class="geometry">
+        <label>X <input type="number" id="geom-x" min="0" disabled></label>
+        <label>Y <input type="number" id="geom-y" min="0" disabled></label>
+        <label>Largura <input type="number" id="geom-w" min="1" disabled></label>
+        <label>Altura <input type="number" id="geom-h" min="1" disabled></label>
+      </div>
+      <div class="buttons">
+        <button id="save-geometry" disabled>Aplicar posição e tamanho</button>
+        <button id="bring-forward" disabled>Subir camada</button>
+        <button id="send-backward" disabled>Descer camada</button>
+      </div>
+      <label>Ativo PNG (máx. 512 KiB) <input id="file" type="file" accept="image/png" disabled></label>
+      <label class="inline"><input id="rights" type="checkbox" disabled> Confirmo direito de uso deste ativo</label>
+      <button id="insert-image" disabled>Inserir imagem</button>
+      <h2>4. Exportação</h2>
+      <button id="export" disabled>Exportar PNG desta página</button>
+      <p class="hint">Arraste camadas no canvas. Não existe publicação externa, vídeo ou previsão de engajamento neste incremento. O PNG é gerado pelo navegador; o documento versionado permanece no banco.</p>
+      <p id="status" role="status" aria-live="polite">Entre para começar.</p>
+    </aside>
+    <section class="preview">
+      <div class="preview-bar"><h2>Prévia editável</h2><span id="revision">Sem documento</span></div>
+      <canvas id="canvas" width="1080" height="1350" tabindex="0" aria-label="Canvas de rascunho editável"></canvas>
+      <p class="hint">Visualização raster derivada. O JSON do DesignDocument permanece a fonte da verdade; a exportação só usa os ativos carregados.</p>
+    </section>
+  </main>
+</body>
+</html>
