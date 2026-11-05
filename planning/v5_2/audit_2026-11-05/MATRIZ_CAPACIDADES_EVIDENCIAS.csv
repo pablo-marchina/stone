@@ -1,0 +1,24 @@
+feature_id,audit_execution_status,evidence_pr_urls,audit_note,as_of,base_commit
+CAP-001,COLETA_TECNICA_REAL_LIMITADA,https://github.com/pablo-marchina/stone/pull/23;https://github.com/pablo-marchina/stone/pull/33;https://github.com/pablo-marchina/stone/pull/36,3 registros Meta tecnicos; zero admissoes cientificas,2026-11-05,79bb0173c90cbc993481bf1e959154adf796a5de
+CAP-002,PARCIAL_CODIGO,https://github.com/pablo-marchina/stone/pull/34,Ranking deterministico; falta corpus elegivel,2026-11-05,79bb0173c90cbc993481bf1e959154adf796a5de
+CAP-003,PARCIAL_EXPERIMENTAL,https://github.com/pablo-marchina/stone/pull/24;https://github.com/pablo-marchina/stone/pull/25;https://github.com/pablo-marchina/stone/pull/26,Rubrica tipada e GLiNER textual; faltam 20 campos validados,2026-11-05,79bb0173c90cbc993481bf1e959154adf796a5de
+CAP-004,DISPENSADO_DEC018_NAO_CUMPRIDO,https://github.com/pablo-marchina/stone/pull/32,50 revisoes dispensadas conforme DEC018 declarada; requisito original nao cumprido,2026-11-05,79bb0173c90cbc993481bf1e959154adf796a5de
+CAP-005,PARCIAL_CODIGO,https://github.com/pablo-marchina/stone/pull/34,Ferramentas B2; LangGraph e tres modos pendentes,2026-11-05,79bb0173c90cbc993481bf1e959154adf796a5de
+CAP-006,MCP_LOCAL_LIMITADO,https://github.com/pablo-marchina/stone/pull/34,MCP stdio com tres ferramentas; paridade final pendente,2026-11-05,79bb0173c90cbc993481bf1e959154adf796a5de
+CAP-007,PARCIAL_CODIGO,https://github.com/pablo-marchina/stone/pull/34;https://github.com/pablo-marchina/stone/pull/35;https://github.com/pablo-marchina/stone/pull/40,CreativeSpec e Studio presentes; playbook e cinco criativos pendentes,2026-11-05,79bb0173c90cbc993481bf1e959154adf796a5de
+CAP-008,NAO_COMPROVADO,,Contraste top vs resto sem corpus real,2026-11-05,79bb0173c90cbc993481bf1e959154adf796a5de
+CAP-009,BUSCA_ESTRUTURADA_PARCIAL,https://github.com/pablo-marchina/stone/pull/34,Retrieval SQL sem RAG hibrido validado,2026-11-05,79bb0173c90cbc993481bf1e959154adf796a5de
+CAP-010,NAO_COMPROVADO,,Avaliacao de criativos pendente,2026-11-05,79bb0173c90cbc993481bf1e959154adf796a5de
+CAP-011,NAO_COMPROVADO,,Analise de comentarios pendente,2026-11-05,79bb0173c90cbc993481bf1e959154adf796a5de
+CAP-012,CURADORIA_PARCIAL,https://github.com/pablo-marchina/stone/pull/23,Estratos de fontes v2; evidencia setorial insuficiente,2026-11-05,79bb0173c90cbc993481bf1e959154adf796a5de
+CAP-013,NAO_COMPROVADO,,Calendario pendente,2026-11-05,79bb0173c90cbc993481bf1e959154adf796a5de
+CAP-014,NAO_COMPROVADO,,Playbook lojista pendente,2026-11-05,79bb0173c90cbc993481bf1e959154adf796a5de
+CAP-015,FORA_CASE_CONDICIONAL,,Predicao nao exigida e nao comprovada,2026-11-05,79bb0173c90cbc993481bf1e959154adf796a5de
+CAP-016,RENDER_RASCUNHO_LOCAL,https://github.com/pablo-marchina/stone/pull/38;https://github.com/pablo-marchina/stone/pull/39;https://github.com/pablo-marchina/stone/pull/40,Export e MP4 de rascunho; nao producao final aprovada,2026-11-05,79bb0173c90cbc993481bf1e959154adf796a5de
+CAP-017,BLOQUEADO,,Publicacao externa bloqueada,2026-11-05,79bb0173c90cbc993481bf1e959154adf796a5de
+CAP-018,BLOQUEADO_CUSTO_ZERO,,Midia paga bloqueada pelo R$0,2026-11-05,79bb0173c90cbc993481bf1e959154adf796a5de
+CAP-019,BLOQUEADO_CONDICIONAL,,CRM e leads nao comprovados,2026-11-05,79bb0173c90cbc993481bf1e959154adf796a5de
+CAP-020,DOCUMENTADO_SEM_BENCHMARK_PROPRIO,,Pesquisa de mercado documental,2026-11-05,79bb0173c90cbc993481bf1e959154adf796a5de
+CAP-021,NAO_COMPROVADO,,Roteamento adaptativo nao demonstrado,2026-11-05,79bb0173c90cbc993481bf1e959154adf796a5de
+CAP-022,INFRA_LOCAL_PARCIAL,https://github.com/pablo-marchina/stone/pull/33;https://github.com/pablo-marchina/stone/pull/34;https://github.com/pablo-marchina/stone/pull/35;https://github.com/pablo-marchina/stone/pull/39;https://github.com/pablo-marchina/stone/pull/40,RBAC outbox SSE e testes locais; release nao homologado,2026-11-05,79bb0173c90cbc993481bf1e959154adf796a5de
+CAP-023,EDITOR_AVANCADO_LOCAL_PARCIAL,https://github.com/pablo-marchina/stone/pull/35;https://github.com/pablo-marchina/stone/pull/37;https://github.com/pablo-marchina/stone/pull/38;https://github.com/pablo-marchina/stone/pull/39;https://github.com/pablo-marchina/stone/pull/40,Studio E3-E8; 720p limitado e sem aprovacao editorial,2026-11-05,79bb0173c90cbc993481bf1e959154adf796a5de
