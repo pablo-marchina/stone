@@ -1,0 +1,14 @@
+decision_id,audit_execution_status,evidence_pr_urls,audit_note,as_of
+DEC-001,BASELINE_IMPLEMENTADO_BENCHMARK_PENDENTE,https://github.com/pablo-marchina/stone/pull/35,Monolito modular nao e benchmark comparativo,2026-11-05
+DEC-003,AUTH_LOCAL_BENCHMARK_PENDENTE,https://github.com/pablo-marchina/stone/pull/33;https://github.com/pablo-marchina/stone/pull/34,Autenticacao RBAC local nao e OIDC homologado,2026-11-05
+DEC-004,OUTBOX_LOCAL_BENCHMARK_PENDENTE,https://github.com/pablo-marchina/stone/pull/39;https://github.com/pablo-marchina/stone/pull/40,Jobs locais ainda nao homologados,2026-11-05
+DEC-005,GRANTS_META_TECNICOS_LIMITADOS,https://github.com/pablo-marchina/stone/pull/33;https://github.com/pablo-marchina/stone/pull/36,Grants de fontes e coleta de tres posts tecnicos,2026-11-05
+DEC-007,LAB_TEXTO_EXPERIMENTAL,https://github.com/pablo-marchina/stone/pull/24;https://github.com/pablo-marchina/stone/pull/25;https://github.com/pablo-marchina/stone/pull/26,Sem VLM audiovisual validado,2026-11-05
+DEC-008,B2_DETERMINISTICO_SEM_GRAFO,https://github.com/pablo-marchina/stone/pull/34,MCP local nao substitui LangGraph final,2026-11-05
+DEC-012,FAIL_CLOSED_IMPLEMENTADO,https://github.com/pablo-marchina/stone/pull/33;https://github.com/pablo-marchina/stone/pull/39;https://github.com/pablo-marchina/stone/pull/40,Efeitos externos desabilitados,2026-11-05
+DEC-013,CANVAS_INCREMENTAL_SEM_BENCHMARK,https://github.com/pablo-marchina/stone/pull/35;https://github.com/pablo-marchina/stone/pull/37;https://github.com/pablo-marchina/stone/pull/38,Nao houve escolha comparativa final,2026-11-05
+DEC-014,FFMPEG_INCREMENTAL_SEM_BENCHMARK,https://github.com/pablo-marchina/stone/pull/39;https://github.com/pablo-marchina/stone/pull/40,Worker real local nao fecha comparativo,2026-11-05
+DEC-015,ABERTA,https://github.com/pablo-marchina/stone/pull/35;https://github.com/pablo-marchina/stone/pull/40,Geração visual IA nao homologada,2026-11-05
+DEC-016,REGISTRADA_COM_CODIGO,https://github.com/pablo-marchina/stone/pull/23,Conteudo voltado a MPEs independe do porte do autor,2026-11-05
+DEC-017,LAB_EXPERIMENTAL,https://github.com/pablo-marchina/stone/pull/24;https://github.com/pablo-marchina/stone/pull/25;https://github.com/pablo-marchina/stone/pull/26,GLiNER local e abstenção; nao gold independente,2026-11-05
+DEC-018,CONFIRMADA_RESPONSAVEL_SEM_INSTRUMENTO_ANEXADO,https://github.com/pablo-marchina/stone/pull/32,Direitos gerais e dispensa revisao independente declarados; nao cumpre minimo original de 50,2026-11-05
