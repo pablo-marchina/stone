@@ -4,6 +4,7 @@ const $ = id => document.getElementById(id);
 const model = {
   token: null, principal: null, doc: null, selection: null, drag: null,
   preview: null, bitmaps: new Map(), pendingImages: new Map(),
+  pageId: null, dragPageId: null, undoStack: [], redoStack: [],
 };
 const canvas = $('canvas');
 const ctx = canvas.getContext('2d');
@@ -21,6 +22,14 @@ function controls() {
   $('file').disabled = !editing;
   $('rights').disabled = !editing;
   $('export').disabled = !logged || !model.doc;
+  const pages=model.doc?.pages || [], index=pages.findIndex(page=>page.id===model.pageId);
+  const carousel=editing && model.doc.platform_intent==='instagram_carousel';
+  $('duplicate-page').disabled = !carousel || pages.length>=10;
+  $('delete-page').disabled = !carousel || pages.length<2;
+  $('page-left').disabled = !carousel || index<=0;
+  $('page-right').disabled = !carousel || index<0 || index>=pages.length-1;
+  $('undo').disabled = !editing || !model.undoStack.length;
+  $('redo').disabled = !editing || !model.redoStack.length;
   $('layer-text').disabled = !editing || model.selection?.kind !== 'text';
   for (const id of ['geom-x','geom-y','geom-w','geom-h','save-geometry','bring-forward','send-backward'])
     $(id).disabled = !editing || !model.selection;
@@ -38,6 +47,7 @@ async function api(path, { method = 'GET', payload } = {}) {
 function reset() {
   model.token = null; model.principal = null; model.doc = null;
   model.selection = null; model.drag = null; model.preview = null;
+  model.pageId=null;model.dragPageId=null;model.undoStack=[];model.redoStack=[];
   for (const bitmap of model.bitmaps.values()) bitmap.close?.();
   model.bitmaps.clear(); model.pendingImages.clear();
   $('password').value = ''; $('selected').textContent = 'Nenhuma';
@@ -66,13 +76,91 @@ async function logout() {
   }
   status('Sessão encerrada.');
 }
-function showDocument(doc) {
+function showDocument(doc, {history=true, resetHistory=false}={}) {
+  const previous=model.doc;
+  if (resetHistory || !previous || previous.document_id!==doc.document_id) {
+    model.undoStack=[];model.redoStack=[];model.pageId=null;
+  } else if (history && previous.version!==doc.version) {
+    model.undoStack.push(previous.version);model.redoStack=[];
+  }
   model.doc = doc; model.selection = null; model.drag = null;
   model.preview = null;
+  if (!doc.pages.some(page=>page.id===model.pageId)) model.pageId=doc.pages[0].id;
   $('revision').textContent = doc.document_id + ' · versão ' + doc.version;
   $('selected').textContent = 'Clique em uma camada';
   $('layer-text').value = '';
-  controls(); draw();
+  renderPages();controls();draw();
+}
+function activePage() {return model.doc?.pages.find(page=>page.id===model.pageId) || null;}
+function selectPage(pageId) {
+  if (!model.doc?.pages.some(page=>page.id===pageId)) return;
+  model.pageId=pageId;model.selection=null;model.drag=null;model.preview=null;
+  $('selected').textContent='Clique em uma camada';$('layer-text').value='';
+  renderPages();controls();draw();
+}
+function renderPages() {
+  const host=$('pages');host.replaceChildren();
+  if (!model.doc) return;
+  model.doc.pages.forEach((page,index)=>{
+    const button=document.createElement('button');
+    button.type='button';button.textContent='Página '+(index+1);
+    button.className='page-chip'+(page.id===model.pageId?' is-active':'');
+    button.setAttribute('aria-current',page.id===model.pageId?'page':'false');
+    button.draggable=canWrite() && model.doc.platform_intent==='instagram_carousel';
+    button.addEventListener('click',()=>selectPage(page.id));
+    button.addEventListener('dragstart',event=>{
+      if (!button.draggable) {event.preventDefault();return;}
+      model.dragPageId=page.id;event.dataTransfer.effectAllowed='move';
+      event.dataTransfer.setData('text/plain',page.id);
+    });
+    button.addEventListener('dragover',event=>{
+      if (model.dragPageId && model.dragPageId!==page.id) event.preventDefault();
+    });
+    button.addEventListener('drop',event=>{
+      event.preventDefault();const dragged=model.dragPageId;model.dragPageId=null;
+      if (dragged && dragged!==page.id) void reorderPage(index,dragged);
+    });
+    button.addEventListener('dragend',()=>{model.dragPageId=null;});
+    host.appendChild(button);
+  });
+}
+function docPath() {return '/v1/studio/documents/'+encodeURIComponent(model.doc.document_id);}
+async function duplicatePage() {
+  if (!activePage())return;
+  const newId='page.'+crypto.randomUUID().replaceAll('-','').slice(0,16);
+  try {
+    const doc=await api(docPath()+'/pages/duplicate',{method:'POST',payload:{
+      expected_version:model.doc.version,page_id:model.pageId,new_page_id:newId}});
+    showDocument(doc);selectPage(newId);status('Página duplicada. Versão '+doc.version);
+  }catch(error){status('Não foi possível duplicar: '+error.message);}
+}
+async function deletePage() {
+  if (!activePage())return;
+  try {
+    const doc=await api(docPath()+'/pages/delete',{method:'POST',payload:{
+      expected_version:model.doc.version,page_id:model.pageId}});
+    showDocument(doc);status('Página excluída. Versão '+doc.version);
+  }catch(error){status('Não foi possível excluir: '+error.message);}
+}
+async function reorderPage(targetIndex,pageId=model.pageId) {
+  if (!model.doc || !pageId)return;
+  try {
+    const doc=await api(docPath()+'/pages/reorder',{method:'POST',payload:{
+      expected_version:model.doc.version,page_id:pageId,target_index:targetIndex}});
+    showDocument(doc);selectPage(pageId);status('Ordem das páginas salva. Versão '+doc.version);
+  }catch(error){status('Não foi possível reordenar: '+error.message);}
+}
+async function restoreRevision(direction) {
+  if (!model.doc)return;
+  const undo=direction==='undo', stack=undo?model.undoStack:model.redoStack;
+  if (!stack.length)return;
+  const target=stack[stack.length-1],previous=model.doc.version;
+  try {
+    const doc=await api(docPath()+'/versions/restore',{method:'POST',payload:{
+      expected_version:previous,restore_version:target}});
+    stack.pop();(undo?model.redoStack:model.undoStack).push(previous);
+    showDocument(doc,{history:false});status((undo?'Desfeito':'Refeito')+' na versão '+doc.version);
+  }catch(error){status('Histórico indisponível: '+error.message);}
 }
 async function create() {
   try {
@@ -80,19 +168,19 @@ async function create() {
       tenant_id:model.principal.tenant_id,
       objective:$('objective').value.trim(),headline:$('headline').value.trim(),
       body:$('body-text').value.trim(),cta:$('cta').value.trim(),
-      reference_content_ids:[]};
+      platform_intent:$('format').value,reference_content_ids:[]};
     const doc = await api('/v1/studio/documents', {method:'POST',
       payload:{document_id:$('document-id').value.trim(),spec}});
-    showDocument(doc); status('Rascunho criado e persistido. Versão 1.');
+    showDocument(doc,{resetHistory:true}); status('Rascunho criado e persistido. Versão 1.');
   } catch(error){status('Não foi possível criar: '+error.message);}
 }
 async function open() {
   try {
     const doc = await api('/v1/studio/documents/'+encodeURIComponent($('document-id').value.trim()));
-    showDocument(doc);status('Rascunho aberto do banco.');
+    showDocument(doc,{resetHistory:true});status('Rascunho aberto do banco.');
   } catch(error){status('Não foi possível abrir: '+error.message);}
 }
-function layerList() { return model.doc?.pages?.[0]?.layers || []; }
+function layerList() { return activePage()?.layers || []; }
 function selectLayer(layer) {
   model.selection = layer || null;
   $('selected').textContent = layer ? layer.id+' · '+layer.kind : 'Nenhuma';
@@ -193,7 +281,7 @@ canvas.addEventListener('pointerup', async event => {
   if (!d || (!d.dx&&!d.dy)) return;
   try {
     const doc=await api('/v1/studio/documents/'+encodeURIComponent(model.doc.document_id)+'/geometry',
-      {method:'POST',payload:{page_id:model.doc.pages[0].id,layer_id:drag.id,
+      {method:'POST',payload:{page_id:model.pageId,layer_id:drag.id,
         expected_version:model.doc.version,x:drag.layer.x+d.dx,y:drag.layer.y+d.dy}});
     showDocument(doc); status('Posição persistida na versão '+doc.version);
   } catch(error){status('Edição rejeitada: '+error.message);}
@@ -203,7 +291,7 @@ async function saveText() {
   if(model.selection?.kind!=='text') return;
   try {
     const doc=await api('/v1/studio/documents/'+encodeURIComponent(model.doc.document_id)+'/text-patches',
-      {method:'POST',payload:{page_id:model.doc.pages[0].id,layer_id:model.selection.id,
+      {method:'POST',payload:{page_id:model.pageId,layer_id:model.selection.id,
         expected_version:model.doc.version,text:$('layer-text').value}});
     showDocument(doc);status('Texto persistido na versão '+doc.version);
   } catch(error){status('Edição rejeitada: '+error.message);}
@@ -218,7 +306,7 @@ async function applyGeometry() {
   }
   try {
     const doc = await api('/v1/studio/documents/'+encodeURIComponent(model.doc.document_id)+'/geometry',
-      {method:'POST',payload:{expected_version:model.doc.version,page_id:model.doc.pages[0].id,
+      {method:'POST',payload:{expected_version:model.doc.version,page_id:model.pageId,
          layer_id:model.selection.id,...numbers}});
     showDocument(doc); status('Geometria salva. Versão '+doc.version);
   } catch (error) {status('Geometria rejeitada: '+error.message);}
@@ -227,7 +315,7 @@ async function reorder(direction) {
   if (!model.doc || !model.selection) return;
   try {
     const doc = await api('/v1/studio/documents/'+encodeURIComponent(model.doc.document_id)+'/order',
-      {method:'POST',payload:{expected_version:model.doc.version,page_id:model.doc.pages[0].id,
+      {method:'POST',payload:{expected_version:model.doc.version,page_id:model.pageId,
         layer_id:model.selection.id,direction}});
     showDocument(doc);status('Ordem das camadas salva. Versão '+doc.version);
   } catch(error) {status('Ordem não alterada: '+error.message);}
@@ -256,7 +344,7 @@ async function insertImage() {
     const initialX=Math.floor((model.doc.canvas.width-imageWidth)/2);
     const initialY=Math.max(0,model.doc.canvas.height-imageHeight-20);
     const doc=await api('/v1/studio/documents/'+encodeURIComponent(model.doc.document_id)+'/image-layers',
-      {method:'POST',payload:{page_id:model.doc.pages[0].id,
+      {method:'POST',payload:{page_id:model.pageId,
         layer_id:'image.'+crypto.randomUUID().replaceAll('-','').slice(0,14),
         asset_id:asset.asset_id,expected_version:model.doc.version,
         x:initialX,y:initialY,w:imageWidth,h:imageHeight}});
@@ -285,6 +373,17 @@ $('logout').addEventListener('click',logout);
 $('create').addEventListener('click',create);
 $('open').addEventListener('click',open);
 $('save-text').addEventListener('click',saveText);
+// Also persist text on blur (the server version check prevents silent overwrites).
+$('layer-text').addEventListener('change',()=>{
+  if (canWrite() && model.selection?.kind==='text' &&
+      $('layer-text').value!==model.selection.text) void saveText();
+});
+$('duplicate-page').addEventListener('click',duplicatePage);
+$('delete-page').addEventListener('click',deletePage);
+$('page-left').addEventListener('click',()=>reorderPage(model.doc.pages.findIndex(p=>p.id===model.pageId)-1));
+$('page-right').addEventListener('click',()=>reorderPage(model.doc.pages.findIndex(p=>p.id===model.pageId)+1));
+$('undo').addEventListener('click',()=>restoreRevision('undo'));
+$('redo').addEventListener('click',()=>restoreRevision('redo'));
 $('save-geometry').addEventListener('click',applyGeometry);
 $('bring-forward').addEventListener('click',()=>reorder('forward'));
 $('send-backward').addEventListener('click',()=>reorder('backward'));

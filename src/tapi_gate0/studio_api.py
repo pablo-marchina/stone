@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict
 from .identity import IdentityFailure, Principal
 from .studio_e1 import CreativeSpec, DesignDocument, StudioError, StudioStore, TextLayerPatch
 from .studio_canvas_c2 import (StudioCanvasStore, UploadPNG, AssetRecord, PlaceImage, MoveLayer, LayerOrder)
+from .studio_pages_e3 import StudioPagesService, DuplicatePage, DeletePage, ReorderPage, RestoreVersion
 
 
 class CreateDraft(BaseModel):
@@ -18,6 +19,7 @@ class CreateDraft(BaseModel):
 def router_for_studio(identity, store: StudioStore):
     router = APIRouter(prefix="/v1/studio", tags=["Editable creative drafts"])
     canvas_store = StudioCanvasStore(store.engine)
+    pages_service = StudioPagesService(store.engine)
 
     def principal(request: Request) -> Principal:
         value = request.headers.get("Authorization", "")
@@ -115,6 +117,46 @@ def router_for_studio(identity, store: StudioStore):
             raise IdentityFailure("FORBIDDEN", 403)
         try:
             return canvas_store.order(p.tenant_id, p.actor_id, document_id, payload)
+        except StudioError as exc:
+            as_http(exc)
+
+    @router.post("/documents/{document_id}/pages/duplicate", response_model=DesignDocument)
+    def duplicate_page(document_id: str, payload: DuplicatePage,
+                       p: Principal = Depends(principal)):
+        if p.role not in {"admin", "editor"}:
+            raise IdentityFailure("FORBIDDEN", 403)
+        try:
+            return pages_service.duplicate(p.tenant_id, p.actor_id, document_id, payload)
+        except StudioError as exc:
+            as_http(exc)
+
+    @router.post("/documents/{document_id}/pages/delete", response_model=DesignDocument)
+    def delete_page(document_id: str, payload: DeletePage,
+                    p: Principal = Depends(principal)):
+        if p.role not in {"admin", "editor"}:
+            raise IdentityFailure("FORBIDDEN", 403)
+        try:
+            return pages_service.delete(p.tenant_id, p.actor_id, document_id, payload)
+        except StudioError as exc:
+            as_http(exc)
+
+    @router.post("/documents/{document_id}/pages/reorder", response_model=DesignDocument)
+    def reorder_page(document_id: str, payload: ReorderPage,
+                     p: Principal = Depends(principal)):
+        if p.role not in {"admin", "editor"}:
+            raise IdentityFailure("FORBIDDEN", 403)
+        try:
+            return pages_service.reorder(p.tenant_id, p.actor_id, document_id, payload)
+        except StudioError as exc:
+            as_http(exc)
+
+    @router.post("/documents/{document_id}/versions/restore", response_model=DesignDocument)
+    def restore_version(document_id: str, payload: RestoreVersion,
+                        p: Principal = Depends(principal)):
+        if p.role not in {"admin", "editor"}:
+            raise IdentityFailure("FORBIDDEN", 403)
+        try:
+            return pages_service.restore(p.tenant_id, p.actor_id, document_id, payload)
         except StudioError as exc:
             as_http(exc)
 
