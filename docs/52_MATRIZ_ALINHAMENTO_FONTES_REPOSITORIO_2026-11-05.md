@@ -2,7 +2,7 @@
 
 **Auditoria de referência:** 05/11/2026. **Branch auditada:** `main`, commit `79bb0173c90cbc993481bf1e959154adf796a5de`.  
 **Objetivo:** identificar **o que a fonte exige/projeta**, **o que o repositório comprova** e **o que permanece pendente**, evitando que descrições antigas continuem sendo lidas como status atual.  
-**Registro de decisões relacionado:** [51_REGISTRO_DECISOES_POS_V52_2026-11-05.md](51_REGISTRO_DECISOES_POS_V52_2026-11-05.md).
+**Registro de decisões relacionado:** [51_REGISTRO_DECISOES_POS_V52_2026-11-05.md](51_REGISTRO_DECISOES_POS_V52_2026-11-05.md). A DEC-018 está formalizada no âmbito de decisão do responsável em [53](53_DEC018_CONFIRMACAO_ALCANCE_E_CRITERIO_REVISAO_2026-11-05.md), e as matrizes sincronizadas são explicadas em [54](54_SINCRONIZACAO_MATRIZES_V52_DEC018_2026-11-05.md).
 
 ## 1. Inventário e precedência das fontes
 
@@ -51,7 +51,7 @@ ab9651300d0f289df51f21a2158aa08bfebbf20db223baa23dde40ba09a91b60  TAPI_Stone_Arq
 | **001** Coleta/base | Instagram principal; YouTube complementar quando permitido; 2–5 mil posts/≥30 perfis como referência; idade ≥14 dias; origem, direitos, qualidade | `connectors.py`, `mpe_sources.py`, `corpus.py`, `scientific_corpus.py`, `docs/45_...`, PRs #23/#33/#36 | IMPLEMENTADO_PARCIAL + EXECUCAO_REAL_REPORTADA | Somente **3 posts técnicos reais** relatados em 05/11, zero posts demonstrados como cientificamente admitidos; volumetria/diversidade não atendida |
 | **002** Ranking | `ER=(likes+comments)/followers`, top 10% por base declarada; recortes, qualidade do denominador | `agent_evidence_e1.py`, contratos e store SQL; `docs/43_...` | IMPLEMENTADO_PARCIAL | Sem ranking científico reproduzível sobre corpus elegível e observável de escala adequada |
 | **003** Rubrica | 20 campos fixos, evidência multimodal/temporal e JSON tipado | `domain.py`, `classification.py`, `system_one_e1.py`, `system_one_e12.py`; PRs #24–26 | IMPLEMENTADO_PARCIAL / TESTADO_SINTETICO | Sem classificação audiovisual integral comprovada em posts reais autorizados; GLiNER é laboratório textual |
-| **004** Revisão | Validação manual mínima ≥50 publicações segundo case, concordância por campo | `scientific_corpus.py`, protocolos e scripts do E1.2 | IMPLEMENTADO_PARCIAL | Nenhuma amostra ≥50 efetivamente validada documentada; eventual dispensa está em PR #32 aberto, não altera case automaticamente |
+| **004** Revisão | TAPI original: ≥50; DEC-018: dispensa de revisores humanos e validação científica independente comunicada pelo responsável | `scientific_corpus.py`, docs/53 e PR #32 | ALTERACAO_DE_ACEITE_DECLARADA_NAO_CUMPRIDA_LITERALMENTE | As 50 revisões não ocorreram; não produzir pseudo-gold nem apresentar dispensa como cumprimento do PDF original |
 | **005** Agente | Modos `analisar/recomendar/gerar_criativo`, ferramentas, evidência e justificativa | `agent_evidence_e1.py`, `agent_evidence_b2.py`, `agent_api_e1.py`; PR #34 | IMPLEMENTADO_PARCIAL | Sem LangGraph final, geração original fundamentada completa, testes E2E dos três modos |
 | **006** Integração | Função Python tipada + MCP; retorno com findings/references/creatives/confidence/explanation | `agent_mcp_b2.py` (MCP stdio, três ferramentas), contratos B2 | IMPLEMENTADO_LOCAL / PARCIAL | Ferramentas e protocolo não representam ainda paridade com contrato final de saída nem servidor MCP/cliente homologados |
 | **007** Playbook/criativos | ≥5 criativos com gancho, roteiro, legenda, CTA, fontes e contexto Stone | `creative-spec.v1` via B2, Studio C2–E8, edição/exportação | IMPLEMENTADO_PARCIAL | Faltam cinco criativos originais sustentados por pesquisa real, playbook final e avaliação editorial |
@@ -112,7 +112,7 @@ ab9651300d0f289df51f21a2158aa08bfebbf20db223baa23dde40ba09a91b60  TAPI_Stone_Arq
 - Qualquer PR de mudança de escopo, fonte, política, métrica, contrato ou aceitação deve atualizar **51 (decisões)** e **52 (matriz)**, associando SHA, diff e prova de teste; um PR puramente técnico atualiza os componentes atingidos.
 - Estados **por capacidade** precisam indicar fonte, condição, commit, teste e gate; não converter a matriz histórica `NAO_IMPLEMENTADO` para `CONCLUIDO` em lote.
 - Em divergência, abrir `DEC-XXX` ou ADR correspondente, sem silenciar a divergência. Não marcar direitos/aceite como resolvidos com base apenas em uma declaração.
-- Uma sincronização futura das 13 matrizes CSV v5.2 com Git requer conferência de checksums, validador, integridade referencial e revisão própria. **Esta documentação não afirma que essa sincronização ocorreu.**
+- A sincronização foi registrada como **deltas CSV versionados em Git + gerador determinístico** em `planning/v5_2/audit_2026-11-05/` e `scripts/sync_plano_v52_audit.py`; os **13 CSVs completos** estão no pacote gerado nesta conversa, mas **não foram versionados como arquivos completos nesta branch**. Conferir [docs/54](54_SINCRONIZACAO_MATRIZES_V52_DEC018_2026-11-05.md).
 - O produto segue **uma entrega única** e não uma sequência de entregáveis independentes; as fases são gates internos.
 
 ## 8. Checklist verificável no próximo corte
@@ -121,8 +121,8 @@ ab9651300d0f289df51f21a2158aa08bfebbf20db223baa23dde40ba09a91b60  TAPI_Stone_Arq
 - [x] Piloto A3 descrito com 3 publicações técnicas e ressalva explícita de não admissão científica.
 - [x] Separação do material Stone (C2–C4) em relação ao corpus externo (C1) documentada.
 - [x] PR #32 e #27–31 tratados como abertos, sem antecipar efeito na `main`.
-- [ ] Harmonizar formalmente o aceite ≥50 com a declaração do PR #32.
-- [ ] Sincronizar matrizes CSV com evidências e reconstruir o status único de CAP/IMP/DEC.
+- [x] DEC-018 documentada como dispensa de revisão humana **confirmada pelo responsável** (não requisito cumprido); confirmação documental institucional independente não disponível neste corte.
+- [x] Criados deltas CSV para CAP, IMP, DEC e gates, além de gerador verificador para reconstruir as quatro matrizes a partir do ZIP original.
 - [ ] Comprovar universo científico representativo, 20 atributos observados/avaliados, agente de três modos e cinco criativos.
 - [ ] Rodar suíte e CI com HEAD exato, integrar testes E8 ausentes, verificar backup/migrações do banco real, E2E, direitos e release.
 
