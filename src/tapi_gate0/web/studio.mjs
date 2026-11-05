@@ -90,6 +90,7 @@ async function api(path, { method = 'GET', payload } = {}) {
 }
 function reset() {
   recoveryStore(null);
+  timelineEditor?.reset();
   model.token = null; model.principal = null; model.doc = null;
   model.selection = null; model.drag = null; model.preview = null;
   model.pageId=null;model.dragPageId=null;model.undoStack=[];model.redoStack=[];
@@ -511,10 +512,12 @@ async function createStoryboard() {
     const sb=await api('/v1/studio/storyboards',{method:'POST',payload:{
       storyboard_id:identifier,source_document_id:model.doc.document_id,
       platform_intent:$('storyboard-format').value}});
+    timelineEditor?.setStoryboard(sb);
     $('storyboard-preview').textContent='Storyboard '+sb.storyboard_id+' · v'+sb.version+' · '+sb.scenes.length+' cena(s) · '+sb.clips.reduce((sum,c)=>sum+c.duration_ms,0)+' ms';
-    status('Storyboard textual versionado salvo. Render de vídeo não disponível.');
+    status('Storyboard versionado criado; abra a timeline e vincule mídias autorizadas.');
   }catch(error){status('Storyboard rejeitado: '+error.message);}
 }
+const timelineEditor = window.StoneTimelineE8?.initTimelineEditor({api, canWrite, getDocument:()=>model.doc, getToken:()=>model.token, status});
 $('login').addEventListener('click',login);
 $('logout').addEventListener('click',logout);
 $('create').addEventListener('click',create);

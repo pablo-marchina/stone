@@ -62,7 +62,16 @@ class TimelineClip(Model):
     scene_id: Id
     start_ms: int = Field(ge=0, le=180_000)
     duration_ms: int = Field(ge=500, le=30_000)
-    transition: Literal["cut"] = "cut"
+    transition: Literal["cut", "crossfade"] = "cut"
+    transition_ms: int = Field(default=0, ge=0, le=500)
+
+    @model_validator(mode="after")
+    def valid_transition(self):
+        if self.transition == "cut" and self.transition_ms:
+            raise ValueError("STORYBOARD_CUT_TRANSITION_MUST_BE_ZERO")
+        if self.transition == "crossfade" and not (100 <= self.transition_ms <= 500):
+            raise ValueError("STORYBOARD_CROSSFADE_DURATION_REQUIRED")
+        return self
 
 
 class StoryboardDocument(Model):
@@ -92,7 +101,10 @@ class StoryboardDocument(Model):
             raise ValueError("STORYBOARD_TIMELINE_MUST_COVER_SCENES")
         durations={s.scene_id:s.duration_ms for s in self.scenes}
         elapsed=0
-        for clip in self.clips:
+        for index, clip in enumerate(self.clips):
+            if clip.transition == "crossfade" and (index == len(self.clips)-1 or
+                    clip.transition_ms > min(clip.duration_ms, self.clips[index+1].duration_ms)//2):
+                raise ValueError("STORYBOARD_INVALID_CROSSFADE_BOUNDARY")
             if clip.start_ms!=elapsed or clip.duration_ms!=durations[clip.scene_id]:
                 raise ValueError("STORYBOARD_TIMELINE_GAP_OVERLAP_OR_DURATION")
             elapsed+=clip.duration_ms

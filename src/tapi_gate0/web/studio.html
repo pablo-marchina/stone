@@ -6,6 +6,7 @@
   <title>TAPI Stone — Creative Studio C2</title>
   <link rel="stylesheet" href="./studio.css">
   <script defer src="./studio_export_e4.js"></script>
+  <script defer src="./studio_timeline_e8.js"></script>
   <script type="module" src="./studio.mjs"></script>
 </head>
 <body>
@@ -72,11 +73,69 @@
       <label class="inline"><input id="confirm-proposal" type="checkbox" disabled> Confirmo a alteração nesta versão</label>
       <button id="apply-proposal" disabled>Aplicar patch confirmado</button>
       <h2>6. Storyboard / timeline</h2>
-      <p class="hint">IMP-187/188: cenas e keyframes textuais versionados; sem render de vídeo ou áudio.</p>
+      <p class="hint">IMP-187/188: storyboard versionado. A timeline E8 permite vincular mídias locais com direitos específicos para rascunhos.</p>
       <label>Destino <select id="storyboard-format"><option value="instagram_reel">Instagram Reel</option><option value="youtube_short">YouTube Short</option></select></label>
       <button id="storyboard-create" disabled>Gerar storyboard textual do documento</button>
       <pre id="storyboard-preview" class="version-diff" aria-live="polite"></pre>
-      <h2>7. Exportação</h2>
+      <h2>7. Timeline visual e render E8</h2>
+      <p class="hint">Storyboard versionado, faixas e transições. Arraste as cenas ou use Alt + setas.
+      Renderização somente em worker local acionado pelo operador; nenhuma publicação automática.</p>
+      <label>Storyboard ID <input id="timeline-storyboard-id" placeholder="story.0001"></label>
+      <button id="timeline-open">Abrir timeline</button>
+      <p id="timeline-revision" role="status">Nenhum storyboard aberto</p>
+      <div id="timeline-visual" class="timeline-visual" role="region" aria-label="Timeline de vídeo e overlays"></div>
+      <fieldset class="timeline-fields"><legend>Editar cena selecionada</legend>
+        <p id="timeline-scene-id">—</p>
+        <label>Duração (ms) <input id="timeline-duration" type="number" min="500" max="30000" value="1200"></label>
+        <label>Narração <textarea id="timeline-narration" maxlength="1000"></textarea></label>
+        <label>Sobreposição de texto <input id="timeline-overlay" maxlength="500"></label>
+        <div class="geometry" role="group" aria-label="Keyframes do texto: início e fim (coordenadas 0–1000)">
+          <label>X inicial <input id="timeline-kf-x0" type="number" min="0" max="1000" value="100"></label>
+          <label>Y inicial <input id="timeline-kf-y0" type="number" min="0" max="1000" value="100"></label>
+          <label>Opacidade inicial (%) <input id="timeline-kf-o0" type="number" min="0" max="100" value="100"></label>
+          <label>X final <input id="timeline-kf-x1" type="number" min="0" max="1000" value="350"></label>
+          <label>Y final <input id="timeline-kf-y1" type="number" min="0" max="1000" value="100"></label>
+          <label>Opacidade final (%) <input id="timeline-kf-o1" type="number" min="0" max="100" value="100"></label>
+        </div>
+        <label>Transição <select id="timeline-transition"><option value="cut">Corte</option><option value="crossfade">Dissolvência</option></select></label>
+        <label>Dissolvência (ms) <input id="timeline-crossfade" type="number" min="100" max="500" value="200"></label>
+        <button id="timeline-save" disabled>Salvar cena / timeline</button>
+      </fieldset>
+      <fieldset class="timeline-fields"><legend>Fontes locais e direitos</legend>
+        <label>ID MP4 da cena <input id="timeline-video-id" placeholder="mp4.hash"></label>
+        <label>ID PNG da cena <input id="timeline-image-id" placeholder="asset.hash"></label>
+        <button id="timeline-bind-source" disabled>Vincular ativo à cena</button>
+        <p id="timeline-scene-source" class="hint"></p>
+        <label>Início do trecho MP4 (ms) <input id="timeline-trim" type="number" min="0" max="30000" value="0"></label>
+        <label class="inline"><input id="timeline-source-audio" type="checkbox"> Usar áudio embutido autorizado</label>
+        <label>Ganho do áudio embutido (%) <input id="timeline-source-gain" type="number" min="0" max="100" value="100"></label>
+        <label>Arquivo MP4 local (máx. 7 MiB) <input id="timeline-video-file" type="file" accept="video/mp4"></label>
+        <label>Referência dos direitos do vídeo/imagem/áudio <input id="timeline-rights-ref" minlength="16" maxlength="512"></label>
+        <label>Validade das permissões (UTC) <input id="timeline-expiry" type="date"></label>
+        <label class="inline"><input id="timeline-video-rights" type="checkbox"> Atesto os direitos do ativo para rascunho local</label>
+        <label class="inline"><input id="timeline-embedded-rights" type="checkbox"> Atesto separadamente os direitos do áudio embutido</label>
+        <label>Prova específica do áudio embutido <input id="timeline-audio-rights-ref" minlength="16" maxlength="512"></label>
+        <div class="buttons">
+          <button id="timeline-upload-video" disabled>Enviar MP4 autorizado</button>
+          <button id="timeline-revoke-source-audio" disabled>Revogar só o áudio</button>
+          <button id="timeline-attest-image" disabled>Atestar PNG existente</button>
+        </div>
+        <label>Arquivo WAV PCM local <input id="timeline-wav-file" type="file" accept="audio/wav"></label>
+        <button id="timeline-upload-wav" disabled>Enviar WAV autorizado</button>
+        <label>ID do WAV adicional <input id="timeline-wav-id"></label>
+        <label>Início da faixa WAV (ms) <input id="timeline-wav-start" type="number" min="0" max="15000" value="0"></label>
+        <label>Ganho da faixa WAV (%) <input id="timeline-wav-gain" type="number" min="0" max="100" value="100"></label>
+        <button id="timeline-audio-add" disabled>Adicionar faixa WAV</button>
+      </fieldset>
+      <fieldset class="timeline-fields"><legend>Renderização de rascunho</legend>
+        <label>Qualidade <select id="timeline-quality"><option value="preview_540p">540×960 · 12 FPS (padrão)</option><option value="quality_720p">720×1280 · 24 FPS (opt-in, até 6s)</option></select></label>
+        <button id="timeline-queue" disabled>Enfileirar render local</button>
+        <label>ID do job <input id="timeline-job-id"></label>
+        <button id="timeline-refresh" disabled>Consultar status</button>
+        <output id="timeline-job-status" aria-live="polite">Nenhum job criado</output>
+        <button id="timeline-download" disabled>Salvar MP4 rascunho</button>
+      </fieldset>
+      <h2>8. Exportação</h2>
       <label>Formato de exportação <select id="export-format"><option value="png">PNG</option><option value="jpeg">JPEG</option><option value="svg">SVG seguro</option></select></label>
       <button id="export" disabled>Exportar página selecionada</button>
       <button id="export-zip" disabled>Exportar ZIP do carrossel</button>
