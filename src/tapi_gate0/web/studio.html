@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TAPI Stone — Creative Studio C2</title>
   <link rel="stylesheet" href="./studio.css">
+  <script defer src="./studio_export_e4.js"></script>
   <script type="module" src="./studio.mjs"></script>
 </head>
 <body>
@@ -37,6 +38,12 @@
       </div>
       <div class="buttons"><button id="undo" disabled>Desfazer</button><button id="redo" disabled>Refazer</button></div>
       <p class="hint">Carrossel com até 10 páginas. Arraste as abas para reordenar. Cada edição e restauração cria uma nova versão imutável.</p>
+      <div class="geometry" role="group" aria-label="Comparar revisões">
+        <label>De versão <input id="diff-from" type="number" min="1" value="1"></label>
+        <label>Para versão <input id="diff-to" type="number" min="1" value="1"></label>
+      </div>
+      <button id="version-diff">Comparar versões</button>
+      <pre id="diff-result" class="version-diff" aria-live="polite"></pre>
       <h2>4. Camadas</h2>
       <label>Selecionada <output id="selected">Nenhuma</output></label>
       <label>Texto <textarea id="layer-text" disabled></textarea></label>
@@ -55,9 +62,24 @@
       <label>Ativo PNG (máx. 512 KiB) <input id="file" type="file" accept="image/png" disabled></label>
       <label class="inline"><input id="rights" type="checkbox" disabled> Confirmo direito de uso deste ativo</label>
       <button id="insert-image" disabled>Inserir imagem</button>
-      <h2>5. Exportação</h2>
-      <button id="export" disabled>Exportar PNG da página selecionada</button>
-      <p class="hint">Arraste camadas no canvas. Não existe publicação externa, vídeo ou previsão de engajamento neste incremento. O PNG é gerado pelo navegador; o documento versionado permanece no banco.</p>
+      <h2>5. Propostas estruturadas</h2>
+      <p class="hint">IMP-185: prévia validada e confirmação do operador. Nenhum modelo de IA é executado neste incremento.</p>
+      <label>Texto sugerido para a camada selecionada <textarea id="proposal-text" maxlength="2000"></textarea></label>
+      <button id="preview-proposal" disabled>Pré-visualizar proposta</button>
+      <pre id="proposal-preview" class="version-diff" aria-live="polite"></pre>
+      <label class="inline"><input id="confirm-proposal" type="checkbox" disabled> Confirmo a alteração nesta versão</label>
+      <button id="apply-proposal" disabled>Aplicar patch confirmado</button>
+      <h2>6. Storyboard / timeline</h2>
+      <p class="hint">IMP-187/188: cenas e keyframes textuais versionados; sem render de vídeo ou áudio.</p>
+      <label>Destino <select id="storyboard-format"><option value="instagram_reel">Instagram Reel</option><option value="youtube_short">YouTube Short</option></select></label>
+      <button id="storyboard-create" disabled>Gerar storyboard textual do documento</button>
+      <pre id="storyboard-preview" class="version-diff" aria-live="polite"></pre>
+      <h2>7. Exportação</h2>
+      <label>Formato de exportação <select id="export-format"><option value="png">PNG</option><option value="jpeg">JPEG</option><option value="svg">SVG seguro</option></select></label>
+      <button id="export" disabled>Exportar página selecionada</button>
+      <button id="export-zip" disabled>Exportar ZIP do carrossel</button>
+      <p id="export-progress" role="status" aria-live="polite"></p>
+      <p class="hint">Arraste camadas no canvas. Não existe publicação externa, vídeo ou previsão de engajamento neste incremento. Os arquivos são prévias locais marcadas RASCUNHO; exigem aprovação editorial e direitos antes da publicação. O JSON versionado permanece canônico.</p>
       <p id="status" role="status" aria-live="polite">Entre para começar.</p>
     </aside>
     <section class="preview">
