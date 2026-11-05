@@ -1,5 +1,8 @@
 # Gate 0 — Mapa e status
 
+> **Este documento é um snapshot histórico do Gate 0 anterior ao Plano v5.2.** Os números **22 CAP / 12 DEC** descrevem o planejamento inicial. O pacote v5.2 contém **23 CAP / 15 DEC / 204 IMP**, e o repositório avançou até o PR #40. Consulte o [registro de decisões](51_REGISTRO_DECISOES_POS_V52_2026-11-05.md) e a [matriz atual](52_MATRIZ_ALINHAMENTO_FONTES_REPOSITORIO_2026-11-05.md). O histórico abaixo é preservado para auditoria.
+
+
 ## Objetivo único
 
 Preparar a implementação **de uma plataforma única** de inteligência e operação de conteúdo TAPI Stone. Cobertura de planejamento: 22 capacidades (7 formais, 7 opcionais, 5 ampliações externas e 3 transversais), 18 critérios da metodologia, 12 decisões de tecnologia. Não transformar isso em entregas separadas; a liberação continua sendo única e integral, subordinada a gates globais.
