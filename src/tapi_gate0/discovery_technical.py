@@ -40,7 +40,7 @@ class TechnicalDiscoveryRequest(BaseModel):
     run_key: str = Field(min_length=8, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")
     page_limit: int = Field(default=10, ge=1, le=10)
     max_pages: int = Field(default=4, ge=1, le=4)
-    persist_limit: int = Field(default=3, ge=1, le=3)
+    persist_limit: int = Field(default=3, ge=1, le=40)
     min_age_days: Literal[14] = 14
 
     @model_validator(mode="after")
