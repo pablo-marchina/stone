@@ -67,7 +67,7 @@ def db(tmp_path, grants=2):
     return engine, store
 
 
-def fake_http(*, likes_offset=0, items=2):
+def fake_http(*, likes_offset=0, items=2, same_ids_across_sources=False):
     calls = []
     def callback(req):
         calls.append(req)
@@ -81,7 +81,7 @@ def fake_http(*, likes_offset=0, items=2):
         index = SOURCES.index(found)
         source_id = found[1]
         data = [{
-            "id": str(18000000000000000+index*1000+j),
+            "id": str(18000000000000000+(0 if same_ids_across_sources else index*1000)+j),
             "media_type": "CAROUSEL_ALBUM",
             "media_product_type": "FEED",
             "permalink": f"https://www.instagram.com/p/Fixture{index}a{j}/",
@@ -275,4 +275,20 @@ def test_empty_provider_data_does_not_create_synthetic_observations(tmp_path):
     assert result["sources"][0]["audit_all_traces_valid"]
     assert result["coverage"]["unique_technical_posts_after"]==0
     assert len(calls)==1
+    client.close();engine.dispose()
+
+
+def test_cross_source_media_id_collision_stops_without_double_count(tmp_path):
+    engine, store = db(tmp_path)
+    transport, calls, client = fake_http(same_ids_across_sources=True)
+    result = TechnicalDiscoveryBatch(store).execute(TENANT, manifest(), batch_limits(), VIEWER,
+        batch_key="bdbatch-cross-source", token=TOKEN, http=transport)
+    assert len(calls) == 2
+    assert result["status"] == "BATCH_STOPPED_ON_SOURCE_FAILURE"
+    assert result["failure_code"] == "BD_CROSS_SOURCE_MEDIA_ID_CONFLICT"
+    assert result["counts"]["new_records"] == 2
+    assert result["coverage"]["unique_technical_posts_after"] == 2
+    with engine.connect() as c:
+        assert c.execute(select(func.count()).select_from(content_items)).scalar_one() == 2
+        assert c.execute(select(func.count()).select_from(ingestion_records)).scalar_one() == 2
     client.close();engine.dispose()
