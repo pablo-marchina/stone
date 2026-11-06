@@ -1,0 +1,40 @@
+{
+  "audit_date": "2026-11-05",
+  "source_plan_zip": "TAPI_Stone_Plano_Unico_Implementacao_v5_2_2026-10-30.zip",
+  "source_zip_sha256": "0dbb51bf18a75734fcb2121373590bfc1ba3ae5cd729aff9a4dcb537491aa04d",
+  "audited_code_commit": "79bb0173c90cbc993481bf1e959154adf796a5de",
+  "capabilities": 23,
+  "tasks": 204,
+  "decisions_original": 15,
+  "decisions_updated": 18,
+  "added_decision_ids": [
+    "DEC-016",
+    "DEC-017",
+    "DEC-018"
+  ],
+  "gates": 7,
+  "dependencies": 543,
+  "iso_relations_unchanged": 207,
+  "criterion_capability_relations_unchanged": 414,
+  "incremental_tasks_with_evidence": 67,
+  "source_dependecies_unchanged": true,
+  "github_synced_files": {
+    "BACKLOG_UNICO_IMPORTAVEL.csv": "9f07287f00358fc13f4c8b4ee4efcb70a3bafbae",
+    "MATRIZ_CAPACIDADES.csv": "0e489b45deebff31607156f41cf6c5832a976b8f",
+    "MATRIZ_DECISOES.csv": "33568625c139c13d2a1522e5d276a7cd26fc1df3",
+    "MATRIZ_GATE_GLOBAL.csv": "2fb0a7c8a218693f0469d93359f1d43f0d7b6409",
+    "DEPENDENCIAS.csv": "c88a09ee6b5be44fd5c15c0a29ed1602bc6fb60e"
+  },
+  "verification": "Uploaded CSV contents compared exactly to exported audited CSV content; four updated matrices + original dependencies",
+  "decision_018": {
+    "authority": "confirmed by responsible stakeholder communication of 2026-11-04",
+    "institutional_document_attached": false,
+    "independent_human_review_available": false,
+    "independent_scientific_validation_available": false,
+    "original_tapi_minimum_50_reviews_fulfilled": false,
+    "disposition": "DECLARED_WAIVER_WITH_DOCUMENTED_DEVIATION",
+    "global_gates_released": false
+  },
+  "no_product_code_modified": true,
+  "no_production_approval_claimed": true
+}

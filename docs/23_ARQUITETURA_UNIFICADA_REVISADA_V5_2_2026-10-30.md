@@ -1,5 +1,8 @@
 # TAPI Stone × Inteli Academy — Arquitetura Unificada Revisada v5.2
 
+> **Adendo de execução (05/11/2026):** esta arquitetura é a especificação histórica **de 30/10**, não um relatório de execução atualizado. O fluxo e seus invariantes seguem como alvo; PRs #23–#40 implementaram partes relevantes (DEC-016, coleta Meta A3, agente B2/MCP e Studio E3–E8). As afirmações abaixo de "editor pendente" ou "nenhuma coleta real" refletem a data do documento. Para decisões posteriores e status por capacidade ver [51](51_REGISTRO_DECISOES_POS_V52_2026-11-05.md) e [52](52_MATRIZ_ALINHAMENTO_FONTES_REPOSITORIO_2026-11-05.md). Não há homologação integral ou ciência validada.
+
+
 **Revisão arquitetural e registro de alterações (v5.1 → v5.2)**  
 **Data de consolidação documental:** 30/10/2026  
 **Status:** **REVISÃO DOCUMENTAL PROPOSTA, REGISTRADA — não homologada como baseline de execução nem implementada integralmente.**  

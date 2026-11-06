@@ -1,6 +1,9 @@
 # TAPI Stone — Plataforma unificada (implementação incremental)
 
-**Status:** domínio, autenticação, UI autenticada, eventos e conectores de **metadados oficiais** implementados e testados localmente; ainda não é a plataforma completa. **NÃO HOMOLOGADO para produção.** Nenhuma credencial ou coleta externa real foi utilizada.
+> **Situação atualizada em 05/11/2026:** ver [decisões pós-v5.2](docs/51_REGISTRO_DECISOES_POS_V52_2026-11-05.md), [matriz de alinhamento](docs/52_MATRIZ_ALINHAMENTO_FONTES_REPOSITORIO_2026-11-05.md), [DEC-018](docs/53_DEC018_CONFIRMACAO_ALCANCE_E_CRITERIO_REVISAO_2026-11-05.md) e [matrizes sincronizadas](docs/54_SINCRONIZACAO_MATRIZES_V52_DEC018_2026-11-05.md). O piloto oficial Meta A3 registrou **3 posts técnicos reais** e snapshots, mas **zero admissões científicas demonstradas**; o Creative Studio E3–E8 foi integrado até o [PR #40](https://github.com/pablo-marchina/stone/pull/40). Não há homologação de produção, corpus-alvo validado, rubrica multimodal completa ou playbook institucional concluído. Abaixo há seções **históricas de implementação incremental**, que não devem ser interpretadas isoladamente como o estado mais recente.
+
+
+**Status:** domínio, autenticação, UI autenticada, eventos e conectores de **metadados oficiais** implementados e testados localmente; ainda não é a plataforma completa. **NÃO HOMOLOGADO para produção.** Uma coleta oficial real limitada foi relatada no piloto A3 em 05/11/2026; ver ressalvas no início deste README.
 
 Este pacote materializa as decisões do responsável pelo projeto: **repositório privado** `pablo-marchina/stone` (existente e acessível), **comparar infraestrutura** (decisão aberta), **custo financeiro total R$ 0 (bloqueio obrigatório)**, **aprovação geral de dados e operações declarada pelo solicitante, com grants por conta ainda não registrados e acessos técnicos ainda não validados**, **escopo ampliado aprovado pelo solicitante; autoridade institucional não comprovada**. Segue a Arquitetura Unificada v5.1 e o Plano Único, sem alterar o objetivo de **uma entrega final consolidada**.
 
@@ -128,7 +131,7 @@ Validação local: `PYTHONPATH=src python -m pytest -q` e `node --test tests/fro
 A camada segura agora registra grants por conta, valida identidade técnica da fonte via APIs
 Meta/YouTube, normaliza metadados, aplica classificação parcial evidenciada e persiste
 registros/eventos transacionais (migração Alembic 0002). **Desligada por padrão**:
-nenhuma credencial foi configurada e nenhuma coleta externa real ocorreu.
+este trecho registra a fase anterior ao piloto A3 de 05/11/2026; consulte a atualização no início do README.
 O adaptador opcional de quadros/OCR usa somente mídia local autorizada; áudio e
 inferência visual completa permanecem pendentes de validação.
 Detalhes, flags, limites e ressalvas de direitos: [aquisição oficial](docs/21_AQUISICAO_OFICIAL_MULTIMODAL.md).
