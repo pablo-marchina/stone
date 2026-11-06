@@ -144,7 +144,7 @@ def main(archive, outdir):
         assert all(d in decs for d in r["decision_ids"].split(";") if d)
     for r in audited["MATRIZ_DECISOES.csv"]:
         assert all(t in taskids for t in r["linked_tasks"].split(";") if t)
-    # Fail if rebuild differs from the exact audited CSVs committed to Git.
+    # Fail if the rebuild diverges from the exact audited CSVs committed to Git.
     for changed_name in AUDIT:
         assert result[changed_name] == (ROOT / "synced" / changed_name).read_bytes(), ("REBUILD_DIFFERS_FROM_GIT", changed_name)
     assert parse(result["DEPENDENCIAS.csv"])[0] == parse((ROOT / "synced" / "DEPENDENCIAS.csv").read_bytes())[0]
