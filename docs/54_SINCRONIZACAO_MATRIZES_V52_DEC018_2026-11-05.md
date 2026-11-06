@@ -54,5 +54,15 @@ Assim, CAP-004 e IMP-062 apresentam a dispensa DEC-018 de forma visível, com `G
 - [x] Status de CAP, IMP, DEC e gates relacionados a PRs e evidências.
 - [x] Dependências e matrizes de referência preservadas e verificadas no pacote local.
 - [x] Quatro matrizes CSV completas, `DEPENDENCIAS.csv`, manifesto de blobs, gerador e deltas de evidência versionados no Git.
-- [ ] Rodar o gerador no checkout do PR com o ZIP original; as matrizes completas já foram geradas localmente e seus conteúdos conferidos após o envio ao Git.
+- [x] Rodar o gerador em worktree isolado no commit documental, com o ZIP v5.2 original de SHA-256 verificado; comparação **byte a byte** dos quatro CSVs reconstruídos com os quatro arquivos versionados e com o ZIP anteriormente entregue.
 - [ ] Aceite da entrega única permanece condicionado aos gates restantes.
+
+## Revalidação de reprodutibilidade — 06/11/2026
+
+Foi utilizado o checkout Git local incluído em `stone(2).zip`, com `main@79bb0173c90cbc993481bf1e959154adf796a5de` e branch `docs/alinhamento-fontes-decisoes-20261105` (PR #41). Em worktree isolado, o gerador foi executado com o pacote original `TAPI_Stone_Plano_Unico_Implementacao_v5_2_2026-10-30.zip` cujo SHA-256 corresponde ao esperado.
+
+**Resultado:** sucesso; 23 CAP, 204 IMP, 18 DEC, 7 gates, 543 vínculos de dependência preservados, grafo sem ciclos, 207 relações ISO e 414 relações critério-capacidade. Os **quatro CSVs reconstruídos** são idênticos byte a byte aos CSVs `synced/` e aos arquivos do ZIP de entrega anterior. `DEPENDENCIAS.csv` permanece byte a byte igual ao arquivo original no ZIP reconstruído; a versão Git utiliza normalização de término de linha, com os mesmos 543 registros e quatro campos.
+
+A primeira execução do gerador revelou divergências entre os overlays de evidência e os CSVs integrais já publicados. Essas divergências foram corrigidas nos quatro overlays e no script. O programa **agora falha explicitamente** se o resultado diferir dos quatro CSVs canônicos publicados no Git. O código de script validado tem Git blob SHA-1 `ab9ca045282ce234d3e15a899df667fb3d05061b`, confirmado no repositório remoto após a correção.
+
+**Limite:** validação da reconstrução documental, não homologação de funcionalidades do produto, nem teste da infraestrutura ou substituição das decisões de aceite. Nenhuma credencial, permissão, banco ou runtime do TAPI foi alterado.
