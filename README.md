@@ -7,6 +7,8 @@
 
 Este pacote materializa as decisões do responsável pelo projeto: **repositório privado** `pablo-marchina/stone` (existente e acessível), **comparar infraestrutura** (decisão aberta), **custo financeiro total R$ 0 (bloqueio obrigatório)**, **aprovação geral de dados e operações declarada pelo solicitante, com grants por conta ainda não registrados e acessos técnicos ainda não validados**, **escopo ampliado aprovado pelo solicitante; autoridade institucional não comprovada**. Segue a Arquitetura Unificada v5.1 e o Plano Único, sem alterar o objetivo de **uma entrega final consolidada**.
 
+> **CAP-001/A4 (06/11):** novo [lote curado Business Discovery](docs/55_CAP001_A4_LOTE_AMPLIADO_BUSINESS_DISCOVERY_2026-11-06.md), com até cinco fontes aprovadas, persistência limitada de até 40 observações por fonte, deduplicação, eventos e cobertura. **Nenhuma nova leitura real foi feita neste desenvolvimento sem credenciais/grants**; os candidatos documentais não são autorização. A execução é opt-in no ambiente do operador.
+
 ## O que funciona agora
 
 - API de bootstrap e API segura com identidade, domínio, eventos, UI e conectores oficiais condicionados a autorização específica; nenhum acesso real realizado.
