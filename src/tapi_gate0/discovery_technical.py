@@ -26,7 +26,7 @@ from sqlalchemy.exc import IntegrityError
 from .business_discovery import BusinessDiscoveryProbe, CURSOR, IG_ID, USERNAME
 from .connectors import ConnectorError, NormalizedItem, OfficialHttp, Platform, _date, _integer, credential_for
 from .domain import MediaType
-from .ingestion import IngestionRequest, IngestionStore, source_grants, stable_id
+from .ingestion import IngestionRequest, IngestionStore, ingestion_records, source_grants, stable_id
 from .mpe_evidence import _instagram_url, canonical_hash
 from .sa_store import domain_events, outbox, metrics_snapshots, content_items
 from .storage import now_utc
@@ -245,6 +245,20 @@ class TechnicalDiscoveryService:
         created = refreshed = duplicates = 0
         try:
             observations, report = TechnicalDiscoveryReader(transport).fetch(req, access_token)
+            # Meta media IDs identify content across profiles. Refuse a media ID
+            # already attributed to another external account in this tenant,
+            # rather than silently multiplying the batch's unique-post count.
+            if observations:
+                ids = [ob.item.source_item_id for ob in observations]
+                with self.store.engine.connect() as db:
+                    conflict = db.execute(select(ingestion_records.c.source_item_id).where(
+                        ingestion_records.c.tenant_id == tenant,
+                        ingestion_records.c.platform == Platform.INSTAGRAM.value,
+                        ingestion_records.c.source_item_id.in_(ids),
+                        ingestion_records.c.source_account_id != req.expected_ig_id,
+                    ).limit(1)).first()
+                    if conflict:
+                        raise ConnectorError("BD_CROSS_SOURCE_MEDIA_ID_CONFLICT", 409)
             # Recheck approval/grant against concurrent administrative revocation.
             current = self.store.read_grant(tenant, Platform.INSTAGRAM, req.expected_ig_id)
             if current["approval_reference"] != grant["approval_reference"]:
