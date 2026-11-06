@@ -102,18 +102,18 @@ def main(archive, outdir):
             if ev:
                 st = ev["audit_execution_status"]
                 if status_field:
-                    r[status_field] = ("IMPLEMENTACAO_PARCIAL_SEM_ACEITE" if name == "BACKLOG_UNICO_IMPORTAVEL.csv" and r[key] != "IMP-062" else st)
+                    r[status_field] = ev.get("status") or st
                 if name == "BACKLOG_UNICO_IMPORTAVEL.csv":
-                    r["proof_state"] = "ALTERACAO_ACEITE_DECLARADA" if r[key]=="IMP-062" else "EVIDENCIA_INCREMENTAL_NAO_HOMOLOGADA"
-                    if r[key] in {"IMP-024","IMP-062","IMP-167","IMP-169"}:
-                        refs = [v for v in r["decision_ids"].split(";") if v]
-                        if "DEC-018" not in refs: refs.append("DEC-018")
-                        r["decision_ids"] = ";".join(refs)
+                    r["proof_state"] = ev.get("proof_state") or ("ALTERACAO_ACEITE_DECLARADA" if r[key]=="IMP-062" else "EVIDENCIA_INCREMENTAL_NAO_HOMOLOGADA")
                 r.update(audit_execution_status=st,audit_evidence_pr=ev["evidence_pr_urls"],
                          audit_note=ev["audit_note"])
             else:
                 r.update(audit_execution_status="NAO_COMPROVADO_NESTE_CORTE",audit_evidence_pr="",
-                         audit_note="Status legado preservado; ausencia de evidencia no corte nao prova ausencia de codigo")
+                         audit_note="Estado de planejamento preservado; sem afirmacao de ausencia do codigo")
+            if name == "BACKLOG_UNICO_IMPORTAVEL.csv" and r[key] in {"IMP-024","IMP-062","IMP-167","IMP-169"}:
+                refs = [v for v in r["decision_ids"].split(";") if v]
+                if "DEC-018" not in refs: refs.append("DEC-018")
+                r["decision_ids"] = ";".join(refs)
             r.update(audit_as_of=CUT, audit_main_sha=MAIN_SHA)
         if name == "MATRIZ_DECISOES.csv":
             # Preserve DEC-001..015, then append only new IDs. Never overwrite the original criterion.
@@ -121,10 +121,10 @@ def main(archive, outdir):
             for dec_id, (issue, baseline, task_links) in NEW_DEC.items():
                 e = evidence[dec_id]
                 row = {c:"" for c in cols}
-                row.update(decision_id=dec_id,issue=issue,candidates="Conforme registro DEC no repositorio",
-                           baseline=baseline,comparison_protocol="Politicas, integridade, evidencias e limites por operacao",
-                           linked_tasks=task_links,status=e["audit_execution_status"],
-                           decision_evidence=e["evidence_pr_urls"],decision_rule=e["audit_note"],
+                row.update(decision_id=dec_id,issue=e["issue"],candidates=e["candidates"],
+                           baseline=e["baseline"],comparison_protocol=e["comparison_protocol"],
+                           linked_tasks=e["linked_tasks"],status=e["status"],
+                           decision_evidence=e["decision_evidence"],decision_rule=e["decision_rule"],
                            baseline_status_20261030="NAO_EXISTIA_NA_V52",
                            audit_execution_status=e["audit_execution_status"],audit_evidence_pr=e["evidence_pr_urls"],
                            audit_note=e["audit_note"],audit_as_of=CUT,audit_main_sha=MAIN_SHA)
@@ -144,6 +144,10 @@ def main(archive, outdir):
         assert all(d in decs for d in r["decision_ids"].split(";") if d)
     for r in audited["MATRIZ_DECISOES.csv"]:
         assert all(t in taskids for t in r["linked_tasks"].split(";") if t)
+    # Fail if rebuild differs from the exact audited CSVs committed to Git.
+    for changed_name in AUDIT:
+        assert result[changed_name] == (ROOT / "synced" / changed_name).read_bytes(), ("REBUILD_DIFFERS_FROM_GIT", changed_name)
+    assert parse(result["DEPENDENCIAS.csv"])[0] == parse((ROOT / "synced" / "DEPENDENCIAS.csv").read_bytes())[0]
     audit_meta = {"source_zip_sha256":SOURCE_SHA,"audited_main_sha":MAIN_SHA,"date":CUT,
                   "tasks":204,"capabilities":23,"decisions_old":15,"decisions_new":18,
                   "gates":7,"dependencies_preserved":543,
