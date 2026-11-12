@@ -1,13 +1,10 @@
 """A6 identity-only batches. Identity is not consent to ingest posts."""
 from __future__ import annotations
 
-from datetime import datetime
-import hashlib
 import json
 import os
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, insert, select
 
 from .business_discovery import IG_ID
@@ -23,16 +20,10 @@ RESERVATION = "business_discovery.identity_reserved"
 RESULT = "business_discovery.identity_result"
 
 
-class IdentityScope(BaseModel):
-    """Private operator attestation; only identity fields and named handles."""
-    model_config = ConfigDict(extra="forbid")
-    tenant_id: str = Field(min_length=1, max_length=128)
-    viewer_ig_id: str = Field(pattern=r"^[0-9]{5,32}$")
-    manifest_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
-    usernames: list[str] = Field(min_length=1, max_length=5)
-    approval_reference: str = Field(min_length=12, max_length=512)
-    expires_at: datetime
-    operation: str = Field(pattern=r"^business_discovery_identity_read$")
+# DEC-018: standing institutional authorization communicated by the project owner.
+# Do not ask the operator to re-attest it for each batch. This is not a provider
+# permission, a media grant or a scientific admission.
+INSTITUTIONAL_DECISION = "DEC-018"
 
 
 def identity_reserved_today(db, tenant, day):
@@ -78,6 +69,7 @@ def plan_identity(engine, tenant, manifest: BatchManifest, viewer, handles, *, d
     if used + len(selected) > 10 or 4 * runs + used + len(selected) > daily_budget:
         raise ConnectorError("BD_IDENTITY_DAILY_BUDGET_EXCEEDED", 429)
     return {"status":"PLAN_ONLY_NO_EXTERNAL_READ", "manifest_sha256":manifest.fingerprint(),
+        "institutional_decision":INSTITUTIONAL_DECISION, "utc_day":day,
         "selected_sources":[s.username for s in selected], "max_identity_requests":len(selected),
         "identity_reserved_today":used, "conservative_reserved_today":4 * runs + used,
         "daily_request_budget":daily_budget, "grants_created":0, "external_data_accessed":False}, selected
@@ -90,17 +82,13 @@ def _event(db, tenant, key, version, event_type, payload):
     db.execute(insert(outbox).values(seq=row.inserted_primary_key[0], attempts=0, dead_letter=0))
 
 
-def execute_identity(engine, principal: Principal, manifest, viewer, handles, scope: IdentityScope,
+def execute_identity(engine, principal: Principal, manifest, viewer, handles,
                      *, daily_budget=80, token=None, http=None):
     if principal.role != "admin":
         raise ConnectorError("BD_IDENTITY_ADMIN_REQUIRED", 403)
     if any(os.getenv(k) != "1" for k in ("TAPI_BD_IDENTITY_ENABLED", "TAPI_OFFICIAL_METADATA_READS", "TAPI_ZERO_BILLING_CONFIRMED")):
         raise ConnectorError("BD_IDENTITY_FLAGS_REQUIRED", 403)
     tenant = principal.tenant_id
-    if (scope.tenant_id != tenant or scope.viewer_ig_id != viewer or scope.manifest_sha256 != manifest.fingerprint()
-            or scope.expires_at.tzinfo is None or scope.expires_at <= now_utc()
-            or sorted(h.casefold() for h in scope.usernames) != sorted(h.casefold() for h in handles)):
-        raise ConnectorError("BD_IDENTITY_SCOPE_MISMATCH", 403)
     access = token if token is not None else credential_for(Platform.INSTAGRAM)
     if len(access) < 10:
         raise ConnectorError("CREDENTIAL_MISSING", 403)
@@ -108,8 +96,9 @@ def execute_identity(engine, principal: Principal, manifest, viewer, handles, sc
     results = []
     with cycle_lease(engine, tenant, cycle):
         plan, selected = plan_identity(engine, tenant, manifest, viewer, handles, daily_budget=daily_budget)
-        day = now_utc().date().isoformat()
-        ref_hash = hashlib.sha256(scope.approval_reference.encode()).hexdigest()
+        day = plan["utc_day"]
+        if now_utc().date().isoformat() != day:
+            raise ConnectorError("BD_IDENTITY_UTC_DAY_CHANGED", 409)
         # Reserve the entire batch before network. Interrupted/unattempted slots are
         # deliberately not refunded. The A5 lease serializes A5 and A6 cycles.
         with engine.begin() as db:
@@ -117,15 +106,16 @@ def execute_identity(engine, principal: Principal, manifest, viewer, handles, sc
                 _event(db, tenant, _key(tenant, day, source.username), 1, RESERVATION,
                     {"cycle_key":cycle,"username":source.username,"viewer_ig_id":viewer,
                      "manifest_sha256":manifest.fingerprint(),"actor_id":principal.actor_id,
-                     "approval_reference_sha256":ref_hash})
+                     "institutional_decision":INSTITUTIONAL_DECISION,
+                     "operation":"business_discovery_identity_read"})
         transport = http or OfficialHttp(instagram_version="v26.0")
         known = {s.expected_ig_id:s.username.casefold() for s in manifest.sources if s.expected_ig_id}
         try:
             for source in selected:
                 key = _key(tenant, day, source.username)
                 try:
-                    if scope.expires_at <= now_utc() or now_utc().date().isoformat() != day:
-                        raise ConnectorError("BD_IDENTITY_SCOPE_EXPIRED", 403)
+                    if now_utc().date().isoformat() != day:
+                        raise ConnectorError("BD_IDENTITY_UTC_DAY_CHANGED", 409)
                     data = transport.get(Platform.INSTAGRAM, viewer,
                         {"fields":f"business_discovery.username({source.username})"+"{id,username}"}, access)
                     found = data.get("business_discovery")
