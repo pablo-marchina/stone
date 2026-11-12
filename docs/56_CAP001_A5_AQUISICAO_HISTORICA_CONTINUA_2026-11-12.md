@@ -1,6 +1,6 @@
 # CAP-001 / A5 — aquisição histórica e contínua com curadoria incremental
 
-**Data:** 12/11/2026. **Base:** main após merge do [PR #42](https://github.com/pablo-marchina/stone/pull/42) (`d2efe5f`). **Status:** incremento implementado e testado offline; execução real A5 ainda não efetuada. A4 comprovou 39 posts técnicos únicos em 3 fontes, 60 observações reauditadas nos três lotes A4, zero admissões científicas. DEC-016 e DEC-018 continuam aplicáveis.
+**Data:** 12/11/2026. **Base:** main após merge do [PR #42](https://github.com/pablo-marchina/stone/pull/42) (`d2efe5f`). **Status:** incremento implementado e testado offline; primeiro ciclo histórico real A5 reportado em 12/11/2026, com checkpoints nas três fontes. Retomada real e refresh ainda pendentes. A4 comprovou 39 posts técnicos únicos em 3 fontes, 60 observações reauditadas nos três lotes A4, zero admissões científicas. DEC-016 e DEC-018 continuam aplicáveis.
 
 ## Arquitetura e decisões
 
@@ -92,3 +92,18 @@ Repetir com **nome de relatório novo**, dentro das quotas, para demonstrar reto
 A 10 itens/página e 80 páginas reservadas/dia, o teto aritmético é de 800 itens retornados/dia, não de novos posts. Os 1.961 posts técnicos restantes exigiriam no mínimo 50 runs de 40 novos registros (limite idealizado, sem exclusões ou duplicatas), condicionado ao volume disponível, grants, estabilidade dos cursores, quotas e termos. Não programar chamadas para atingir o teto automaticamente sem validação real.
 
 **Validação:** 10 novos testes A5; regressão A3/A4/A5, ingestão, corpus e migrações: 77 PASS; suíte completa Python reconstruída: **381 PASS** (40,74 s). Os 77 estão incluídos nos 381. `verify_zero_spend.py` PASS e `check_gate0.py` estrutura local verificada; Gate 0B global permanece bloqueado. Código testado offline em SQLite de arquivo, transporte simulado, blobs conferidos contra o GitHub. Sem nova leitura Meta, CI remota ou prova de PostgreSQL. Sem admissão científica ou produção.
+
+
+## Primeira execução histórica real reportada — 12/11/2026
+
+Prévia no ambiente do operador: manifesto `a1e61806a5b9a57f307f0c0b129fe6f59a63666a7930ecaae90ceb668ef18717`, 15 fontes, 3 aprovadas, 12 deferidas por SOURCE_NOT_APPROVED, 39 media IDs distintos, zero conflitos entre fontes. Orçamento local reservado antes do ciclo: 20/80 páginas. A prévia foi read-only e sem rede.
+
+Ciclo `a5history-20261112141205-e3d3524b`, status BATCH_COMPLETED: 12 páginas, 120 itens retornados, 43 excluídos por idade, 77 elegíveis, 38 novos e 39 refreshes, 39 → 77 registros e media IDs únicos, 3 fontes. Todos os checkpoints reportados como continuation_available.
+
+| Fonte | Run key | Novos | Refreshes | Observações reauditadas | Páginas | Checkpoint |
+|---|---|---:|---:|---:|---:|---|
+| Sebrae | a5history-20261112141205-e3d3524b-01 | 5 | 15 | 20 | 4 | continuation_available |
+| Ton | a5history-20261112141205-e3d3524b-02 | 13 | 12 | 25 | 4 | continuation_available |
+| Stone | a5history-20261112141205-e3d3524b-03 | 20 | 12 | 32 | 4 | continuation_available |
+
+Reauditoria de todos os runs: completed, all_traces_valid=true, has_persisted_observations=true. Zero admissão científica, production_approved=false, cobertura não exaustiva. Orçamento conservador esperado após o ciclo: 32/80, sujeito à próxima prévia. A prévia e o ciclo bem-sucedido evidenciam disponibilidade das tabelas no DB operacional; backup e saída exata Alembic não foram fornecidos. Fonte: resumos CLI e reauditoria reportados pelo operador, não inspeção independente do DB/JSON integral. Não registrar cursores privados. Segundo ciclo deve confirmar avanço de pages_examined e last_run_key; refresh deve preservar o checkpoint. Sebrae pode atingir a quota de cinco reservas diárias após a segunda execução histórica, portanto não forçar refresh se deferido. PR permanece draft.
