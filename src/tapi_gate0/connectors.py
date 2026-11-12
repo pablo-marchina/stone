@@ -18,8 +18,9 @@ from .domain import Origin, MediaType, require_utc_date
 
 
 class ConnectorError(Exception):
-    def __init__(self, code: str, status: int = 422):
+    def __init__(self, code: str, status: int = 422, *, provider_diagnostic: dict | None = None):
         self.code, self.status = code, status
+        self.provider_diagnostic = provider_diagnostic or {}
         super().__init__(code)
 
 
@@ -75,6 +76,24 @@ def _date(value):
         raise ConnectorError("INVALID_PROVIDER_TIMESTAMP") from exc
 
 
+def _meta_error_diagnostic(response: httpx.Response) -> dict:
+    """Allowlist numeric Graph error fields; never retain messages or raw payloads."""
+    result = {"http_status": response.status_code}
+    if len(response.content) > 1_000_000:
+        return result
+    try:
+        body = response.json()
+    except (ValueError, RecursionError):
+        return result
+    error = body.get("error") if isinstance(body, dict) else None
+    if isinstance(error, dict):
+        for field in ("code", "error_subcode"):
+            value = error.get(field)
+            if type(value) is int and 0 <= value <= 2_147_483_647:
+                result[field] = value
+    return result
+
+
 class OfficialHttp:
     """Never accepts caller-specified hosts, redirects or generic fetch URLs."""
     def __init__(self, client: httpx.Client | None = None, *,
@@ -107,12 +126,13 @@ class OfficialHttp:
                                        headers={"Authorization": f"Bearer {token}", "Accept": "application/json"})
             if response.is_redirect:
                 raise ConnectorError("PROVIDER_REDIRECT_DENIED", 403)
-            if response.status_code in (401, 403):
-                raise ConnectorError("PROVIDER_PERMISSION_DENIED", 403)
-            if response.status_code == 429:
-                raise ConnectorError("PROVIDER_RATE_LIMITED", 429)
             if response.status_code >= 400:
-                raise ConnectorError("PROVIDER_REQUEST_FAILED", 502)
+                diagnostic = _meta_error_diagnostic(response) if platform == Platform.INSTAGRAM else {}
+                if response.status_code in (401, 403):
+                    raise ConnectorError("PROVIDER_PERMISSION_DENIED", 403, provider_diagnostic=diagnostic)
+                if response.status_code == 429:
+                    raise ConnectorError("PROVIDER_RATE_LIMITED", 429, provider_diagnostic=diagnostic)
+                raise ConnectorError("PROVIDER_REQUEST_FAILED", 502, provider_diagnostic=diagnostic)
             if len(response.content) > 1_000_000:
                 raise ConnectorError("PROVIDER_RESPONSE_INVALID",502)
             data = response.json()
