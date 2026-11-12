@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 from .connectors import ConnectorError, Platform
 from .discovery_batch import BatchLimits, BatchManifest, TechnicalDiscoveryBatch
 from .discovery_history import cycle_lease, read_checkpoint
+from .discovery_identity_a6 import identity_reserved_today
 from .discovery_recovery import reviewed_failure
 from .ingestion import IngestionStore, ingestion_records, ingestion_runs
 from .storage import now_utc
@@ -36,7 +37,7 @@ def plan_cycle(store: IngestionStore, tenant: str, manifest: BatchManifest,
         ).order_by(ingestion_runs.c.requested_at.desc(), ingestion_runs.c.run_key.desc())).mappings().all()
         # Conservative bound: charge four pages for EVERY Instagram reservation,
         # including failed/reserved runs and A3/A4. Not a provider billing meter.
-        used = 4 * sum(r["requested_at"] >= day for r in rows)
+        used = 4 * sum(r["requested_at"] >= day for r in rows) + identity_reserved_today(db, tenant, day)
         for source in manifest.sources:
             reason = None
             latest = [r for r in rows if r["source_account_id"] == source.expected_ig_id]
