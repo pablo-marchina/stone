@@ -131,6 +131,8 @@ def execute_identity(engine, principal: Principal, manifest, viewer, handles,
                     result = {"username":source.username,"status":"IDENTIFIED","instagram_id":ident}
                 except ConnectorError as exc:
                     result = {"username":source.username,"status":"BLOCKED","code":exc.code}
+                    if exc.provider_diagnostic:
+                        result["provider_diagnostic"] = exc.provider_diagnostic
                 with engine.begin() as db:
                     _event(db, tenant, key, 2, RESULT, result)
                 results.append(result)
