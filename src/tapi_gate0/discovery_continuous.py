@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 from .connectors import ConnectorError, Platform
 from .discovery_batch import BatchLimits, BatchManifest, TechnicalDiscoveryBatch
 from .discovery_history import cycle_lease, read_checkpoint
+from .discovery_recovery import reviewed_failure
 from .ingestion import IngestionStore, ingestion_records, ingestion_runs
 from .storage import now_utc
 
@@ -56,7 +57,8 @@ def plan_cycle(store: IngestionStore, tenant: str, manifest: BatchManifest,
             if reason is None:
                 if any(r["status"] == "reserved" for r in latest):
                     reason = "ACCOUNT_INGESTION_IN_PROGRESS"
-                elif latest and latest[0]["status"] == "failed":
+                elif (latest and latest[0]["status"] == "failed" and
+                      not reviewed_failure(db, tenant, latest[0]["run_key"])):
                     reason = "SOURCE_LAST_RUN_FAILED_REVIEW_REQUIRED"
                 elif sum(r["requested_at"] >= day for r in latest) >= 5:
                     reason = "BD_BATCH_DAILY_SOURCE_QUOTA_REACHED"
