@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from .business_discovery import CURSOR
 from .connectors import ConnectorError, Platform
 from .ingestion import source_grants
-from .sa_store import metadata
+from .sa_store import metadata, tenants
 from .storage import now_utc
 
 history_checkpoints = Table("bd_history_checkpoints", metadata,
@@ -102,11 +102,20 @@ def advance_checkpoint(db, *, tenant, source, viewer, approval, run_key,
             history_checkpoints.c.source_account_id == source).values(**values))
 
 
+def lock_tenant(db, tenant):
+    """Serialize A5 lease acquisition/recovery with an existing tenant row."""
+    locked = db.execute(update(tenants).where(tenants.c.tenant_id == tenant)
+                        .values(name=tenants.c.name))
+    if locked.rowcount != 1:
+        raise ConnectorError("INGESTION_TENANT_NOT_FOUND", 404)
+
+
 @contextmanager
 def cycle_lease(engine, tenant: str, key: str):
     """One A5 cycle per tenant. A crash leaves a lease for operator recovery."""
     try:
         with engine.begin() as db:
+            lock_tenant(db, tenant)
             db.execute(insert(cycle_leases).values(tenant_id=tenant,
                 cycle_key=key, started_at=now_utc().isoformat()))
     except IntegrityError as exc:
