@@ -1,6 +1,6 @@
 # CAP-001 / A5 — aquisição histórica e contínua com curadoria incremental
 
-**Data:** 12/11/2026. **Base:** main após merge do [PR #42](https://github.com/pablo-marchina/stone/pull/42) (`d2efe5f`). **Status:** incremento implementado e testado offline; dois ciclos históricos reais A5 reportados em 12/11/2026, com retomada nas três fontes, 197 media IDs únicos e auditorias válidas. Refresh e recuperação auditada ainda pendentes. A4 comprovou 39 posts técnicos únicos em 3 fontes, 60 observações reauditadas nos três lotes A4, zero admissões científicas. DEC-016 e DEC-018 continuam aplicáveis.
+**Data:** 12/11/2026. **Base:** main após merge do [PR #42](https://github.com/pablo-marchina/stone/pull/42) (`d2efe5f`). **Status:** incremento implementado e testado offline; dois ciclos históricos reais A5 reportados em 12/11/2026, com retomada nas três fontes, 197 media IDs únicos e auditorias válidas. Refresh real independente também reportado com sucesso; recuperação auditada ainda pendente. A4 comprovou 39 posts técnicos únicos em 3 fontes, 60 observações reauditadas nos três lotes A4, zero admissões científicas. DEC-016 e DEC-018 continuam aplicáveis.
 
 ## Arquitetura e decisões
 
@@ -122,3 +122,15 @@ Ciclo `a5history-20261112141401-2ccaaea7`: BATCH_COMPLETED, mesmo manifesto SHA-
 Todos os runs BD_TECHNICAL_METADATA_COMMITTED; reauditorias read-only completed, all_traces_valid=true, has_persisted_observations=true. Consulta local reportada aos checkpoints confirma avanço 4 → 8 páginas e last_run_key do segundo ciclo nas três fontes, sem divulgar cursores. Dois ciclos históricos A5: 197 observações reauditadas, 158 novos registros e 39 refreshes. Rendimento do segundo ciclo (120 novos/120 retornados) não é garantia de ciclos futuros. Evidência operacional fornecida pelo operador; sem inspeção independente do banco, dos payloads ou dos relatórios integrais.
 
 **Aceite de retomada histórica real reportado.** Orçamento conservador esperado 44/80 após o ciclo. Sebrae atingiu, segundo o histórico informado, cinco reservas diárias; validar a próxima prévia e não contornar a quota. Próximo teste: refresh de fontes elegíveis (esperadas Stone/Ton), com comparação integral dos checkpoints localmente antes/depois, sem publicar cursores ou referências privadas. Recuperação auditada de falhas e agendamento ainda pendentes; PR permanece draft. Meta de 30 fontes e 2.000–5.000 posts não atingida, nem comparável automaticamente à base científica.
+
+
+## Refresh real independente do histórico — 12/11/2026
+
+Ciclo `a5refresh-20261112141559-2ef847d8`: BATCH_COMPLETED, manifesto SHA-256 `a1e61806a5b9a57f307f0c0b129fe6f59a63666a7930ecaae90ceb668ef18717`. Prévia selecionou Ton e Stone; Sebrae deferido corretamente por BD_BATCH_DAILY_SOURCE_QUOTA_REACHED, 12 candidatas por SOURCE_NOT_APPROVED. Orçamento local antes do ciclo 44/80 páginas reservadas, teto de 8 requisições e 24 observações. Resultado: 5 páginas, 47 retornados, 23 recentes excluídos, 24 elegíveis, zero novos, 24 refreshes, zero duplicatas. Cobertura 197 → 197 registros e media IDs únicos, 3 fontes, zero duplicatas entre fontes.
+
+| Fonte | Run key | Novos | Refreshes | Observações reauditadas | Trilhas válidas |
+|---|---|---:|---:|---:|---|
+| Ton | a5refresh-20261112141559-2ef847d8-01 | 0 | 12 | 12 | true |
+| Stone | a5refresh-20261112141559-2ef847d8-02 | 0 | 12 | 12 | true |
+
+Ambos BD_TECHNICAL_METADATA_COMMITTED, reauditoria completed, all_traces_valid=true, has_persisted_observations=true. Operador comparou SHA-256 da serialização ordenada de todas as linhas de bd_history_checkpoints no tenant antes/depois: CHECKPOINTS_PRESERVADOS: TRUE. Não divulgar cursores, referências privadas ou os hashes integrais. Orçamento conservador esperado após refresh: 52/80, sujeito à próxima prévia. A5 acumula 221 observações reauditadas, 158 novas e 63 refreshes, base de 39 → 197 registros técnicos únicos. Zero admissões científicas, sem produção. Aceite operacional do refresh independente reportado, não inspeção independente do banco privado. Recuperação auditada de falhas, cursor expirado e lease órfão, revisão final e agendamento permanecem pendentes; não ativar execução contínua não supervisionada. Backup/migração exatos e quotas efetivas do provedor não foram independentemente verificados.
