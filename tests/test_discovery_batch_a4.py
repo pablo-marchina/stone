@@ -292,3 +292,44 @@ def test_cross_source_media_id_collision_stops_without_double_count(tmp_path):
         assert c.execute(select(func.count()).select_from(content_items)).scalar_one() == 2
         assert c.execute(select(func.count()).select_from(ingestion_records)).scalar_one() == 2
     client.close();engine.dispose()
+
+
+def test_concurrent_cross_source_collision_is_serialized(tmp_path, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    from tapi_gate0.discovery_technical import TechnicalDiscoveryRequest, TechnicalDiscoveryService, audit_run
+    engine, store = db(tmp_path)
+    transport, calls, client = fake_http(items=1, same_ids_across_sources=True)
+    barrier = Barrier(2)
+    original = IngestionStore._persist_item
+    def synchronized(self, tenant, item, **kwargs):
+        # Both runs have passed the earlier batch-level collision check.
+        barrier.wait(timeout=10)
+        return original(self, tenant, item, **kwargs)
+    monkeypatch.setattr(IngestionStore, "_persist_item", synchronized)
+    def run(source):
+        name, ident, _ = source
+        key = "concurrent-bd-" + name
+        try:
+            result = TechnicalDiscoveryService(store).execute(TENANT,
+                TechnicalDiscoveryRequest(username=name, expected_ig_id=ident,
+                    viewer_ig_id=VIEWER, run_key=key, persist_limit=1),
+                token=TOKEN, http=transport)
+            return key, result["status"]
+        except ConnectorError as exc:
+            return key, exc.code
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            outcomes = list(pool.map(run, SOURCES))
+        assert sorted(status for _, status in outcomes) == [
+            "BD_CROSS_SOURCE_MEDIA_ID_CONFLICT", "BD_TECHNICAL_METADATA_COMMITTED"]
+        with engine.connect() as c:
+            assert c.execute(select(func.count()).select_from(ingestion_records)).scalar_one() == 1
+            assert c.execute(select(func.count()).select_from(content_items)).scalar_one() == 1
+            assert c.execute(select(func.count()).select_from(metrics_snapshots)).scalar_one() == 1
+        for key, status in outcomes:
+            audited = audit_run(engine, TENANT, key)
+            assert audited["all_traces_valid"] == (status == "BD_TECHNICAL_METADATA_COMMITTED")
+            assert audited["observations"] == int(status == "BD_TECHNICAL_METADATA_COMMITTED")
+    finally:
+        client.close(); engine.dispose()
