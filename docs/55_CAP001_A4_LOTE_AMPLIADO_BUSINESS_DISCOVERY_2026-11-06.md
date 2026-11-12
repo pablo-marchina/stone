@@ -1,6 +1,6 @@
 # CAP-001 / A4 — lote ampliado de observações técnicas Meta Business Discovery
 
-**Corte:** 06/11/2026. **Escopo:** seleção explícita de fontes, coleta oficial limitada, persistência, deduplicação e relatório de cobertura. **Status atualizado em 12/11/2026:** código e testes offline implementados; duas execuções reais no ambiente autorizado do operador reportadas com sucesso, incluindo reauditoria local e refresh sem duplicação. Ver seção de evidência operacional ao final. O banco privado não foi inspecionado diretamente nesta revisão.
+**Corte:** 06/11/2026. **Escopo:** seleção explícita de fontes, coleta oficial limitada, persistência, deduplicação e relatório de cobertura. **Status atualizado em 12/11/2026:** código e testes offline implementados; três execuções reais no ambiente autorizado do operador reportadas com sucesso, incluindo lote de três fontes, reauditoria local e refresh sem duplicação. Ver seção de evidência operacional ao final. O banco privado não foi inspecionado diretamente nesta revisão.
 
 **Precedência:** [DEC-016](33_DEC016_IMPLEMENTACAO_FONTE_ELEGIBILIDADE_DATA_CARD_V2.md), [DEC-018](53_DEC018_CONFIRMACAO_ALCANCE_E_CRITERIO_REVISAO_2026-11-05.md) e [A3 técnico real](45_A3_BUSINESS_DISCOVERY_PRIMEIRO_LOTE_TECNICO.md). A4 **não** é revisão independente nem inclusão científica automática.
 
@@ -54,7 +54,7 @@ O resultado é JSON privado. Verificar `status`, `sources[].audit_all_traces_val
 | Proveniência | Auditoria de eventos, snapshots, outbox, hashes e run keys; nenhuma credencial/cursor armazenado | Hash é integridade local, não assinatura Meta |
 | Limites e bloqueios | Preflight de todos os grants, validação de janela/flags, limite 5×4, stop-on-error | Sem medição de quotas Meta em ambiente real |
 | Cobertura | Contagens por origem e total de registros técnicos únicos no banco antes/depois | Não prova representatividade/validade científica |
-| Dados reais novos | **12 novos registros técnicos reportados em 12/11/2026; 12 refreshes na segunda execução** | Uma fonte real; banco privado não inspecionado diretamente nesta revisão |
+| Dados reais novos | **36 novos registros técnicos reportados em três lotes de 12/11/2026; 24 refreshes** | Três fontes reais; banco privado não inspecionado diretamente nesta revisão |
 
 **Nota:** a referência científica de 2.000–5.000 posts e pelo menos 30 perfis continua pendente. O lote A4 é operacionalmente limitado para segurança e não pretende atingir essa meta em uma execução.
 
@@ -83,3 +83,19 @@ Prévia offline: manifesto SHA-256 `b506a6e3cd4513a1a1c41c13ef82cbaa0654f0a9b0c7
 **Conclusão restrita:** a repetição real preservou a cardinalidade dos posts e registrou refresh de métricas nas 12 observações. A implementação compara likes, comments, follower_count e views; o resumo não identifica qual campo mudou. Não afirmar que todos os posts ganharam curtidas ou comentários. As 24 observações dos dois runs não são 24 posts únicos.
 
 **Limites da evidência:** transcrição dos resumos de CLI/JSON e da reauditoria executada pelo operador, não inspeção independente do banco, dos JSON completos ou dos payloads Meta. Não anexar tokens, dados privados ou payloads. O teste multifonte real continua pendente; testes simulados cobrem múltiplas fontes, mas não o comportamento live. A referência científica de 30 perfis/2.000–5.000 posts não foi atingida; `production_approved=false`. Esta evidência não libera gates globais, não autoriza novas fontes e não substitui a revisão final do diff.
+
+## Primeiro lote multifonte real — 12/11/2026
+
+Evidência reportada pelo operador após registro e verificação dos grants de Stone e Ton no tenant local, além do grant Sebrae preexistente. IDs identificados via Business Discovery oficial: Stone `17841401947908402`, Ton (`seliganoton`) `17841426444024285`; Sebrae RN `17841401897470679` identificado mas **não selecionado**. Não há autorização implícita para a fonte reserva.
+
+Batch `bdmulti-20261112-104658`, `BATCH_COMPLETED`, 3 fontes, limites 4 páginas × 10 itens e 12 observações por fonte. Resultado: 9 páginas, 79 itens retornados, 43 recentes excluídos, 36 observações elegíveis, 24 registros novos, 12 refreshes, 0 duplicatas inalteradas ou do provedor; cobertura técnica 15 → 39 posts únicos nas três fontes.
+
+| Fonte | Run key | Novos | Refreshes | Posts únicos após | Observações reauditadas | Trilhas válidas |
+|---|---|---:|---:|---:|---:|---|
+| Sebrae | `bdmulti-20261112-104658-01` | 0 | 12 | 15 | 12 | true |
+| Stone | `bdmulti-20261112-104658-02` | 12 | 0 | 12 | 12 | true |
+| Ton | `bdmulti-20261112-104658-03` | 12 | 0 | 12 | 12 | true |
+
+Todos os runs: `BD_TECHNICAL_METADATA_COMMITTED`; reauditorias read-only: `completed`, `all_traces_valid=true`, `has_persisted_observations=true`. Três lotes A4 totalizam 60 observações (36 novas + 24 refreshes), além de três posts únicos do piloto A3, sem admissão científica automática. Cobertura não exaustiva e não comparável à referência científica. A base do lote não representa todos os posts de todas as fontes nem uma amostra representativa; Stone e Ton são do mesmo grupo.
+
+**Aceite operacional multifonte reportado**. Não houve acesso independente ao DB ou ao relatório integral nesta revisão. A prova não testa conflito concorrente entre fontes em produção, nem valida direitos independentemente, CI ou os gates científicos. A revisão de código identificou que a verificação cross-source ocorre antes da persistência, sem restrição de unicidade global entre contas; não assumir segurança para execuções concorrentes entre fontes. Manter execução serial por tenant até tratar/testar concorrência. Revisão final e regressão ampliada pendentes antes do merge.
