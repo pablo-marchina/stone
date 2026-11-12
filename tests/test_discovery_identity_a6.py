@@ -133,3 +133,24 @@ def test_cli_plan_without_credentials(setup,tmp_path,monkeypatch,capsys):
     monkeypatch.delenv("TAPI_INSTAGRAM_ACCESS_TOKEN",raising=False)
     assert main(["--manifest",str(path),"--source","mpe_example"])==0
     assert json.loads(capsys.readouterr().out)["external_data_accessed"] is False
+
+
+def test_create_identity_scope_validates_expiry_and_sources(setup):
+    from scripts.a6_create_identity_scope import build_scope
+    engine, store, frame, scope = setup
+    expiry = (now_utc() + timedelta(hours=1)).isoformat()
+    result = build_scope(frame, TENANT, VIEWER, ["mpe_example"],
+                         "fixture identity authorization", expiry)
+    assert result.manifest_sha256 == frame.fingerprint()
+    assert result.usernames == ["mpe_example"]
+    assert result.operation == "business_discovery_identity_read"
+    with pytest.raises(ValueError):
+        build_scope(frame, TENANT, VIEWER, ["mpe_example"], "fixture identity authorization", "")
+    with pytest.raises(ValueError):
+        build_scope(frame, TENANT, VIEWER, ["mpe_example"], "fixture identity authorization",
+                    (now_utc() - timedelta(hours=1)).isoformat())
+    with pytest.raises(ValueError, match="SOURCE_NOT_ELIGIBLE"):
+        build_scope(frame, TENANT, VIEWER, ["sebrae"], "fixture identity authorization", expiry)
+    with pytest.raises(ValueError, match="SELECT_ONE_TO_FIVE_DISTINCT_SOURCES"):
+        build_scope(frame, TENANT, VIEWER, ["mpe_example", "MPE_EXAMPLE"],
+                    "fixture identity authorization", expiry)
