@@ -1,0 +1,149 @@
+{
+  "schema_version": "tapi-bd-technical-batch.v1",
+  "sources": [
+    {
+      "username": "saladoempreendedor.ab",
+      "sampling_stratum": "municipal_entrepreneur_support",
+      "audience_intent": "mpe_targeted",
+      "source_evidence_reference": "https://www.aguaboa.mt.gov.br/secretarias/desenvolvimento/sala-do-empreendedor",
+      "audience_rationale_reference": "https://www.aguaboa.mt.gov.br/secretarias/desenvolvimento/sala-do-empreendedor",
+      "status": "candidate"
+    },
+    {
+      "username": "sala.torres.rs",
+      "sampling_stratum": "municipal_entrepreneur_support",
+      "audience_intent": "mpe_targeted",
+      "source_evidence_reference": "https://torres.rs.gov.br/prefeitura/sala-do-empreendedor/",
+      "audience_rationale_reference": "https://torres.rs.gov.br/prefeitura/sala-do-empreendedor/",
+      "status": "candidate"
+    },
+    {
+      "username": "saladoempreendedoreso",
+      "sampling_stratum": "municipal_entrepreneur_support",
+      "audience_intent": "mpe_targeted",
+      "source_evidence_reference": "https://espiritosanto.rn.gov.br/sala-do-empreendedor/",
+      "audience_rationale_reference": "https://espiritosanto.rn.gov.br/sala-do-empreendedor/",
+      "status": "candidate"
+    },
+    {
+      "username": "saolourencodosulempreendedora",
+      "sampling_stratum": "municipal_entrepreneur_support",
+      "audience_intent": "mpe_targeted",
+      "source_evidence_reference": "https://www.saolourencodosul.rs.gov.br/portal/secretarias/319/sala-do-empreendedor/instagram.com/saolourencodosulempreendedora",
+      "audience_rationale_reference": "https://www.saolourencodosul.rs.gov.br/portal/secretarias/319/sala-do-empreendedor/instagram.com/saolourencodosulempreendedora",
+      "status": "candidate"
+    },
+    {
+      "username": "saladoempreendedorsantamaria",
+      "sampling_stratum": "municipal_entrepreneur_support",
+      "audience_intent": "mpe_targeted",
+      "source_evidence_reference": "https://office.santamaria.rs.gov.br/smdei/1808-atendimento",
+      "audience_rationale_reference": "https://office.santamaria.rs.gov.br/smdei/1808-atendimento",
+      "status": "candidate"
+    },
+    {
+      "username": "saladoempreendedor.bj",
+      "sampling_stratum": "municipal_entrepreneur_support",
+      "audience_intent": "mpe_targeted",
+      "source_evidence_reference": "https://belojardim.pe.gov.br/sala-do-empreendedor-de-belo-jardim-passa-a-funcionar-no-abrigo-de-ze-ramos-na-praca-da-cultura-desembargador-joao-paes/",
+      "audience_rationale_reference": "https://belojardim.pe.gov.br/sala-do-empreendedor-de-belo-jardim-passa-a-funcionar-no-abrigo-de-ze-ramos-na-praca-da-cultura-desembargador-joao-paes/",
+      "status": "candidate"
+    },
+    {
+      "username": "saladoempreendedormcz",
+      "sampling_stratum": "municipal_entrepreneur_support",
+      "audience_intent": "mpe_targeted",
+      "source_evidence_reference": "https://alagoasdigital.al.gov.br/orgao/sala-do-empreendedor",
+      "audience_rationale_reference": "https://alagoasdigital.al.gov.br/orgao/sala-do-empreendedor",
+      "status": "candidate"
+    },
+    {
+      "username": "saladoempreendedorcristalina",
+      "sampling_stratum": "municipal_entrepreneur_support",
+      "audience_intent": "mpe_targeted",
+      "source_evidence_reference": "https://cristalina.go.gov.br/sala-do-empreendedor/",
+      "audience_rationale_reference": "https://cristalina.go.gov.br/sala-do-empreendedor/",
+      "status": "candidate"
+    },
+    {
+      "username": "saladoempreendedor.saoluis",
+      "sampling_stratum": "municipal_entrepreneur_support",
+      "audience_intent": "mpe_targeted",
+      "source_evidence_reference": "https://www.saoluis.ma.gov.br/portal/carta-servicos/504/",
+      "audience_rationale_reference": "https://www.saoluis.ma.gov.br/portal/carta-servicos/504/",
+      "status": "candidate"
+    },
+    {
+      "username": "saladoempreendedorangulo",
+      "sampling_stratum": "municipal_entrepreneur_support",
+      "audience_intent": "mpe_targeted",
+      "source_evidence_reference": "https://smtp.angulo.pr.gov.br/?meio=17223",
+      "audience_rationale_reference": "https://smtp.angulo.pr.gov.br/?meio=17223",
+      "status": "candidate"
+    },
+    {
+      "username": "redemulherempreendedora",
+      "sampling_stratum": "women_entrepreneurship",
+      "audience_intent": "uncertain",
+      "source_evidence_reference": "https://santandernegocioseempresas.com.br/conhecimento/empreendedorismo/7-perfis-sobre-empreendedorismo-para-seguir-nas-redes-sociais/",
+      "audience_rationale_reference": "https://santandernegocioseempresas.com.br/conhecimento/empreendedorismo/7-perfis-sobre-empreendedorismo-para-seguir-nas-redes-sociais/",
+      "status": "candidate"
+    },
+    {
+      "username": "menteempreendedora",
+      "sampling_stratum": "entrepreneurship_education",
+      "audience_intent": "uncertain",
+      "source_evidence_reference": "https://santandernegocioseempresas.com.br/conhecimento/empreendedorismo/7-perfis-sobre-empreendedorismo-para-seguir-nas-redes-sociais/",
+      "audience_rationale_reference": "https://santandernegocioseempresas.com.br/conhecimento/empreendedorismo/7-perfis-sobre-empreendedorismo-para-seguir-nas-redes-sociais/",
+      "status": "candidate"
+    },
+    {
+      "username": "feirapretaoficial",
+      "sampling_stratum": "black_entrepreneurship_creative",
+      "audience_intent": "uncertain",
+      "source_evidence_reference": "https://santandernegocioseempresas.com.br/conhecimento/empreendedorismo/7-perfis-sobre-empreendedorismo-para-seguir-nas-redes-sociais/",
+      "audience_rationale_reference": "https://santandernegocioseempresas.com.br/conhecimento/empreendedorismo/7-perfis-sobre-empreendedorismo-para-seguir-nas-redes-sociais/",
+      "status": "candidate"
+    },
+    {
+      "username": "endeavorbrasil",
+      "sampling_stratum": "entrepreneurship_growth",
+      "audience_intent": "uncertain",
+      "source_evidence_reference": "https://santandernegocioseempresas.com.br/conhecimento/empreendedorismo/7-perfis-sobre-empreendedorismo-para-seguir-nas-redes-sociais/",
+      "audience_rationale_reference": "https://santandernegocioseempresas.com.br/conhecimento/empreendedorismo/7-perfis-sobre-empreendedorismo-para-seguir-nas-redes-sociais/",
+      "status": "candidate"
+    },
+    {
+      "username": "lojaintegrada",
+      "sampling_stratum": "ecommerce_education",
+      "audience_intent": "mpe_targeted",
+      "source_evidence_reference": "https://ajuda.lojaintegrada.com.br/pt-BR/articles/8048282-conheca-os-canais-oficiais-da-loja-integrada",
+      "audience_rationale_reference": "https://ajuda.lojaintegrada.com.br/pt-BR/articles/8048282-conheca-os-canais-oficiais-da-loja-integrada",
+      "status": "candidate"
+    },
+    {
+      "username": "contabilizei",
+      "sampling_stratum": "accounting_mpe",
+      "audience_intent": "mpe_targeted",
+      "source_evidence_reference": "https://mkt.contabilizei.com.br/abrir-cnpj-dev",
+      "audience_rationale_reference": "https://mkt.contabilizei.com.br/abrir-cnpj-dev",
+      "status": "candidate"
+    },
+    {
+      "username": "omie.oficial",
+      "sampling_stratum": "business_financial_management",
+      "audience_intent": "uncertain",
+      "source_evidence_reference": "https://pt.linkedin.com/posts/omie_se-voc%C3%AA-busca-insights-relevantes-sobre-empreendedorismo-activity-7398725833865048065-N51g",
+      "audience_rationale_reference": "https://pt.linkedin.com/posts/omie_se-voc%C3%AA-busca-insights-relevantes-sobre-empreendedorismo-activity-7398725833865048065-N51g",
+      "status": "candidate"
+    },
+    {
+      "username": "andraeltec",
+      "sampling_stratum": "erp_consulting",
+      "audience_intent": "uncertain",
+      "source_evidence_reference": "https://www.bling.com.br/parceiros/andrael-tecnologia-e-gestao-treinamentos-ltda",
+      "audience_rationale_reference": "https://www.bling.com.br/parceiros/andrael-tecnologia-e-gestao-treinamentos-ltda",
+      "status": "candidate"
+    }
+  ]
+}
