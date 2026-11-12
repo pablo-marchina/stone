@@ -14,7 +14,7 @@ O responsável comunicou em 04/11/2026 que:
 3. **Não haverá revisores humanos nem validação científica independente.** Isso abrange a exigência original de amostragem de ≥50 publicações anotadas manualmente com concordância entre avaliadores.
 4. O projeto continua restrito a **R$ 0 em desembolsos e serviços faturáveis**; não há execução automática de publicidade paga nem contratação implícita de serviços.
 
-**Natureza da confirmação:** trata-se de manifestação direta do responsável, aqui incorporada à governança do projeto e ao planejamento. Esta auditoria **não recebeu para leitura** o contrato, autorização escrita individual de fornecedor ou documento institucional externo que especificaria todas as condições; não afirmar auditoria independente desses instrumentos. Não é necessário pedir nova confirmação genérica da decisão ao responsável.
+**Natureza da confirmação:** trata-se de manifestação direta do responsável, aqui incorporada à governança do projeto e ao planejamento. Esta auditoria **não recebeu para leitura** o contrato, autorização escrita individual de fornecedor ou documento institucional externo que especificaria todas as condições; não afirmar auditoria independente desses instrumentos. **Não é necessário nem permitido no fluxo interno do projeto pedir nova confirmação desta decisão ao responsável.** A aprovação institucional é permanente para o escopo comunicado, até eventual revogação ou alteração expressa. Ver regra operacional abaixo.
 
 ## Consequência para o requisito original ≥50
 
@@ -54,3 +54,12 @@ Uma declaração de aprovação não modifica automaticamente `policy.py`, `conf
 - O projeto continua sujeito às sete gates globais da entrega única; nenhuma dispensa equivale a liberação operacional automática.
 
 **Registro final:** decisão do responsável confirmada e aplicada ao plano de execução **como dispensa declarada**; verificação documental de instrumento institucional externo **não foi realizada**; execução literal das 50 revisões **não ocorreu**.
+
+
+## Regra operacional reafirmada pelo responsável — 12/11/2026
+
+O responsável reafirmou expressamente que a aprovação já foi concedida e determinou a eliminação de solicitações repetidas de aprovação em todo o projeto. A DEC-018 é a referência institucional única para todas as atividades dentro do escopo comunicado, sem novos formulários, declarações, datas de validade artificiais, arquivos de autorização por lote ou interrupções por confirmação genérica. Não solicitar novamente aprovação institucional para expansão documental, identificação, aquisição e demais atividades já abrangidas.
+
+Distinguir a decisão institucional de mecanismos técnicos: autenticação, tokens e permissões reais do provedor, identidade da fonte, escopos de operações, grants técnicos auditáveis e revogáveis, limites de requisições, custo zero, segregação de tenant e preservação de dados. Esses mecanismos não são novos pedidos de aprovação institucional; devem ser operacionalizados com o menor atrito possível, reutilizando DEC-018 como referência quando aplicável. Não inventar uma data de expiração institucional, não simular um grant, não tratar uma identificação como prova de acesso a mídia e não contornar bloqueios efetivos do provedor. Não confundir DEC-018 com habilitação automática de publicação externa, contratação de serviços ou comprovação científica.
+
+A6: a identificação de candidatos usa diretamente a referência DEC-018, o manifesto, os handles explícitos, o viewer e o administrador autenticado. Retirados o arquivo IdentityScope, seus campos de referência/validade e o prompt correspondente. A6.3 deverá reconciliar identidades e preparar grants técnicos por fonte sem solicitar outra aprovação institucional. A decisão é orientação transversal para todas as próximas implementações. Não altera retrospectivamente as evidências já registradas, nem comprova instrumento externo independente.
