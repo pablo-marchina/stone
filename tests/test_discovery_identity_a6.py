@@ -92,7 +92,6 @@ def test_identity_scope_and_provider_mismatch_fail_closed(setup,monkeypatch):
     assert len(calls)==1
 
 
-
 def test_failure_stops_batch_and_keeps_all_reserved_slots(setup):
     engine,store,frame,scope=setup
     extra=frame.sources[1].model_copy(update={"username":"another_candidate","expected_ig_id":None})
