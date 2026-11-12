@@ -265,12 +265,14 @@ class IngestionStore:
                 requested_at=now_utc().isoformat(),status="reserved",new_records=0,
                 refreshed_records=0,duplicate_records=0))
 
-    def _finish(self,tenant,run_key,status,added=0,duplicate=0,refreshed=0,reason=None):
+    def _finish(self,tenant,run_key,status,added=0,duplicate=0,refreshed=0,reason=None, *, after_finish=None):
         with self.engine.begin() as db:
             db.execute(update(ingestion_runs).where(ingestion_runs.c.tenant_id==tenant,
                 ingestion_runs.c.run_key==run_key).values(status=status,
                   new_records=added,duplicate_records=duplicate,
                   refreshed_records=refreshed,reason_code=reason))
+            if after_finish is not None:
+                after_finish(db)
 
     def _persist_item(self, tenant: str, item: NormalizedItem, *, provenance_writer=None) -> str:
         """Store a new post or append a changed metric snapshot atomically.
