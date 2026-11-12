@@ -15,7 +15,7 @@ from .ingestion import ingestion_runs, source_grants, stable_id
 from .sa_store import domain_events, outbox
 from .storage import now_utc
 
-CYCLE_KEY = re.compile(r"a5(?:history|refresh)-[0-9]{14}-[a-f0-9]{8}\Z")
+CYCLE_KEY = re.compile(r"(?:a5(?:history|refresh)|a6identity)-[0-9]{14}-[a-f0-9]{8}\Z")
 RUN_KEY = re.compile(r"a5(?:history|refresh)-[0-9]{14}-[a-f0-9]{8}-0[1-5]\Z")
 RECOVERY_EVENT = "business_discovery.failed_run_reviewed"
 
