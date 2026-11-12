@@ -1,6 +1,6 @@
 # CAP-001 / A4 — lote ampliado de observações técnicas Meta Business Discovery
 
-**Corte:** 06/11/2026. **Escopo:** seleção explícita de fontes, coleta oficial limitada, persistência, deduplicação e relatório de cobertura. **Status:** código e testes offline implementados; **nenhuma nova chamada Meta efetuada neste PR**, pois o ambiente de implementação não possui token, viewer ID, banco/tenant operacional nem grants consultáveis. Não declarar números reais novos até executar o comando autorizado.
+**Corte:** 06/11/2026. **Escopo:** seleção explícita de fontes, coleta oficial limitada, persistência, deduplicação e relatório de cobertura. **Status atualizado em 12/11/2026:** código e testes offline implementados; duas execuções reais no ambiente autorizado do operador reportadas com sucesso, incluindo reauditoria local e refresh sem duplicação. Ver seção de evidência operacional ao final. O banco privado não foi inspecionado diretamente nesta revisão.
 
 **Precedência:** [DEC-016](33_DEC016_IMPLEMENTACAO_FONTE_ELEGIBILIDADE_DATA_CARD_V2.md), [DEC-018](53_DEC018_CONFIRMACAO_ALCANCE_E_CRITERIO_REVISAO_2026-11-05.md) e [A3 técnico real](45_A3_BUSINESS_DISCOVERY_PRIMEIRO_LOTE_TECNICO.md). A4 **não** é revisão independente nem inclusão científica automática.
 
@@ -54,6 +54,32 @@ O resultado é JSON privado. Verificar `status`, `sources[].audit_all_traces_val
 | Proveniência | Auditoria de eventos, snapshots, outbox, hashes e run keys; nenhuma credencial/cursor armazenado | Hash é integridade local, não assinatura Meta |
 | Limites e bloqueios | Preflight de todos os grants, validação de janela/flags, limite 5×4, stop-on-error | Sem medição de quotas Meta em ambiente real |
 | Cobertura | Contagens por origem e total de registros técnicos únicos no banco antes/depois | Não prova representatividade/validade científica |
-| Dados reais novos | **Não executados neste ambiente** | Pendente de token Meta válido, grants e banco do operador |
+| Dados reais novos | **12 novos registros técnicos reportados em 12/11/2026; 12 refreshes na segunda execução** | Uma fonte real; banco privado não inspecionado diretamente nesta revisão |
 
 **Nota:** a referência científica de 2.000–5.000 posts e pelo menos 30 perfis continua pendente. O lote A4 é operacionalmente limitado para segurança e não pretende atingir essa meta em uma execução.
+
+## Evidência operacional reportada pelo operador — 12/11/2026
+
+Prévia offline: manifesto SHA-256 `b506a6e3cd4513a1a1c41c13ef82cbaa0654f0a9b0c7d4fa804bfdc475dd74b0`; 1 fonte selecionada de 6 candidatas (Sebrae, `17841403133066329`); limites 4 páginas, 10 itens/página, 12 observações. O endpoint de prontidão havia retornado `READY_FOR_BOUNDED_PREFLIGHT` sem bloqueios.
+
+| Evidência | Lote 1 | Lote 2 |
+|---|---:|---:|
+| Batch key | `bdbatch-20261112-103410` | `bdbatch-20261112-103638` |
+| Run key | `bdbatch-20261112-103410-01` | `bdbatch-20261112-103638-01` |
+| Status | BATCH_COMPLETED | BATCH_COMPLETED |
+| Páginas examinadas | 4 | 4 |
+| Itens retornados | 32 | 32 |
+| Excluídos por idade | 20 | 20 |
+| Observações elegíveis | 12 | 12 |
+| Registros novos | 12 | 0 |
+| Refresh de métricas | 0 | 12 |
+| Duplicatas inalteradas | 0 | 0 |
+| Posts técnicos únicos antes/depois | 3 → 15 | 15 → 15 |
+| Reauditoria read-only: observações | 12 | 12 |
+| Reauditoria: all_traces_valid | true | true |
+| Reauditoria: has_persisted_observations | true | true |
+| Admissões científicas | 0 | 0 |
+
+**Conclusão restrita:** a repetição real preservou a cardinalidade dos posts e registrou refresh de métricas nas 12 observações. A implementação compara likes, comments, follower_count e views; o resumo não identifica qual campo mudou. Não afirmar que todos os posts ganharam curtidas ou comentários. As 24 observações dos dois runs não são 24 posts únicos.
+
+**Limites da evidência:** transcrição dos resumos de CLI/JSON e da reauditoria executada pelo operador, não inspeção independente do banco, dos JSON completos ou dos payloads Meta. Não anexar tokens, dados privados ou payloads. O teste multifonte real continua pendente; testes simulados cobrem múltiplas fontes, mas não o comportamento live. A referência científica de 30 perfis/2.000–5.000 posts não foi atingida; `production_approved=false`. Esta evidência não libera gates globais, não autoriza novas fontes e não substitui a revisão final do diff.
