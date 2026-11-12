@@ -1,0 +1,49 @@
+{
+  "schema_version": "tapi-bd-technical-batch.v1",
+  "sources": [
+    {
+      "username": "sebrae",
+      "expected_ig_id": "17841403133066329",
+      "sampling_stratum": "cross_sector_institution",
+      "audience_intent": "mpe_targeted",
+      "source_evidence_reference": "docs/45_A3_BUSINESS_DISCOVERY_PRIMEIRO_LOTE_TECNICO.md",
+      "audience_rationale_reference": "docs/45_A3_BUSINESS_DISCOVERY_PRIMEIRO_LOTE_TECNICO.md",
+      "status": "candidate"
+    },
+    {
+      "username": "vaicomeroquee",
+      "sampling_stratum": "food_documented_candidate",
+      "audience_intent": "uncertain",
+      "source_evidence_reference": "docs/30_MPE_CANDIDATES_FIRST_ELIGIBLE_V52.md",
+      "status": "candidate"
+    },
+    {
+      "username": "solmaior_supermercado",
+      "sampling_stratum": "commerce_documented_candidate",
+      "audience_intent": "uncertain",
+      "source_evidence_reference": "docs/30_MPE_CANDIDATES_FIRST_ELIGIBLE_V52.md",
+      "status": "candidate"
+    },
+    {
+      "username": "usecairos",
+      "sampling_stratum": "commerce_research_candidate",
+      "audience_intent": "uncertain",
+      "source_evidence_reference": "docs/30_MPE_CANDIDATES_FIRST_ELIGIBLE_V52.md",
+      "status": "candidate"
+    },
+    {
+      "username": "comuniquedigital_",
+      "sampling_stratum": "services_documented_candidate",
+      "audience_intent": "uncertain",
+      "source_evidence_reference": "docs/30_MPE_CANDIDATES_FIRST_ELIGIBLE_V52.md",
+      "status": "candidate"
+    },
+    {
+      "username": "volkstore",
+      "sampling_stratum": "commerce_historical_candidate",
+      "audience_intent": "uncertain",
+      "source_evidence_reference": "docs/30_MPE_CANDIDATES_FIRST_ELIGIBLE_V52.md",
+      "status": "candidate"
+    }
+  ]
+}

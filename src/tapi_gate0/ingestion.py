@@ -294,6 +294,23 @@ class IngestionStore:
         complete = all(x is not None for x in (
             item.likes, item.comments, item.follower_count))
         with self.engine.begin() as db:
+            # Serialize Instagram media ownership across all ingestion paths.
+            # Lock order: tenant, then source grant. The ownership check and
+            # content/snapshot/outbox writes share the same transaction.
+            if item.platform == Platform.INSTAGRAM:
+                locked = db.execute(update(tenants).where(
+                    tenants.c.tenant_id == tenant
+                ).values(name=tenants.c.name))
+                if locked.rowcount != 1:
+                    raise ConnectorError("INGESTION_TENANT_NOT_FOUND", 404)
+                conflict = db.execute(select(ingestion_records.c.source_account_id).where(
+                    ingestion_records.c.tenant_id == tenant,
+                    ingestion_records.c.platform == Platform.INSTAGRAM.value,
+                    ingestion_records.c.source_item_id == item.source_item_id,
+                    ingestion_records.c.source_account_id != item.source_account_id,
+                ).limit(1)).first()
+                if conflict:
+                    raise ConnectorError("BD_CROSS_SOURCE_MEDIA_ID_CONFLICT", 409)
             # Serialize persistence against administrative revocation. A no-op
             # UPDATE holds the account row lock through the content transaction.
             active=db.execute(update(source_grants).where(
