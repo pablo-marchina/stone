@@ -233,7 +233,7 @@ def test_a5_plan_cli_needs_no_token_and_never_writes(tmp_path,monkeypatch,capsys
         monkeypatch.setenv("TAPI_TENANT_ID",TENANT)
         monkeypatch.setenv("TAPI_META_IG_ID",VIEWER)
         monkeypatch.delenv("TAPI_INSTAGRAM_ACCESS_TOKEN",raising=False)
-        path=tmp_path/"manifest.json";path.write_text(manifest(approved=1).model_dump_json())
+        path=tmp_path/"manifest.json";path.write_text(manifest(approved=1).model_dump_json(), encoding="utf-8")
         assert main(["--manifest",str(path),"--mode","history"])==0
         result=json.loads(capsys.readouterr().out)
         assert result["status"]=="PLAN_ONLY_NO_EXTERNAL_READ"
@@ -243,3 +243,19 @@ def test_a5_plan_cli_needs_no_token_and_never_writes(tmp_path,monkeypatch,capsys
             assert conn.execute(select(func.count()).select_from(ingestion_runs)).scalar_one()==0
     finally:
         engine.dispose()
+
+
+def test_a5_missing_database_is_blocked_without_creating_file(tmp_path, monkeypatch, capsys):
+    from scripts.a5_business_discovery_cycle import main
+    from scripts.a5_recover_business_discovery import main as recover
+    missing = tmp_path / "missing db.sqlite"
+    monkeypatch.setenv("TAPI_DATABASE_URL", "sqlite:///" + missing.as_posix())
+    monkeypatch.setenv("TAPI_TENANT_ID", TENANT)
+    monkeypatch.setenv("TAPI_META_IG_ID", VIEWER)
+    path = tmp_path / "manifest.json"
+    path.write_text(manifest(approved=1).model_dump_json(), encoding="utf-8")
+    assert main(["--manifest", str(path), "--mode", "history"]) == 2
+    assert json.loads(capsys.readouterr().out)["code"] == "A5_DATABASE_INVALID_OR_MISSING"
+    assert recover([]) == 2
+    assert json.loads(capsys.readouterr().out)["code"] == "EXISTING_DATABASE_AND_TENANT_REQUIRED"
+    assert not missing.exists()
