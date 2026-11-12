@@ -1,4 +1,4 @@
-"""Plan identity-only Meta reads; actual execution requires an admin and private scope."""
+"""Plan identity-only Meta reads; execution uses standing DEC-018 and authenticated admin."""
 import argparse
 import getpass
 import json
@@ -9,7 +9,7 @@ from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 from tapi_gate0.connectors import ConnectorError
 from tapi_gate0.discovery_batch import BatchManifest
-from tapi_gate0.discovery_identity_a6 import IdentityScope, execute_identity, plan_identity
+from tapi_gate0.discovery_identity_a6 import execute_identity, plan_identity
 from tapi_gate0.discovery_local_db import validate_existing_database_url
 from tapi_gate0.identity import IdentityFailure, IdentityStore
 from tapi_gate0.sa_store import engine_for
@@ -21,7 +21,6 @@ def main(argv=None):
     p.add_argument("--source", action="append", required=True)
     p.add_argument("--daily-request-budget", type=int, default=80)
     p.add_argument("--execute", action="store_true")
-    p.add_argument("--scope", type=Path)
     p.add_argument("--report", type=Path)
     p.add_argument("--admin", default="admin")
     args = p.parse_args(argv)
@@ -34,9 +33,8 @@ def main(argv=None):
             result, _ = plan_identity(engine, tenant, manifest, viewer, args.source, daily_budget=args.daily_request_budget)
         else:
             root = (Path(__file__).resolve().parents[1] / "artifacts" / "private").resolve()
-            if not args.scope or not args.report or any(not x.resolve().is_relative_to(root) or x.suffix.lower() != ".json" for x in (args.scope,args.report)):
-                raise ConnectorError("BD_IDENTITY_PRIVATE_SCOPE_AND_REPORT_REQUIRED", 422)
-            scope = IdentityScope.model_validate_json(args.scope.read_text(encoding="utf-8"))
+            if not args.report or not args.report.resolve().is_relative_to(root) or args.report.suffix.lower() != ".json":
+                raise ConnectorError("BD_IDENTITY_PRIVATE_REPORT_REQUIRED", 422)
             args.report.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
             fd = os.open(args.report, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             with os.fdopen(fd,"w",encoding="utf-8") as stream:
@@ -44,7 +42,7 @@ def main(argv=None):
                 session = identity.login(args.admin,getpass.getpass("Admin password: "),tenant)
                 principal = identity.resolve(session.access_token)
                 try:
-                    result = execute_identity(engine,principal,manifest,viewer,args.source,scope,daily_budget=args.daily_request_budget)
+                    result = execute_identity(engine,principal,manifest,viewer,args.source,daily_budget=args.daily_request_budget)
                 finally:
                     identity.revoke(session.access_token,principal)
                 json.dump(result,stream,ensure_ascii=False,indent=2)
