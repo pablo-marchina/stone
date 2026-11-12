@@ -1,6 +1,6 @@
 # CAP-001 / A5 — aquisição histórica e contínua com curadoria incremental
 
-**Data:** 12/11/2026. **Base:** main após merge do [PR #42](https://github.com/pablo-marchina/stone/pull/42) (`d2efe5f`). **Status:** incremento implementado e testado offline; primeiro ciclo histórico real A5 reportado em 12/11/2026, com checkpoints nas três fontes. Retomada real e refresh ainda pendentes. A4 comprovou 39 posts técnicos únicos em 3 fontes, 60 observações reauditadas nos três lotes A4, zero admissões científicas. DEC-016 e DEC-018 continuam aplicáveis.
+**Data:** 12/11/2026. **Base:** main após merge do [PR #42](https://github.com/pablo-marchina/stone/pull/42) (`d2efe5f`). **Status:** incremento implementado e testado offline; dois ciclos históricos reais A5 reportados em 12/11/2026, com retomada nas três fontes, 197 media IDs únicos e auditorias válidas. Refresh e recuperação auditada ainda pendentes. A4 comprovou 39 posts técnicos únicos em 3 fontes, 60 observações reauditadas nos três lotes A4, zero admissões científicas. DEC-016 e DEC-018 continuam aplicáveis.
 
 ## Arquitetura e decisões
 
@@ -107,3 +107,18 @@ Ciclo `a5history-20261112141205-e3d3524b`, status BATCH_COMPLETED: 12 páginas, 
 | Stone | a5history-20261112141205-e3d3524b-03 | 20 | 12 | 32 | 4 | continuation_available |
 
 Reauditoria de todos os runs: completed, all_traces_valid=true, has_persisted_observations=true. Zero admissão científica, production_approved=false, cobertura não exaustiva. Orçamento conservador esperado após o ciclo: 32/80, sujeito à próxima prévia. A prévia e o ciclo bem-sucedido evidenciam disponibilidade das tabelas no DB operacional; backup e saída exata Alembic não foram fornecidos. Fonte: resumos CLI e reauditoria reportados pelo operador, não inspeção independente do DB/JSON integral. Não registrar cursores privados. Segundo ciclo deve confirmar avanço de pages_examined e last_run_key; refresh deve preservar o checkpoint. Sebrae pode atingir a quota de cinco reservas diárias após a segunda execução histórica, portanto não forçar refresh se deferido. PR permanece draft.
+
+
+## Segunda execução histórica real e prova de retomada — 12/11/2026
+
+Ciclo `a5history-20261112141401-2ccaaea7`: BATCH_COMPLETED, mesmo manifesto SHA-256 `a1e61806a5b9a57f307f0c0b129fe6f59a63666a7930ecaae90ceb668ef18717`. Prévia: três fontes autorizadas selecionadas, 12 candidatas deferidas, orçamento conservador 32/80. Foram consultadas 12 páginas, retornados 120 itens, zero excluídos por idade, 120 elegíveis e **120 novos**, zero refreshes ou duplicatas. Cobertura do tenant: 77 → 197 registros técnicos e media IDs distintos, três fontes, zero duplicatas entre fontes. Zero admissões científicas e produção não aprovada.
+
+| Fonte | Run key | Novos | Total técnico acumulado | Observações reauditadas | Páginas cumulativas | Checkpoint |
+|---|---|---:|---:|---:|---:|---|
+| Sebrae | a5history-20261112141401-2ccaaea7-01 | 40 | 60 | 40 | 8 | continuation_available |
+| Ton | a5history-20261112141401-2ccaaea7-02 | 40 | 65 | 40 | 8 | continuation_available |
+| Stone | a5history-20261112141401-2ccaaea7-03 | 40 | 72 | 40 | 8 | continuation_available |
+
+Todos os runs BD_TECHNICAL_METADATA_COMMITTED; reauditorias read-only completed, all_traces_valid=true, has_persisted_observations=true. Consulta local reportada aos checkpoints confirma avanço 4 → 8 páginas e last_run_key do segundo ciclo nas três fontes, sem divulgar cursores. Dois ciclos históricos A5: 197 observações reauditadas, 158 novos registros e 39 refreshes. Rendimento do segundo ciclo (120 novos/120 retornados) não é garantia de ciclos futuros. Evidência operacional fornecida pelo operador; sem inspeção independente do banco, dos payloads ou dos relatórios integrais.
+
+**Aceite de retomada histórica real reportado.** Orçamento conservador esperado 44/80 após o ciclo. Sebrae atingiu, segundo o histórico informado, cinco reservas diárias; validar a próxima prévia e não contornar a quota. Próximo teste: refresh de fontes elegíveis (esperadas Stone/Ton), com comparação integral dos checkpoints localmente antes/depois, sem publicar cursores ou referências privadas. Recuperação auditada de falhas e agendamento ainda pendentes; PR permanece draft. Meta de 30 fontes e 2.000–5.000 posts não atingida, nem comparável automaticamente à base científica.
