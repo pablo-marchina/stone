@@ -11,6 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from tapi_gate0.connectors import ConnectorError
 from tapi_gate0.discovery_batch import BatchLimits, BatchManifest
 from tapi_gate0.discovery_continuous import execute_cycle, plan_cycle, tenant_coverage
+from tapi_gate0.discovery_local_db import validate_existing_database_url
 from tapi_gate0.ingestion import IngestionStore
 from tapi_gate0.sa_store import engine_for
 
@@ -41,14 +42,13 @@ def main(argv=None):
         product = args.page_limit * args.max_pages
         limits = BatchLimits(max_sources=args.max_sources, page_limit=args.page_limit,
             max_pages=args.max_pages, persist_limit=product if args.mode == "history" else min(12, product))
-        url = os.environ["TAPI_DATABASE_URL"]
-        if not url.startswith(("sqlite:///", "postgresql+psycopg://")):
-            raise ValueError("INVALID_DATABASE_URL")
-        # Local SQLite must exist: planning must not create a database.
-        if url.startswith("sqlite:///") and not Path(url.removeprefix("sqlite:///")).is_file():
-            raise ValueError("DATABASE_MUST_EXIST")
     except (OSError, ValidationError, ValueError):
         print(json.dumps({"status": "BLOCKED", "code": "A5_INVALID_MANIFEST_OR_LIMITS", "external_data_accessed": False}))
+        return 2
+    try:
+        url = validate_existing_database_url(os.environ["TAPI_DATABASE_URL"])
+    except (OSError, ValueError, SQLAlchemyError):
+        print(json.dumps({"status": "BLOCKED", "code": "A5_DATABASE_INVALID_OR_MISSING", "external_data_accessed": False}))
         return 2
     try:
         engine = engine_for(url)
