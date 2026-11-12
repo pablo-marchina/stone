@@ -5,10 +5,10 @@ import argparse
 import getpass
 import json
 import os
-from pathlib import Path
 
 from sqlalchemy.exc import SQLAlchemyError
 from tapi_gate0.connectors import ConnectorError
+from tapi_gate0.discovery_local_db import validate_existing_database_url
 from tapi_gate0.discovery_recovery import inspect_recovery, recover_orphan_lease, review_failure
 from tapi_gate0.identity import IdentityFailure, IdentityStore
 from tapi_gate0.sa_store import engine_for
@@ -29,8 +29,11 @@ def main(argv=None):
     if mutation and not args.confirm_all_ingestion_stopped:
         parser.error("stop every ingestion process before recovery; explicit confirmation required")
     url, tenant = os.getenv("TAPI_DATABASE_URL", ""), os.getenv("TAPI_TENANT_ID", "")
-    if not tenant or not url.startswith(("sqlite:///", "postgresql+psycopg://")) or (
-            url.startswith("sqlite:///") and not Path(url.removeprefix("sqlite:///")).is_file()):
+    try:
+        if not tenant:
+            raise ValueError("TENANT_REQUIRED")
+        url = validate_existing_database_url(url)
+    except (OSError, ValueError, SQLAlchemyError):
         print(json.dumps({"status":"BLOCKED", "code":"EXISTING_DATABASE_AND_TENANT_REQUIRED"}))
         return 2
     engine = None
