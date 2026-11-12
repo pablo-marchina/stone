@@ -9,6 +9,8 @@ Este pacote materializa as decisões do responsável pelo projeto: **repositóri
 
 > **CAP-001/A4 (06/11):** novo [lote curado Business Discovery](docs/55_CAP001_A4_LOTE_AMPLIADO_BUSINESS_DISCOVERY_2026-11-06.md), com até cinco fontes aprovadas, persistência limitada de até 40 observações por fonte, deduplicação, eventos e cobertura. **Nenhuma nova leitura real foi feita neste desenvolvimento sem credenciais/grants**; os candidatos documentais não são autorização. A execução é opt-in no ambiente do operador.
 
+> **CAP-001/A5 (12/11):** [aquisição histórica e contínua](docs/56_CAP001_A5_AQUISICAO_HISTORICA_CONTINUA_2026-11-12.md): checkpoint privado, histórico/refresh separados, fila limitada, intake documental e migração 0012. A4 integrado com 39 posts técnicos reais reportados; A5 implementado/testado offline, execução real e agendamento pendentes. Sem admissão científica ou produção.
+
 ## O que funciona agora
 
 - API de bootstrap e API segura com identidade, domínio, eventos, UI e conectores oficiais condicionados a autorização específica; nenhum acesso real realizado.
