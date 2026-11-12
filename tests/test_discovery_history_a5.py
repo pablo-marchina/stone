@@ -208,3 +208,38 @@ def test_migration_preserves_existing_ingestion_tables(tmp_path,monkeypatch):
         assert inspect(engine).has_table("ingestion_records")
     finally:
         engine.dispose()
+
+
+def test_candidate_intake_preserves_existing_approvals_and_never_promotes():
+    from scripts.a5_expand_source_frame import merge_candidates
+    from tapi_gate0.discovery_batch import BatchManifest
+    base=manifest(approved=1)
+    public=BatchManifest.model_validate_json((Path(__file__).resolve().parents[1]/
+        "evidence/acquisition/bd_a5_candidate_expansion_20261112.json").read_text(encoding="utf-8"))
+    merged=merge_candidates(base,public)
+    assert len(merged.sources)==len(base.sources)+6
+    assert merged.sources[:len(base.sources)]==base.sources
+    assert sum(s.status=="approved" for s in merged.sources)==1
+    assert all(s.status=="candidate" and not s.allowed_operations for s in public.sources)
+    with pytest.raises(ValueError,match="CANDIDATE_FRAME_CANNOT_CONTAIN_APPROVALS"):
+        merge_candidates(base,manifest())
+
+
+def test_a5_plan_cli_needs_no_token_and_never_writes(tmp_path,monkeypatch,capsys):
+    from scripts.a5_business_discovery_cycle import main
+    engine,store=db(tmp_path)
+    try:
+        monkeypatch.setenv("TAPI_DATABASE_URL",str(engine.url))
+        monkeypatch.setenv("TAPI_TENANT_ID",TENANT)
+        monkeypatch.setenv("TAPI_META_IG_ID",VIEWER)
+        monkeypatch.delenv("TAPI_INSTAGRAM_ACCESS_TOKEN",raising=False)
+        path=tmp_path/"manifest.json";path.write_text(manifest(approved=1).model_dump_json())
+        assert main(["--manifest",str(path),"--mode","history"])==0
+        result=json.loads(capsys.readouterr().out)
+        assert result["status"]=="PLAN_ONLY_NO_EXTERNAL_READ"
+        assert result["selected_sources"]==[SOURCES[0][0]]
+        assert checkpoint(engine) is None
+        with engine.connect() as conn:
+            assert conn.execute(select(func.count()).select_from(ingestion_runs)).scalar_one()==0
+    finally:
+        engine.dispose()
