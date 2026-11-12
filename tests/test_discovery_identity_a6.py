@@ -90,3 +90,47 @@ def test_identity_scope_and_provider_mismatch_fail_closed(setup,monkeypatch):
         result=execute_identity(engine,ADMIN,frame,VIEWER,["mpe_example"],scope,token=TOKEN,http=transport)
         assert result["status"]=="IDENTITY_BATCH_STOPPED" and result["results"][0]["code"]=="BD_IDENTITY_TARGET_MISMATCH"
     assert len(calls)==1
+
+
+
+def test_failure_stops_batch_and_keeps_all_reserved_slots(setup):
+    engine,store,frame,scope=setup
+    extra=frame.sources[1].model_copy(update={"username":"another_candidate","expected_ig_id":None})
+    frame=BatchManifest(schema_version=frame.schema_version,sources=[*frame.sources,extra])
+    handles=["mpe_example","another_candidate"]
+    scope=scope.model_copy(update={"manifest_sha256":frame.fingerprint(),"usernames":handles})
+    calls=[]
+    def handler(req):
+        calls.append(req)
+        return httpx.Response(429,json={"error":{"code":4}})
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        result=execute_identity(engine,ADMIN,frame,VIEWER,handles,scope,token=TOKEN,http=OfficialHttp(client=client,instagram_version="v26.0"))
+    assert result["status"]=="IDENTITY_BATCH_STOPPED" and len(calls)==1 and result["reserved_requests"]==2
+    with pytest.raises(ConnectorError,match="BD_IDENTITY_DAILY_ATTEMPT_EXISTS"):
+        plan_identity(engine,TENANT,frame,VIEWER,["another_candidate"])
+    assert plan_cycle(store,TENANT,frame,VIEWER,mode="history",limits=BatchLimits(persist_limit=40))[0]["conservative_reserved_pages_today"]==2
+
+
+def test_admin_and_flags_are_required_before_network(setup,monkeypatch):
+    engine,store,frame,scope=setup
+    reader=Principal(actor_id="reader",tenant_id=TENANT,role="viewer")
+    with pytest.raises(ConnectorError,match="BD_IDENTITY_ADMIN_REQUIRED"):
+        execute_identity(engine,reader,frame,VIEWER,["mpe_example"],scope,token=TOKEN)
+    monkeypatch.setenv("TAPI_BD_IDENTITY_ENABLED","0")
+    with pytest.raises(ConnectorError,match="BD_IDENTITY_FLAGS_REQUIRED"):
+        execute_identity(engine,ADMIN,frame,VIEWER,["mpe_example"],scope,token=TOKEN)
+    with engine.connect() as conn:
+        assert conn.execute(select(func.count()).select_from(domain_events).where(domain_events.c.event_type==RESERVATION)).scalar_one()==0
+
+
+def test_cli_plan_without_credentials(setup,tmp_path,monkeypatch,capsys):
+    from scripts.a6_identify_sources import main
+    engine,store,frame,scope=setup
+    path=tmp_path/"manifest.json"
+    path.write_text(frame.model_dump_json(),encoding="utf-8")
+    monkeypatch.setenv("TAPI_DATABASE_URL",str(engine.url))
+    monkeypatch.setenv("TAPI_TENANT_ID",TENANT)
+    monkeypatch.setenv("TAPI_META_IG_ID",VIEWER)
+    monkeypatch.delenv("TAPI_INSTAGRAM_ACCESS_TOKEN",raising=False)
+    assert main(["--manifest",str(path),"--source","mpe_example"])==0
+    assert json.loads(capsys.readouterr().out)["external_data_accessed"] is False
