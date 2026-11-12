@@ -1,0 +1,210 @@
+"""A5 private historical checkpoint, bounded scheduling and recovery tests (no network)."""
+import json
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+import httpx
+import pytest
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import func, inspect, select
+
+from tapi_gate0.connectors import ConnectorError, OfficialHttp
+from tapi_gate0.discovery_batch import BatchLimits
+from tapi_gate0.discovery_continuous import execute_cycle, plan_cycle, tenant_coverage
+from tapi_gate0.discovery_history import cycle_lease, read_checkpoint
+from tapi_gate0.discovery_technical import TechnicalDiscoveryRequest, TechnicalDiscoveryService
+from tapi_gate0.ingestion import ingestion_runs
+from tapi_gate0.sa_store import engine_for
+from test_discovery_batch_a4 import db, manifest, SOURCES, TENANT, VIEWER, TOKEN
+
+
+@pytest.fixture(autouse=True)
+def switches(monkeypatch):
+    for key in ("TAPI_BD_CONTINUOUS_ENABLED", "TAPI_BD_TECHNICAL_INGEST",
+                "TAPI_OFFICIAL_METADATA_READS", "TAPI_ZERO_BILLING_CONFIRMED"):
+        monkeypatch.setenv(key, "1")
+
+
+def limits(sources=1):
+    return BatchLimits(max_sources=sources, page_limit=2, max_pages=1, persist_limit=2)
+
+
+def provider(*, fail=False, loop=False, recent=False):
+    calls = []
+    def callback(req):
+        fields = req.url.params["fields"]
+        calls.append(fields)
+        assert req.url.host == "graph.facebook.com" and req.url.path == "/v26.0/" + VIEWER
+        assert req.headers["Authorization"] == "Bearer " + TOKEN
+        assert "access_token" not in str(req.url)
+        if fail:
+            return httpx.Response(429, json={"error":{"code":4}})
+        name, ident, _ = next(s for s in SOURCES if f"username({s[0]})" in fields)
+        base = 18000000000000000 + SOURCES.index((name, ident, _)) * 100
+        start = 0 if ".after(" not in fields else 2 if ".after(CURSOR_ONE)" in fields else 4
+        n = 2 if start < 4 else 1
+        rows = [{"id": str(base+start+i), "media_type":"CAROUSEL_ALBUM", "media_product_type":"FEED",
+                 "timestamp": (datetime.now(timezone.utc) - timedelta(days=1 if recent else 40)).isoformat(),
+                 "like_count":10, "comments_count":1, "caption":"Negócios locais",
+                 "permalink":f"https://www.instagram.com/p/Fixture{base+start+i}/"} for i in range(n)]
+        cursor = "CURSOR_ONE" if start == 0 or loop else "CURSOR_TWO" if start == 2 else None
+        paging = {"cursors":{"after":cursor}} if cursor else {}
+        return httpx.Response(200,json={"id":VIEWER,"business_discovery":{
+            "id":ident,"username":name,"followers_count":100,"media_count":5,
+            "media":{"data":rows,"paging":paging}}})
+    client = httpx.Client(transport=httpx.MockTransport(callback))
+    return OfficialHttp(client=client, instagram_version="v26.0"), calls, client
+
+
+def cycle(store, transport, *, mode="history", approved=1, budget=80):
+    return execute_cycle(store,TENANT,manifest(approved=approved),VIEWER,
+        mode=mode,limits=limits(),daily_request_budget=budget,token=TOKEN,http=transport)
+
+
+def checkpoint(engine):
+    with engine.connect() as conn:
+        return read_checkpoint(conn,TENANT,SOURCES[0][1])
+
+
+def test_history_resumes_full_pages_and_refresh_does_not_move_checkpoint(tmp_path):
+    engine,store=db(tmp_path)
+    transport,calls,client=provider()
+    try:
+        first=cycle(store,transport)
+        assert first["batch"]["counts"]["new_records"]==2
+        assert checkpoint(engine)["next_cursor"]=="CURSOR_ONE"
+        assert "CURSOR_ONE" not in json.dumps(first)
+        second=cycle(store,transport)
+        assert second["batch"]["counts"]["new_records"]==2
+        assert ".after(CURSOR_ONE)" in calls[-1]
+        assert checkpoint(engine)["next_cursor"]=="CURSOR_TWO"
+        prior=checkpoint(engine)
+        refreshed=cycle(store,transport,mode="refresh")
+        assert refreshed["batch"]["counts"]["new_records"]==0
+        assert ".after(" not in calls[-1]
+        assert checkpoint(engine)==prior
+        third=cycle(store,transport)
+        assert third["batch"]["counts"]["new_records"]==1
+        assert checkpoint(engine)["status"]=="frontier_unconfirmed"
+        assert checkpoint(engine)["next_cursor"] is None
+        assert checkpoint(engine)["pages_examined"]==3
+        assert tenant_coverage(store,TENANT)["unique_media_ids"]==5
+        fourth=cycle(store,transport)
+        assert fourth["status"]=="NO_DUE_AUTHORIZED_SOURCES"
+        assert len(calls)==4
+        assert fourth["plan"]["deferred"][0]["reason"]=="BD_HISTORY_FRONTIER_UNCONFIRMED"
+        assert cycle(store,transport,mode="refresh")["status"]=="NO_DUE_AUTHORIZED_SOURCES"
+    finally:
+        client.close();engine.dispose()
+
+
+def test_failure_preserves_checkpoint_and_stops_automatic_retries(tmp_path):
+    engine,store=db(tmp_path)
+    ok,calls,client=provider(); bad,bad_calls,bad_client=provider(fail=True)
+    try:
+        cycle(store,ok); prior=checkpoint(engine)
+        report=cycle(store,bad)
+        assert report["status"]=="BATCH_STOPPED_ON_SOURCE_FAILURE"
+        assert checkpoint(engine)==prior
+        assert len(bad_calls)==1
+        assert cycle(store,ok)["status"]=="NO_DUE_AUTHORIZED_SOURCES"
+        assert len(calls)==1
+    finally:
+        client.close();bad_client.close();engine.dispose()
+
+
+def test_cursor_cycle_is_blocked_without_checkpoint_advance(tmp_path):
+    engine,store=db(tmp_path)
+    ok,calls,client=provider(); bad,bad_calls,bad_client=provider(loop=True)
+    try:
+        cycle(store,ok); prior=checkpoint(engine)
+        report=cycle(store,bad)
+        assert report["status"]=="BATCH_STOPPED_ON_SOURCE_FAILURE"
+        assert report["batch"]["failure_code"]=="BD_PAGINATION_STALLED"
+        assert checkpoint(engine)==prior
+        assert "CURSOR_ONE" not in json.dumps(report)
+    finally:
+        client.close();bad_client.close();engine.dispose()
+
+
+def test_empty_eligible_page_advances_without_fabricating_posts(tmp_path):
+    engine,store=db(tmp_path)
+    transport,calls,client=provider(recent=True)
+    try:
+        report=cycle(store,transport)
+        assert report["status"]=="BATCH_NO_ELIGIBLE_OBSERVATIONS"
+        assert report["batch"]["counts"]["new_records"]==0
+        assert checkpoint(engine)["next_cursor"]=="CURSOR_ONE"
+        assert tenant_coverage(store,TENANT)["unique_media_ids"]==0
+    finally:
+        client.close();engine.dispose()
+
+
+def test_history_audit_failure_does_not_advance_checkpoint(tmp_path,monkeypatch):
+    engine,store=db(tmp_path)
+    transport,calls,client=provider()
+    try:
+        monkeypatch.setattr("tapi_gate0.discovery_technical.audit_run",lambda *a,**kw:{"all_traces_valid":False})
+        report=cycle(store,transport)
+        assert report["status"]=="BATCH_STOPPED_ON_SOURCE_FAILURE"
+        assert report["batch"]["failure_code"]=="BD_HISTORY_AUDIT_FAILED"
+        assert checkpoint(engine) is None
+        with engine.connect() as conn:
+            assert conn.execute(select(ingestion_runs.c.status)).scalar_one()=="failed"
+    finally:
+        client.close();engine.dispose()
+
+
+def test_plan_fairness_budget_candidate_and_lease(tmp_path):
+    engine,store=db(tmp_path)
+    transport,calls,client=provider()
+    try:
+        plan,selected=plan_cycle(store,TENANT,manifest(),VIEWER,mode="history",limits=limits())
+        assert len(selected)==1 and plan["external_data_accessed"] is False
+        assert calls==[] and checkpoint(engine) is None
+        first=cycle(store,transport,approved=2)
+        second=cycle(store,transport,approved=2)
+        assert first["plan"]["selected_sources"]!=second["plan"]["selected_sources"]
+        blocked=cycle(store,transport,approved=2,budget=8)
+        assert blocked["status"]=="NO_DUE_AUTHORIZED_SOURCES" and len(calls)==2
+        with cycle_lease(engine,TENANT,"fixture-lease"):
+            with pytest.raises(ConnectorError,match="BD_CYCLE_LEASE_UNAVAILABLE"):
+                cycle(store,transport)
+        assert len(calls)==2
+        plan,_=plan_cycle(store,TENANT,manifest(approved=1),VIEWER,mode="history",limits=limits())
+        assert any(s["reason"]=="SOURCE_NOT_APPROVED" for s in plan["deferred"])
+    finally:
+        client.close();engine.dispose()
+
+
+def test_history_rejects_truncating_page_before_provider(tmp_path):
+    engine,store=db(tmp_path)
+    transport,calls,client=provider()
+    try:
+        req=TechnicalDiscoveryRequest(username=SOURCES[0][0],expected_ig_id=SOURCES[0][1],
+            viewer_ig_id=VIEWER,run_key="a5bad-limit",page_limit=2,max_pages=1,persist_limit=1)
+        with pytest.raises(ConnectorError,match="BD_HISTORY_FULL_PAGE_BUDGET_REQUIRED"):
+            TechnicalDiscoveryService(store).execute(TENANT,req,token=TOKEN,http=transport,history=True)
+        assert not calls
+    finally:
+        client.close();engine.dispose()
+
+
+def test_migration_preserves_existing_ingestion_tables(tmp_path,monkeypatch):
+    path=tmp_path/"migrate.sqlite"
+    monkeypatch.setenv("TAPI_DATABASE_URL",f"sqlite:///{path}")
+    root=Path(__file__).resolve().parents[1]
+    config=Config(str(root/"alembic.ini"));config.set_main_option("script_location",str(root/"migrations"))
+    command.upgrade(config,"0011_studio_source_audio_hq_e8")
+    engine=engine_for(f"sqlite:///{path}")
+    try:
+        assert not inspect(engine).has_table("bd_history_checkpoints")
+        command.upgrade(config,"head")
+        assert inspect(engine).has_table("bd_history_checkpoints")
+        assert inspect(engine).has_table("bd_cycle_leases")
+        command.downgrade(config,"0011_studio_source_audio_hq_e8")
+        assert not inspect(engine).has_table("bd_history_checkpoints")
+        assert inspect(engine).has_table("ingestion_records")
+    finally:
+        engine.dispose()
