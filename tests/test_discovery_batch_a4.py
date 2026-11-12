@@ -54,7 +54,7 @@ def manifest(*, approved=2, expired=False) -> BatchManifest:
 
 
 def db(tmp_path, grants=2):
-    engine = engine_for("sqlite:///" + str(tmp_path / "a4.sqlite"))
+    engine = engine_for("sqlite:///" + (tmp_path / "a4.sqlite").as_posix())
     metadata.create_all(engine)
     with engine.begin() as c:
         c.execute(insert(tenants).values(tenant_id=TENANT, name="A4 test tenant"))
