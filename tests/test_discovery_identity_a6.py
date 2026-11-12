@@ -98,10 +98,16 @@ def test_failure_stops_batch_and_keeps_all_reserved_slots(setup):
     calls=[]
     def handler(req):
         calls.append(req)
-        return httpx.Response(429,json={"error":{"code":4}})
+        return httpx.Response(429,json={"error":{"code":4,"message":TOKEN,"fbtrace_id":TOKEN}})
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
         result=execute_identity(engine,ADMIN,frame,VIEWER,handles,token=TOKEN,http=OfficialHttp(client=client,instagram_version="v26.0"))
     assert result["status"]=="IDENTITY_BATCH_STOPPED" and len(calls)==1 and result["reserved_requests"]==2
+    assert result["results"][0]["provider_diagnostic"]=={"http_status":429,"code":4}
+    assert TOKEN not in json.dumps(result)
+    with engine.connect() as conn:
+        payload=conn.execute(select(domain_events.c.payload).where(domain_events.c.event_type=="business_discovery.identity_result")).scalar_one()
+        assert json.loads(payload)["provider_diagnostic"]=={"http_status":429,"code":4}
+        assert TOKEN not in payload
     with pytest.raises(ConnectorError,match="BD_IDENTITY_DAILY_ATTEMPT_EXISTS"):
         plan_identity(engine,TENANT,frame,VIEWER,["another_candidate"])
     assert plan_cycle(store,TENANT,frame,VIEWER,mode="history",limits=BatchLimits(persist_limit=40))[0]["conservative_reserved_pages_today"]==2
