@@ -12,6 +12,7 @@ from .connectors import ConnectorError, OfficialHttp, Platform, credential_for
 from .discovery_batch import BatchManifest
 from .discovery_history import cycle_lease, lock_tenant, cycle_leases
 from .discovery_auth_guard import require_auth_available, record_auth_failure
+from .discovery_credential_expiry import expiry_status
 from .identity import Principal
 from .ingestion import ingestion_runs, stable_id
 from .sa_store import domain_events, outbox
@@ -74,7 +75,8 @@ def plan_identity(engine, tenant, manifest: BatchManifest, viewer, handles, *, d
         "institutional_decision":INSTITUTIONAL_DECISION, "utc_day":day,
         "selected_sources":[s.username for s in selected], "max_identity_requests":len(selected),
         "identity_reserved_today":used, "conservative_reserved_today":4 * runs + used,
-        "daily_request_budget":daily_budget, "grants_created":0, "external_data_accessed":False}, selected
+        "daily_request_budget":daily_budget, "meta_credential_expiry":expiry_status(),
+        "grants_created":0, "external_data_accessed":False}, selected
 
 
 def _event(db, tenant, key, version, event_type, payload):
