@@ -664,3 +664,30 @@ python scripts/a6_corpus_readiness.py --manifest artifacts/private/bd_manifest_a
 ```
 
 Esperar 12 novos perfis se grants ainda vigentes e iguais, 0 contextos/revisões/admissões, canonical data card com até 480 técnicamente elegíveis e 0 científicos; aplicar apenas após regressão aprovada. Repetição idempotente. Fazer novo backup após alteração real, com comando de drill existente. Não compartilhar JSON privado por post ou banco.
+
+
+## Aceite da triagem, diagnóstico de autenticação e piloto contextual — 13/11/2026
+
+- Operador reportou AUDIENCE_SIGNALS_PLANNED às 23:42 UTC, 480 legendas, 7 sinais explícitos (todos Sebrae), 42 menções (36 Sebrae, 5 Contabilizei, 1 ABIHPEC), 431 abstenções. Arquivo privado a6-audience-20261113-204242.json. Nenhuma decisão de targeting/admissão. Plano 12 REGISTER, cadastro falhou INVALID_CREDENTIALS, card posterior confirma 0 perfis/contextos/admissões e inventário inalterado 605/10. Regressões 543/558 não reportadas; não alegar aprovação integral. Falha de senha pode gravar audit/contador; nenhum cadastro confirmado.
+- Correção CLI a6_corpus_bridge: não assumir login admin; --admin aceita login existente ou prompt explícito. --inspect-local-admins limitado ao CLI operador OS e SQLite já existente; seleciona somente login, disabled, locked_until por membership admin do tenant; sem hash/senha/token, sem escrita ou redefinição. Não expor stdout de diagnóstico a terceiros; não repetir senha incorreta (lock 15 min após 5 falhas no IdentityStore); reutilizar login/senha já usados no provisionamento, não bootstrap/reset manual.
+- CAP-003/IMP-064, CAP-001 IMP-053/170, DEC-017/018: novo adapter `discovery_audience_contextual.py` e CLI `a6_audience_contextual.py`. Reusa E1 LocalGLiNERDecider, EvidenceBundle, checkpoint fixado e validado, sem download, flags offline. Compara candidatos positivo/negativo/abstenção com lexical por matriz 3x3; valida vínculo de hash/fingerprint/modalidade/locator e não promove nenhum resultado a targeting, review ou admissão. Negativo de legenda não exclui post. 6 textos sintéticos cobrem explícito, negação, menção, implícito, institucional e consumidor; smoke de integração não é benchmark científico. Preflight padrão não abre DB/modelo.
+- Política existente `decide(instagram_metadata, classify)` permanece deny-default; --execute bloqueia antes de abrir banco/carregar modelo, mesmo com flag. DEC-018 não precisa ser reafirmada, mas leitura metadata não constitui autorização técnica específica de classificação. Nenhuma alteração de policy ou criação de grant fictício. Caminho futuro de execução somente após política efetiva permitir, reusa readiness com grants e manifesto existentes, sem gravação DB, relatório por post privado exclusivo com hash/locator correlacionável e modelo fixado. Sem texto bruto, sem avaliação audiovisual, sem validação independente. Não habilitar operação real agora. Piloto sintético é opcional se checkpoint local já disponível.
+- 11 PASS em 0,03 s nos testes puros (blobs 4182ce5/adf5628 verificados); dois testes integrados publicados e não executados localmente. Esperado 571 integral se 558 preservados. Sem merge, migração, chamada Meta, inferência real ou alteração do DB operacional pelo assistente.
+
+```powershell
+git pull --ff-only
+python -m pytest -q tests/test_discovery_audience_contextual.py tests/test_discovery_contextual_integration.py tests/test_discovery_audience_signals.py tests/test_discovery_corpus_readiness.py tests/test_discovery_history_a5.py
+python -m pytest -q
+python scripts/verify_zero_spend.py
+python scripts/a6_corpus_bridge.py --inspect-local-admins
+```
+
+Somente no terminal privado: conferir login admin e estado, não enviar login/senha ou hash ao chat. Se conta desbloqueada e senha conhecida, parar ingestão e executar novamente (prompt login e senha):
+
+```powershell
+python scripts/a6_corpus_bridge.py --manifest artifacts/private/bd_manifest_a6_v8.json --register-profiles --confirm-all-ingestion-stopped
+python scripts/a6_corpus_readiness.py --manifest artifacts/private/bd_manifest_a6_v8.json
+python scripts/a6_audience_contextual.py
+```
+
+Esperado cadastro 12/480 técnico/0 científico se grants inalterados; se falhar novamente, parar, não resetar senha diretamente no SQLite. Preflight contextual CONTEXTUAL_READINESS, classification_scope_allowed=false. Após sucesso fazer backup como já documentado. Se checkpoint local previamente validado disponível e flag TAPI_SYSTEM_ONE_ENABLED=1, teste opcional com `--synthetic-smoke --report-name "a6-contextual-synthetic-<stamp>.json"` (TAPI_SYSTEM_ONE_LOCAL_MODEL_DIR aponta para diretório existente fora do projeto). Não executar --execute em base real enquanto policy negar. Próximo resolver escopo técnico efetivo de classificação e contexto de fontes, validar modelo local em smoke e então avaliar corpus, sem simular revisão humana.

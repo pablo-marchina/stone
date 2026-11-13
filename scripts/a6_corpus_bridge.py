@@ -8,38 +8,67 @@ import os
 from pathlib import Path
 import re
 
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from tapi_gate0.connectors import ConnectorError
 from tapi_gate0.discovery_batch import BatchManifest
 from tapi_gate0.discovery_corpus_bridge import audience_preview, register_sampling_profiles
 from tapi_gate0.discovery_local_db import validate_existing_database_url
-from tapi_gate0.identity import IdentityFailure, IdentityStore
+from tapi_gate0.identity import IdentityFailure, IdentityStore, users, memberships, utcnow
+from datetime import datetime
 from tapi_gate0.sa_store import engine_for
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def inspect_local_admins(engine, tenant):
+    """OS-operator CLI only; never select passwords, tokens or hashes."""
+    with engine.connect() as db:
+        rows = db.execute(select(users.c.login, users.c.disabled, users.c.locked_until)
+            .join(memberships, memberships.c.user_id == users.c.user_id)
+            .where(memberships.c.tenant_id == tenant, memberships.c.role == "admin")
+            .order_by(users.c.login)).mappings().all()
+    now = utcnow()
+    return {"status": "LOCAL_ADMIN_INSPECTION", "admins": [
+        {"login": row["login"], "disabled": bool(row["disabled"]),
+         "temporarily_locked": bool(row["locked_until"] and
+             datetime.fromisoformat(row["locked_until"]) > now)} for row in rows],
+        "database_mutated": False, "external_data_accessed": False}
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--manifest", required=True, type=Path)
+    parser.add_argument("--manifest", type=Path)
     parser.add_argument("--report-name", help="Optional new private JSON basename for per-post hashes and spans")
-    parser.add_argument("--register-profiles", action="store_true")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--register-profiles", action="store_true")
+    group.add_argument("--inspect-local-admins", action="store_true", help="OS operator only; show login and lock state, no secrets")
     parser.add_argument("--confirm-all-ingestion-stopped", action="store_true")
-    parser.add_argument("--admin", default="admin")
+    parser.add_argument("--admin", help="Existing local admin login; prompted if omitted")
     args = parser.parse_args(argv)
     engine = None
     try:
         url = validate_existing_database_url(os.environ.get("TAPI_DATABASE_URL", ""))
         tenant, viewer = os.getenv("TAPI_TENANT_ID", ""), os.getenv("TAPI_META_IG_ID", "")
-        if not tenant or not viewer:
+        if not tenant:
+            raise ValueError("MISSING_SCOPE")
+        engine = engine_for(url)
+        if args.inspect_local_admins:
+            if engine.dialect.name != "sqlite" or args.report_name or args.manifest:
+                raise ConnectorError("BD_CORPUS_LOCAL_SQLITE_INSPECTION_ONLY", 422)
+            print(json.dumps(inspect_local_admins(engine, tenant), ensure_ascii=False))
+            return 0
+        if not viewer or args.manifest is None:
             raise ValueError("MISSING_SCOPE")
         manifest = BatchManifest.model_validate_json(args.manifest.read_text(encoding="utf-8"))
-        engine = engine_for(url)
         if args.register_profiles:
             if not args.confirm_all_ingestion_stopped or args.report_name:
                 raise ConnectorError("BD_CORPUS_ADMIN_STOP_REQUIRED", 422)
             identity = IdentityStore(engine)
-            session = identity.login(args.admin, getpass.getpass("Admin password: "), tenant)
+            login = args.admin if args.admin is not None else input("Admin login: ").strip()
+            if not login or len(login) > 128:
+                raise ConnectorError("BD_CORPUS_ADMIN_LOGIN_REQUIRED", 422)
+            session = identity.login(login, getpass.getpass("Admin password: "), tenant)
             principal = identity.resolve(session.access_token)
             try:
                 result = register_sampling_profiles(engine, principal, manifest, viewer, stopped=True)
@@ -69,7 +98,7 @@ def main(argv=None):
         code = exc.code
     except FileExistsError:
         code = "BD_CORPUS_REPORT_EXISTS"
-    except (OSError, ValueError, SQLAlchemyError, KeyError, TypeError, ImportError):
+    except (OSError, ValueError, SQLAlchemyError, KeyError, TypeError, ImportError, EOFError):
         code = "BD_CORPUS_BRIDGE_LOCAL_ERROR"
     finally:
         if engine is not None:
