@@ -140,7 +140,7 @@ def execute_cycle(store: IngestionStore, tenant: str, manifest: BatchManifest,
         if selected:
             subset = BatchManifest(schema_version=manifest.schema_version, sources=selected)
             report["batch"] = TechnicalDiscoveryBatch(store).execute(tenant, subset, limits,
-                viewer, batch_key=key, token=token, http=http, history=mode == "history")
+                viewer, batch_key=key, token=token, http=http, history=mode == "history", cycle_key=key)
             report["status"] = report["batch"]["status"]
             report["tenant_coverage_after"] = tenant_coverage(store, tenant)
         return report
