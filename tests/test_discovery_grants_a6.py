@@ -56,3 +56,40 @@ def test_revoked_not_reenabled(setup):
         db.execute(update(source_grants).values(enabled=0))
     with pytest.raises(ConnectorError,match="BD_GRANT_EXISTING_CONFLICT_OR_EXPIRED"):
         provision(engine,TENANT,VIEWER,frame,["candidate_one"],principal=ADMIN)
+
+
+def test_technical_grant_denies_generic_route_and_other_viewer(setup,monkeypatch):
+    from tapi_gate0.connectors import Platform
+    from tapi_gate0.ingestion import IngestionStore, IngestionRequest, ingestion_runs
+    from tapi_gate0.discovery_technical import TechnicalDiscoveryService, TechnicalDiscoveryRequest
+    engine,base=setup
+    record(engine,base)
+    frame,_=reconcile_identities(engine,TENANT,VIEWER,base,[CYCLE])
+    provision(engine,TENANT,VIEWER,frame,["candidate_one"],principal=ADMIN)
+    for flag in ("TAPI_OFFICIAL_METADATA_READS","TAPI_ZERO_BILLING_CONFIRMED","TAPI_BD_TECHNICAL_INGEST"):
+        monkeypatch.setenv(flag,"1")
+    monkeypatch.delenv("TAPI_INSTAGRAM_ACCESS_TOKEN",raising=False)
+    store=IngestionStore(engine)
+    with pytest.raises(ConnectorError,match="BD_GRANT_TECHNICAL_ROUTE_ONLY"):
+        store.run(TENANT,IngestionRequest(platform=Platform.INSTAGRAM,source_account_id=ID,run_key="generic-run-001"))
+    with pytest.raises(ConnectorError,match="BD_GRANT_VIEWER_MISMATCH"):
+        TechnicalDiscoveryService(store).execute(TENANT,TechnicalDiscoveryRequest(username="candidate_one",expected_ig_id=ID,
+            viewer_ig_id="17841400000000009",run_key="technical-run-001"))
+    with engine.connect() as db:
+        assert db.execute(select(func.count()).select_from(ingestion_runs)).scalar_one()==0
+
+
+def test_cli_preview_without_token(setup,tmp_path,monkeypatch,capsys):
+    import json
+    from scripts import a6_provision_grants as cli
+    engine,base=setup
+    record(engine,base)
+    frame,_=reconcile_identities(engine,TENANT,VIEWER,base,[CYCLE])
+    path=tmp_path/"frame.json"
+    path.write_text(frame.model_dump_json(),encoding="utf-8")
+    monkeypatch.setenv("TAPI_DATABASE_URL",str(engine.url))
+    monkeypatch.setenv("TAPI_TENANT_ID",TENANT)
+    monkeypatch.setenv("TAPI_META_IG_ID",VIEWER)
+    monkeypatch.delenv("TAPI_INSTAGRAM_ACCESS_TOKEN",raising=False)
+    assert cli.main(["--manifest",str(path),"--source","candidate_one"])==0
+    assert json.loads(capsys.readouterr().out)["status"]=="TECHNICAL_GRANTS_PLANNED"
