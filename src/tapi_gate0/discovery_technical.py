@@ -242,7 +242,7 @@ class TechnicalDiscoveryService:
 
     def execute(self, tenant: str, req: TechnicalDiscoveryRequest,
                 *, token: str | None = None, http: OfficialHttp | None = None,
-                history: bool = False) -> dict:
+                history: bool = False, cycle_key: str | None = None) -> dict:
         if os.getenv("TAPI_BD_TECHNICAL_INGEST") != "1":
             raise ConnectorError("BD_TECHNICAL_INGEST_DISABLED", 403)
         if os.getenv("TAPI_OFFICIAL_METADATA_READS") != "1":
@@ -260,7 +260,7 @@ class TechnicalDiscoveryService:
         run = IngestionRequest(platform=Platform.INSTAGRAM,
                                source_account_id=req.expected_ig_id,
                                run_key=req.run_key, limit=req.page_limit)
-        self.store._reserve(tenant, run)
+        self.store._reserve(tenant, run, cycle_key=cycle_key)
         transport = http or OfficialHttp(instagram_version="v26.0")
         created = refreshed = duplicates = 0
         try:
