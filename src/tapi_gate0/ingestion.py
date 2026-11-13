@@ -28,6 +28,8 @@ from .identity import Principal, IdentityFailure
 from .gate0b_technical import assess_metadata_readiness
 
 
+MANUAL_ORPHAN_REASON = "BD_ORPHANED_MANUAL_RUN_QUARANTINED"
+
 A6_BD_GRANT_PREFIX = "DEC-018:A6:business_discovery_metadata_read:"
 
 source_grants = Table("ingestion_source_grants", metadata,
@@ -216,22 +218,21 @@ class IngestionStore:
             raise ConnectorError("PAGINATION_COMPLETE", 409)
         return row["next_cursor"]
 
-    def _save_checkpoint(self, tenant: str, req: IngestionRequest, cursor: str | None):
+    def _save_checkpoint(self, db, tenant: str, req: IngestionRequest, cursor: str | None):
         updated = now_utc().isoformat()
         where = (
             (ingestion_page_checkpoints.c.tenant_id == tenant) &
             (ingestion_page_checkpoints.c.platform == req.platform.value) &
             (ingestion_page_checkpoints.c.source_account_id == req.source_account_id)
         )
-        with self.engine.begin() as db:
-            old = db.execute(select(ingestion_page_checkpoints.c.tenant_id).where(where)).first()
-            values = {"next_cursor": cursor, "complete": int(cursor is None), "updated_at": updated}
-            if old:
-                db.execute(update(ingestion_page_checkpoints).where(where).values(**values))
-            else:
-                db.execute(insert(ingestion_page_checkpoints).values(
-                    tenant_id=tenant, platform=req.platform.value,
-                    source_account_id=req.source_account_id, **values))
+        old = db.execute(select(ingestion_page_checkpoints.c.tenant_id).where(where)).first()
+        values = {"next_cursor": cursor, "complete": int(cursor is None), "updated_at": updated}
+        if old:
+            db.execute(update(ingestion_page_checkpoints).where(where).values(**values))
+        else:
+            db.execute(insert(ingestion_page_checkpoints).values(
+                tenant_id=tenant, platform=req.platform.value,
+                source_account_id=req.source_account_id, **values))
 
     def _reserve(self,tenant,req:IngestionRequest, *, cycle_key=None):
         """Reserve one of five bounded account reads per UTC day BEFORE network call."""
@@ -263,6 +264,13 @@ class IngestionStore:
                     raise ConnectorError("RUN_KEY_CONFLICT",409)
                 raise ConnectorError("RUN_ALREADY_REGISTERED",409)
             if req.platform == Platform.INSTAGRAM:
+                quarantined = db.execute(select(ingestion_runs.c.run_key).where(
+                    ingestion_runs.c.tenant_id == tenant,
+                    ingestion_runs.c.platform == Platform.INSTAGRAM.value,
+                    ingestion_runs.c.source_account_id == req.source_account_id,
+                    ingestion_runs.c.reason_code == MANUAL_ORPHAN_REASON).limit(1)).first()
+                if quarantined:
+                    raise ConnectorError("BD_SOURCE_ORPHAN_QUARANTINED", 409)
                 active_tenant = db.execute(select(ingestion_runs.c.run_key).where(
                     ingestion_runs.c.tenant_id == tenant,
                     ingestion_runs.c.platform == Platform.INSTAGRAM.value,
@@ -544,6 +552,8 @@ class IngestionStore:
             if self.read_grant(tenant,req.platform,req.source_account_id)["approval_reference"]!=grant["approval_reference"]:
                 raise ConnectorError("SOURCE_GRANT_CHANGED_DURING_READ",403)
             with self.engine.begin() as db:
+                self._lock_reserved_run(db, tenant, req.run_key, platform=req.platform,
+                                        source=req.source_account_id)
                 updated=db.execute(update(source_grants).where(
                     source_grants.c.tenant_id==tenant,
                     source_grants.c.platform==req.platform.value,
@@ -558,14 +568,14 @@ class IngestionStore:
                 if (now_utc() - item.published_at).total_seconds() < req.min_age_days * 86400:
                     excluded_recent += 1
                     continue
-                status = self._persist_item(tenant,item)
+                status = self._persist_item(tenant,item,run_key=req.run_key)
                 if status == "created": created += 1
                 elif status == "refreshed": refreshed += 1
                 else: duplicate += 1
             # Only advance a cursor after all eligible records were committed.
-            if req.platform == Platform.INSTAGRAM:
-                self._save_checkpoint(tenant, req, next_cursor)
-            self._finish(tenant,req.run_key,"completed",created,duplicate,refreshed)
+            self._finish(tenant,req.run_key,"completed",created,duplicate,refreshed,
+                after_finish=(lambda db: self._save_checkpoint(db, tenant, req, next_cursor))
+                if req.platform == Platform.INSTAGRAM else None)
             return IngestionResult(run_key=req.run_key,platform=req.platform,
                 source_account_id=req.source_account_id,new_records=created,
                 duplicate_records=duplicate,refreshed_records=refreshed,
