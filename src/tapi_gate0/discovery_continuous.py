@@ -14,6 +14,7 @@ from .discovery_history import cycle_lease, read_checkpoint
 from .discovery_identity_a6 import identity_reserved_today
 from .discovery_recovery import reviewed_failure
 from .discovery_auth_guard import AUTH_BLOCKED, AUTH_INVALID, auth_status
+from .discovery_credential_expiry import expiry_status
 from .ingestion import IngestionStore, ingestion_records, ingestion_runs, MANUAL_ORPHAN_REASON
 from .storage import now_utc
 
@@ -33,6 +34,7 @@ def plan_cycle(store: IngestionStore, tenant: str, manifest: BatchManifest,
     deferred = []
     with store.engine.connect() as db:
         auth = auth_status(db, tenant)
+        expiry = expiry_status(now=now)
         rows = db.execute(select(ingestion_runs).where(
             ingestion_runs.c.tenant_id == tenant,
             ingestion_runs.c.platform == Platform.INSTAGRAM.value,
@@ -48,6 +50,8 @@ def plan_cycle(store: IngestionStore, tenant: str, manifest: BatchManifest,
                 reason = "SOURCE_NOT_APPROVED"
             elif auth["blocked"]:
                 reason = AUTH_BLOCKED
+            elif expiry["blocked"]:
+                reason = expiry["reason_code"]
             elif source.expected_ig_id == viewer:
                 reason = "BD_BATCH_VIEWER_IS_TARGET"
             elif source.expires_at <= now:
@@ -104,6 +108,7 @@ def plan_cycle(store: IngestionStore, tenant: str, manifest: BatchManifest,
             "selected_sources": [s.username for s in selected], "deferred": deferred,
             "daily_request_budget": daily_request_budget,
             "meta_auth": auth,
+            "meta_credential_expiry": expiry,
             "conservative_reserved_pages_today": used,
             "max_official_requests": len(selected) * limits.max_pages,
             "max_observations_to_persist": len(selected) * limits.persist_limit,
