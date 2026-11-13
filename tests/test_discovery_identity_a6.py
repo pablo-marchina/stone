@@ -204,3 +204,27 @@ def test_history_auth_failure_blocks_identity_then_reset_reenables_due_source(se
     assert plan["meta_auth"]["status"]=="RESET_UNVERIFIED"
     identity,_=plan_identity(engine,TENANT,frame,VIEWER,["mpe_example"])
     assert identity["conservative_reserved_today"]==4
+
+
+def test_declared_expiry_blocks_history_and_identity_plans_without_spending(setup,monkeypatch):
+    from tapi_gate0.discovery_credential_expiry import TOKEN_EXPIRY, DATA_EXPIRY, REQUIRE_EXPIRY
+    from tapi_gate0.ingestion import ingestion_runs
+    from tapi_gate0.discovery_recovery import inspect_recovery
+    engine,store,frame=setup
+    monkeypatch.setenv(TOKEN_EXPIRY,"2000-01-01T00:00:00Z")
+    monkeypatch.delenv(DATA_EXPIRY,raising=False)
+    monkeypatch.setenv(REQUIRE_EXPIRY,"0")
+    plan,selected=plan_cycle(store,TENANT,frame,VIEWER,mode="history",limits=BatchLimits(persist_limit=40))
+    assert selected==[] and plan["meta_credential_expiry"]["status"]=="EXPIRED"
+    assert {"username":"sebrae","reason":"BD_META_DECLARED_CREDENTIAL_EXPIRED"} in plan["deferred"]
+    assert plan["conservative_reserved_pages_today"]==0
+    with pytest.raises(ConnectorError,match="BD_META_DECLARED_CREDENTIAL_EXPIRED"):
+        plan_identity(engine,TENANT,frame,VIEWER,["mpe_example"])
+    with pytest.raises(ConnectorError,match="BD_META_DECLARED_CREDENTIAL_EXPIRED"):
+        execute_identity(engine,ADMIN,frame,VIEWER,["mpe_example"],token=TOKEN)
+    with engine.connect() as conn:
+        assert conn.execute(select(func.count()).select_from(ingestion_runs)).scalar_one()==0
+        assert conn.execute(select(func.count()).select_from(domain_events).where(domain_events.c.event_type==RESERVATION)).scalar_one()==0
+    state=inspect_recovery(engine,TENANT)
+    assert state["lease"] is None and state["meta_credential_expiry"]["blocked"] is True
+    assert state["meta_auth"]["status"]=="NOT_CHECKED"
