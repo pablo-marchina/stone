@@ -8,7 +8,7 @@ from .connectors import ConnectorError, Platform
 from .discovery_batch import BatchManifest
 from .discovery_reconcile_a6 import _trace
 from .identity import Principal
-from .ingestion import IngestionStore, source_grants, ingestion_runs, A6_BD_GRANT_PREFIX
+from .ingestion import IngestionStore, source_grants, ingestion_runs, A6_BD_GRANT_PREFIX, cycle_leases
 from .sa_store import domain_events, outbox, tenants
 from .storage import now_utc
 
@@ -24,8 +24,9 @@ def _prepare(db, tenant, viewer, manifest, handles):
         raise ConnectorError("BD_GRANT_INVALID_SELECTION", 422)
     if not db.execute(select(tenants.c.tenant_id).where(tenants.c.tenant_id == tenant)).first():
         raise ConnectorError("INGESTION_TENANT_NOT_FOUND", 404)
-    if db.execute(select(ingestion_runs.c.run_key).where(ingestion_runs.c.tenant_id == tenant,
-            ingestion_runs.c.status == "reserved").limit(1)).first():
+    if (db.execute(select(cycle_leases.c.cycle_key).where(cycle_leases.c.tenant_id == tenant)).first()
+            or db.execute(select(ingestion_runs.c.run_key).where(ingestion_runs.c.tenant_id == tenant,
+            ingestion_runs.c.status == "reserved").limit(1)).first()):
         raise ConnectorError("BD_GRANT_INGESTION_ACTIVE", 409)
     rows = db.execute(select(domain_events, outbox.c.seq.label("outbox_seq"))
         .outerjoin(outbox, outbox.c.seq == domain_events.c.seq).where(
