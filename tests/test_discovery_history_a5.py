@@ -379,3 +379,45 @@ def test_scheduler_cli_preview_requires_no_token_and_does_not_write(tmp_path, mo
                 domain_events.c.aggregate_type == scheduler.AGGREGATE)).scalar_one() == 0
     finally:
         engine.dispose()
+
+
+def test_readiness_reports_caption_without_scientific_admission(tmp_path, monkeypatch, capsys):
+    from tapi_gate0.discovery_corpus_readiness import readiness_report
+    from tapi_gate0.sa_store import domain_events
+    from tapi_gate0.ingestion import source_grants
+    from sqlalchemy import update
+    from scripts.a6_corpus_readiness import main
+    engine, store = db(tmp_path)
+    transport, calls, client = provider()
+    try:
+        cycle(store, transport)
+        frame = manifest(approved=1)
+        before = len(calls)
+        with engine.connect() as conn:
+            event_count = conn.execute(select(func.count()).select_from(domain_events)).scalar_one()
+        report = readiness_report(engine, TENANT, frame, VIEWER)
+        assert report["technical_inventory"]["records"] == 2
+        assert report["first_blocking_stage"]["CAPTION_AVAILABLE_FOR_ASSESSMENT"] == 2
+        assert report["canonical_corpus_card"]["observed"]["scientifically_eligible_instagram_posts"] == 0
+        assert report["new_scientific_admissions"] == 0
+        assert "Negócios locais" not in json.dumps(report, ensure_ascii=False)
+        assert len(calls) == before
+        monkeypatch.setenv("TAPI_DATABASE_URL", str(engine.url))
+        monkeypatch.setenv("TAPI_TENANT_ID", TENANT)
+        monkeypatch.setenv("TAPI_META_IG_ID", VIEWER)
+        monkeypatch.delenv("TAPI_INSTAGRAM_ACCESS_TOKEN", raising=False)
+        path = tmp_path / "manifest.json"
+        path.write_text(frame.model_dump_json(), encoding="utf-8")
+        assert main(["--manifest", str(path)]) == 0
+        assert json.loads(capsys.readouterr().out)["status"] == "CORPUS_READINESS_PLANNED"
+        with engine.connect() as conn:
+            assert conn.execute(select(func.count()).select_from(domain_events)).scalar_one() == event_count
+        with engine.begin() as conn:
+            conn.execute(update(source_grants).where(source_grants.c.tenant_id == TENANT,
+                source_grants.c.source_account_id == SOURCES[0][1]).values(enabled=0))
+        revoked = readiness_report(engine, TENANT, frame, VIEWER)
+        assert revoked["first_blocking_stage"]["SOURCE_NOT_ELIGIBLE"] == 2
+        assert revoked["first_blocking_stage"]["CAPTION_AVAILABLE_FOR_ASSESSMENT"] == 0
+    finally:
+        client.close()
+        engine.dispose()
