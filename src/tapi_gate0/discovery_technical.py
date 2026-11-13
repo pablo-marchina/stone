@@ -32,6 +32,7 @@ from .mpe_evidence import _instagram_url, canonical_hash
 from .sa_store import domain_events, outbox, metrics_snapshots, content_items
 from .storage import now_utc
 from .discovery_history import checkpoint_start, advance_checkpoint
+from .discovery_auth_guard import AUTH_INVALID, is_global_auth_failure, record_auth_failure
 
 
 class TechnicalDiscoveryRequest(BaseModel):
@@ -364,8 +365,13 @@ class TechnicalDiscoveryService:
             }
         except (ConnectorError, IntegrityError, ValueError) as exc:
             reason = exc.code if isinstance(exc, ConnectorError) else "BD_TECHNICAL_INGEST_FAILED"
+            auth_failure = is_global_auth_failure(exc)
+            if auth_failure and not (created or duplicates or refreshed):
+                reason = AUTH_INVALID
             self.store._finish(tenant, req.run_key, "failed",
-                               created, duplicates, refreshed, reason)
+                               created, duplicates, refreshed, reason,
+                               after_finish=(lambda db: record_auth_failure(db, tenant, exc, req.run_key))
+                               if auth_failure else None)
             raise
         finally:
             if http is None:
