@@ -45,6 +45,9 @@ def main(argv=None):
                 result = register_sampling_profiles(engine, principal, manifest, viewer, stopped=True)
             finally:
                 identity.revoke(session.access_token, principal)
+            result["sampling_registry_mutated"] = result["database_mutated"]
+            result["identity_session_written"] = True
+            result["database_mutated"] = True
         else:
             result = audience_preview(engine, tenant, manifest, viewer,
                                       include_private_evidence=bool(args.report_name))
