@@ -218,7 +218,7 @@ class DiscoveryCorpusService:
                         observed_at=evidence["observed_at"],
                         recorded_at=now_utc().isoformat()))
                 status = self.store._persist_item(
-                    tenant, item, provenance_writer=write_provenance)
+                    tenant, item, provenance_writer=write_provenance, run_key=req.run_key)
                 if status == "created":
                     created += 1
                 elif status == "refreshed":
@@ -226,6 +226,8 @@ class DiscoveryCorpusService:
                 else:
                     duplicates += 1
             with self.store.engine.begin() as db:
+                self.store._lock_reserved_run(db, tenant, req.run_key,
+                    platform=Platform.INSTAGRAM, source=req.expected_ig_id)
                 db.execute(update(source_grants).where(
                     source_grants.c.tenant_id == tenant,
                     source_grants.c.platform == "instagram",
