@@ -435,3 +435,27 @@ python scripts/a5_recover_business_discovery.py
 ```
 
 Manter flags externos desligados. Backup pós-605 ainda não reportado. Não iniciar agendamento ou recuperação destrutiva. Nenhuma chamada Meta, migração, alteração da base operacional, merge ou nova aprovação institucional. DEC-018 vigente.
+
+
+## Aceite Windows da coordenação e recuperação de reservas sem lease — 13/11/2026 UTC
+
+Operador reportou **19 PASS focal em 4,30 s; 458 PASS, 1 warning em 143,42 s** na regressão integral, verify_zero_spend PASS, RECOVERY_INSPECTION sem lease/reservas/bloqueios. Corrigida a regressão do teste de barreira A4, sem relaxar os invariantes. Warning conhecido Starlette/TestClient/httpx. SHA local não reportado; head de referência anterior f7c6dc7. Backup pós-605 ainda não confirmado.
+
+### A6.6 — recuperação de reserva Instagram órfã sem lease e fencing das demais rotas
+
+- Novo `discovery_orphan_run.py`: fechamento auditado de exatamente uma reserva Instagram abandonada sem lease. Exige administrador autenticado, todos os processos de ingestão efetivamente parados (controle técnico, não nova aprovação institucional), identificador exato, idade mínima de 30 minutos, ausência de lease e de qualquer outra reserva no tenant. Não é recuperação automática por timeout. Aplicável também a reservas A5 legadas sem lease.
+- Transação sob lock do tenant: preserva linha original, data de reserva, contadores e quaisquer registros/checkpoints previamente comprometidos; transição reserved→failed com reason_code BD_ORPHANED_MANUAL_RUN_QUARANTINED; evento business_discovery.orphan_run_recovered e outbox atômicos. Não reembolsa quota e não assume ausência de escritas parciais (rotas antigas não permitem correlacioná-las integralmente com run).
+- Quarentena fail-closed da fonte afetada em _reserve e plan_cycle, inclusive se houver um run mais recente. Não há liberação automática nem procedimento implementado para remover a quarentena; requer futura reconciliação técnica explícita. As outras fontes podem operar respeitando quotas. Nenhuma linha é apagada; não editar ledger para contornar a quarentena.
+- Inspeção somente leitura passa a apresentar orphan_runs_without_lease e quarantined_sources. CLI adiciona --recover-orphan-run RUN_KEY ao grupo mutuamente exclusivo de recuperação; usa autenticação administrativa e controle de processos já existentes. Não executar mutação na base saudável.
+- Rota genérica: fencing antes de atualização do grant e em cada persistência de item (também YouTube quanto à escrita); checkpoint Instagram de primeira parte é persistido no callback da mesma transação da finalização. A rota científica recebe fencing em cada item/proveniência e antes da marcação de verificação técnica do grant. Não altera critérios científicos ou direitos. Não protege processos que executam código antigo, requisições externas em voo ou probes sem ledger. A retomada genérica ainda lê cursor antes da reserva (possível stale read se operação anterior concluir entre leitura e reserva); tratar separadamente.
+- Validação local: **35 PASS em 9,40 s**, 5 novos testes em test_discovery_orphan_run.py e 30 anteriores (test_ingestion_cursor.py, test_discovery_corpus_ingestion.py, test_official_ingestion.py), em cópia reconstruída anterior, SQLite temporário, mock HTTP; módulo novo e testes conferidos pelos hashes Git 307249179eee4b3ec11f926c3ac6dabdef346b08 e 8ddd6b1efa9998c68952acf1576ebe2e8d19cb98. Blocos de produção equivalentes testados; integração com CLI/planner/inspeção não executada localmente. Não é regressão integral do head, nem prova de concorrência PostgreSQL. 463 testes esperados após atualização. Sem chamada Meta, migração ou mutação do DB do operador.
+
+```powershell
+git pull --ff-only
+python -m pytest -q tests/test_discovery_orphan_run.py tests/test_ingestion_cursor.py tests/test_discovery_corpus_ingestion.py tests/test_official_ingestion.py tests/test_discovery_recovery_a5.py tests/test_discovery_history_a5.py
+python -m pytest -q
+python scripts/verify_zero_spend.py
+python scripts/a5_recover_business_discovery.py
+```
+
+Manter flags externos desabilitados. Esperado lease=null, latest_a5_blocked_runs=[], orphan_runs_without_lease=[], quarantined_sources=[], reserved_runs=0. Não executar --recover-orphan-run na base saudável. Backup pós-605 ainda pendente; coordenação de probes, revalidação do cursor de primeira parte, reconciliação de fontes em quarentena, credenciais, renovação de grants e scheduler pendentes. PRs #43/#44 draft, DEC-018 vigente.
