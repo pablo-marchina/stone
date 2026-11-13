@@ -13,7 +13,7 @@ from .discovery_batch import BatchLimits, BatchManifest, TechnicalDiscoveryBatch
 from .discovery_history import cycle_lease, read_checkpoint
 from .discovery_identity_a6 import identity_reserved_today
 from .discovery_recovery import reviewed_failure
-from .ingestion import IngestionStore, ingestion_records, ingestion_runs
+from .ingestion import IngestionStore, ingestion_records, ingestion_runs, MANUAL_ORPHAN_REASON
 from .storage import now_utc
 
 
@@ -56,7 +56,9 @@ def plan_cycle(store: IngestionStore, tenant: str, manifest: BatchManifest,
                 except ConnectorError as exc:
                     reason = exc.code
             if reason is None:
-                if any(r["status"] == "reserved" for r in latest):
+                if any(r["reason_code"] == MANUAL_ORPHAN_REASON for r in latest):
+                    reason = "BD_SOURCE_ORPHAN_QUARANTINED"
+                elif any(r["status"] == "reserved" for r in latest):
                     reason = "ACCOUNT_INGESTION_IN_PROGRESS"
                 elif (latest and latest[0]["status"] == "failed" and
                       not reviewed_failure(db, tenant, latest[0]["run_key"])):
