@@ -49,7 +49,7 @@ def source_gate(source, grant, now):
     return "TECHNICAL_SCOPE_MATCHED"
 
 
-def readiness_report(engine, tenant, manifest, viewer):
+def readiness_report(engine, tenant, manifest, viewer, *, _caption_observer=None):
     """Aggregate only. No caption export, model inference, registration or admission."""
     from sqlalchemy import select
     from pydantic import ValidationError
@@ -126,9 +126,12 @@ def readiness_report(engine, tenant, manifest, viewer):
         per_source = defaultdict(list)
         for r in records:
             sid, cid = r["source_account_id"], r["content_id"]
-            per_source[sid].append(classify_record(posts.get(cid), latest.get(cid),
+            stage = classify_record(posts.get(cid), latest.get(cid),
                 source_ok=sid in allowed_ids,
-                trace_ok=(sid, r["source_item_id"], cid) in traces, cutoff=cutoff))
+                trace_ok=(sid, r["source_item_id"], cid) in traces, cutoff=cutoff)
+            per_source[sid].append(stage)
+            if _caption_observer is not None and stage == STAGES[7]:
+                _caption_observer(manifest_by_id[sid], cid, posts[cid].caption)
     sources = []
     for source in manifest.sources:
         sid = source.expected_ig_id

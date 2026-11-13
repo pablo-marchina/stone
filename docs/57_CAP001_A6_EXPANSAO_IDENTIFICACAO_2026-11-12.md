@@ -637,3 +637,30 @@ python scripts/a6_corpus_readiness.py --manifest artifacts/private/bd_manifest_a
 ```
 
 Último comando apenas offline; manter flags externas desligadas, escritores parados e compartilhar saída agregada, nunca DB/legendas. Esperar CORPUS_READINESS_PLANNED, inventário 605/10 se inalterado, soma first_blocking_stage=605, new_scientific_admissions=0, external_data_accessed=false. Número de captions e formatos a medir, não presumir. Nenhum gate liberado. Próximos: diagnosticar resultado, corrigir lacunas de fonte e planejar admissão com evidência automatizada honesta; validação operacional do tick quando quota e credencial permitirem.
+
+
+## Diagnóstico operacional e ponte de registro/triagem textual — 13/11/2026
+
+- Operador reportou CORPUS_READINESS_PLANNED às 23:38 UTC: 605 IDs únicos/10 perfis; 125 formatos não prioritários; **480** Reels/carrosséis com legenda disponível após todos os filtros. 30 runs concluídos não vazios auditados, zero runs inválidos, zero registros fora do manifesto e zero admissões. Nenhum perfil/contexto registrado; data card canônico exclui 605 por ausência de registro. 12 fontes com escopo técnico correspondente (duas sem registros), 38 candidatas. Não foi enviada a saída da regressão esperada de 543; não afirmar aceite integral anterior.
+- CAP-001 IMP-048/053/167/170, suporte CAP-003 IMP-064: `discovery_corpus_bridge.py` e CLI `a6_corpus_bridge.py` usam manifesto e grants existentes, sem nova aprovação institucional. Prévia de cadastro para fontes aprovadas, ativas, tecnicamente verificadas, referência igual, viewer distinto. Registro explícito admin e ingestão parada, transação atômica com lock tenant/grant e evento/outbox por perfil, idempotente; conflito de metadados bloqueia lote, não sobrescreve. Não cria grants, contextos, revisões ou admissão. Setor operacional mapeado por estrato (foodservice=food; beauty=beauty; ecommerce=commerce; financial/accounting=services; demais=other), não porte jurídico; duas fontes vazias podem integrar frame prospectivo. Eventos preservam DEC-018 e hash do manifesto; nenhuma alteração de schema.
+- Triagem lexical local determinística `bd-caption-audience-signals.v1` apenas nas captions que passam readiness: sinais explícitos de endereçamento (MEI/microempresa/pequeno negócio), menção isolada ou abstenção por falta de sinal. Regex não reconhece adequadamente negação, ironia, citação, contexto implícito ou toda variedade linguística; até 'não é para MEIs' contém sinal lexical. Nunca é decisão positiva/negativa de targeting, não estima precisão, não cria review e não conta para corpus científico. Evidências por post opcionais em JSON privado exclusivo: content_id, username, SHA-256 da legenda persistida, spans de codepoints Python/rule (máx 20, truncamento sinalizado); não exporta texto, URL ou token. Sem IA externa. Campo de observabilidade audiovisual continua não avaliado; não confundir hash local da legenda com verificação criptográfica do payload Meta.
+- Validação: 14 PASS puros em 0,06 s, módulo e teste conferidos por hash 5137c70/303b2a5. Um teste integrado A5/registro/replay/triagem publicado, não executado localmente. Regressão esperada 558 se 543 anteriores preservados. Registro e triagem do DB real ainda não realizados, sem merge, migração, rede, despesa ou liberação de gates. Prévia é diagnóstico corrente, manter escritores parados.
+- Próximo: executar prévia com relatório privado, conferir plano de registro e aplicar cadastro local autenticado; construir avaliação contextual por post com abstenção, proveniência e trilha automatizada separada de revisão humana, seguida de critérios de admissão e direitos efetivos. Não chamar os 480 de amostra científica. Scheduler permanece pendente de quota positiva e data OAuth real.
+
+```powershell
+git pull --ff-only
+python -m pytest -q tests/test_discovery_audience_signals.py tests/test_discovery_corpus_readiness.py tests/test_discovery_history_a5.py
+python -m pytest -q
+python scripts/verify_zero_spend.py
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+python scripts/a6_corpus_bridge.py --manifest artifacts/private/bd_manifest_a6_v8.json --report-name "a6-audience-$stamp.json"
+```
+
+Esperar AUDIENCE_SIGNALS_PLANNED, assessed_captions=480 se dados e grants inalterados; categorias somam 480, targeting_decisions=0, scientific_admissions=0. Compartilhar somente stdout agregado. Após conferir registro planejado e parar todas as rotas de ingestão, cadastro explícito (login admin local; não nova aprovação institucional):
+
+```powershell
+python scripts/a6_corpus_bridge.py --manifest artifacts/private/bd_manifest_a6_v8.json --register-profiles --confirm-all-ingestion-stopped
+python scripts/a6_corpus_readiness.py --manifest artifacts/private/bd_manifest_a6_v8.json
+```
+
+Esperar 12 novos perfis se grants ainda vigentes e iguais, 0 contextos/revisões/admissões, canonical data card com até 480 técnicamente elegíveis e 0 científicos; aplicar apenas após regressão aprovada. Repetição idempotente. Fazer novo backup após alteração real, com comando de drill existente. Não compartilhar JSON privado por post ou banco.

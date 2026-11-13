@@ -423,3 +423,41 @@ def test_readiness_reports_caption_without_scientific_admission(tmp_path, monkey
     finally:
         client.close()
         engine.dispose()
+
+
+def test_corpus_bridge_register_and_signal_preview(tmp_path):
+    from types import SimpleNamespace
+    from tapi_gate0 import corpus
+    from tapi_gate0.discovery_corpus_bridge import audience_preview, register_sampling_profiles
+    from tapi_gate0.sa_store import domain_events
+    engine, store = db(tmp_path)
+    transport, calls, client = provider()
+    try:
+        cycle(store, transport)
+        frame = manifest(approved=1)
+        count = len(calls)
+        result = audience_preview(engine, TENANT, frame, VIEWER, include_private_evidence=True)
+        assert result["assessed_captions"] == 2
+        assert result["signal_counts"]["NO_EXPLICIT_SIGNAL_ABSTAIN"] == 2
+        assert len(result["private_evidence"]) == 2
+        assert result["registration_plan"][0]["action"] == "REGISTER"
+        assert "Negócios locais" not in json.dumps(result, ensure_ascii=False)
+        admin = SimpleNamespace(role="admin", tenant_id=TENANT, actor_id="fixture-admin")
+        with pytest.raises(ConnectorError, match="BD_CORPUS_ADMIN_STOP_REQUIRED"):
+            register_sampling_profiles(engine, admin, frame, VIEWER, stopped=False)
+        applied = register_sampling_profiles(engine, admin, frame, VIEWER, stopped=True)
+        assert applied["new_profiles"] == 1 and applied["scientific_admissions"] == 0
+        replay = register_sampling_profiles(engine, admin, frame, VIEWER, stopped=True)
+        assert replay["new_profiles"] == 0 and replay["already_registered"] == 1
+        result = audience_preview(engine, TENANT, frame, VIEWER)
+        assert result["canonical_corpus_card"]["sampling_frame"]["registered_profiles"] == 1
+        assert result["canonical_corpus_card"]["observed"]["technically_eligible_instagram_posts"] == 2
+        assert result["canonical_corpus_card"]["observed"]["scientifically_eligible_instagram_posts"] == 0
+        assert "private_evidence" not in result
+        assert len(calls) == count
+        with engine.connect() as conn:
+            assert conn.execute(select(func.count()).select_from(domain_events).where(
+                domain_events.c.aggregate_type == "bd_sampling_profile")).scalar_one() == 1
+    finally:
+        client.close()
+        engine.dispose()
