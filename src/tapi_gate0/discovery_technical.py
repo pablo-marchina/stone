@@ -360,10 +360,10 @@ class TechnicalDiscoveryService:
                 "scientifically_validated":False,
                 "production_approved":False,
             }
-        except (ConnectorError, IntegrityError, ValueError):
+        except (ConnectorError, IntegrityError, ValueError) as exc:
+            reason = exc.code if isinstance(exc, ConnectorError) else "BD_TECHNICAL_INGEST_FAILED"
             self.store._finish(tenant, req.run_key, "failed",
-                               created, duplicates, refreshed,
-                               "BD_TECHNICAL_INGEST_FAILED")
+                               created, duplicates, refreshed, reason)
             raise
         finally:
             if http is None:
