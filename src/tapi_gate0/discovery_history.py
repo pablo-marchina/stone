@@ -116,6 +116,12 @@ def cycle_lease(engine, tenant: str, key: str):
     try:
         with engine.begin() as db:
             lock_tenant(db, tenant)
+            active = db.execute(select(ingestion_runs.c.run_key).where(
+                ingestion_runs.c.tenant_id == tenant,
+                ingestion_runs.c.platform == Platform.INSTAGRAM.value,
+                ingestion_runs.c.status == "reserved").limit(1)).first()
+            if active:
+                raise ConnectorError("ACCOUNT_INGESTION_IN_PROGRESS", 409)
             db.execute(insert(cycle_leases).values(tenant_id=tenant,
                 cycle_key=key, started_at=now_utc().isoformat()))
     except IntegrityError as exc:
