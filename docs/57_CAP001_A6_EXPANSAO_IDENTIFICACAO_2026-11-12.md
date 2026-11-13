@@ -190,3 +190,32 @@ Operador extraiu relatório privado do ciclo `a5history-20261113020343-48e4f64b`
 Total 56 observações reauditadas, 8 páginas, quatro trilhas válidas e quatro checkpoints de continuação. Cobertura anterior reportada permanece 253 IDs técnicos únicos e 7 fontes com registros; nenhum novo acesso externo nesta reauditoria. SQLite backup pela API nativa, origem aberta em modo somente leitura, `PRAGMA integrity_check` igual a ok; operador reportou BACKUP_VERIFICADO em `C:\stone-data\backups\tapi-a6-20261112-230541.sqlite3`. Evidência de backup pós-A6, não prova backup pré-migração A5 nem teste de restauração. Não registrar conteúdo privado no Git.
 
 Próximo lote de identificação proposto: contaazul (gestão MPE), abraselnorn (alimentação/associação), abihpecoficial (beleza/cosméticos, intenção incerta), feirapretaoficial (empreendedorismo negro/economia criativa, intenção incerta), menteempreendedora (educação empreendedora, intenção incerta). Todos já documentados nos JSON A5/A6, com referência de audiência. A escolha substitui a sugestão anterior de três perfis comerciais individuais cujo registro original não contém audience_rationale_reference: serem negócios pequenos não comprova audiência MPE (DEC-016), e não preencher justificativa artificialmente. Evitar duas regionais Abrasel no mesmo lote. Identificação não determina automaticamente elegibilidade de publicações. Confirmar prévia em v4 e quota; expectativa 5/10 reservas de identidade e 21/80 compartilhado antes do lote, 10/10 e 26/80 depois se ainda no mesmo dia UTC e sem operações intermediárias. Identificar somente via API oficial com credencial válida; parar em falha e não reusar reserva. Reconciliar resultado com v4 antes de provisionar os novos grants. PRs #43/#44 permanecem draft; backup atual confirmado, sem merge. Recuperação sob falhas reais e coordenação entre entrypoints seguem pendentes, portanto manter execução serial supervisionada. DEC-018 vigente, sem nova aprovação institucional.
+
+
+## Terceiro lote de identidade real — 13/11/2026 UTC
+
+Operador reportou prévia sobre v4 `12c9d33bfd6392df30b173e2d206bc90b17a86d356a9d0dc3cb6431c44e786e3`, 5/10 reservas de identidade e 21/80 compartilhado, confirmando a contabilidade do piloto. Execução `a6identity-20261113020813-710eacbc`: IDENTITY_BATCH_COMPLETED, cinco IDs oficiais distintos, nenhuma falha:
+
+| Fonte | Instagram ID |
+|---|---|
+| contaazul | 17841400850775253 |
+| abraselnorn | 17841401199718642 |
+| abihpecoficial | 17841407256098039 |
+| feirapretaoficial | 17841402334344300 |
+| menteempreendedora | 17841402289934850 |
+
+Cumulativo A6: nove identidades bem-sucedidas; 10/10 reservas de identidade no dia UTC, orçamento compartilhado esperado 26/80 se não houve operações intermediárias. Zero novos grants, posts, admissões e liberação de produção nesta identificação. O campo external_data_accessed=false está no plano prévio, não caracteriza a execução. Cobertura real preservada: 253 IDs únicos, 7 fontes observadas, 33 fontes documentadas. Evidência reportada, não inspeção independente do DB. Intenção MPE de três novas fontes incerta; identificação não implica elegibilidade científica. Não repetir identificação neste dia UTC.
+
+Próximo fluxo operacional, sem nova aprovação institucional: reconciliar v4→v5 a partir do ciclo persistido; planejar e provisionar os cinco grants técnicos em v5→v6, utilizando DEC-018. Se bem-sucedido, 12 fontes habilitadas, ainda 7 observadas. Usar plano A5 histórico com v6, cinco fontes, duas páginas de dez itens por fonte para piloto (10 requisições oficiais máximas, 100 observações máximas, 20 unidades conservadoras por cinco reservas). Confirmar seleção exata dos cinco novos perfis, cobertura de partida 253/7 e orçamento 26/80 antes de executar. Teto 353 posts únicos e 12 fontes observadas, não previsão garantida; orçamento esperado até 46/80. Depois reauditar todos os runs concluídos e preservar checkpoints. Manter execução serial supervisionada; nenhuma nova chamada externa ou mutação do banco feita pelo assistente.
+
+```powershell
+python scripts/a6_reconcile_identities.py --manifest artifacts/private/bd_manifest_a6_v4.json --cycle a6identity-20261113020813-710eacbc --output artifacts/private/bd_manifest_a6_v5.json
+python scripts/a6_provision_grants.py --manifest artifacts/private/bd_manifest_a6_v5.json --source contaazul --source abraselnorn --source abihpecoficial --source feirapretaoficial --source menteempreendedora
+python scripts/a6_provision_grants.py --manifest artifacts/private/bd_manifest_a6_v5.json --source contaazul --source abraselnorn --source abihpecoficial --source feirapretaoficial --source menteempreendedora --execute --output artifacts/private/bd_manifest_a6_v6.json
+python scripts/a5_business_discovery_cycle.py --manifest artifacts/private/bd_manifest_a6_v6.json --mode history --max-sources 5 --page-limit 10 --max-pages 2 --daily-request-budget 80
+# Somente após conferir o plano, flags, credencial e ausência de outros processos:
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+python scripts/a5_business_discovery_cycle.py --manifest artifacts/private/bd_manifest_a6_v6.json --mode history --max-sources 5 --page-limit 10 --max-pages 2 --daily-request-budget 80 --execute --report "artifacts/private/a6-history-pilot-$stamp.json"
+```
+
+Backup pós-piloto anterior confirmado, não contém necessariamente este lote; preservar backup atualizado após novas mutações. Regressão reportada 419 PASS permanece referência (incrementos desde então documentais). PRs #43/#44 ainda draft. Recuperação, renovação técnica dos grants e agendamento contínuo não homologados.
