@@ -1,0 +1,77 @@
+{
+  "schema_version": "tapi-bd-technical-batch.v1",
+  "sources": [
+    {
+      "username": "ifoodparaparceiros",
+      "sampling_stratum": "foodservice_platform_education",
+      "audience_intent": "mpe_targeted",
+      "source_evidence_reference": "https://blog-parceiros.ifood.com.br/instagram-ifood-para-parceiros/",
+      "audience_rationale_reference": "https://blog-parceiros.ifood.com.br/instagram-ifood-para-parceiros/",
+      "status": "candidate"
+    },
+    {
+      "username": "agisaalimentos",
+      "sampling_stratum": "food_safety_consulting",
+      "audience_intent": "uncertain",
+      "source_evidence_reference": "https://smg.abrasel.com.br/parceiros/agisa-1/",
+      "audience_rationale_reference": "https://smg.abrasel.com.br/parceiros/agisa-1/",
+      "status": "candidate"
+    },
+    {
+      "username": "anatex",
+      "sampling_stratum": "digital_marketing_education",
+      "audience_intent": "mpe_targeted",
+      "source_evidence_reference": "https://anatexpalestra.com.br/",
+      "audience_rationale_reference": "https://agenciasebrae.com.br/cultura-empreendedora/o-que-faz-um-pequeno-negocio-vender-mais-sebrae-aposta-em-autenticidade-ia-e-conexao-humana/",
+      "status": "candidate"
+    },
+    {
+      "username": "ricardodeoliveirapet",
+      "sampling_stratum": "pet_retail_education",
+      "audience_intent": "mpe_targeted",
+      "source_evidence_reference": "https://www.formulapetshop.com.br/",
+      "audience_rationale_reference": "https://www.formulapetshop.com.br/blog/como-abrir-pet-shop-do-zero",
+      "status": "candidate"
+    },
+    {
+      "username": "aanadesales",
+      "sampling_stratum": "foodservice_architecture",
+      "audience_intent": "uncertain",
+      "source_evidence_reference": "https://mg.abrasel.com.br/parceiros/a-sales-arquitetura/",
+      "audience_rationale_reference": "https://mg.abrasel.com.br/parceiros/a-sales-arquitetura/",
+      "status": "candidate"
+    },
+    {
+      "username": "wabizapp",
+      "sampling_stratum": "foodservice_delivery_technology",
+      "audience_intent": "uncertain",
+      "source_evidence_reference": "https://sp.abrasel.com.br/parceiros/wabiz/",
+      "audience_rationale_reference": "https://sp.abrasel.com.br/parceiros/wabiz/",
+      "status": "candidate"
+    },
+    {
+      "username": "melhorenvio",
+      "sampling_stratum": "ecommerce_logistics",
+      "audience_intent": "mpe_targeted",
+      "source_evidence_reference": "https://melhorenvio.com.br/blog/",
+      "audience_rationale_reference": "https://centraldeajuda.melhorenvio.com.br/hc/pt-br/articles/31220426141844-O-que-%C3%A9-o-Meus-Links-de-Frete-e-como-us%C3%A1-lo",
+      "status": "candidate"
+    },
+    {
+      "username": "empreendedorasdabelezagb",
+      "sampling_stratum": "beauty_entrepreneurship_education",
+      "audience_intent": "mpe_targeted",
+      "source_evidence_reference": "https://empreendedorasdabeleza.grupoboticario.com.br/faq",
+      "audience_rationale_reference": "https://empreendedorasdabeleza.grupoboticario.com.br/faq",
+      "status": "candidate"
+    },
+    {
+      "username": "amarefashiongo",
+      "sampling_stratum": "fashion_sector_entrepreneurship",
+      "audience_intent": "uncertain",
+      "source_evidence_reference": "https://www.sebraego.com.br/moda/",
+      "audience_rationale_reference": "https://www.sebraego.com.br/moda/",
+      "status": "candidate"
+    }
+  ]
+}
