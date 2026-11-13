@@ -563,3 +563,29 @@ python scripts/a5_business_discovery_cycle.py --manifest artifacts/private/bd_ma
 ```
 
 A última linha é prévia offline; não usar --execute nesta verificação. Se a quota estiver esgotada, capacidade zero é resultado válido, não reiniciar o ledger ou forçar chamadas. Backup pós-605 e teste de restauração continuam pendentes. PRs #43/#44 permanecem draft.
+
+
+## Aceite da priorização e backup/restore isolado — 13/11/2026
+
+- Operador: 26 PASS focal (6,82 s), **502 PASS integral** (249,02 s, 1 warning Starlette conhecido), zero-spend PASS. Inspeção sem lease, reservas, órfãos, quarentena ou bloqueio de autenticação; validade OAuth UNKNOWN (não verificada).
+- Prévia v8 confirma 50 fontes, 12 aprovadas, 10 observadas, 605 media IDs únicos, zero duplicidades e admissões. Capacidade 0 (78/80 reservas conservadoras, cada run exige quatro unidades); 12 elegíveis deferidas por orçamento, 38 não aprovadas. Nenhuma leitura externa. Inventário dos três maiores perfis soma 311/605; duas fontes aprovadas sem observações (Conta Azul e Mente Empreendedora). Ambas as políticas retornam seleção vazia: não há comparação operacional de diversidade com capacidade positiva. Não alterar quota.
+- Novo incremento **IMP-091/144 (CAP-022/G5-OPS), suporte IMP-040/052/170 (CAP-001)**: backup SQLite de todos os tenants pelo operador de filesystem, somente com parada explícita de todos os escritores (API, workers, ingestão, scheduler). Sem lease ou run reservado em qualquer tenant. Origem aberta read-only, snapshot SQLite backup API (inclui WAL comprometido), head 0012 obrigatório; validação integrity_check/foreign_key_check, fingerprint de schema, contagem de todas as tabelas e cobertura técnica do tenant. Cópia em arquivo novo, exclusivo, sob artifacts/private; restauração de teste em diretório descartável privado, revalidada, nunca sobre a origem. SHA-256, bytes e tempos observados no relatório. Não é lock distribuído, backup criptografado, teste de recuperação de aplicação ou RPO/RTO de produção.
+- Proteja artifacts/private por ACL do sistema (modo POSIX 0600 não configura ACL Windows) e não sincronize/enviar o banco: contém todos os tenants e dados sensíveis. A confirmação de parada é operacional, não uma nova aprovação institucional. Não executar com processos escritores ativos; o ledger não detecta todos os escritores.
+- Testes efetivamente executados: 12 PASS em 0,43 s, SQLite temporário com schema reduzido e dependência local reconstruída, incluindo WAL, bloqueio de lease/reserva de outros tenants, integridade referencial, destino exclusivo, falha de cópia, CLI. Blobs módulo/CLI/teste conferidos. Sem checkout completo nem execução Windows real. Esperado 514 se a regressão anterior de 502 for preservada. Backup pós-605 e restore operacional ainda pendentes; nenhum merge, migração, scheduler, escrita no DB operacional, chamada Meta, despesa ou nova aprovação institucional.
+
+```powershell
+git pull --ff-only
+python -m pytest -q tests/test_discovery_backup.py
+python -m pytest -q
+python scripts/verify_zero_spend.py
+python scripts/a5_recover_business_discovery.py
+```
+
+Após parar efetivamente API, workers e todos os escritores do banco, manter o ambiente local e as flags externas desligadas. Usar nome exclusivo (não sobrescrever backup anterior):
+
+```powershell
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+python scripts/a6_backup_restore_drill.py --output-name "tapi-a6-post605-$stamp.sqlite3" --confirm-all-writers-stopped
+```
+
+Esperar BACKUP_RESTORE_VERIFIED, integrity_check=ok, foreign_key_check=ok, inventory_matches=true, cobertura 605/10 se não houve nova ingestão, live_restore_performed=false. Guardar backup e relatório JSON localmente; compartilhar somente relatório sanitizado, nunca o arquivo SQLite. Se BLOCKED, não forçar nem apagar dados. Próximo incremento: agendador supervisionado com tick limitado e prévia, condicionado a backup/restore e testes; PRs #43/#44 draft. Não liberar G5 nem afirmar homologação de produção.
