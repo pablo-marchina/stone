@@ -17,6 +17,7 @@ from sqlalchemy import (Table, Column, String, ForeignKeyConstraint,
                         select, insert, update, inspect)
 from sqlalchemy.exc import IntegrityError
 
+from .discovery_auth_guard import AUTH_INVALID, is_global_auth_failure, record_auth_failure
 from .connectors import ConnectorError, OfficialHttp, NormalizedItem, Platform, credential_for
 from .domain import MediaType
 from .identity import IdentityFailure, Principal
@@ -252,7 +253,12 @@ class DiscoveryCorpusService:
             }
         except (ConnectorError, ValueError, IntegrityError) as exc:
             reason = exc.code if isinstance(exc, ConnectorError) else "DISCOVERY_INGESTION_FAILED"
-            self.store._finish(tenant, req.run_key, "failed", created, duplicates, refreshed, reason)
+            auth_failure = is_global_auth_failure(exc)
+            if auth_failure and not (created or duplicates or refreshed):
+                reason = AUTH_INVALID
+            self.store._finish(tenant, req.run_key, "failed", created, duplicates, refreshed, reason,
+                after_finish=(lambda db: record_auth_failure(db, tenant, exc, req.run_key))
+                if auth_failure else None)
             if isinstance(exc, ConnectorError):
                 raise
             raise ConnectorError(reason, 422) from exc
