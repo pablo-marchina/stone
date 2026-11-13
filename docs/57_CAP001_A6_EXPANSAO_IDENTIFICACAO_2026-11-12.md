@@ -300,3 +300,30 @@ python scripts/a5_expand_source_frame.py --base artifacts/private/bd_manifest_a6
 ```
 
 Esperado 33→42, approved=12, grants_created=0, external_data_accessed=false para o intake offline. Quota diária de identidade continua 10/10, orçamento compartilhado esperado 78/80; não executar identificação ou ingestão até nova janela UTC. Priorizar no próximo dia histórico de Conta Azul/Mente Empreendedora e novas identidades de segmentos menos cobertos, com prévia e quotas. Manter backup pós-605, executar regressão completa sem flags externas; PRs #43/#44 permanecem draft. Recuperação robusta, agendamento, renovação de grants e admissão científica pendentes. DEC-018 vigente, sem nova aprovação institucional.
+
+
+## Intake v7 confirmado e terceira onda documental — 13/11 UTC
+
+Operador reportou CANDIDATE_FRAME_EXPANDED, 33→42 fontes, 12 aprovadas tecnicamente, zero grants criados, external_data_accessed=false. Hash v7 `1f8586aed636b2977a3d45924125b993934156f85aa9c3b4cdad507ed56eff2d`. Acervo anterior 605/10 preservado; nenhuma mutação do DB nesta operação.
+
+Terceira onda: `evidence/acquisition/bd_a6_candidate_expansion_wave3_20261113.json`. Oito novos candidatos, referências públicas consultadas em 12/11/2026 (Brasília), sem IDs ou grants; verificação estrutural de campos e ausência de colisão com as listas públicas anteriores.
+
+| Handle | Estrato | Intenção | Evidência/limitação |
+|---|---|---|---|
+| aliancaempreendedora | Microempreendedorismo inclusivo | mpe_targeted | Site próprio nomeia perfil e detalha programas para microempreendedores; não assumir independência de programas parceiros |
+| varejointeligentecdlbh | Capacitação digital do varejo | mpe_targeted | FAQ da CDL/BH identifica o canal oficial do projeto; ação CDL/Sebrae para pequenos negócios; perfil pode ter atividade intermitente e vínculo Sebrae |
+| abfoficial | Franchising | uncertain | Site ABF nomeia handle; possui ações para microfranquias, mas público inclui grandes redes |
+| abavnacional | Gestão de agências de viagens | uncertain | Página institucional nomeia canal; programa 2026 de qualificação das agências; tamanho dos negócios não verificado |
+| instituto_cea | Inclusão produtiva na moda | mpe_targeted | Artigo do Instituto C&A identifica canal e programas para micro/pequenos negócios; também empregabilidade |
+| institutolojasrenner | Moda circular e inclusão | uncertain | Edital oficial indica Instagram, criação de negócios e empregabilidade; audiência pode incluir OSCs e beneficiárias |
+| prodarteoficial | Acesso a mercado para artesãos | mpe_targeted | Prefeitura Recife indica perfil oficial para participação em feiras e formalização; público artesanal, não comprova porte individual |
+| casa.artemisia.escola | Cosméticos naturais/capacitação | uncertain | Reportagem local de 03/11/2026 identifica canal de cursos para geração de renda; iniciativa recém-inaugurada, atividade, identidade profissional e maturidade não verificadas |
+
+A seleção é intencional, não amostragem probabilística. Quatro classificações mpe_targeted e quatro uncertain; intenção documental não determina audiência real de posts. Foram evitados perfis cujo canal é explicitamente orientado ao consumo final. A ABF e ABAV ampliam setores, mas não são exclusivamente MPE. Instituto C&A e Instituto Lojas Renner têm afinidade temática e devem ser avaliados como grupos distintos, sem assumir independência estatística. A nova onda eleva o total previsto a 50 (12 habilitadas + 38 candidatas); a meta mais estrita de 50 candidatas não habilitadas ainda exige 12. Não alterar os grants existentes. Sem acesso à API Meta, sem alteração do código executável, sem consulta a posts e sem custos financeiros. Pesquisa documental em sites públicos externos distinta do intake offline.
+
+```powershell
+git pull --ff-only
+python scripts/a5_expand_source_frame.py --base artifacts/private/bd_manifest_a6_v7.json --candidates evidence/acquisition/bd_a6_candidate_expansion_wave3_20261113.json --output artifacts/private/bd_manifest_a6_v8.json
+```
+
+Esperado 42→50, approved=12, grants_created=0, external_data_accessed=false. Intake operacional ainda pendente; não declarar meta atingida no manifesto privado antes da execução. Última regressão integral reportada 419 PASS; nova suíte após A6.7 e backup pós-605 ainda não reportados. No dia UTC 13/11 quota esperada 78/80 e identidade 10/10; não realizar novas chamadas até a renovação diária. PRs #43/#44 draft, recuperação robusta e agendamento pendentes. DEC-018 vigente.
