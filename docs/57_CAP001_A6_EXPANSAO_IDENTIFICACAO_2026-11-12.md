@@ -416,3 +416,22 @@ python scripts/a5_business_discovery_cycle.py --manifest artifacts/private/bd_ma
 ```
 
 Esperado 457 testes (452+5), inspeção saudável e plano somente leitura confirmando limite compartilhado (78/80 se mesmo dia UTC sem novas operações). Não habilitar agendamento ainda. Backup pós-605 pendente. DEC-018 vigente.
+
+
+## Regressão Windows da coordenação compartilhada e adequação do teste A4 — 13/11/2026 UTC
+
+Operador reportou 35 PASS focal (14,85 s), regressão integral **456 PASS, 1 FAIL, 1 warning em 167,45 s** no incremento de coordenação (head de referência 650a572, SHA local não reportado). Falha única em test_concurrent_cross_source_collision_is_serialized: BrokenBarrierError. O teste antigo sincronizava dois serviços em _persist_item, mas a exclusão mútua adicionada na reserva impede o segundo de chegar à barreira. Zero-spend PASS e RECOVERY_INSPECTION sem lease/reservas/bloqueios. Não declarar regressão integral aprovada antes da reexecução.
+
+Correção exclusivamente de testes em `tests/test_discovery_batch_a4.py`: manter teste original de colisão concorrente, agora diretamente na camada de armazenamento (dois itens com mesmo media ID, fontes diferentes, duas threads, barreira antes da persistência, um criado e outro BD_CROSS_SOURCE_MEDIA_ID_CONFLICT, exatamente um registro/content/snapshot). Adicionar teste de serviço com eventos determinísticos: primeiro run permanece ativo enquanto segundo tenta reservar, segundo recebe ACCOUNT_INGESTION_IN_PROGRESS antes de rede e sem ledger; após completar o primeiro, segunda fonte pode reservar mas colisão do mesmo media ID é rejeitada, com auditoria do vencedor válida e zero observações no perdedor. Não remover proteção, não afrouxar quota, não desabilitar teste. Nenhum código de produção modificado.
+
+Validação local: 7 PASS em 1,43 s (2 cenários A4 + 5 testes de reservas compartilhadas), em cópia reconstruída anterior, SQLite temporário, blocos equivalentes de reserva/persistência/serviço e fixture HTTP simulado. Dois novos corpos de teste publicados e conferidos com a versão executada; não é checkout integral do PR. Esperado 458 testes (um substituído por dois). Regressão integral Windows pendente; warning conhecido de Starlette/httpx permanece.
+
+```powershell
+git pull --ff-only
+python -m pytest -q tests/test_discovery_batch_a4.py tests/test_discovery_shared_reservations.py
+python -m pytest -q
+python scripts/verify_zero_spend.py
+python scripts/a5_recover_business_discovery.py
+```
+
+Manter flags externos desligados. Backup pós-605 ainda não reportado. Não iniciar agendamento ou recuperação destrutiva. Nenhuma chamada Meta, migração, alteração da base operacional, merge ou nova aprovação institucional. DEC-018 vigente.
