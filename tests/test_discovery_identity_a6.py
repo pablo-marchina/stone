@@ -220,8 +220,12 @@ def test_declared_expiry_blocks_history_and_identity_plans_without_spending(setu
     assert plan["conservative_reserved_pages_today"]==0
     with pytest.raises(ConnectorError,match="BD_META_DECLARED_CREDENTIAL_EXPIRED"):
         plan_identity(engine,TENANT,frame,VIEWER,["mpe_example"])
-    with pytest.raises(ConnectorError,match="BD_META_DECLARED_CREDENTIAL_EXPIRED"):
-        execute_identity(engine,ADMIN,frame,VIEWER,["mpe_example"],token=TOKEN)
+    def unexpected(req):
+        pytest.fail("expiry guard allowed a provider request")
+    with httpx.Client(transport=httpx.MockTransport(unexpected)) as client:
+        with pytest.raises(ConnectorError,match="BD_META_DECLARED_CREDENTIAL_EXPIRED"):
+            execute_identity(engine,ADMIN,frame,VIEWER,["mpe_example"],token=TOKEN,
+                http=OfficialHttp(client=client,instagram_version="v26.0"))
     with engine.connect() as conn:
         assert conn.execute(select(func.count()).select_from(ingestion_runs)).scalar_one()==0
         assert conn.execute(select(func.count()).select_from(domain_events).where(domain_events.c.event_type==RESERVATION)).scalar_one()==0
