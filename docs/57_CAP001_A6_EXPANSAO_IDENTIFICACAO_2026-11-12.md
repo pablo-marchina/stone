@@ -356,3 +356,31 @@ python scripts/a5_recover_business_discovery.py
 ```
 
 Não executar comandos de recuperação que alterem estado na base saudável. Limitações: ainda não há fencing de persistência/finalização de workers antigos, coordenação abrangente com todos os entrypoints, tratamento de leases órfãs legadas sem linha de lease, classificação de autenticação global/expiração do cursor pelo diagnóstico Meta, nem revalidação de revisões antigas. A política não torna agendamento automático seguro por si só; manter ingestão supervisionada e serial, quotas existentes, PRs draft. Sem migração, sem merge, sem nova aprovação institucional. DEC-018 vigente.
+
+
+## Aceite operacional da recuperação fail-closed e fencing de escrita — 13/11/2026 UTC
+
+Operador reportou regressão integral Windows **447 passed, 1 warning in 145.98s**, verify_zero_spend PASS e RECOVERY_INSPECTION lease=null, latest_a5_blocked_runs=[], reserved_runs=0. Assim, o primeiro incremento A6.6 passou inclusive nos testes de integração publicados. Warning não detalhado, SHA local não reportado; sequência corresponde ao head anterior `80122c1`. Não houve necessidade de recuperação real. Backup pós-605 ainda não confirmado.
+
+### A6.6 — proteção contra finalização/escrita de run encerrado
+
+- `IngestionStore._lock_reserved_run`: bloqueia a linha do tenant, depois verifica e bloqueia por UPDATE condicional o run reservado, com escopo opcional plataforma/conta. Mesmo lock de tenant usado pela recuperação A5.
+- `_finish`: aceita somente estados terminais completed/failed e transição de reserved; rejeita terminal/missing com INGESTION_RUN_NO_LONGER_RESERVED, não altera contadores ou reason_code anteriores e não executa after_finish quando bloqueado. Callback continua transacional; falha no callback desfaz transição.
+- `TechnicalDiscoveryService`: verifica reserva ativa antes da escrita de technical_verified_at e antes de cada persistência de item, na mesma transação de escrita. Escopo tenant/Instagram/target/run. Uma recuperação que encerre a reserva impede novas escritas locais por este serviço atualizado, inclusive proveniência; observações já comprometidas não são apagadas.
+- Cinco novos testes em `tests/test_discovery_run_fencing.py`: interrupção simulada antes da verificação técnica e antes da persistência, tentativa de finalizar novamente como completed/failed e rollback do callback. **19 PASS em 1,99 s** (5 novos + 14 A3) na cópia reconstruída anterior com os mesmos blocos alterados, SQLite temporário e transporte simulado; verify_zero_spend PASS. Blob do arquivo de teste publicado conferido. Não é regressão integral do head atual, nem teste PostgreSQL ou corrida com processos reais.
+- Escopo limitado: _finish protege todas as rotas que usam esse método; a verificação por item e verificação de grant foram conectadas somente à rota Business Discovery técnica. Rotas genérica/científica ainda não receberam fencing de todas as suas escritas; não existe coordenação global de reserva/quotas entre entrypoints. A proteção não cancela requisições externas já iniciadas, não impede processo rodando código antigo, nem substitui parada explícita antes de recuperação. Não habilitar agendamento ainda. Sem migração, sem alteração do banco do operador e sem chamadas Meta. DEC-018 vigente.
+
+```powershell
+git pull --ff-only
+$env:TAPI_BD_IDENTITY_ENABLED = "0"
+$env:TAPI_OFFICIAL_METADATA_READS = "0"
+$env:TAPI_BD_TECHNICAL_INGEST = "0"
+$env:TAPI_BD_CONTINUOUS_ENABLED = "0"
+$env:TAPI_ZERO_BILLING_CONFIRMED = "0"
+python -m pytest -q tests/test_discovery_run_fencing.py tests/test_discovery_technical_a3.py tests/test_discovery_history_a5.py tests/test_discovery_recovery_a5.py
+python -m pytest -q
+python scripts/verify_zero_spend.py
+python scripts/a5_recover_business_discovery.py
+```
+
+Expectativa 452 testes (447+5), sem novas falhas. Preservar backup pós-605. Próximo incremento: coordenação global de reserva/lease e quota, incluindo rotas manuais e identidade; proteção de demais escritas e teste de concorrência. PRs #43/#44 continuam draft, sem merge. 
