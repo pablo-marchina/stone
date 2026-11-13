@@ -382,6 +382,8 @@ def test_scheduler_cli_preview_requires_no_token_and_does_not_write(tmp_path, mo
 
 
 def test_readiness_reports_caption_without_scientific_admission(tmp_path, monkeypatch, capsys):
+    # Register corpus tables before the A4 fixture creates metadata.
+    from tapi_gate0 import corpus  # noqa: F401
     from tapi_gate0.discovery_corpus_readiness import readiness_report
     from tapi_gate0.sa_store import domain_events
     from tapi_gate0.ingestion import source_grants
