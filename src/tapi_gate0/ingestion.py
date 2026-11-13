@@ -226,9 +226,32 @@ class IngestionStore:
                     tenant_id=tenant, platform=req.platform.value,
                     source_account_id=req.source_account_id, **values))
 
-    def _reserve(self,tenant,req:IngestionRequest):
+    def _reserve(self,tenant,req:IngestionRequest, *, cycle_key=None):
         """Reserve one of five bounded account reads per UTC day BEFORE network call."""
         with self.engine.begin() as db:
+            if req.platform == Platform.INSTAGRAM:
+                # Local imports avoid the ingestion/history/identity import cycle.
+                from .discovery_history import lock_tenant, cycle_leases
+                from .discovery_identity_a6 import identity_reserved_today
+                lock_tenant(db, tenant)
+                lease = db.execute(select(cycle_leases.c.cycle_key).where(
+                    cycle_leases.c.tenant_id == tenant)).scalar_one_or_none()
+                if lease != cycle_key or (cycle_key is not None and
+                        not req.run_key.startswith(cycle_key + "-")):
+                    raise ConnectorError("BD_CYCLE_RESERVATION_SCOPE_MISMATCH", 409)
+                active_tenant = db.execute(select(ingestion_runs.c.run_key).where(
+                    ingestion_runs.c.tenant_id == tenant,
+                    ingestion_runs.c.platform == Platform.INSTAGRAM.value,
+                    ingestion_runs.c.status == "reserved").limit(1)).first()
+                if active_tenant:
+                    raise ConnectorError("ACCOUNT_INGESTION_IN_PROGRESS", 409)
+                day = now_utc().date().isoformat()
+                used = db.execute(select(func.count()).select_from(ingestion_runs).where(
+                    ingestion_runs.c.tenant_id == tenant,
+                    ingestion_runs.c.platform == Platform.INSTAGRAM.value,
+                    ingestion_runs.c.requested_at >= day)).scalar_one()
+                if 4 * used + identity_reserved_today(db, tenant, day) + 4 > 80:
+                    raise ConnectorError("BD_SHARED_DAILY_BUDGET_EXCEEDED", 429)
             # Acquire a per-account write/row lock before testing reservations.
             # SQLite serializes writers; PostgreSQL locks this grant row.
             locked = db.execute(update(source_grants).where(
