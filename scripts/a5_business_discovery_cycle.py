@@ -27,6 +27,8 @@ def main(argv=None):
     parser.add_argument("--max-pages", type=int, default=4)
     parser.add_argument("--daily-request-budget", type=int, default=80)
     parser.add_argument("--refresh-hours", type=int, default=24)
+    parser.add_argument("--priority-policy", choices=("recency", "coverage"), default="recency",
+                        help="Opt-in technical coverage policy for history only; refresh keeps recency")
     args = parser.parse_args(argv)
     required = ["TAPI_DATABASE_URL", "TAPI_TENANT_ID", "TAPI_META_IG_ID"]
     if args.execute:
@@ -57,7 +59,7 @@ def main(argv=None):
         return 3
     tenant, viewer = os.environ["TAPI_TENANT_ID"], os.environ["TAPI_META_IG_ID"]
     options = dict(mode=args.mode, limits=limits, daily_request_budget=args.daily_request_budget,
-                   refresh_hours=args.refresh_hours)
+                   refresh_hours=args.refresh_hours, priority_policy=args.priority_policy)
     try:
         store = IngestionStore(engine)
         if not args.execute:

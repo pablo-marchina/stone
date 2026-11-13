@@ -259,3 +259,62 @@ def test_a5_missing_database_is_blocked_without_creating_file(tmp_path, monkeypa
     assert recover([]) == 2
     assert json.loads(capsys.readouterr().out)["code"] == "EXISTING_DATABASE_AND_TENANT_REQUIRED"
     assert not missing.exists()
+
+
+def test_coverage_plan_observes_only_due_approved_sources_and_is_read_only(tmp_path):
+    engine, store = db(tmp_path)
+    try:
+        plan, selected = plan_cycle(store, TENANT, manifest(approved=1), VIEWER,
+            mode="history", limits=limits(sources=2), priority_policy="coverage")
+        assert [s.username for s in selected] == [SOURCES[0][0]]
+        assert plan["priority_comparison"]["coverage_policy"]["sources_without_observations"] == 1
+        assert plan["priority_comparison"]["recency_baseline"]["selected_sources"] == plan["selected_sources"]
+        assert plan["external_data_accessed"] is False
+        assert any(s["reason"] == "SOURCE_NOT_APPROVED" for s in plan["deferred"])
+        with engine.connect() as conn:
+            assert conn.execute(select(func.count()).select_from(ingestion_runs)).scalar_one() == 0
+        blocked, selected = plan_cycle(store, TENANT, manifest(approved=1, expired=True), VIEWER,
+            mode="history", limits=limits(), priority_policy="coverage")
+        assert not selected and not blocked["priority_comparison"]["inputs"]
+    finally:
+        engine.dispose()
+
+
+def test_coverage_execution_counts_existing_inventory_without_touching_refresh_policy(tmp_path):
+    engine, store = db(tmp_path)
+    transport, calls, client = provider()
+    try:
+        first = execute_cycle(store, TENANT, manifest(approved=2), VIEWER,
+            mode="history", limits=limits(), priority_policy="coverage", token=TOKEN, http=transport)
+        assert first["status"] == "BATCH_COMPLETED"
+        prior_calls = len(calls)
+        plan, selected = plan_cycle(store, TENANT, manifest(approved=2), VIEWER,
+            mode="history", limits=limits(sources=2), priority_policy="coverage")
+        coverage = {c["username"]: c["technical_posts"] for c in plan["priority_comparison"]["inputs"]}
+        assert sorted(coverage.values()) == [0, 2]
+        assert len(calls) == prior_calls and len(selected) == 2
+        with pytest.raises(ConnectorError, match="BD_PRIORITY_INVALID_POLICY"):
+            plan_cycle(store, TENANT, manifest(), VIEWER, mode="refresh", limits=limits(), priority_policy="coverage")
+        default, _ = plan_cycle(store, TENANT, manifest(), VIEWER, mode="refresh", limits=limits())
+        assert default["priority_policy"] == "recency" and default["priority_comparison"] is None
+    finally:
+        client.close()
+        engine.dispose()
+
+
+def test_coverage_cli_preview_matches_selected_policy(tmp_path, monkeypatch, capsys):
+    from scripts.a5_business_discovery_cycle import main
+    engine, store = db(tmp_path)
+    try:
+        monkeypatch.setenv("TAPI_DATABASE_URL", str(engine.url))
+        monkeypatch.setenv("TAPI_TENANT_ID", TENANT)
+        monkeypatch.setenv("TAPI_META_IG_ID", VIEWER)
+        monkeypatch.delenv("TAPI_INSTAGRAM_ACCESS_TOKEN", raising=False)
+        path = tmp_path / "manifest.json"
+        path.write_text(manifest().model_dump_json(), encoding="utf-8")
+        assert main(["--manifest", str(path), "--mode", "history", "--priority-policy", "coverage"]) == 0
+        result = json.loads(capsys.readouterr().out)
+        assert result["priority_comparison"]["coverage_policy"]["selected_sources"] == result["selected_sources"]
+        assert result["external_data_accessed"] is False
+    finally:
+        engine.dispose()

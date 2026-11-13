@@ -540,3 +540,26 @@ python scripts/a5_recover_business_discovery.py
 ```
 
 Manter flags externos desabilitados e as variáveis de expiração não configuradas durante a regressão (os testes focalizados usam datas simuladas isoladas). Inspeção sem configuração esperada: meta_credential_expiry.status=UNKNOWN, blocked=false, provider_verified=false; nenhuma consulta. Para configurar, copiar apenas datas reais verificadas na ferramenta oficial do provedor para o ambiente privado, em ISO 8601 com fuso; não colar o token no chat, logs ou Git. Não é necessário configurar ou resetar a credencial para validar esta atualização. Próximo incremento: priorização de fontes por cobertura e diversidade, seguido de scheduler supervisionado/validação operacional. Backup pós-605 pendente. PRs #43/#44 draft, sem merge, migração, escrita no DB operacional, despesa ou nova aprovação institucional. DEC-018 vigente.
+
+
+## A6 — política experimental de prioridade por cobertura (13/11/2026)
+
+**Vínculo obrigatório ao Plano Único v5.2:** CAP-001, IMP-048 (amostragem), IMP-052 (lotes e cobertura), IMP-053 (data card), IMP-167 (diversidade de fontes) e IMP-170 (evidência de cobertura); preparação de comparação de políticas para CAP-021, sem declarar IMP-124/125 completos. DEC-016 e DEC-018 preservadas; sem novos IDs, backlog paralelo ou liberação de gate.
+
+- O planejamento histórico aceita `--priority-policy coverage` como opt-in; padrão `recency` permanece idêntico na seleção e refresh não aceita a política de cobertura. Nenhuma mudança nos filtros prévios (grant, expiração, autenticação, quotas, falhas e checkpoint), capacidade, orçamento ou caminho de execução. O executor reutiliza exatamente a política no replanejamento sob lease.
+- Um slot preserva a seleção por checkpoint mais antigo (ou ainda não iniciado); slots seguintes minimizam repetição de estrato no ciclo e priorizam fontes sem registros, menor número de fontes observadas no estrato, menor inventário técnico do estrato, menor inventário da fonte, recência e username. Com capacidade de um, a política é igual ao baseline por desenho. Não estima relevância científica nem yield. Estratos são os rótulos documentais atuais; não são evidência de representatividade.
+- Contagens de media IDs distintos por fonte aprovada do manifesto (inclusive deferidas) no tenant e somente metadata_only Instagram. Somatórios entre fontes são inventário técnico, não unicidade global nem admissões; não contam snapshots repetidos. A política não admite candidatos nem cria grants.
+- A prévia privada registra inputs, contagens por estrato, versão `bd-history-coverage.v1`, ordem/razões de seleção, baseline e política com mesmos candidatos/capacidade; métricas planejadas: diversidade de estratos, fontes sem observações e inventário prévio. Não publica cursores, tokens ou referências brutas.
+- Validação efetiva: 12 testes unitários puros PASS em 0,07 s, incluindo fixture pareada (1→3 estratos no mesmo orçamento de três fontes), determinismo e limites. Não prova melhoria em coleta real. Três testes adicionais de integração planner/execução/CLI publicados mas ainda não executados; regressão integral do HEAD, backup pós-605 e revisão A5/A6 pendentes. Sem chamada Meta, escrita operacional, migração, merge, scheduler ou nova aprovação institucional.
+- Próximo aceite: comparar as prévias privadas no manifesto v8, com quota disponível, verificar a regressão Windows e os contadores; manter recency como fallback, sem ativar agendamento antes do aceite operacional. Não extrapolar ganhos para CAP-021 ou corpus científico.
+
+```powershell
+git pull --ff-only
+python -m pytest -q tests/test_discovery_priority.py tests/test_discovery_history_a5.py
+python -m pytest -q
+python scripts/verify_zero_spend.py
+python scripts/a5_recover_business_discovery.py
+python scripts/a5_business_discovery_cycle.py --manifest artifacts/private/bd_manifest_a6_v8.json --mode history --max-sources 3 --priority-policy coverage
+```
+
+A última linha é prévia offline; não usar --execute nesta verificação. Se a quota estiver esgotada, capacidade zero é resultado válido, não reiniciar o ledger ou forçar chamadas. Backup pós-605 e teste de restauração continuam pendentes. PRs #43/#44 permanecem draft.

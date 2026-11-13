@@ -15,15 +15,19 @@ from .discovery_identity_a6 import identity_reserved_today
 from .discovery_recovery import reviewed_failure
 from .discovery_auth_guard import AUTH_BLOCKED, AUTH_INVALID, auth_status
 from .discovery_credential_expiry import expiry_status
+from .discovery_priority import HistoryCandidate, compare_history_selection
 from .ingestion import IngestionStore, ingestion_records, ingestion_runs, MANUAL_ORPHAN_REASON
 from .storage import now_utc
 
 
 def plan_cycle(store: IngestionStore, tenant: str, manifest: BatchManifest,
                viewer: str, *, mode: str, limits: BatchLimits,
-               daily_request_budget: int = 80, refresh_hours: int = 24):
+               daily_request_budget: int = 80, refresh_hours: int = 24,
+               priority_policy: str = "recency"):
     if mode not in {"history", "refresh"} or not 4 <= daily_request_budget <= 80 or not 1 <= refresh_hours <= 720:
         raise ConnectorError("BD_CYCLE_INVALID_LIMITS", 422)
+    if priority_policy not in {"recency", "coverage"} or (mode != "history" and priority_policy != "recency"):
+        raise ConnectorError("BD_PRIORITY_INVALID_POLICY", 422)
     if not re.fullmatch(r"[0-9]{5,32}", viewer):
         raise ConnectorError("BD_BATCH_INVALID_VIEWER", 422)
     if mode == "history" and limits.persist_limit != limits.page_limit * limits.max_pages:
@@ -32,6 +36,9 @@ def plan_cycle(store: IngestionStore, tenant: str, manifest: BatchManifest,
     day = now.date().isoformat()
     due = []
     deferred = []
+    coverage_comparison = None
+    counts = {}
+    stratum_coverage = {}
     with store.engine.connect() as db:
         auth = auth_status(db, tenant)
         expiry = expiry_status(now=now)
@@ -95,11 +102,37 @@ def plan_cycle(store: IngestionStore, tenant: str, manifest: BatchManifest,
                 deferred.append({"username": source.username, "reason": reason})
             else:
                 due.append((priority, source.username, source))
+        if priority_policy == "coverage":
+            # Count existing technical inventory of approved manifest sources, including
+            # deferred ones. This is not an estimate of the scientific sample.
+            approved = [s for s in manifest.sources if s.status == "approved"]
+            keys = [s.expected_ig_id for s in approved]
+            if keys:
+                counts = dict(db.execute(select(
+                    ingestion_records.c.source_account_id,
+                    func.count(func.distinct(ingestion_records.c.source_item_id)),
+                ).where(ingestion_records.c.tenant_id == tenant,
+                        ingestion_records.c.platform == Platform.INSTAGRAM.value,
+                        ingestion_records.c.metadata_only == 1,
+                        ingestion_records.c.source_account_id.in_(keys),
+                ).group_by(ingestion_records.c.source_account_id)).all())
+            for source in approved:
+                observed, posts = stratum_coverage.get(source.sampling_stratum, (0, 0))
+                n = counts.get(source.expected_ig_id, 0)
+                stratum_coverage[source.sampling_stratum] = (observed + int(n > 0), posts + n)
     due.sort(key=lambda item: (item[0], item[1]))
     capacity = min(limits.max_sources, max(0, (daily_request_budget - used) // 4))
     selected = [s for _, _, s in due[:capacity]]
+    if priority_policy == "coverage":
+        candidates = [HistoryCandidate(s.username, s.sampling_stratum, last,
+                                       counts.get(s.expected_ig_id, 0))
+                      for last, _, s in due]
+        coverage_comparison = compare_history_selection(candidates, stratum_coverage, capacity)
+        by_name = {s.username: s for _, _, s in due}
+        selected = [by_name[name] for name in coverage_comparison["coverage_policy"]["selected_sources"]]
+    selected_names = {s.username for s in selected}
     deferred.extend({"username": s.username, "reason": "CYCLE_OR_DAILY_BUDGET_LIMIT"}
-                    for _, _, s in due[capacity:])
+                    for _, _, s in due if s.username not in selected_names)
     return {"schema_version": "tapi-bd-continuous-plan.v1",
             "status": "PLAN_ONLY_NO_EXTERNAL_READ", "mode": mode,
             "manifest_sha256": manifest.fingerprint(),
@@ -107,6 +140,8 @@ def plan_cycle(store: IngestionStore, tenant: str, manifest: BatchManifest,
             "approved_source_count": sum(s.status == "approved" for s in manifest.sources),
             "selected_sources": [s.username for s in selected], "deferred": deferred,
             "daily_request_budget": daily_request_budget,
+            "priority_policy": priority_policy,
+            "priority_comparison": coverage_comparison,
             "meta_auth": auth,
             "meta_credential_expiry": expiry,
             "conservative_reserved_pages_today": used,
@@ -134,7 +169,7 @@ def tenant_coverage(store: IngestionStore, tenant: str) -> dict:
 def execute_cycle(store: IngestionStore, tenant: str, manifest: BatchManifest,
                   viewer: str, *, mode: str, limits: BatchLimits,
                   daily_request_budget: int = 80, refresh_hours: int = 24,
-                  token=None, http=None):
+                  token=None, http=None, priority_policy: str = "recency"):
     if os.getenv("TAPI_BD_CONTINUOUS_ENABLED") != "1":
         raise ConnectorError("BD_CONTINUOUS_DISABLED", 403)
     if any(os.getenv(k) != "1" for k in ("TAPI_OFFICIAL_METADATA_READS",
@@ -145,7 +180,8 @@ def execute_cycle(store: IngestionStore, tenant: str, manifest: BatchManifest,
     key = f"a5{mode}-" + now_utc().strftime("%Y%m%d%H%M%S") + "-" + secrets.token_hex(4)
     with cycle_lease(store.engine, tenant, key):
         plan, selected = plan_cycle(store, tenant, manifest, viewer, mode=mode,
-            limits=limits, daily_request_budget=daily_request_budget, refresh_hours=refresh_hours)
+            limits=limits, daily_request_budget=daily_request_budget, refresh_hours=refresh_hours,
+            priority_policy=priority_policy)
         before = tenant_coverage(store, tenant)
         report = {"schema_version": "tapi-bd-continuous-cycle.v1", "cycle_key": key,
                   "mode": mode, "plan": plan, "status": "NO_DUE_AUTHORIZED_SOURCES",
