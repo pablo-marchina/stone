@@ -384,3 +384,35 @@ python scripts/a5_recover_business_discovery.py
 ```
 
 Expectativa 452 testes (447+5), sem novas falhas. Preservar backup pós-605. Próximo incremento: coordenação global de reserva/lease e quota, incluindo rotas manuais e identidade; proteção de demais escritas e teste de concorrência. PRs #43/#44 continuam draft, sem merge. 
+
+
+## Aceite Windows do fencing e coordenação compartilhada — 13/11/2026 UTC
+
+Operador reportou 36 PASS focal (20,76 s), **452 PASS, 1 warning em 145,32 s** na suíte integral, verify_zero_spend PASS, RECOVERY_INSPECTION lease=null, latest_a5_blocked_runs=[], reserved_runs=0. Warning identificado: StarletteDeprecationWarning de `fastapi.testclient` sobre `httpx` com `starlette.testclient`, sugerindo httpx2. Não trocar dependências de transporte sem teste específico; aviso não causou falha. Head de referência anterior `a9858f4` pela sequência reportada, sem SHA local independente. Backup pós-605 continua não confirmado.
+
+### A6.6 — coordenação de reservas Instagram
+
+- Reserva compartilhada em `IngestionStore._reserve`: lock transacional de tenant antes de verificar lease e adquirir lock do grant; preserva checagem de run duplicado e quota por fonte. Uma reserva Instagram ativa impede outra reserva Instagram no mesmo tenant, inclusive de outra fonte. Entrada manual não pode se apropriar de uma lease por coincidência de prefixo do run; contexto de ciclo é argumento interno, não parte do payload HTTP.
+- A5 passa cycle_key explicitamente pela camada batch e serviço técnico. A reserva recusa contexto de ciclo expirado ou diferente. A3/A4, ingestão genérica Instagram e rota científica usam a mesma reserva e não entram durante lease A5/A6. A4 não ganha lease do lote inteiro: cada run é isolado, e pode ocorrer interleaving entre runs, sujeito à quota; não afirmar exclusão mútua de lotes manuais completos.
+- Aquisição de lease A5/A6 verifica reserva Instagram ativa sob o mesmo lock. Identidade A6 confere lease antes de reservar, antes da chamada de identidade e antes de registrar resultado; ausência de lease impede novo registro. Não cancela chamada já iniciada e não garante cancelamento entre a verificação e a rede.
+- Teto compartilhado de 80 unidades/dia UTC por tenant agora verificado na transação da reserva (4 por run Instagram de qualquer status +1 por evento identity_reserved). Limite por fonte de 5 e limite de identidade de 10 continuam; planner A5/A6 pode ser mais restritivo. Não é medidor de faturamento nem quota real do provedor. Probes de leitura sem ledger de ingestão e processos externos/versões antigas não são cobertos. YouTube permanece fora desse orçamento específico Instagram.
+- Definição SQLAlchemy de bd_cycle_leases movida para ingestion.py, reexportada por discovery_history.py; mesma tabela, nenhuma alteração do schema/migração. Importação antecipada evita ausência da tabela em fixtures de criação isolada via metadata.create_all. DB operacional deve estar em 0012 ou posterior.
+- Batch agora preserva provider_diagnostic numérico seguro quando disponível no relatório privado. O stdout compacto da CLI continua podendo omitir esse detalhe.
+- Testes: **5 PASS em 1,24 s** em SQLite temporário, incluindo disputa de duas threads com um único vencedor, lease contra manual/prefixo forjado, reserva manual ativa bloqueando ciclo e outra fonte, contexto encerrado e orçamento 78/80 recusando nova reserva. Cópia reconstruída sobre zip anterior com os blocos equivalentes de reserva/lease/finalização, função real de contagem de identidade e fixture mínimo A4; não checkout integral. Blob do teste publicado 5264f0dbcabe2caa04350ef95f2cfe0a71b69537 conferido idêntico ao local. Integração A5/A6 e regressão Windows do novo head ainda não executadas aqui; não afirmar teste PostgreSQL.
+- Limitações: proteção de escrita item/grant ainda não conectada integralmente às rotas genérica/científica; reserva manual abandonada sem lease pode bloquear o tenant e precisa de caminho de recuperação auditado específico (não remover linha manualmente). Não há coordenação para preflights/probes sem reserva, fencing de rede, autenticação global, renovação automática ou scheduler. Manter execução serial supervisionada e flags externos desligados durante testes. Sem chamada Meta, mutação do DB operacional, merge ou nova aprovação institucional.
+
+```powershell
+git pull --ff-only
+$env:TAPI_BD_IDENTITY_ENABLED = "0"
+$env:TAPI_OFFICIAL_METADATA_READS = "0"
+$env:TAPI_BD_TECHNICAL_INGEST = "0"
+$env:TAPI_BD_CONTINUOUS_ENABLED = "0"
+$env:TAPI_ZERO_BILLING_CONFIRMED = "0"
+python -m pytest -q tests/test_discovery_shared_reservations.py tests/test_discovery_history_a5.py tests/test_discovery_identity_a6.py tests/test_discovery_run_fencing.py tests/test_discovery_recovery_a5.py
+python -m pytest -q
+python scripts/verify_zero_spend.py
+python scripts/a5_recover_business_discovery.py
+python scripts/a5_business_discovery_cycle.py --manifest artifacts/private/bd_manifest_a6_v8.json --mode history --max-sources 5 --page-limit 10 --max-pages 4 --daily-request-budget 80
+```
+
+Esperado 457 testes (452+5), inspeção saudável e plano somente leitura confirmando limite compartilhado (78/80 se mesmo dia UTC sem novas operações). Não habilitar agendamento ainda. Backup pós-605 pendente. DEC-018 vigente.
