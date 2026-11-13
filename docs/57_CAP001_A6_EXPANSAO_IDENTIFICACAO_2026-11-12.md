@@ -163,3 +163,14 @@ python scripts/a5_business_discovery_cycle.py --manifest artifacts/private/bd_ma
 ```
 
 Auditar individualmente cada run efetivamente concluído com `scripts/a3_business_discovery_first_batch.py --audit <run_key>`; relatar observações, validade das trilhas e cobertura. Sem nova aprovação institucional. Se ocorrer falha, parar e inspecionar; o batch técnico ainda não propaga os códigos numéricos do provedor no resumo, diferentemente da A6 identidade. Não agendar, não presumir recuperação robusta ou corpus científico aceito.
+
+
+## Primeiro ciclo histórico A6 bem-sucedido e regressão integral Windows — 13/11/2026 UTC
+
+Operador reportou suíte completa **419 passed, 1 warning in 147.92s** e `verify_zero_spend.py` PASS, após desabilitar flags externas conforme procedimento. Warning não detalhado; evidência reportada, não CI independente. Código operacional correspondente ao head anterior `dfa375951f6ca37cc1bffc0ebedc142445533d36` presumido pela sequência dos comandos; git rev-parse não fornecido.
+
+Prévia do manifesto v4 (`12c9d33bfd6392df30b173e2d206bc90b17a86d356a9d0dc3cb6431c44e786e3`): 33 fontes, 7 aprovadas; seleção exata contabilizei, lojaintegrada, redemulherempreendedora, saladoempreendedor.saoluis; 5/80 unidades reservadas, 8 chamadas máximas, 80 observações máximas, 197 registros únicos, 3 perfis observados, zero duplicidade entre fontes.
+
+Execução `a5history-20261113020343-48e4f64b`: BATCH_COMPLETED; 8 páginas examinadas, 80 retornadas, 24 recentes demais, 56 elegíveis tecnicamente e **56 novos registros**, zero refresh/duplicatas/duplicatas do provedor; **197→253 IDs únicos, 3→7 perfis com registros**, zero duplicidade entre fontes. Zero admissões científicas, scientifically_validated=false, production_approved=false. Relatório privado `artifacts/private/a6-history-pilot-20261112-230343.json`. O resumo agregado não informa contagem individual nem estado de checkpoint de cada fonte; extrair do relatório local e reauditar os quatro runs. Orçamento conservador esperado após o ciclo: 21/80 (5 anteriores + 4 reservas de ingestão ×4); 5/10 identidade. Conferir no próximo plano. Não confundir reserva com chamadas efetivas ou cobrança. 
+
+Próxima etapa: reauditoria local dos runs -01 a -04 e inspeção do relatório privado; preservar checkpoints; backup consistente após as mutações. A expansão documental ainda precisa alcançar a meta, e a seleção diversificada e operação contínua não estão finalizadas. Com 7/30 perfis e 253/2000 posts técnicos, cobertura é 23,33% e 12,65% das metas mínimas técnicas, não comparabilidade científica. PR #44 permanece empilhado draft sobre #43, sem merge. Não agendar até corrigir/validar recuperação de falhas e coordenação entre entrypoints. Nenhuma nova aprovação institucional necessária.
