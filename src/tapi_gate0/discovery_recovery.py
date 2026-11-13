@@ -13,6 +13,7 @@ from .connectors import ConnectorError, Platform
 from .discovery_history import cycle_leases, history_checkpoints, read_checkpoint, lock_tenant
 from .identity import Principal
 from .discovery_recovery_policy import recovery_action, require_recoverable
+from .discovery_orphan_run import orphan_reservations
 from .ingestion import ingestion_runs, source_grants, stable_id
 from .sa_store import domain_events, outbox, tenants
 from .storage import now_utc
@@ -91,6 +92,7 @@ def inspect_recovery(engine, tenant):
                     "recovery_action":recovery_action(run["reason_code"], observations) if run["status"] == "failed" else "inspect_orphan_lease"})
         return {"status":"RECOVERY_INSPECTION", "lease":dict(lease) if lease else None,
                 "latest_a5_blocked_runs":blocked,
+                "orphan_runs_without_lease":orphan_reservations(db, tenant),
                 "reserved_runs":len(_reservations(db, tenant)), "external_data_accessed":False}
 
 
