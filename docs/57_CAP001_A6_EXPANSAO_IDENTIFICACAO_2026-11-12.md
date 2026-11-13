@@ -270,3 +270,33 @@ python scripts/a6_audit_history_reports.py --report artifacts/private/a6-history
 ```
 
 Esperado: HISTORY_REPORTS_REAUDITED, reports=4, runs=17, returned=500, accepted=408, observations=408, new_records=408, pages_examined=50, too_recent=86, missing_metrics=6, demais exclusões zero, sem rede ou escrita DB. Manter relatórios privados. Operar serialmente; backup pós-605 e inspeção de recuperação pendentes. DEC-018 vigente.
+
+
+## Aceite operacional A6.7 e nova expansão documental — 13/11 UTC
+
+Operador reportou HISTORY_REPORTS_REAUDITED, 4 relatórios, 17 runs, 500 retornadas, 408 elegíveis/observações/novos registros, 86 recentes, 6 métricas ausentes, zero formatos/metadados inválidos, duplicatas, refresh, admissões ou escrita DB; 50 páginas. Todos os 17 runs audit_valid=true e checkpoint_at_run=continuation_available, inclusive os três da última expansão. Estados dos checkpoints são os registrados no relatório histórico, não uma nova inspeção dos cursores. RECOVERY_INSPECTION: lease=null, latest_a5_blocked_runs=[], reserved_runs=0; não foi executada recuperação destrutiva. Acervo 605/10, 12 habilitadas. Regressão integral após os dez testes A6.7 ainda não reportada; última suíte 419 PASS. Backup pós-605 ainda não confirmado.
+
+### A6.1 — segunda onda documental
+
+Pesquisa em fontes públicas institucionais em 12/11/2026 (Brasília). Arquivo `evidence/acquisition/bd_a6_candidate_expansion_wave2_20261113.json` contém 9 novos candidatos, sem IDs Meta ou grants. Referências de handle e finalidade no próprio JSON; seleção dirigida, não amostra representativa. Foram descartadas entradas sem vínculo suficientemente claro entre handle e organização. Para quatro perfis, o URL de destino do link institucional foi identificado, mas a página Instagram não pôde ser recuperada (ricardodeoliveirapet, aanadesales, wabizapp, melhorenvio); o mesmo ocorreu para amarefashiongo. Não confundir vínculo documental com identidade oficial atual. Nenhuma mídia, métrica ou perfil foi coletado via API Meta; a pesquisa documental usou páginas públicas externas.
+
+| Handle | Estrato | Intenção preliminar | Limitação |
+|---|---|---|---|
+| ifoodparaparceiros | Capacitação foodservice | mpe_targeted | Página oficial do iFood declara canal para estabelecimentos; público inclui negócios de vários portes |
+| agisaalimentos | Segurança alimentar | uncertain | Diretório Abrasel identifica handle e atuação B2B; audiência MPE não comprovada |
+| anatex | Educação marketing digital | mpe_targeted | Página própria nomeia handle e Sebrae descreve contribuição à Semana do MEI; classificação preliminar, não de todos os posts |
+| ricardodeoliveirapet | Educação para varejo pet | mpe_targeted | Link no site Fórmula Pet Shop, orientação para pequenos estabelecimentos |
+| aanadesales | Arquitetura foodservice | uncertain | Link no diretório Abrasel; consultoria setorial, audiência MPE não comprovada |
+| wabizapp | Tecnologia delivery | uncertain | Link no diretório Abrasel; produto B2B, público específico incerto |
+| melhorenvio | Logística e-commerce | mpe_targeted | Link no blog próprio, documentação de soluções para lojistas pequenos e digitais; audiência mista possível |
+| empreendedorasdabelezagb | Empreendedorismo beleza | mpe_targeted | FAQ oficial do Grupo Boticário nomeia Instagram e programa para profissionalização/negócio próprio |
+| amarefashiongo | Moda e economia criativa | uncertain | Link no portal Sebrae Goiás, iniciativa de moda com múltiplos públicos |
+
+Nove registros novos, 33→42 fontes documentadas previstas (12 habilitadas, 30 não habilitadas). Meta de 50 fontes totais ainda exige 8; se critério for 50 candidatos não habilitados, faltam 20 após intake. Evitar sobre-representação: iFood/Wabiz/Agisa/A Sales têm afinidade foodservice; não selecionar todos juntos apenas por volume. Amarê vinculado ao ecossistema Sebrae; Melhor Envio e Bling a LWSA; registrar dependências de grupos quando verificadas, não inferir independência. Pré-classificação mpe_targeted é intenção documental, não prova de audiência, direito de uso ou elegibilidade científica. Campos JSON verificados para comprimento/padrão/unicidade; sem execução do Pydantic ou teste integral novo no ambiente do operador. A expansão só passa a existir no manifesto privado após intake.
+
+```powershell
+git pull --ff-only
+python scripts/a5_expand_source_frame.py --base artifacts/private/bd_manifest_a6_v6.json --candidates evidence/acquisition/bd_a6_candidate_expansion_wave2_20261113.json --output artifacts/private/bd_manifest_a6_v7.json
+```
+
+Esperado 33→42, approved=12, grants_created=0, external_data_accessed=false para o intake offline. Quota diária de identidade continua 10/10, orçamento compartilhado esperado 78/80; não executar identificação ou ingestão até nova janela UTC. Priorizar no próximo dia histórico de Conta Azul/Mente Empreendedora e novas identidades de segmentos menos cobertos, com prévia e quotas. Manter backup pós-605, executar regressão completa sem flags externas; PRs #43/#44 permanecem draft. Recuperação robusta, agendamento, renovação de grants e admissão científica pendentes. DEC-018 vigente, sem nova aprovação institucional.
