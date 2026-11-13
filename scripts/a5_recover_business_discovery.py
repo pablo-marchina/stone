@@ -7,7 +7,8 @@ import json
 import os
 
 from sqlalchemy.exc import SQLAlchemyError
-from tapi_gate0.connectors import ConnectorError
+from tapi_gate0.connectors import ConnectorError, Platform, credential_for
+from tapi_gate0.discovery_auth_guard import reset_after_rotation
 from tapi_gate0.discovery_local_db import validate_existing_database_url
 from tapi_gate0.discovery_recovery import inspect_recovery, recover_orphan_lease, review_failure
 from tapi_gate0.discovery_orphan_run import recover_orphan_run
@@ -21,11 +22,12 @@ def main(argv=None):
     group.add_argument("--review-failure", metavar="RUN_KEY")
     group.add_argument("--recover-orphan-lease", metavar="CYCLE_KEY")
     group.add_argument("--recover-orphan-run", metavar="RUN_KEY")
+    group.add_argument("--reset-meta-auth-after-rotation", action="store_true")
     parser.add_argument("--restart-history", action="store_true")
     parser.add_argument("--confirm-all-ingestion-stopped", action="store_true")
     parser.add_argument("--admin", default="admin")
     args = parser.parse_args(argv)
-    mutation = bool(args.review_failure or args.recover_orphan_lease or args.recover_orphan_run)
+    mutation = bool(args.review_failure or args.recover_orphan_lease or args.recover_orphan_run or args.reset_meta_auth_after_rotation)
     if args.restart_history and not args.review_failure:
         parser.error("--restart-history requires --review-failure")
     if mutation and not args.confirm_all_ingestion_stopped:
@@ -51,6 +53,9 @@ def main(argv=None):
                 if args.review_failure:
                     report = review_failure(engine, principal, args.review_failure,
                         stopped=True, restart_history=args.restart_history)
+                elif args.reset_meta_auth_after_rotation:
+                    credential_for(Platform.INSTAGRAM)
+                    report = reset_after_rotation(engine, principal, stopped=True)
                 elif args.recover_orphan_run:
                     report = recover_orphan_run(engine, principal, args.recover_orphan_run, stopped=True)
                 else:
