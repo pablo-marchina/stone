@@ -298,6 +298,8 @@ class TechnicalDiscoveryService:
             # under the same per-source lock used for grant revocation. This does
             # not imply legal reuse rights, human scientific review or production.
             with self.store.engine.begin() as db:
+                self.store._lock_reserved_run(db, tenant, req.run_key,
+                    platform=Platform.INSTAGRAM, source=req.expected_ig_id)
                 locked = db.execute(update(source_grants).where(
                     source_grants.c.tenant_id == tenant,
                     source_grants.c.platform == Platform.INSTAGRAM.value,
@@ -322,7 +324,7 @@ class TechnicalDiscoveryService:
                         source_username=req.username, observation=observation,
                         content_id=content_id, approval_reference=grant["approval_reference"])
                 outcome = self.store._persist_item(tenant, item,
-                                                    provenance_writer=evidence_writer)
+                                                    provenance_writer=evidence_writer, run_key=req.run_key)
                 if outcome == "created":
                     created += 1
                 elif outcome == "refreshed":
