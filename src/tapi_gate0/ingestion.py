@@ -26,6 +26,7 @@ from .sa_store import (metadata, tenants, creators, content_items, metrics_snaps
 from .storage import now_utc
 from .identity import Principal, IdentityFailure
 from .gate0b_technical import assess_metadata_readiness
+from .discovery_auth_guard import AUTH_INVALID, is_global_auth_failure, record_auth_failure, require_auth_available
 
 
 MANUAL_ORPHAN_REASON = "BD_ORPHANED_MANUAL_RUN_QUARANTINED"
@@ -242,6 +243,7 @@ class IngestionStore:
                 from .discovery_history import lock_tenant
                 from .discovery_identity_a6 import identity_reserved_today
                 lock_tenant(db, tenant)
+                require_auth_available(db, tenant)
                 lease = db.execute(select(cycle_leases.c.cycle_key).where(
                     cycle_leases.c.tenant_id == tenant)).scalar_one_or_none()
                 if lease != cycle_key or (cycle_key is not None and
@@ -583,7 +585,12 @@ class IngestionStore:
                 next_page_available=next_cursor is not None)
         except (ConnectorError, ValueError, IntegrityError) as exc:
             reason=exc.code if isinstance(exc,ConnectorError) else "INGESTION_VALIDATION_FAILED"
-            self._finish(tenant,req.run_key,"failed",created,duplicate,refreshed,reason)
+            auth_failure = req.platform == Platform.INSTAGRAM and is_global_auth_failure(exc)
+            if auth_failure and not (created or duplicate or refreshed):
+                reason = AUTH_INVALID
+            self._finish(tenant,req.run_key,"failed",created,duplicate,refreshed,reason,
+                after_finish=(lambda db: record_auth_failure(db, tenant, exc, req.run_key))
+                if auth_failure else None)
             if isinstance(exc,ConnectorError):raise
             raise ConnectorError(reason,422) from exc
         finally:
