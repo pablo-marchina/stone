@@ -459,3 +459,36 @@ python scripts/a5_recover_business_discovery.py
 ```
 
 Manter flags externos desabilitados. Esperado lease=null, latest_a5_blocked_runs=[], orphan_runs_without_lease=[], quarantined_sources=[], reserved_runs=0. Não executar --recover-orphan-run na base saudável. Backup pós-605 ainda pendente; coordenação de probes, revalidação do cursor de primeira parte, reconciliação de fontes em quarentena, credenciais, renovação de grants e scheduler pendentes. PRs #43/#44 draft, DEC-018 vigente.
+
+
+## Aceite Windows da recuperação de órfãos e proteção global de autenticação — 13/11/2026 UTC
+
+Operador reportou 52 PASS focal em 26,70 s, **463 PASS, 1 warning em 217,00 s** integral, verify_zero_spend PASS e RECOVERY_INSPECTION sem lease, blocked runs, reservas, orphan_runs_without_lease ou quarantined_sources. Primeiro incremento de recuperação sem lease e fencing das demais rotas validado na regressão integral. Warning conhecido de Starlette/TestClient/httpx. SHA local não apresentado; head de referência anterior 1e625fc. Acervo anterior 605 posts/10 fontes observadas, 12 grants, 50 fontes documentadas; não houve nova aquisição neste turno. Backup pós-605 ainda não reportado.
+
+### A6.6 — circuit breaker persistente para credenciais Meta
+
+Motivação observada: falha anterior Meta 190/463 em identificação real, após expiração de credencial, renovada pelo operador naquele momento. O novo mecanismo reage a falhas futuras; não reinterpreta retrospectivamente eventos legados, nem afirma que a credencial atual está válida.
+
+- Novo `discovery_auth_guard.py`: identifica somente diagnóstico numérico Meta code=190 em HTTP 400/401/403 como falha global de autenticação. HTTP 403 genérico, rate limit, erros de identidade e outras falhas não são automaticamente tratados como expiração. Sem novas consultas ou armazenamento de token/hash, mensagem bruta, resposta do provedor ou fbtrace_id.
+- O bloqueio persistente é por tenant, no agregado bd_meta_auth com eventos business_discovery.meta_auth_blocked / meta_auth_reset e outbox atômico. A decisão conservadora de bloquear todo o tenant assume o uso de credencial Meta compartilhada; não distingue credenciais diferentes do mesmo tenant. Não é bloqueio global entre tenants.
+- Nas três rotas de ingestão Instagram, a falha de credencial gera bloqueio na mesma transação que finaliza a reserva; sem observações contabilizadas, reason_code=BD_META_AUTH_INVALID. Nas reservas subsequentes, _reserve exige auth disponível sob lock do tenant antes de criar novo run. Identidade A6 verifica no planejamento, reserva e antes da leitura, e registra bloqueio no mesmo commit do resultado. Não devolve reservas antigas.
+- A5 expõe meta_auth no plano e não seleciona fontes quando bloqueado. Após reset, runs com AUTH_INVALID e contadores zerados voltam à seleção normal respeitando os demais gates e quotas; outros motivos de falha e quarentenas continuam bloqueados. Tentativas de identidade já reservadas permanecem bloqueadas no mesmo dia UTC. Não retroativamente liberar falha genérica de permissão.
+- Inspeção read-only inclui meta_auth. NOT_CHECKED significa ausência de evento de bloqueio, não validação da credencial. RESET_UNVERIFIED significa reset técnico registrado, não verificação OAuth. O estado persiste sem provar validade atual do token. A primeira falha 190 após reset bloqueia novamente. Não há reset automático por tempo.
+- CLI existente recebe `--reset-meta-auth-after-rotation`, mutuamente exclusivo com outras recuperações; somente após substituição real da credencial, com token presente no ambiente, administrador autenticado, processos parados e sem reservas/leases ativas. Nenhuma nova aprovação institucional; reset técnico não verifica a credencial nem consome rede. Nunca executar na base saudável apenas para teste. Não expor tokens no terminal/chat.
+- Testes: **46 PASS em 11,81 s** no checkout reconstruído anterior (6 novos + 40 casos existentes: órfãos, cursor, corpus, ingestão oficial e reserva compartilhada). SQLite temporário e mock HTTP; módulo novo e teste novo idênticos aos publicados (blobs c6b86144c2c3d57146a758055767594e7aa82f1f e 70d2566f78fed58added1c2f80aa49b2169825db). Blocos de integração genérica/técnica/científica reconstruídos; não é teste integral do novo head. Dois casos A5/A6 adicionais publicados em test_discovery_identity_a6.py (identidade→bloqueio A5 e A5→bloqueio identidade, reset e quotas), ainda não executados localmente por ausência do checkout integral. Esperado **471 testes** na regressão (463+8).
+- Limitações: não prediz expiração nem renova tokens; não autentica substituição local, não impede rede já em voo, processos antigos ou probes sem ledger; não substitui controles de escopo, grants ou auditoria; sem PostgreSQL. Auth reset requer administração técnica, não aprovação institucional. Sem migração, chamada Meta, escrita no DB operacional ou merge. Próximas frentes: acompanhamento de expiração sem novas chamadas indevidas, renovação dos grants A6 e prioridade por diversidade; scheduler somente após controles e testes.
+
+```powershell
+git pull --ff-only
+$env:TAPI_BD_IDENTITY_ENABLED = "0"
+$env:TAPI_OFFICIAL_METADATA_READS = "0"
+$env:TAPI_BD_TECHNICAL_INGEST = "0"
+$env:TAPI_BD_CONTINUOUS_ENABLED = "0"
+$env:TAPI_ZERO_BILLING_CONFIRMED = "0"
+python -m pytest -q tests/test_discovery_auth_guard.py tests/test_discovery_identity_a6.py tests/test_discovery_history_a5.py tests/test_discovery_orphan_run.py tests/test_discovery_recovery_a5.py
+python -m pytest -q
+python scripts/verify_zero_spend.py
+python scripts/a5_recover_business_discovery.py
+```
+
+Esperado 471 PASS, recuperação saudável, meta_auth NOT_CHECKED/blocked=false se não houve nova falha após instalação. Backup pós-605 pendente. PRs #43/#44 draft. DEC-018 vigente.
