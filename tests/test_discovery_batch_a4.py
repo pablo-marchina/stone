@@ -294,42 +294,90 @@ def test_cross_source_media_id_collision_stops_without_double_count(tmp_path):
     client.close();engine.dispose()
 
 
-def test_concurrent_cross_source_collision_is_serialized(tmp_path, monkeypatch):
+def test_concurrent_cross_source_collision_is_serialized(tmp_path):
+    """Exercise the storage invariant independently of the acquisition gate."""
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
-    from tapi_gate0.discovery_technical import TechnicalDiscoveryRequest, TechnicalDiscoveryService, audit_run
+    from tapi_gate0.connectors import NormalizedItem
+    from tapi_gate0.domain import MediaType
     engine, store = db(tmp_path)
-    transport, calls, client = fake_http(items=1, same_ids_across_sources=True)
     barrier = Barrier(2)
-    original = IngestionStore._persist_item
-    def synchronized(self, tenant, item, **kwargs):
-        # Both runs have passed the earlier batch-level collision check.
-        barrier.wait(timeout=10)
-        return original(self, tenant, item, **kwargs)
-    monkeypatch.setattr(IngestionStore, "_persist_item", synchronized)
-    def run(source):
+    def persist(source):
         name, ident, _ = source
-        key = "concurrent-bd-" + name
+        item = NormalizedItem(platform=Platform.INSTAGRAM, source_account_id=ident,
+            source_item_id="18000000000000000", creator_handle=name,
+            media_type=MediaType.CAROUSEL, source_url="https://www.instagram.com/p/FixtureCollision/",
+            published_at=datetime.now(timezone.utc)-timedelta(days=40),
+            likes=100, comments=2, follower_count=1234, metadata_only=True)
+        # Deliberately test the lower-level storage guard, not a second
+        # acquisition reservation. No provider request is involved.
+        barrier.wait(timeout=10)
         try:
-            result = TechnicalDiscoveryService(store).execute(TENANT,
-                TechnicalDiscoveryRequest(username=name, expected_ig_id=ident,
-                    viewer_ig_id=VIEWER, run_key=key, persist_limit=1),
-                token=TOKEN, http=transport)
-            return key, result["status"]
+            return store._persist_item(TENANT, item)
         except ConnectorError as exc:
-            return key, exc.code
+            return exc.code
     try:
         with ThreadPoolExecutor(max_workers=2) as pool:
-            outcomes = list(pool.map(run, SOURCES))
-        assert sorted(status for _, status in outcomes) == [
-            "BD_CROSS_SOURCE_MEDIA_ID_CONFLICT", "BD_TECHNICAL_METADATA_COMMITTED"]
+            outcomes = list(pool.map(persist, SOURCES))
+        assert sorted(outcomes) == ["BD_CROSS_SOURCE_MEDIA_ID_CONFLICT", "created"]
         with engine.connect() as c:
-            assert c.execute(select(func.count()).select_from(ingestion_records)).scalar_one() == 1
-            assert c.execute(select(func.count()).select_from(content_items)).scalar_one() == 1
-            assert c.execute(select(func.count()).select_from(metrics_snapshots)).scalar_one() == 1
-        for key, status in outcomes:
-            audited = audit_run(engine, TENANT, key)
-            assert audited["all_traces_valid"] == (status == "BD_TECHNICAL_METADATA_COMMITTED")
-            assert audited["observations"] == int(status == "BD_TECHNICAL_METADATA_COMMITTED")
+            for table in (ingestion_records, content_items, metrics_snapshots):
+                assert c.execute(select(func.count()).select_from(table)).scalar_one() == 1
     finally:
+        engine.dispose()
+
+
+def test_concurrent_technical_runs_are_blocked_before_network(tmp_path, monkeypatch):
+    """The new acquisition gate prevents overlap; a later collision still fails."""
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+    from tapi_gate0.discovery_technical import TechnicalDiscoveryRequest, TechnicalDiscoveryService, audit_run
+    from tapi_gate0.ingestion import ingestion_runs
+    engine, store = db(tmp_path)
+    transport, calls, client = fake_http(items=1, same_ids_across_sources=True)
+    entered, release = Event(), Event()
+    original = IngestionStore._persist_item
+    def hold_first(self, tenant, item, **kwargs):
+        entered.set()
+        if not release.wait(timeout=15):
+            raise AssertionError("test did not release the first acquisition")
+        return original(self, tenant, item, **kwargs)
+    monkeypatch.setattr(IngestionStore, "_persist_item", hold_first)
+    def run(source):
+        name, ident, _ = source
+        return TechnicalDiscoveryService(store).execute(TENANT,
+            TechnicalDiscoveryRequest(username=name, expected_ig_id=ident,
+                viewer_ig_id=VIEWER, run_key="concurrent-bd-"+name, persist_limit=1),
+            token=TOKEN, http=transport)
+    first_key = "concurrent-bd-"+SOURCES[0][0]
+    second_key = "concurrent-bd-"+SOURCES[1][0]
+    try:
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(run, SOURCES[0])
+            try:
+                assert entered.wait(timeout=15), "first run did not reach persistence"
+                with pytest.raises(ConnectorError, match="ACCOUNT_INGESTION_IN_PROGRESS"):
+                    run(SOURCES[1])
+                assert len(calls) == 1
+                with engine.connect() as c:
+                    assert c.execute(select(ingestion_runs.c.run_key).where(
+                        ingestion_runs.c.run_key == second_key)).first() is None
+            finally:
+                release.set()
+            assert future.result(timeout=15)["status"] == "BD_TECHNICAL_METADATA_COMMITTED"
+        # The blocked attempt did not reserve a run or make a provider call.
+        # After the first run finishes, the same media ID from another source
+        # must still fail, even though the second reservation is now allowed.
+        with pytest.raises(ConnectorError, match="BD_CROSS_SOURCE_MEDIA_ID_CONFLICT"):
+            run(SOURCES[1])
+        assert len(calls) == 2
+        for key, valid in ((first_key, True), (second_key, False)):
+            audited = audit_run(engine, TENANT, key)
+            assert audited["all_traces_valid"] is valid
+            assert audited["observations"] == int(valid)
+        with engine.connect() as c:
+            for table in (ingestion_records, content_items, metrics_snapshots):
+                assert c.execute(select(func.count()).select_from(table)).scalar_one() == 1
+    finally:
+        release.set()
         client.close(); engine.dispose()
