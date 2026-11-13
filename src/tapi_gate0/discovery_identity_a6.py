@@ -11,6 +11,7 @@ from .business_discovery import IG_ID
 from .connectors import ConnectorError, OfficialHttp, Platform, credential_for
 from .discovery_batch import BatchManifest
 from .discovery_history import cycle_lease, lock_tenant, cycle_leases
+from .discovery_auth_guard import require_auth_available, record_auth_failure
 from .identity import Principal
 from .ingestion import ingestion_runs, stable_id
 from .sa_store import domain_events, outbox
@@ -45,6 +46,7 @@ def plan_identity(engine, tenant, manifest: BatchManifest, viewer, handles, *, d
     by_name = {s.username.casefold(): s for s in manifest.sources}
     day = now_utc().date().isoformat()
     with engine.connect() as db:
+        require_auth_available(db, tenant)
         used = identity_reserved_today(db, tenant, day)
         runs = db.execute(select(func.count()).select_from(ingestion_runs).where(
             ingestion_runs.c.tenant_id == tenant, ingestion_runs.c.platform == Platform.INSTAGRAM.value,
@@ -111,6 +113,7 @@ def execute_identity(engine, principal: Principal, manifest, viewer, handles,
         # deliberately not refunded. The A5 lease serializes A5 and A6 cycles.
         with engine.begin() as db:
             _require_identity_lease(db, tenant, cycle)
+            require_auth_available(db, tenant)
             if now_utc().date().isoformat() != day:
                 raise ConnectorError("BD_IDENTITY_UTC_DAY_CHANGED", 409)
             for source in selected:
@@ -124,11 +127,13 @@ def execute_identity(engine, principal: Principal, manifest, viewer, handles,
         try:
             for source in selected:
                 key = _key(tenant, day, source.username)
+                failure = None
                 try:
                     if now_utc().date().isoformat() != day:
                         raise ConnectorError("BD_IDENTITY_UTC_DAY_CHANGED", 409)
                     with engine.begin() as db:
                         _require_identity_lease(db, tenant, cycle)
+                        require_auth_available(db, tenant)
                     data = transport.get(Platform.INSTAGRAM, viewer,
                         {"fields":f"business_discovery.username({source.username})"+"{id,username}"}, access)
                     found = data.get("business_discovery")
@@ -143,12 +148,14 @@ def execute_identity(engine, principal: Principal, manifest, viewer, handles,
                     known[ident] = source.username.casefold()
                     result = {"username":source.username,"status":"IDENTIFIED","instagram_id":ident}
                 except ConnectorError as exc:
+                    failure = exc
                     result = {"username":source.username,"status":"BLOCKED","code":exc.code}
                     if exc.provider_diagnostic:
                         result["provider_diagnostic"] = exc.provider_diagnostic
                 with engine.begin() as db:
                     _require_identity_lease(db, tenant, cycle)
                     _event(db, tenant, key, 2, RESULT, result)
+                    record_auth_failure(db, tenant, failure, cycle)
                 results.append(result)
                 if result["status"] != "IDENTIFIED":
                     break
