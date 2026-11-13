@@ -120,3 +120,30 @@ python scripts/a6_reconcile_identities.py --manifest artifacts/private/bd_manife
 Esperado: verified_identities=1, ids_added=1, contabilizei/candidate, sources=33, approved=3, grants_created=0, database_written=false, external_data_accessed=false. Usar v2 para novos lotes após confirmar o resultado. Nuvemshop e Contabilizei já reservadas neste dia UTC; não repetir. 
 
 10 testes novos PASS (1,02s) em SQLite temporário com eventos sintéticos equivalentes à estrutura real A6, em cópia reconstruída do checkout anterior e modelo A4. Três blobs novos conferidos com GitHub por hash. Não é regressão completa da branch atual ou validação do banco operacional. Validação Windows pendente. Provisionamento de grants técnicos em lote e curadoria continuam no próximo incremento A6.3, com DEC-018 como referência automática e sem pedidos institucionais repetidos; não simular permissões do provedor.
+
+
+## Reconciliação real e segundo lote bem-sucedido — 13/11 UTC
+
+Operador confirmou `IDENTITY_RECONCILIATION_PLANNED` e `IDENTITIES_RECONCILED` para contabilizei (ciclo a6identity-20261113014308-f39d45ee), 1 ID acrescentado, 33 fontes, 3 aprovadas, sem escrita DB, grants ou rede. Manifesto v2 SHA-256 `7538bb28ead98ac07a95a418196141893a17f798a6baece46cb366a9baf737cf` (v1 e7d0151ef6eab424fffcd0556906e2576e27dd6ef50f2d6d91ee75284074cb45). Prévia e execução correspondentes.
+
+Segundo lote `a6identity-20261113015031-9e1b751a` sobre v2, IDENTITY_BATCH_COMPLETED: lojaintegrada 17841400335392901; redemulherempreendedora 17841400631433694; saladoempreendedor.saoluis 17841440388740768. Três novas identificações; cumulativo A6 quatro identidades, cinco reservas no dia UTC (2 anteriores + 3, orçamento esperado 5/80). Zero grants novos, posts, admissões ou produção. Contabilizei já reconciliada; outras três ainda devem ser reconciliadas. Última cobertura 197 posts técnicos, 3 fontes com coleta real. Evidência reportada pelo operador, não inspeção independente.
+
+## A6.3 — provisionamento técnico em lote
+
+Implementados `discovery_grants_a6.py` e `scripts/a6_provision_grants.py`: prévia sem credencial/rede; execução autenticada admin, até dez candidatos/review explícitos, IDs conciliados com eventos A6 (reserva/resultado/outbox, DEC-018, viewer e conflitos cruzados), evidência de audiência documentada e intenção não excluída. Grava todos os novos grants em uma transação, audit/outbox existentes, referência `DEC-018:A6:business_discovery_metadata_read:<viewer>:<target>`. Não solicita nova aprovação institucional. TTL técnico local de 30 dias escolhido como limite operacional revogável, **não** vencimento institucional nem garantia de token válido. Não reativa grant revogado, expirado ou conflitante; reexecução sobre manifesto de entrada com grants ativos idênticos reutiliza os registros sem duplicar eventos. Mantém grants prévios intactos. Novos grants têm technical_verified_at nulo. Prefixo restrito: rota genérica de ingestão e rota científica recusam, rota técnica valida viewer/target. Sem nova migração. Não é liberação de direitos de mídia, admissão científica ou prova de acesso às publicações; as leituras oficiais posteriores continuam sujeitas aos gates técnicos existentes. Não executar outros processos de ingestão simultaneamente.
+
+Saída exclusiva privada: v3 após reconciliação; v4 após provisionamento. Banco e arquivo são recursos distintos: se a gravação do manifesto falhar após commit, usar manifesto v3 original e um nome de saída novo, reaproveitando os grants idênticos ativos. Não apagar nem reativar grants para recuperar. A prévia não cria arquivo. Recomenda-se backup consistente e regressão completa antes de mutações operacionais.
+
+```powershell
+git pull --ff-only
+python -m pytest -q tests/test_discovery_grants_a6.py tests/test_discovery_reconcile_a6.py
+python -m pytest -q
+python scripts/verify_zero_spend.py
+python scripts/a6_reconcile_identities.py --manifest artifacts/private/bd_manifest_a6_v2.json --cycle a6identity-20261113015031-9e1b751a --output artifacts/private/bd_manifest_a6_v3.json
+python scripts/a6_provision_grants.py --manifest artifacts/private/bd_manifest_a6_v3.json --source contabilizei --source lojaintegrada --source redemulherempreendedora --source saladoempreendedor.saoluis
+python scripts/a6_provision_grants.py --manifest artifacts/private/bd_manifest_a6_v3.json --source contabilizei --source lojaintegrada --source redemulherempreendedora --source saladoempreendedor.saoluis --execute --output artifacts/private/bd_manifest_a6_v4.json
+```
+
+A última linha altera o banco local; executar somente após regressão e backup, sem novos pedidos de aprovação institucional. Resultado esperado 4 novos grants técnicos, 7 fontes aprovadas tecnicamente no manifesto, zero posts novos. Se algum candidato não satisfizer as condições, todo lote é bloqueado. Nenhuma execução no banco do operador realizada pelo assistente.
+
+Validação: 15 PASS em 1,31 s (10 reconciliação + 5 grants/CLI/isolamento) em SQLite temporário e cópia reconstruída do código com as mesmas alterações de guards sobre versão anterior; três blobs novos do provisionamento conferidos por hash. verify_zero_spend PASS. Não é teste integral do head A6 (os módulos A5/A6 completos não estavam disponíveis no checkout local); proteção na rota científica revisada por código, não exercitada em teste específico novo. Regressão completa do PR, Windows e prova operacional de grant/ingestão pendentes. A6.1 expansão documental para 50 candidatos também pendente.
