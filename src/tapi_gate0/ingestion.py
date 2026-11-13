@@ -267,16 +267,39 @@ class IngestionStore:
                 requested_at=now_utc().isoformat(),status="reserved",new_records=0,
                 refreshed_records=0,duplicate_records=0))
 
+    def _lock_reserved_run(self, db, tenant, run_key, *, platform=None, source=None):
+        """Fence local writes against terminal runs under the recovery tenant lock."""
+        locked = db.execute(update(tenants).where(tenants.c.tenant_id == tenant)
+                            .values(name=tenants.c.name))
+        if locked.rowcount != 1:
+            raise ConnectorError("INGESTION_TENANT_NOT_FOUND", 404)
+        scope = [ingestion_runs.c.tenant_id == tenant,
+                 ingestion_runs.c.run_key == run_key,
+                 ingestion_runs.c.status == "reserved"]
+        if platform is not None:
+            scope.append(ingestion_runs.c.platform == platform.value)
+        if source is not None:
+            scope.append(ingestion_runs.c.source_account_id == source)
+        active = db.execute(update(ingestion_runs).where(*scope)
+                            .values(status=ingestion_runs.c.status))
+        if active.rowcount != 1:
+            raise ConnectorError("INGESTION_RUN_NO_LONGER_RESERVED", 409)
+
     def _finish(self,tenant,run_key,status,added=0,duplicate=0,refreshed=0,reason=None, *, after_finish=None):
+        if status not in {"completed", "failed"}:
+            raise ConnectorError("INGESTION_INVALID_TERMINAL_STATUS", 422)
         with self.engine.begin() as db:
-            db.execute(update(ingestion_runs).where(ingestion_runs.c.tenant_id==tenant,
-                ingestion_runs.c.run_key==run_key).values(status=status,
+            self._lock_reserved_run(db, tenant, run_key)
+            changed = db.execute(update(ingestion_runs).where(ingestion_runs.c.tenant_id==tenant,
+                ingestion_runs.c.run_key==run_key, ingestion_runs.c.status=="reserved").values(status=status,
                   new_records=added,duplicate_records=duplicate,
                   refreshed_records=refreshed,reason_code=reason))
+            if changed.rowcount != 1:
+                raise ConnectorError("INGESTION_RUN_NO_LONGER_RESERVED", 409)
             if after_finish is not None:
                 after_finish(db)
 
-    def _persist_item(self, tenant: str, item: NormalizedItem, *, provenance_writer=None) -> str:
+    def _persist_item(self, tenant: str, item: NormalizedItem, *, provenance_writer=None, run_key=None) -> str:
         """Store a new post or append a changed metric snapshot atomically.
 
         Returns 'created', 'refreshed', or 'unchanged'. A second read never
@@ -298,6 +321,9 @@ class IngestionStore:
         complete = all(x is not None for x in (
             item.likes, item.comments, item.follower_count))
         with self.engine.begin() as db:
+            if run_key is not None:
+                self._lock_reserved_run(db, tenant, run_key, platform=item.platform,
+                                        source=item.source_account_id)
             # Serialize Instagram media ownership across all ingestion paths.
             # Lock order: tenant, then source grant. The ownership check and
             # content/snapshot/outbox writes share the same transaction.
