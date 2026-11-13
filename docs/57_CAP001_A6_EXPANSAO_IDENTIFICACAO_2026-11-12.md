@@ -492,3 +492,28 @@ python scripts/a5_recover_business_discovery.py
 ```
 
 Esperado 471 PASS, recuperação saudável, meta_auth NOT_CHECKED/blocked=false se não houve nova falha após instalação. Backup pós-605 pendente. PRs #43/#44 draft. DEC-018 vigente.
+
+
+## Aceite reportado do circuit breaker e renovação técnica A6 — 13/11/2026
+
+Operador informou "Todos foram aprovados" após instruções de regressão e inspeção do incremento de autenticação. Aceite reportado; total esperado 471 PASS, sem log bruto, SHA local, duração, contagem de warnings ou saída específica da inspeção neste turno. Não atribuir medições exatas não apresentadas. Última regressão integral com log explícito: 463 PASS, 1 warning; backup pós-605 permanece não confirmado. Acervo conhecido 605 IDs técnicos, 10 fontes observadas, 12 habilitadas, manifesto v8 50 fontes; nenhuma nova aquisição reportada.
+
+### A6.6 — renovação do ciclo de vida dos grants técnicos A6
+
+- Novo `src/tapi_gate0/discovery_grant_renewal.py`: modo read-only por padrão, seleção de todos os grants aprovados com prefixo A6 DEC-018, viewer/target exatamente correspondentes, identidade auditada (reserva/resultado/outbox e ausência de conflitos de handle/ID), linha existente e escopo somente business_discovery_metadata_read. Grant revogado/desabilitado ou fonte em quarentena não é reativado. Grants anteriores não A6 não são gerenciados por este mecanismo.
+- Janela local de manutenção de sete dias: grant habilitado que vencer em até sete dias ou já tiver vencido pode receber mais 30 dias a partir da renovação. São parâmetros de manutenção técnica, não prazo de autorização institucional. Sem reaprovação institucional e sem ampliação de escopo. A permissão real da Meta continua sendo exigida em cada leitura. Não equivale à renovação do token OAuth.
+- Mutação somente com principal admin do mesmo tenant, lock de tenant, sem lease/reserva ativa. Atualiza exclusivamente expires_at; conserva referência, criação, identidade, verificação técnica histórica, quotas e checkpoints. Evento business_discovery.technical_grant_renewed em agregado próprio (não interfere na sequência original criação/revogação) e outbox atômicos, incluindo seq da evidência de identidade, fingerprints antes/depois, expiry anterior e novo, ator e operação.
+- Se DB já tiver sido atualizado mas a saída privada não for gravada, o mesmo manifesto de entrada pode ser reconciliado com a última renovação exata auditada, enquanto o novo prazo ainda for válido; não prolonga o prazo novamente. Divergência não explicada falha fechada. Usar nome de saída novo, não sobrescrever o manifesto de entrada. Não é transação distribuída DB/arquivo; o CLI ainda pode deixar arquivo vazio se interrompido. Repetição com outros manifestos ou cadeia de várias renovações não é reconciliação automática garantida.
+- CLI `scripts/a6_provision_grants.py` aceita `--renew-due` mutuamente exclusivo com `--source`. Prévia não requer token; execução usa o mesmo login administrativo e arquivo privado exclusivo já existentes, sem solicitar nova aprovação institucional. Provisionamento A6 também passa a recusar lease ativa, além de reservas.
+- Validação local efetivamente realizada: 6 PASS em 1,21 s em SQLite temporário com ledger e eventos de identidade semeados, testes independentes de smoke (não os sete testes publicados); módulo novo idêntico ao blob Git c9b9c69d78a6bd929ca5d96b071dd9e9208feaa9. Dependências reconstruídas (modelo BatchManifest, _trace e constantes da política); não checkout integral. Sete casos publicados em test_discovery_grant_renewal.py (incluindo CLI, prévia sem token e fixture de provisionamento real) aguardam execução. Expectativa de 478 testes na suíte se a anterior realmente teve 471. Não há teste PostgreSQL, validação operacional de renovação real, monitoramento de validade OAuth ou agendamento automático.
+- Nenhuma chamada Meta, migração, escrita no DB do operador, custo ou merge neste turno. PRs #43/#44 draft. DEC-018 vigente.
+
+```powershell
+git pull --ff-only
+python -m pytest -q tests/test_discovery_grant_renewal.py tests/test_discovery_grants_a6.py tests/test_discovery_reconcile_a6.py
+python -m pytest -q
+python scripts/verify_zero_spend.py
+python scripts/a6_provision_grants.py --manifest artifacts/private/bd_manifest_a6_v8.json --renew-due
+```
+
+Manter flags externos desabilitados. A prévia deverá classificar os nove grants A6 (os três iniciais legados não são modificados); se os grants ainda tiverem mais de sete dias, grants_to_renew=0. Sem pressupor o resultado do DB privado. Não executar renovação se não houver itens a renovar ou reconciliar. Quando devida, usar `--execute --output artifacts/private/<novo-manifesto>.json` com arquivo inexistente, após backup; adotar novo manifesto somente após sucesso e conferir hash. Próximas frentes: monitoramento local de expiração OAuth, priorização por diversidade e operação contínua; backup pós-605 ainda pendente.
