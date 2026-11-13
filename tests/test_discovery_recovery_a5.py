@@ -103,3 +103,39 @@ def test_orphan_recovery_rejects_recent_lease_and_unrelated_reservation(tmp_path
         assert inspect_recovery(engine,TENANT)["lease"]["cycle_key"]==KEY
     finally:
         engine.dispose()
+
+
+def test_integrity_failure_with_partial_observations_cannot_be_reviewed(tmp_path,monkeypatch):
+    engine,store=db(tmp_path)
+    ok,_,client=provider()
+    try:
+        monkeypatch.setattr("tapi_gate0.discovery_technical.audit_run",lambda *a,**kw:{"all_traces_valid":False})
+        failed=cycle(store,ok)
+        run=failed["cycle_key"]+"-01"
+        state=inspect_recovery(engine,TENANT)["latest_a5_blocked_runs"][0]
+        assert state["reason_code"]=="BD_HISTORY_AUDIT_FAILED"
+        assert state["observations_recorded"]==2
+        assert state["recovery_action"]=="blocked_partial_or_invalid_observations"
+        with pytest.raises(ConnectorError,match="BD_RECOVERY_FAILURE_NOT_ELIGIBLE"):
+            review_failure(engine,ADMIN,run,stopped=True)
+        with engine.connect() as conn:
+            assert conn.execute(select(ingestion_runs.c.status).where(ingestion_runs.c.run_key==run)).scalar_one()=="failed"
+    finally:
+        client.close();engine.dispose()
+
+
+def test_unexpected_exception_retains_lease_for_pending_reservation(tmp_path):
+    engine,store=db(tmp_path)
+    try:
+        with pytest.raises(RuntimeError,match="simulated interruption"):
+            with cycle_lease(engine,TENANT,KEY):
+                with engine.begin() as conn:
+                    conn.execute(insert(ingestion_runs).values(tenant_id=TENANT,
+                        run_key=KEY+"-01",platform=Platform.INSTAGRAM.value,
+                        source_account_id=SOURCES[0][1],requested_at=now_utc().isoformat(),status="reserved"))
+                raise RuntimeError("simulated interruption")
+        state=inspect_recovery(engine,TENANT)
+        assert state["lease"]["cycle_key"]==KEY
+        assert state["reserved_runs"]==1
+    finally:
+        engine.dispose()
