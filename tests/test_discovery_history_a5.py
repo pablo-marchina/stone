@@ -318,3 +318,64 @@ def test_coverage_cli_preview_matches_selected_policy(tmp_path, monkeypatch, cap
         assert result["external_data_accessed"] is False
     finally:
         engine.dispose()
+
+
+def test_scheduler_real_a5_cycle_and_replay(tmp_path, monkeypatch):
+    from tapi_gate0 import discovery_scheduler as scheduler
+    from tapi_gate0.sa_store import domain_events
+    engine, store = db(tmp_path)
+    transport, calls, client = provider()
+    try:
+        now = datetime.now(timezone.utc).replace(hour=10)
+        monkeypatch.setattr(scheduler, "now_utc", lambda: now)
+        monkeypatch.setenv("TAPI_BD_SCHEDULER_ENABLED", "1")
+        monkeypatch.setenv("TAPI_META_REQUIRE_TOKEN_EXPIRY", "1")
+        monkeypatch.setenv("TAPI_META_TOKEN_EXPIRES_AT", (datetime.now(timezone.utc)+timedelta(days=30)).isoformat())
+        monkeypatch.delenv("TAPI_META_DATA_ACCESS_EXPIRES_AT", raising=False)
+        frame = manifest(approved=1)
+        plan = scheduler.preview_tick(store, TENANT, frame, VIEWER, max_sources=1)
+        assert plan["proposed_mode"] == "history" and not plan["execution_blockers"]
+        assert not calls
+        result = scheduler.execute_tick(store, TENANT, frame, VIEWER, max_sources=1, token=TOKEN, http=transport)
+        assert result["status"] == "SCHEDULER_COMPLETED"
+        assert result["cycle"]["plan"]["priority_policy"] == "coverage"
+        assert result["cycle"]["batch"]["counts"]["new_records"] > 0
+        assert checkpoint(engine) is not None
+        before = len(calls)
+        with pytest.raises(ConnectorError, match="BD_SCHEDULER_SLOT_ALREADY_CONSUMED"):
+            scheduler.execute_tick(store, TENANT, frame, VIEWER, max_sources=1, token=TOKEN, http=transport)
+        assert len(calls) == before
+        with engine.connect() as conn:
+            assert conn.execute(select(func.count()).select_from(domain_events).where(
+                domain_events.c.aggregate_type == scheduler.AGGREGATE)).scalar_one() == 2
+    finally:
+        client.close()
+        engine.dispose()
+
+
+def test_scheduler_cli_preview_requires_no_token_and_does_not_write(tmp_path, monkeypatch, capsys):
+    from scripts.a6_supervised_scheduler import main
+    from tapi_gate0 import discovery_scheduler as scheduler
+    from tapi_gate0.sa_store import domain_events
+    engine, store = db(tmp_path)
+    try:
+        monkeypatch.setenv("TAPI_DATABASE_URL", str(engine.url))
+        monkeypatch.setenv("TAPI_TENANT_ID", TENANT)
+        monkeypatch.setenv("TAPI_META_IG_ID", VIEWER)
+        monkeypatch.setenv("TAPI_BD_SCHEDULER_ENABLED", "0")
+        monkeypatch.setenv("TAPI_META_REQUIRE_TOKEN_EXPIRY", "0")
+        for key in ("TAPI_INSTAGRAM_ACCESS_TOKEN", "TAPI_META_TOKEN_EXPIRES_AT", "TAPI_META_DATA_ACCESS_EXPIRES_AT"):
+            monkeypatch.delenv(key, raising=False)
+        path = tmp_path / "manifest.json"
+        path.write_text(manifest(approved=1).model_dump_json(), encoding="utf-8")
+        assert main(["--manifest", str(path)]) == 0
+        report = json.loads(capsys.readouterr().out)
+        assert report["status"] == "SCHEDULER_PLAN_ONLY"
+        assert "BD_SCHEDULER_TOKEN_EXPIRY_REQUIRED" in report["execution_blockers"]
+        assert report["external_data_accessed"] is False
+        with engine.connect() as conn:
+            assert conn.execute(select(func.count()).select_from(ingestion_runs)).scalar_one() == 0
+            assert conn.execute(select(func.count()).select_from(domain_events).where(
+                domain_events.c.aggregate_type == scheduler.AGGREGATE)).scalar_one() == 0
+    finally:
+        engine.dispose()
