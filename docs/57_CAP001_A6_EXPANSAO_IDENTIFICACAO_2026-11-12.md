@@ -327,3 +327,32 @@ python scripts/a5_expand_source_frame.py --base artifacts/private/bd_manifest_a6
 ```
 
 Esperado 42→50, approved=12, grants_created=0, external_data_accessed=false. Intake operacional ainda pendente; não declarar meta atingida no manifesto privado antes da execução. Última regressão integral reportada 419 PASS; nova suíte após A6.7 e backup pós-605 ainda não reportados. No dia UTC 13/11 quota esperada 78/80 e identidade 10/10; não realizar novas chamadas até a renovação diária. PRs #43/#44 draft, recuperação robusta e agendamento pendentes. DEC-018 vigente.
+
+
+## Intake v8 confirmado e primeiro endurecimento da recuperação — 13/11 UTC
+
+Operador confirmou CANDIDATE_FRAME_EXPANDED, 42→50 fontes, 12 habilitadas, zero grants novos e zero leituras externas. Manifesto v8 SHA-256 `3c57b923292aa4c69fd67506c474c01f78606593a0b68af96cabb0a1cb43325c`. Meta inicial de 50 fontes totais atingida (38 candidatas não habilitadas); meta estrita de 50 candidatas ainda demanda 12. Cobertura operacional anterior preservada: 605 IDs técnicos únicos, 10 perfis observados, 408 observações A6/17 runs reauditados. Sem novas chamadas Meta ou escrita no DB pelo assistente.
+
+### A6.6 — recuperação fail-closed (primeiro incremento)
+
+Revisão do código confirmou que o contador de observações de recovery já utiliza o aggregate/evento correto. Lacunas efetivas: a ingestão técnica persistia motivo genérico para todas as falhas, review_failure permitia liberar falhas sem classificação, e cycle_lease podia liberar a lease mesmo com reserva pendente após exceção. Alterações publicadas:
+- `discovery_recovery_policy.py`: allowlist de motivos recuperáveis sem observações persistidas (PROVIDER_RATE_LIMITED, PROVIDER_UNAVAILABLE, BD_ORPHANED_RUN_OPERATOR_RECOVERY); reinício de histórico explícito somente para BD_PAGINATION_STALLED/BD_HISTORY_CURSOR_CYCLE e zero observações. Os demais motivos (incluindo falha de auditoria, identidade, permissão, erro genérico legado ou escrita parcial) bloqueiam review. Não libera automaticamente qualquer retry.
+- `discovery_technical.py`: conserva código interno do ConnectorError no ledger em vez de apagar a causa; falhas sem classificação continuam genéricas.
+- `discovery_recovery.py`: inspeção valida tenant, informa reason_code e recovery_action; revisão aplica a política antes de qualquer mutação. Reset explícito permitido registra SHA-256 do checkpoint anterior e contagem/run, sem cursor bruto. Quotas e registros preservados.
+- `discovery_history.py`: lease é preservada se houver reserva pendente com prefixo do ciclo, mesmo quando a exceção passa pelo finally. A recuperação de lease continua explícita e exige parada dos processos; não é nova aprovação institucional.
+- Testes: 16 PASS em 0,16 s no módulo puro de classificação, blobs do módulo e testes idênticos aos publicados; dois novos testes de integração no fixture A5 (falha de auditoria com observações parciais, interrupção deixando reserva). Integração revisada contra código real do PR, mas **não executada** no checkout integral aqui. Windows/regressão e backup pós-605 ainda pendentes. Última regressão integral operacional reportada 419 PASS, antes dos 10 testes A6.7 e 18 casos novos; expectativa 447 testes se suíte não sofreu outras mudanças.
+
+```powershell
+git pull --ff-only
+$env:TAPI_BD_IDENTITY_ENABLED = "0"
+$env:TAPI_OFFICIAL_METADATA_READS = "0"
+$env:TAPI_BD_TECHNICAL_INGEST = "0"
+$env:TAPI_BD_CONTINUOUS_ENABLED = "0"
+$env:TAPI_ZERO_BILLING_CONFIRMED = "0"
+python -m pytest -q tests/test_discovery_recovery_policy.py tests/test_discovery_recovery_a5.py tests/test_discovery_history_a5.py tests/test_a6_audit_history_reports.py
+python -m pytest -q
+python scripts/verify_zero_spend.py
+python scripts/a5_recover_business_discovery.py
+```
+
+Não executar comandos de recuperação que alterem estado na base saudável. Limitações: ainda não há fencing de persistência/finalização de workers antigos, coordenação abrangente com todos os entrypoints, tratamento de leases órfãs legadas sem linha de lease, classificação de autenticação global/expiração do cursor pelo diagnóstico Meta, nem revalidação de revisões antigas. A política não torna agendamento automático seguro por si só; manter ingestão supervisionada e serial, quotas existentes, PRs draft. Sem migração, sem merge, sem nova aprovação institucional. DEC-018 vigente.
