@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 
 from .business_discovery import CURSOR
 from .connectors import ConnectorError, Platform
-from .ingestion import source_grants
+from .ingestion import source_grants, ingestion_runs
 from .sa_store import metadata, tenants
 from .storage import now_utc
 
@@ -124,5 +124,13 @@ def cycle_lease(engine, tenant: str, key: str):
         yield
     finally:
         with engine.begin() as db:
-            db.execute(delete(cycle_leases).where(cycle_leases.c.tenant_id == tenant,
-                cycle_leases.c.cycle_key == key))
+            lock_tenant(db, tenant)
+            pending = db.execute(select(ingestion_runs.c.run_key).where(
+                ingestion_runs.c.tenant_id == tenant,
+                ingestion_runs.c.status == "reserved",
+                ingestion_runs.c.run_key.startswith(key + "-", autoescape=True))).first()
+            # Preserve the exact lease if a run escaped normal finalization.
+            # Recovery must inspect and close the reservation, never refund quota.
+            if not pending:
+                db.execute(delete(cycle_leases).where(cycle_leases.c.tenant_id == tenant,
+                    cycle_leases.c.cycle_key == key))
