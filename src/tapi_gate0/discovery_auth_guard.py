@@ -11,6 +11,7 @@ from sqlalchemy import insert, select
 from .connectors import ConnectorError
 from .sa_store import domain_events, outbox
 from .storage import now_utc
+from .discovery_credential_expiry import require_expiry_available
 
 AGGREGATE = "bd_meta_auth"
 BLOCK = "business_discovery.meta_auth_blocked"
@@ -48,6 +49,7 @@ def auth_status(db, tenant):
 def require_auth_available(db, tenant):
     if auth_status(db, tenant)["blocked"]:
         raise ConnectorError(AUTH_BLOCKED, 409)
+    require_expiry_available()
 
 
 def _append(db, tenant, event_type, payload):
