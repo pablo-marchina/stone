@@ -28,6 +28,8 @@ from .identity import Principal, IdentityFailure
 from .gate0b_technical import assess_metadata_readiness
 
 
+A6_BD_GRANT_PREFIX = "DEC-018:A6:business_discovery_metadata_read:"
+
 source_grants = Table("ingestion_source_grants", metadata,
     Column("tenant_id",String(128),primary_key=True),
     Column("platform",String(32),primary_key=True),
@@ -464,6 +466,8 @@ class IngestionStore:
         if os.getenv("TAPI_ZERO_BILLING_CONFIRMED")!="1":
             raise ConnectorError("PROVIDER_ZERO_BILLING_NOT_CONFIRMED",403)
         grant=self.read_grant(tenant,req.platform,req.source_account_id)
+        if grant["approval_reference"].startswith(A6_BD_GRANT_PREFIX):
+            raise ConnectorError("BD_GRANT_TECHNICAL_ROUTE_ONLY",403)
         token=credential_for(req.platform)
         after = self._resume_cursor(tenant, req) if req.resume else None
         self._reserve(tenant,req)
