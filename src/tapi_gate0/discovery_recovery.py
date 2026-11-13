@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 import json
+import hashlib
 import re
 from uuid import uuid4
 
@@ -11,8 +12,9 @@ from sqlalchemy import delete, insert, select, update, func
 from .connectors import ConnectorError, Platform
 from .discovery_history import cycle_leases, history_checkpoints, read_checkpoint, lock_tenant
 from .identity import Principal
+from .discovery_recovery_policy import recovery_action, require_recoverable
 from .ingestion import ingestion_runs, source_grants, stable_id
-from .sa_store import domain_events, outbox
+from .sa_store import domain_events, outbox, tenants
 from .storage import now_utc
 
 CYCLE_KEY = re.compile(r"(?:a5(?:history|refresh)|a6identity)-[0-9]{14}-[a-f0-9]{8}\Z")
@@ -68,6 +70,8 @@ def _observations(db, tenant, run_key):
 def inspect_recovery(engine, tenant):
     """Safe read-only summary; never return raw cursor, approval or provider payload."""
     with engine.connect() as db:
+        if not db.execute(select(tenants.c.tenant_id).where(tenants.c.tenant_id == tenant)).first():
+            raise ConnectorError("INGESTION_TENANT_NOT_FOUND", 404)
         lease = _lease(db, tenant)
         runs = db.execute(select(ingestion_runs).where(
             ingestion_runs.c.tenant_id == tenant,
@@ -79,10 +83,12 @@ def inspect_recovery(engine, tenant):
         blocked = []
         for run in latest.values():
             if run["status"] in {"failed", "reserved"} and RUN_KEY.fullmatch(run["run_key"]):
+                observations = _observations(db, tenant, run["run_key"])
                 blocked.append({"source_account_id":run["source_account_id"],
                     "run_key":run["run_key"], "status":run["status"],
                     "reviewed":reviewed_failure(db, tenant, run["run_key"]),
-                    "observations_recorded":_observations(db, tenant, run["run_key"])})
+                    "reason_code":run["reason_code"], "observations_recorded":observations,
+                    "recovery_action":recovery_action(run["reason_code"], observations) if run["status"] == "failed" else "inspect_orphan_lease"})
         return {"status":"RECOVERY_INSPECTION", "lease":dict(lease) if lease else None,
                 "latest_a5_blocked_runs":blocked,
                 "reserved_runs":len(_reservations(db, tenant)), "external_data_accessed":False}
@@ -116,6 +122,8 @@ def review_failure(engine, principal: Principal, run_key: str, *, stopped: bool,
         ).order_by(ingestion_runs.c.requested_at.desc(), ingestion_runs.c.run_key.desc()).limit(1)).scalar_one()
         if latest != run_key or reviewed_failure(db, tenant, run_key):
             raise ConnectorError("BD_RECOVERY_RUN_NOT_LATEST_UNREVIEWED", 409)
+        observations = _observations(db, tenant, run_key)
+        require_recoverable(run["reason_code"], observations, restart_history)
         grant = db.execute(select(source_grants).where(source_grants.c.tenant_id == tenant,
             source_grants.c.platform == Platform.INSTAGRAM.value,
             source_grants.c.source_account_id == source).with_for_update()).mappings().first()
@@ -133,7 +141,9 @@ def review_failure(engine, principal: Principal, run_key: str, *, stopped: bool,
                    "action":"restart_history" if restart_history else "retry_reviewed_failure",
                    "previous_checkpoint_pages":checkpoint["pages_examined"] if checkpoint else 0,
                    "previous_checkpoint_run":checkpoint["last_run_key"] if checkpoint else None,
-                   "observations_recorded":_observations(db, tenant, run_key),
+                   "observations_recorded":observations,
+                   "reason_code":run["reason_code"],
+                   "previous_checkpoint_sha256":hashlib.sha256(json.dumps(checkpoint, sort_keys=True).encode()).hexdigest() if checkpoint else None,
                    "operator_confirmed_ingestion_stopped":True}
         _event(db, tenant, principal.actor_id, run_key, RECOVERY_EVENT, payload)
     return {"status":"FAILED_RUN_REVIEWED", **payload, "quota_reservation_preserved":True,
