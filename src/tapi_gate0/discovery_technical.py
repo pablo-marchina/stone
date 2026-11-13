@@ -27,7 +27,7 @@ from sqlalchemy.exc import IntegrityError
 from .business_discovery import BusinessDiscoveryProbe, CURSOR, IG_ID, USERNAME
 from .connectors import ConnectorError, NormalizedItem, OfficialHttp, Platform, _date, _integer, credential_for
 from .domain import MediaType
-from .ingestion import IngestionRequest, IngestionStore, ingestion_records, source_grants, stable_id
+from .ingestion import A6_BD_GRANT_PREFIX, IngestionRequest, IngestionStore, ingestion_records, source_grants, stable_id
 from .mpe_evidence import _instagram_url, canonical_hash
 from .sa_store import domain_events, outbox, metrics_snapshots, content_items
 from .storage import now_utc
@@ -253,6 +253,9 @@ class TechnicalDiscoveryService:
             raise ConnectorError("BD_HISTORY_FULL_PAGE_BUDGET_REQUIRED", 422)
         # A DEC-018 institutional decision is not itself a database grant.
         grant = self.store.read_grant(tenant, Platform.INSTAGRAM, req.expected_ig_id)
+        reference = grant["approval_reference"]
+        if reference.startswith(A6_BD_GRANT_PREFIX) and reference != A6_BD_GRANT_PREFIX + req.viewer_ig_id + ":" + req.expected_ig_id:
+            raise ConnectorError("BD_GRANT_VIEWER_MISMATCH", 403)
         access_token = token if token is not None else credential_for(Platform.INSTAGRAM)
         run = IngestionRequest(platform=Platform.INSTAGRAM,
                                source_account_id=req.expected_ig_id,
