@@ -10,7 +10,7 @@ from sqlalchemy import func, insert, select
 from .business_discovery import IG_ID
 from .connectors import ConnectorError, OfficialHttp, Platform, credential_for
 from .discovery_batch import BatchManifest
-from .discovery_history import cycle_lease
+from .discovery_history import cycle_lease, lock_tenant, cycle_leases
 from .identity import Principal
 from .ingestion import ingestion_runs, stable_id
 from .sa_store import domain_events, outbox
@@ -82,6 +82,14 @@ def _event(db, tenant, key, version, event_type, payload):
     db.execute(insert(outbox).values(seq=row.inserted_primary_key[0], attempts=0, dead_letter=0))
 
 
+def _require_identity_lease(db, tenant, cycle):
+    lock_tenant(db, tenant)
+    active = db.execute(select(cycle_leases.c.cycle_key).where(
+        cycle_leases.c.tenant_id == tenant)).scalar_one_or_none()
+    if active != cycle:
+        raise ConnectorError("BD_IDENTITY_LEASE_LOST", 409)
+
+
 def execute_identity(engine, principal: Principal, manifest, viewer, handles,
                      *, daily_budget=80, token=None, http=None):
     if principal.role != "admin":
@@ -102,6 +110,9 @@ def execute_identity(engine, principal: Principal, manifest, viewer, handles,
         # Reserve the entire batch before network. Interrupted/unattempted slots are
         # deliberately not refunded. The A5 lease serializes A5 and A6 cycles.
         with engine.begin() as db:
+            _require_identity_lease(db, tenant, cycle)
+            if now_utc().date().isoformat() != day:
+                raise ConnectorError("BD_IDENTITY_UTC_DAY_CHANGED", 409)
             for source in selected:
                 _event(db, tenant, _key(tenant, day, source.username), 1, RESERVATION,
                     {"cycle_key":cycle,"username":source.username,"viewer_ig_id":viewer,
@@ -116,6 +127,8 @@ def execute_identity(engine, principal: Principal, manifest, viewer, handles,
                 try:
                     if now_utc().date().isoformat() != day:
                         raise ConnectorError("BD_IDENTITY_UTC_DAY_CHANGED", 409)
+                    with engine.begin() as db:
+                        _require_identity_lease(db, tenant, cycle)
                     data = transport.get(Platform.INSTAGRAM, viewer,
                         {"fields":f"business_discovery.username({source.username})"+"{id,username}"}, access)
                     found = data.get("business_discovery")
@@ -134,6 +147,7 @@ def execute_identity(engine, principal: Principal, manifest, viewer, handles,
                     if exc.provider_diagnostic:
                         result["provider_diagnostic"] = exc.provider_diagnostic
                 with engine.begin() as db:
+                    _require_identity_lease(db, tenant, cycle)
                     _event(db, tenant, key, 2, RESULT, result)
                 results.append(result)
                 if result["status"] != "IDENTIFIED":
