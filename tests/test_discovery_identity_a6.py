@@ -146,3 +146,61 @@ def test_invalid_selection_blocked_without_manual_scope(setup):
     with engine.connect() as conn:
         assert conn.execute(select(func.count()).select_from(domain_events).where(
             domain_events.c.event_type==RESERVATION)).scalar_one()==0
+
+
+def test_identity_auth_failure_stops_ingestion_and_preserves_identity_quota(setup):
+    from tapi_gate0.discovery_auth_guard import AUTH_BLOCKED, reset_after_rotation
+    engine,store,frame=setup
+    calls=[]
+    def handler(req):
+        calls.append(req)
+        return httpx.Response(401,json={"error":{"code":190,"error_subcode":463,"message":TOKEN}})
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        result=execute_identity(engine,ADMIN,frame,VIEWER,["mpe_example"],token=TOKEN,
+            http=OfficialHttp(client=client,instagram_version="v26.0"))
+    assert result["status"]=="IDENTITY_BATCH_STOPPED"
+    assert result["results"][0]["provider_diagnostic"]=={"http_status":401,"code":190,"error_subcode":463}
+    assert len(calls)==1
+    plan,selected=plan_cycle(store,TENANT,frame,VIEWER,mode="history",limits=BatchLimits(persist_limit=40))
+    assert selected==[] and plan["meta_auth"]["blocked"]
+    assert plan["conservative_reserved_pages_today"]==1
+    assert {"username":"sebrae","reason":AUTH_BLOCKED} in plan["deferred"]
+    with pytest.raises(ConnectorError,match=AUTH_BLOCKED):
+        plan_identity(engine,TENANT,frame,VIEWER,["mpe_example"])
+    reset_after_rotation(engine,ADMIN,stopped=True)
+    plan,selected=plan_cycle(store,TENANT,frame,VIEWER,mode="history",limits=BatchLimits(persist_limit=40))
+    assert [s.username for s in selected]==["sebrae"]
+    assert plan["conservative_reserved_pages_today"]==1
+    with pytest.raises(ConnectorError,match="BD_IDENTITY_DAILY_ATTEMPT_EXISTS"):
+        plan_identity(engine,TENANT,frame,VIEWER,["mpe_example"])
+
+
+def test_history_auth_failure_blocks_identity_then_reset_reenables_due_source(setup,monkeypatch):
+    from tapi_gate0.discovery_auth_guard import AUTH_BLOCKED, AUTH_INVALID, reset_after_rotation
+    from tapi_gate0.discovery_continuous import execute_cycle
+    from tapi_gate0.ingestion import ingestion_runs
+    engine,store,frame=setup
+    monkeypatch.setenv("TAPI_BD_CONTINUOUS_ENABLED","1")
+    monkeypatch.setenv("TAPI_BD_TECHNICAL_INGEST","1")
+    limits=BatchLimits(max_sources=1,page_limit=2,max_pages=1,persist_limit=2)
+    calls=[]
+    def handler(req):
+        calls.append(req)
+        return httpx.Response(400,json={"error":{"code":190,"error_subcode":463}})
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        result=execute_cycle(store,TENANT,frame,VIEWER,mode="history",limits=limits,token=TOKEN,
+            http=OfficialHttp(client=client,instagram_version="v26.0"))
+    assert result["status"]=="BATCH_STOPPED_ON_SOURCE_FAILURE"
+    assert result["batch"]["provider_diagnostic"]=={"http_status":400,"code":190,"error_subcode":463}
+    assert len(calls)==1
+    with engine.connect() as conn:
+        assert conn.execute(select(ingestion_runs.c.reason_code)).scalar_one()==AUTH_INVALID
+    with pytest.raises(ConnectorError,match=AUTH_BLOCKED):
+        plan_identity(engine,TENANT,frame,VIEWER,["mpe_example"])
+    reset_after_rotation(engine,ADMIN,stopped=True)
+    plan,selected=plan_cycle(store,TENANT,frame,VIEWER,mode="history",limits=limits)
+    assert [s.username for s in selected]==["sebrae"]
+    assert plan["conservative_reserved_pages_today"]==4
+    assert plan["meta_auth"]["status"]=="RESET_UNVERIFIED"
+    identity,_=plan_identity(engine,TENANT,frame,VIEWER,["mpe_example"])
+    assert identity["conservative_reserved_today"]==4
