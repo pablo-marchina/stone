@@ -15,6 +15,7 @@ from .identity import Principal
 from .discovery_recovery_policy import recovery_action, require_recoverable
 from .discovery_orphan_run import orphan_reservations
 from .discovery_auth_guard import auth_status
+from .discovery_credential_expiry import expiry_status
 from .ingestion import ingestion_runs, source_grants, stable_id, MANUAL_ORPHAN_REASON
 from .sa_store import domain_events, outbox, tenants
 from .storage import now_utc
@@ -95,6 +96,7 @@ def inspect_recovery(engine, tenant):
                 "latest_a5_blocked_runs":blocked,
                 "orphan_runs_without_lease":orphan_reservations(db, tenant),
                 "meta_auth":auth_status(db, tenant),
+                "meta_credential_expiry":expiry_status(),
                 "quarantined_sources":sorted({r["source_account_id"] for r in runs
                     if r["reason_code"] == MANUAL_ORPHAN_REASON}),
                 "reserved_runs":len(_reservations(db, tenant)), "external_data_accessed":False}
