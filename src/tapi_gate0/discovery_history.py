@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 
 from .business_discovery import CURSOR
 from .connectors import ConnectorError, Platform
-from .ingestion import source_grants, ingestion_runs
+from .ingestion import source_grants, ingestion_runs, cycle_leases
 from .sa_store import metadata, tenants
 from .storage import now_utc
 
@@ -30,11 +30,6 @@ history_checkpoints = Table("bd_history_checkpoints", metadata,
         ["ingestion_source_grants.tenant_id", "ingestion_source_grants.platform",
          "ingestion_source_grants.source_account_id"]))
 
-cycle_leases = Table("bd_cycle_leases", metadata,
-    Column("tenant_id", String(128), primary_key=True),
-    Column("cycle_key", String(80), nullable=False),
-    Column("started_at", String(40), nullable=False),
-    ForeignKeyConstraint(["tenant_id"], ["tenants.tenant_id"]))
 
 
 def read_checkpoint(db, tenant: str, source: str):
