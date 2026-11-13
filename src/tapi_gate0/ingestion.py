@@ -57,6 +57,13 @@ ingestion_runs = Table("ingestion_runs",metadata,
         ["ingestion_source_grants.tenant_id","ingestion_source_grants.platform",
          "ingestion_source_grants.source_account_id"]))
 
+cycle_leases = Table("bd_cycle_leases", metadata,
+    Column("tenant_id", String(128), primary_key=True),
+    Column("cycle_key", String(80), nullable=False),
+    Column("started_at", String(40), nullable=False),
+    ForeignKeyConstraint(["tenant_id"], ["tenants.tenant_id"]))
+
+
 ingestion_records=Table("ingestion_records",metadata,
     Column("tenant_id",String(128),primary_key=True),
     Column("platform",String(32),primary_key=True),
@@ -231,7 +238,7 @@ class IngestionStore:
         with self.engine.begin() as db:
             if req.platform == Platform.INSTAGRAM:
                 # Local imports avoid the ingestion/history/identity import cycle.
-                from .discovery_history import lock_tenant, cycle_leases
+                from .discovery_history import lock_tenant
                 from .discovery_identity_a6 import identity_reserved_today
                 lock_tenant(db, tenant)
                 lease = db.execute(select(cycle_leases.c.cycle_key).where(
