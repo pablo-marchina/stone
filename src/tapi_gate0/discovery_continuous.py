@@ -13,6 +13,7 @@ from .discovery_batch import BatchLimits, BatchManifest, TechnicalDiscoveryBatch
 from .discovery_history import cycle_lease, read_checkpoint
 from .discovery_identity_a6 import identity_reserved_today
 from .discovery_recovery import reviewed_failure
+from .discovery_auth_guard import AUTH_BLOCKED, AUTH_INVALID, auth_status
 from .ingestion import IngestionStore, ingestion_records, ingestion_runs, MANUAL_ORPHAN_REASON
 from .storage import now_utc
 
@@ -31,6 +32,7 @@ def plan_cycle(store: IngestionStore, tenant: str, manifest: BatchManifest,
     due = []
     deferred = []
     with store.engine.connect() as db:
+        auth = auth_status(db, tenant)
         rows = db.execute(select(ingestion_runs).where(
             ingestion_runs.c.tenant_id == tenant,
             ingestion_runs.c.platform == Platform.INSTAGRAM.value,
@@ -44,6 +46,8 @@ def plan_cycle(store: IngestionStore, tenant: str, manifest: BatchManifest,
             checkpoint = None
             if source.status != "approved":
                 reason = "SOURCE_NOT_APPROVED"
+            elif auth["blocked"]:
+                reason = AUTH_BLOCKED
             elif source.expected_ig_id == viewer:
                 reason = "BD_BATCH_VIEWER_IS_TARGET"
             elif source.expires_at <= now:
@@ -61,7 +65,10 @@ def plan_cycle(store: IngestionStore, tenant: str, manifest: BatchManifest,
                 elif any(r["status"] == "reserved" for r in latest):
                     reason = "ACCOUNT_INGESTION_IN_PROGRESS"
                 elif (latest and latest[0]["status"] == "failed" and
-                      not reviewed_failure(db, tenant, latest[0]["run_key"])):
+                      not reviewed_failure(db, tenant, latest[0]["run_key"]) and
+                      not (auth["status"] == "RESET_UNVERIFIED" and
+                           latest[0]["reason_code"] == AUTH_INVALID and
+                           latest[0]["new_records"] == latest[0]["refreshed_records"] == latest[0]["duplicate_records"] == 0)):
                     reason = "SOURCE_LAST_RUN_FAILED_REVIEW_REQUIRED"
                 elif sum(r["requested_at"] >= day for r in latest) >= 5:
                     reason = "BD_BATCH_DAILY_SOURCE_QUOTA_REACHED"
@@ -96,6 +103,7 @@ def plan_cycle(store: IngestionStore, tenant: str, manifest: BatchManifest,
             "approved_source_count": sum(s.status == "approved" for s in manifest.sources),
             "selected_sources": [s.username for s in selected], "deferred": deferred,
             "daily_request_budget": daily_request_budget,
+            "meta_auth": auth,
             "conservative_reserved_pages_today": used,
             "max_official_requests": len(selected) * limits.max_pages,
             "max_observations_to_persist": len(selected) * limits.persist_limit,
