@@ -1,0 +1,69 @@
+{
+  "schema_version": "tapi-bd-technical-batch.v1",
+  "sources": [
+    {
+      "username": "aliancaempreendedora",
+      "sampling_stratum": "inclusive_microenterprise_support",
+      "audience_intent": "mpe_targeted",
+      "source_evidence_reference": "https://aliancaempreendedora.org.br/de-empreendedora-a-mentora-o-impacto-do-voluntariado-que-inspira-transformacoes-sociais/",
+      "audience_rationale_reference": "https://aliancaempreendedora.org.br/nosso-trabalho/",
+      "status": "candidate"
+    },
+    {
+      "username": "varejointeligentecdlbh",
+      "sampling_stratum": "retail_digital_training",
+      "audience_intent": "mpe_targeted",
+      "source_evidence_reference": "https://www.cdlbh.com.br/faq-varejo-inteligente/",
+      "audience_rationale_reference": "https://www.cdlbh.com.br/imprensa/setembro-tera-capacitacao-gratuita-para-microempreendedores/",
+      "status": "candidate"
+    },
+    {
+      "username": "abfoficial",
+      "sampling_stratum": "franchise_business_education",
+      "audience_intent": "uncertain",
+      "source_evidence_reference": "https://abf.com.br/franchisingeforcacoletiva/",
+      "audience_rationale_reference": "https://abf.com.br/espaco-microfranquias-da-abf-franchising-expo-2026amplia-acesso-ao-empreendedorismo-com-opcoes-deinvestimento-inicial-a-partir-de-r-7-50000/",
+      "status": "candidate"
+    },
+    {
+      "username": "abavnacional",
+      "sampling_stratum": "travel_agency_business_education",
+      "audience_intent": "uncertain",
+      "source_evidence_reference": "https://lp.abav.com.br/concurso-cultural-dia-do-agente-2024",
+      "audience_rationale_reference": "https://lp.abav.com.br/brasil-recebe-excelencia-em-turismo-receptivo-2026",
+      "status": "candidate"
+    },
+    {
+      "username": "instituto_cea",
+      "sampling_stratum": "fashion_microenterprise_inclusion",
+      "audience_intent": "mpe_targeted",
+      "source_evidence_reference": "https://institutocea.org.br/ampliando-lentes-inclusao-de-grupos-vulneraveis-na-moda/",
+      "audience_rationale_reference": "https://institutocea.org.br/ampliando-lentes-inclusao-de-grupos-vulneraveis-na-moda/",
+      "status": "candidate"
+    },
+    {
+      "username": "institutolojasrenner",
+      "sampling_stratum": "circular_fashion_enterprise_inclusion",
+      "audience_intent": "uncertain",
+      "source_evidence_reference": "https://www.institutolojasrenner.org.br/edital/",
+      "audience_rationale_reference": "https://www.institutolojasrenner.org.br/edital/",
+      "status": "candidate"
+    },
+    {
+      "username": "prodarteoficial",
+      "sampling_stratum": "artisan_market_access",
+      "audience_intent": "mpe_targeted",
+      "source_evidence_reference": "https://www2.recife.pe.gov.br/noticias/18/05/2026/prodarte-abre-inscricoes-para-selecao-de-expositores-da-fenearte-2026",
+      "audience_rationale_reference": "https://www2.recife.pe.gov.br/noticias/06/11/2025/prefeitura-do-recife-convoca-artesas-e-artesaos-do-prodarte-para-participar-do",
+      "status": "candidate"
+    },
+    {
+      "username": "casa.artemisia.escola",
+      "sampling_stratum": "natural_cosmetics_microbusiness_training",
+      "audience_intent": "uncertain",
+      "source_evidence_reference": "https://lestefluminensenews.com.br/2026/11/03/niteroi-tera-casa-dedicada-a-producao-de-cosmeticos-naturais-feitos-por-mulheres/",
+      "audience_rationale_reference": "https://lestefluminensenews.com.br/2026/11/03/niteroi-tera-casa-dedicada-a-producao-de-cosmeticos-naturais-feitos-por-mulheres/",
+      "status": "candidate"
+    }
+  ]
+}
