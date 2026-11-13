@@ -147,3 +147,19 @@ python scripts/a6_provision_grants.py --manifest artifacts/private/bd_manifest_a
 A última linha altera o banco local; executar somente após regressão e backup, sem novos pedidos de aprovação institucional. Resultado esperado 4 novos grants técnicos, 7 fontes aprovadas tecnicamente no manifesto, zero posts novos. Se algum candidato não satisfizer as condições, todo lote é bloqueado. Nenhuma execução no banco do operador realizada pelo assistente.
 
 Validação: 15 PASS em 1,31 s (10 reconciliação + 5 grants/CLI/isolamento) em SQLite temporário e cópia reconstruída do código com as mesmas alterações de guards sobre versão anterior; três blobs novos do provisionamento conferidos por hash. verify_zero_spend PASS. Não é teste integral do head A6 (os módulos A5/A6 completos não estavam disponíveis no checkout local); proteção na rota científica revisada por código, não exercitada em teste específico novo. Regressão completa do PR, Windows e prova operacional de grant/ingestão pendentes. A6.1 expansão documental para 50 candidatos também pendente.
+
+
+## Provisionamento operacional concluído — 13/11/2026 UTC
+
+Operador reportou reconciliação v2→v3 (`55f23249266b33102a8df685db5167e35337e7e5d1fda3c854e6dbfb12adfc36`), 3 IDs acrescentados, 33 fontes, 3 aprovadas, sem escrita no DB ou rede. Prévia TECHNICAL_GRANTS_PLANNED selecionou quatro candidatos conciliados, nenhum grant existente para eles. Execução autenticada TECHNICAL_GRANTS_PROVISIONED criou 4 grants técnicos, manifesto v4 `12c9d33bfd6392df30b173e2d206bc90b17a86d356a9d0dc3cb6431c44e786e3`, total 7 entradas aprovadas tecnicamente e 26 não aprovadas; TTL operacional 30 dias, DEC-018 automática, zero leitura externa, technical_verified=false, zero admissões. Quatro fontes novas: contabilizei 17841400139166475; lojaintegrada 17841400335392901; redemulherempreendedora 17841400631433694; saladoempreendedor.saoluis 17841440388740768. A6.3 validada pelo resultado operacional reportado; a base não foi inspecionada diretamente. Última cobertura real 197 posts/3 fontes, não 7 fontes observadas. Regressão integral do head e backup ainda sem evidência reportada.
+
+Próximo passo A6.4/A6.5: piloto de histórico com manifesto v4, quatro fontes, duas páginas de dez por fonte (até 8 chamadas oficiais e 80 observações elegíveis no máximo; 16 unidades conservadoras reservadas caso as quatro sejam iniciadas). O planner existente prioriza fontes sem checkpoint; confirmar seleção exata das quatro novas antes de executar. Se plano divergir ou bloquear, não executar. No dia UTC 13/11, se não houve operações intermediárias, orçamento antes 5/80 e depois até 21/80. Não confundir cota local com faturamento. Após validar regressão com flags externas desligadas e preservar backup consistente, habilitar somente os flags técnicos necessários e usar credencial válida. Não executar outros processos de ingestão simultaneamente.
+
+```powershell
+python scripts/a5_business_discovery_cycle.py --manifest artifacts/private/bd_manifest_a6_v4.json --mode history --max-sources 4 --page-limit 10 --max-pages 2 --daily-request-budget 80
+# Após verificar seleção e condições técnicas:
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+python scripts/a5_business_discovery_cycle.py --manifest artifacts/private/bd_manifest_a6_v4.json --mode history --max-sources 4 --page-limit 10 --max-pages 2 --daily-request-budget 80 --execute --report "artifacts/private/a6-history-pilot-$stamp.json"
+```
+
+Auditar individualmente cada run efetivamente concluído com `scripts/a3_business_discovery_first_batch.py --audit <run_key>`; relatar observações, validade das trilhas e cobertura. Sem nova aprovação institucional. Se ocorrer falha, parar e inspecionar; o batch técnico ainda não propaga os códigos numéricos do provedor no resumo, diferentemente da A6 identidade. Não agendar, não presumir recuperação robusta ou corpus científico aceito.
