@@ -10,6 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from tapi_gate0.connectors import ConnectorError
 from tapi_gate0.discovery_batch import BatchManifest
 from tapi_gate0.discovery_grants_a6 import provision
+from tapi_gate0.discovery_grant_renewal import renew_due
 from tapi_gate0.discovery_local_db import validate_existing_database_url
 from tapi_gate0.identity import IdentityFailure, IdentityStore
 from tapi_gate0.sa_store import engine_for
@@ -18,7 +19,9 @@ from tapi_gate0.sa_store import engine_for
 def main(argv=None):
     p = argparse.ArgumentParser(description="Provision technical-only grants under DEC-018, no network")
     p.add_argument("--manifest",type=Path,required=True)
-    p.add_argument("--source",action="append",required=True)
+    mode=p.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--source",action="append")
+    mode.add_argument("--renew-due",action="store_true")
     p.add_argument("--execute",action="store_true")
     p.add_argument("--output",type=Path)
     p.add_argument("--admin",default="admin")
@@ -31,8 +34,12 @@ def main(argv=None):
         manifest=BatchManifest.model_validate_json(args.manifest.read_text(encoding="utf-8"))
         tenant,viewer=os.environ["TAPI_TENANT_ID"],os.environ["TAPI_META_IG_ID"]
         engine=engine_for(validate_existing_database_url(os.environ["TAPI_DATABASE_URL"]))
+        def apply(principal=None):
+            if args.renew_due:
+                return renew_due(engine,tenant,viewer,manifest,principal=principal)
+            return provision(engine,tenant,viewer,manifest,args.source,principal=principal)
         if not args.execute:
-            _,result=provision(engine,tenant,viewer,manifest,args.source)
+            _,result=apply()
         else:
             args.output.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
             # Reserve the name before committing grants. A failed/crashed write can
@@ -43,7 +50,7 @@ def main(argv=None):
                 session=identity.login(args.admin,getpass.getpass("Admin password: "),tenant)
                 principal=identity.resolve(session.access_token)
                 try:
-                    updated,result=provision(engine,tenant,viewer,manifest,args.source,principal=principal)
+                    updated,result=apply(principal)
                     stream.write(updated.model_dump_json(indent=2))
                 finally:
                     identity.revoke(session.access_token,principal)
