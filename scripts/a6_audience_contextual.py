@@ -18,6 +18,7 @@ from tapi_gate0.discovery_audience_contextual import (
 )
 from tapi_gate0.discovery_audience_signals import assess_caption
 from tapi_gate0.policy import decide, Operation
+from tapi_gate0.discovery_caption_research import require_scoped_research, plan_research
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = (
@@ -50,21 +51,37 @@ def main(argv=None):
     parser.add_argument("--manifest", type=Path)
     parser.add_argument("--model-dir", type=Path)
     parser.add_argument("--report-name")
+    parser.add_argument("--confirm-all-ingestion-stopped", action="store_true")
     args = parser.parse_args(argv)
     engine = None
     decision = decide("instagram_metadata", Operation.CLASSIFY.value)
     status = {"policy_version": POLICY, "classification_scope_allowed": decision.permitted,
               "classification_policy_code": decision.code, "external_data_accessed": False,
               "scientific_admissions": 0, "human_reviews": 0, "scientifically_validated": False}
-    if not args.synthetic_smoke and not args.execute:
-        print(json.dumps({"status": "CONTEXTUAL_READINESS", **status}))
-        return 0
     try:
+        frame = None
+        if args.manifest is not None and not args.synthetic_smoke:
+            from tapi_gate0.discovery_batch import BatchManifest
+            from tapi_gate0.discovery_local_db import validate_existing_database_url
+            from tapi_gate0.sa_store import engine_for
+            tenant, viewer = os.getenv("TAPI_TENANT_ID", ""), os.getenv("TAPI_META_IG_ID", "")
+            if not tenant or not viewer:
+                raise ValueError("MISSING_SCOPE")
+            frame = BatchManifest.model_validate_json(args.manifest.read_text(encoding="utf-8"))
+            engine = engine_for(validate_existing_database_url(os.getenv("TAPI_DATABASE_URL", "")))
+            plan = plan_research(engine, tenant, frame, viewer)
+            status["local_caption_scope_sources"] = plan["scoped_sources"]
+            status["local_caption_scope_allowed"] = bool(plan["sources"]) and all(r["action"] == "ALREADY_PROVISIONED" for r in plan["sources"])
+        if not args.synthetic_smoke and not args.execute:
+            print(json.dumps({"status": "CONTEXTUAL_READINESS", **status}))
+            return 0
         if args.execute:
-            # Never load model, database or real captions if the policy denies.
-            require_caption_classification()
-            if args.manifest is None:
+            if frame is None:
+                require_caption_classification()
                 raise ValueError("MANIFEST_REQUIRED")
+            if not args.confirm_all_ingestion_stopped:
+                raise ConnectorError("BD_CORPUS_ADMIN_STOP_REQUIRED", 403)
+            status["local_caption_scope_policy"] = require_scoped_research(engine, tenant, frame, viewer)
         if os.getenv("TAPI_SYSTEM_ONE_ENABLED") != "1":
             raise ConnectorError("SYSTEM_ONE_EXPERIMENT_DISABLED", 403)
         path = args.model_dir or os.getenv("TAPI_SYSTEM_ONE_LOCAL_MODEL_DIR")
@@ -82,7 +99,10 @@ def main(argv=None):
             raise ConnectorError("BD_CONTEXTUAL_REPORT_EXISTS", 409)
         # Existing pinned-checkpoint verification. No remote downloads.
         os.environ.update(HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1", HF_DATASETS_OFFLINE="1")
-        from scripts.prepare_gliner25_local_checkpoint import validate_local_checkpoint, _not_inside_project
+        try:
+            from scripts.prepare_gliner25_local_checkpoint import validate_local_checkpoint, _not_inside_project
+        except ModuleNotFoundError:
+            from prepare_gliner25_local_checkpoint import validate_local_checkpoint, _not_inside_project
         from tapi_gate0.system_one_e1 import LocalGLiNERDecider
         import torch
         _not_inside_project(path)
@@ -98,27 +118,20 @@ def main(argv=None):
                     details.append({"content_id": cid, **evaluate_text(decider, tenant="synthetic",
                         cid=cid, creator="fixture", caption=caption)})
             else:
-                from tapi_gate0.discovery_batch import BatchManifest
                 from tapi_gate0.discovery_corpus_readiness import readiness_report
-                from tapi_gate0.discovery_local_db import validate_existing_database_url
                 from tapi_gate0.ingestion import stable_id
-                from tapi_gate0.sa_store import engine_for
-                tenant, viewer = os.getenv("TAPI_TENANT_ID", ""), os.getenv("TAPI_META_IG_ID", "")
-                if not tenant or not viewer:
-                    raise ValueError("MISSING_SCOPE")
-                frame = BatchManifest.model_validate_json(args.manifest.read_text(encoding="utf-8"))
-                engine = engine_for(validate_existing_database_url(os.getenv("TAPI_DATABASE_URL", "")))
                 def observe(source, cid, caption):
                     # Existing operation decision + active matched source scope, not a
                     # grant invented by the model or supplied by a report.
-                    require_caption_classification()
+                    require_scoped_research(engine, tenant, frame, viewer)
                     creator = stable_id("creator", "instagram", source.expected_ig_id)
                     details.append({"content_id": cid, "username": source.username,
                         **evaluate_text(decider, tenant=tenant, cid=cid, creator=creator, caption=caption,
-                                        rights="DEC-018:" + source.approval_reference)})
+                                        rights="DEC-018:offline_bd_caption_candidate_classification:" + source.expected_ig_id)})
                 ready = readiness_report(engine, tenant, frame, viewer, _caption_observer=observe)
                 if len(details) != ready["first_blocking_stage"]["CAPTION_AVAILABLE_FOR_ASSESSMENT"]:
                     raise ValueError("BD_CONTEXTUAL_PARTITION_MISMATCH")
+                require_scoped_research(engine, tenant, frame, viewer)
                 status["manifest_sha256"] = frame.fingerprint()
         report = {"status": "CONTEXTUAL_SYNTHETIC_SMOKE" if args.synthetic_smoke else "CONTEXTUAL_CANDIDATES",
             **status, "synthetic_only": bool(args.synthetic_smoke), "assessed_captions": len(details),

@@ -461,3 +461,44 @@ def test_corpus_bridge_register_and_signal_preview(tmp_path):
     finally:
         client.close()
         engine.dispose()
+
+
+def test_documentary_context_scope_and_revocation(tmp_path):
+    from types import SimpleNamespace
+    from tapi_gate0 import corpus
+    from tapi_gate0.discovery_corpus_bridge import register_sampling_profiles
+    from tapi_gate0.discovery_caption_research import (
+        plan_research, provision_research, require_scoped_research, revoke_research)
+    from tapi_gate0.policy import decide
+    engine, store = db(tmp_path)
+    transport, calls, client = provider()
+    try:
+        cycle(store, transport)
+        frame = manifest(approved=1)
+        admin = SimpleNamespace(role="admin", tenant_id=TENANT, actor_id="fixture-admin")
+        with pytest.raises(ConnectorError, match="BD_CONTEXTUAL_CLASSIFICATION_SCOPE_BLOCKED"):
+            require_scoped_research(engine, TENANT, frame, VIEWER)
+        register_sampling_profiles(engine, admin, frame, VIEWER, stopped=True)
+        assert plan_research(engine, TENANT, frame, VIEWER)["sources_to_provision"] == 1
+        with pytest.raises(ConnectorError, match="BD_CORPUS_ADMIN_STOP_REQUIRED"):
+            provision_research(engine, admin, frame, VIEWER, stopped=False)
+        count = len(calls)
+        result = provision_research(engine, admin, frame, VIEWER, stopped=True)
+        assert result["new_contexts_and_scopes"] == 1
+        assert provision_research(engine, admin, frame, VIEWER, stopped=True)["new_contexts_and_scopes"] == 0
+        assert require_scoped_research(engine, TENANT, frame, VIEWER)
+        assert not decide("instagram_metadata", "classify").permitted
+        card = corpus.corpus_data_card(engine, TENANT)
+        assert card["sampling_frame"]["with_reviewed_source_context"] == 0
+        assert card["documentary_context_coverage"]["active_profiles"] == 1
+        assert card["documentary_context_coverage"]["technical_posts_with_documentary_context"] == 2
+        assert card["observed"]["excluded_unreviewed_content"] == 2
+        assert card["observed"]["scientifically_eligible_instagram_posts"] == 0
+        revoke_research(engine, admin, frame, VIEWER, SOURCES[0][0], stopped=True)
+        with pytest.raises(ConnectorError, match="BD_CONTEXTUAL_CLASSIFICATION_SCOPE_BLOCKED"):
+            require_scoped_research(engine, TENANT, frame, VIEWER)
+        assert corpus.corpus_data_card(engine, TENANT)["documentary_context_coverage"]["active_profiles"] == 0
+        assert len(calls) == count
+    finally:
+        client.close()
+        engine.dispose()

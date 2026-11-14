@@ -704,3 +704,26 @@ python scripts/a6_corpus_bridge.py --manifest artifacts/private/bd_manifest_a6_v
 ```
 
 Executar registro somente após testes e com ingestão parada; senha exclusivamente no terminal local. Não é nova autorização institucional.
+
+
+## Registro real de 12 perfis e contexto documental / escopo local — 14/11/2026 UTC
+
+Operador reportou SAMPLING_PROFILES_REGISTERED: 12 novos, 0 anteriores, sessão autenticada, 0 contextos e admissões; data card 01:05 UTC confirma 12 grants ativos/verificados, 480 tecnicamente elegíveis/10 perfis, 125 formatos excluídos, 480 sem contexto, zero excluídos por registro e 0 científicos. Inventário 605/10 inalterado, 30 runs auditados. Setores: serviços 251, outros 136, comércio 57, beleza 33, alimentação 3. Nenhum teste integral novo reportado. Backup pós-registro ainda não confirmado.
+
+CAP-001/IMP-053/167/170 e CAP-003/IMP-064: `discovery_caption_research.py` introduz evento/outbox por fonte, provisionado por admin autenticado com ingestão parada, lock tenant/grants e correspondência de manifesto, grant ativo/verificado, perfil registrado e referências. Contexto documental reproduz estrato, intenção declarada, referências e hipótese de tipo/setor; porte desconhecido, não revisão humana, não post targeting. Escopo técnico específico `offline_bd_caption_candidate_classification` para legendas já persistidas, DEC-018 como referência única; não cria grant de leitura, não modifica policy.py global, não permite mídia/API/publicação/agregação externa. Revogável por fonte (evento específico ou revogação/expiração do grant subjacente); reexecução idempotente, conflito bloqueia lote. Provisão não significa verificação independente de direitos/termos do provedor. Data card preserva contadores científicos e humanos; nova cobertura documental separada, registros com contexto documental mas sem contexto humano passam para exclusão por avaliação pendente. Sem migração.
+
+CLI bridge: --plan-contexts offline; --register-contexts com senha do único admin e ingestão parada; --revoke-context USERNAME explícito somente para revogar. CLI contextual com --manifest verifica todos os escopos locais e exige --confirm-all-ingestion-stopped em --execute, revalida antes de cada inferência e no final; mantém deny global e não usa grant de leitura como autorização isolada. Sem execução real de modelo pelo assistente. Não há atomicidade global de leitura e inferência, manter todos os escritores parados; relatório de candidatos não é revisão nem admissão. Caminho --execute sem manifesto segue bloqueado. Integração simulada publicada, não executada localmente; regressão esperada 579 se 578 preservados. PR draft sem merge.
+
+```powershell
+git pull --ff-only
+python -m pytest -q tests/test_discovery_history_a5.py tests/test_discovery_contextual_integration.py tests/test_corpus_audit_v52.py
+python -m pytest -q
+python scripts/verify_zero_spend.py
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+python scripts/a6_backup_restore_drill.py --output-name "tapi-a6-registered-$stamp.sqlite3" --confirm-all-writers-stopped
+python scripts/a6_corpus_bridge.py --manifest artifacts/private/bd_manifest_a6_v8.json --plan-contexts
+python scripts/a6_corpus_bridge.py --manifest artifacts/private/bd_manifest_a6_v8.json --register-contexts --confirm-all-ingestion-stopped
+python scripts/a6_audience_contextual.py --manifest artifacts/private/bd_manifest_a6_v8.json
+```
+
+Executar registro somente após regressão e backup aprovados, escritores parados. Esperar 12 contextos/escopos locais, 0 humanos/admissões, local_caption_scope_allowed=true e classification_scope_allowed=false (negação global preservada). Após checkpoint local verificado e smoke sintético, testar inferência local real com --execute --manifest ... --confirm-all-ingestion-stopped --report-name exclusivo, TAPI_SYSTEM_ONE_ENABLED=1 e --model-dir diretório existente fora do projeto. Não baixar modelo automaticamente nem compartilhar relatórios privados.

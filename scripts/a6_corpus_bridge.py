@@ -18,6 +18,7 @@ from tapi_gate0.identity import IdentityFailure, IdentityStore, users, membershi
 from datetime import datetime
 from tapi_gate0.sa_store import engine_for
 from tapi_gate0.local_admin_selection import select_admin_login
+from tapi_gate0.discovery_caption_research import plan_research, provision_research, revoke_research
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -43,6 +44,9 @@ def main(argv=None):
     parser.add_argument("--report-name", help="Optional new private JSON basename for per-post hashes and spans")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--register-profiles", action="store_true")
+    group.add_argument("--plan-contexts", action="store_true")
+    group.add_argument("--register-contexts", action="store_true")
+    group.add_argument("--revoke-context", metavar="USERNAME")
     group.add_argument("--inspect-local-admins", action="store_true", help="OS operator only; show login and lock state, no secrets")
     parser.add_argument("--confirm-all-ingestion-stopped", action="store_true")
     parser.add_argument("--admin", help="Existing local admin login; auto-detect unique enabled admin if omitted")
@@ -62,7 +66,10 @@ def main(argv=None):
         if not viewer or args.manifest is None:
             raise ValueError("MISSING_SCOPE")
         manifest = BatchManifest.model_validate_json(args.manifest.read_text(encoding="utf-8"))
-        if args.register_profiles:
+        if args.plan_contexts:
+            print(json.dumps(plan_research(engine, tenant, manifest, viewer), ensure_ascii=False))
+            return 0
+        if args.register_profiles or args.register_contexts or args.revoke_context:
             if not args.confirm_all_ingestion_stopped or args.report_name:
                 raise ConnectorError("BD_CORPUS_ADMIN_STOP_REQUIRED", 422)
             identity = IdentityStore(engine)
@@ -79,10 +86,17 @@ def main(argv=None):
             session = identity.login(login, getpass.getpass("Admin password: "), tenant)
             principal = identity.resolve(session.access_token)
             try:
-                result = register_sampling_profiles(engine, principal, manifest, viewer, stopped=True)
+                if args.register_contexts:
+                    result = provision_research(engine, principal, manifest, viewer, stopped=True)
+                elif args.revoke_context:
+                    result = revoke_research(engine, principal, manifest, viewer, args.revoke_context, stopped=True)
+                else:
+                    result = register_sampling_profiles(engine, principal, manifest, viewer, stopped=True)
             finally:
                 identity.revoke(session.access_token, principal)
-            result["sampling_registry_mutated"] = result["database_mutated"]
+            result["operation_mutated"] = result["database_mutated"]
+            if args.register_profiles:
+                result["sampling_registry_mutated"] = result["database_mutated"]
             result["identity_session_written"] = True
             result["database_mutated"] = True
         else:
