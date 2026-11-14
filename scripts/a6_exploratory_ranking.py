@@ -1,5 +1,6 @@
 """Reaudit saved grounded report and rank local metadata; no inference or external release."""
 import argparse
+from datetime import datetime
 import hashlib
 import json
 import os
@@ -19,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--editorial", action="store_true", help="Compute descriptive editorial coverage and ranking sensitivity")
     p.add_argument("--manifest", type=Path, required=True)
     p.add_argument("--input-name", required=True)
     p.add_argument("--report-name", required=True)
@@ -47,22 +49,35 @@ def main(argv=None):
         require_scoped_research(engine, tenant, frame, viewer)
         rows = []
         seen = set()
+        if a.editorial:
+            from tapi_gate0.classification import TOPICS, CTA
+            from tapi_gate0.discovery_audience_signals import sampling_sector
+            from tapi_gate0.discovery_editorial_descriptive import caption_features, age_band, analyze_editorial
         def observe(source, post, metric):
             cid = post.content_id
             if cid in seen or cid not in saved or saved[cid]["username"] != source.username:
                 raise ValueError("BD_EXPLORATORY_REPORT_PARTITION_MISMATCH")
             seen.add(cid)
             tier = evidence_tier(post.caption, saved[cid])
-            rows.append({"content_id": cid, "username": source.username, "tier": tier,
+            row = {"content_id": cid, "username": source.username, "tier": tier,
                          "likes": metric.likes, "comments": metric.comments,
                          "followers": metric.follower_count, "snapshot_id": metric.snapshot_id,
                          "observed_at": metric.observed_at.isoformat(),
                          "followers_measured_at": metric.followers_measured_at.isoformat(),
-                         "caption_sha256": saved[cid]["caption_sha256"]})
+                         "caption_sha256": saved[cid]["caption_sha256"]}
+            if a.editorial:
+                row.update(format=post.media_type.value, published_at=post.published_at.isoformat(),
+                           sector=sampling_sector(source.sampling_stratum),
+                           **caption_features(post.caption, TOPICS, CTA))
+            rows.append(row)
         ready = readiness_report(engine, tenant, frame, viewer, _record_observer=observe)
         if seen != set(saved) or len(seen) != ready["first_blocking_stage"]["CAPTION_AVAILABLE_FOR_ASSESSMENT"]:
             raise ValueError("BD_EXPLORATORY_REPORT_PARTITION_MISMATCH")
         require_scoped_research(engine, tenant, frame, viewer)
+        if a.editorial:
+            as_of = datetime.fromisoformat(ready["as_of"])
+            for row in rows:
+                row["age_band"] = age_band((as_of-datetime.fromisoformat(row["published_at"])).days)
         result = summarize(rows)
         top = result.pop("top_ids_private")
         result.update(status="EXPLORATORY_RANKING_COMPLETED", as_of=ready["as_of"],
@@ -74,9 +89,15 @@ def main(argv=None):
                                "Sampling and age differences confound comparisons; no causal or editorial recommendation.",
                                "Saved model predictions are local operator evidence, not independently attested.",
                                "Top 10% uses ceil(n/10) and content ID tie-break; small strata are descriptive only."])
+        editorial_private = {}
+        if a.editorial:
+            editorial = analyze_editorial(rows)
+            editorial_private = editorial.pop("private_rankings")
+            result["editorial"] = editorial
+            result["status"] = "EXPLORATORY_EDITORIAL_COMPLETED"
         fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
-            json.dump({**result, "private_rows": rows, "top_ids_private": top}, stream, indent=2)
+            json.dump({**result, "private_rows": rows, "top_ids_private": top, **({"editorial_private_rankings": editorial_private} if a.editorial else {})}, stream, indent=2)
         print(json.dumps({**result, "report_name": a.report_name}))
         return 0
     except ConnectorError as exc:

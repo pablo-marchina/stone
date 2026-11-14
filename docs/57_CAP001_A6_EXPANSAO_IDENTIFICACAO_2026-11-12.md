@@ -841,3 +841,20 @@ python scripts/a6_exploratory_ranking.py --manifest artifacts/private/bd_manifes
 ```
 
 Executar antes de expandir/modificar o manifesto ou inventário para preservar partição exata; enviar stdout agregado. Se inventário mudou, gerar relatório correspondente, não descartar linhas silenciosamente.
+
+
+### Ranking exploratório real e análise descritiva — 14/11/2026 UTC
+
+Operador: 16/16 focais PASS 0,42s; EXPLORATORY_RANKING_COMPLETED às 02:45:11 UTC, 480/10, 48 top, mediana ER 0,029858%, mediana top 0,315603%; cenário semântico 240/10, 24 top, 0,025166% e 0,235107%. Estratos 1 grounded/239 consenso/203 sinal isolado/37 inconclusivo/0 negativo. Top3 volume 294/480; Sala SL 5 posts mediana 0,838658%, Abrasel 3 mediana 0,176739%; diferenças de fonte e seleção não causais. Relatório a6-exploratory-ranking-20261113-234508.json, input SHA 262b4a18ffc661048e17ce8c644ed4a00e3b97ff8b1af0cb9b9f034e53029928, manifesto 3c57b923292aa4c69fd67506c474c01f78606593a0b68af96cabb0a1cb43325c. Sem mutação, rede, revisão ou admissão.
+
+CAP-002 IMP-057/059 e CAP-003 IMP-064: `--editorial` no ranking local, reusa relatório grounded, mesma reauditoria de manifesto/grants/partição/legenda, sem inferência adicional. Compara top decil global com top decil de cada perfil com >=10 posts (limiar de engenharia, não significância), sobreposição/Jaccard sobre população comparável, percentis por perfil com midrank de empates, sensibilidade leave-one-profile-out por Jaccard. Coortes técnica e semântica separadas. Distribuições de formato, tema e CTA por regex existente, idade e setor amostral; desconhecido separado, proporções somente entre observados, contagens e cobertura por perfil; não afirmar CTA ausente ou atributos AV. Comparações top/rest descritivas, não ajuste causal nem bootstrap por cluster (IMP-058 pendente). IDs/percentis privados, stdout agregado, sem modificação do card/DB/agent. Cinco testes unitários novos publicados, ainda não executados localmente pelo assistente. Sem merge. Próximo validar piloto, ligar referências exploratórias ao agente com guardas, retomar ingestão e expandir fontes; não tratar o relatório como validação de MPE.
+
+```powershell
+git pull --ff-only
+python -m pytest -q tests/test_discovery_editorial_descriptive.py tests/test_discovery_audience_exploratory.py tests/test_discovery_corpus_readiness.py
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+python scripts/a6_exploratory_ranking.py --editorial --manifest artifacts/private/bd_manifest_a6_v8.json --input-name a6-grounded-real-20261113-230031.json --report-name "a6-editorial-$stamp.json" --confirm-all-ingestion-stopped
+python scripts/a6_supervised_scheduler.py --manifest artifacts/private/bd_manifest_a6_v8.json
+```
+
+Scheduler somente prévia; não executar sem token/expiry reais e quota/saúde confirmados. Antes de expandir, concluir relatório para manter partição. Nenhuma alteração de escopo, pesos ou pagamentos.
