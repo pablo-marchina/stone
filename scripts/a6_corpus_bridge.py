@@ -17,6 +17,7 @@ from tapi_gate0.discovery_local_db import validate_existing_database_url
 from tapi_gate0.identity import IdentityFailure, IdentityStore, users, memberships, utcnow
 from datetime import datetime
 from tapi_gate0.sa_store import engine_for
+from tapi_gate0.local_admin_selection import select_admin_login
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -44,7 +45,7 @@ def main(argv=None):
     group.add_argument("--register-profiles", action="store_true")
     group.add_argument("--inspect-local-admins", action="store_true", help="OS operator only; show login and lock state, no secrets")
     parser.add_argument("--confirm-all-ingestion-stopped", action="store_true")
-    parser.add_argument("--admin", help="Existing local admin login; prompted if omitted")
+    parser.add_argument("--admin", help="Existing local admin login; auto-detect unique enabled admin if omitted")
     args = parser.parse_args(argv)
     engine = None
     try:
@@ -65,7 +66,14 @@ def main(argv=None):
             if not args.confirm_all_ingestion_stopped or args.report_name:
                 raise ConnectorError("BD_CORPUS_ADMIN_STOP_REQUIRED", 422)
             identity = IdentityStore(engine)
-            login = args.admin if args.admin is not None else input("Admin login: ").strip()
+            login = args.admin
+            if login is None:
+                if engine.dialect.name != "sqlite":
+                    raise ConnectorError("LOCAL_ADMIN_EXPLICIT_LOGIN_REQUIRED", 422)
+                try:
+                    login = select_admin_login(inspect_local_admins(engine, tenant)["admins"])
+                except ValueError as exc:
+                    raise ConnectorError(str(exc), 403) from exc
             if not login or len(login) > 128:
                 raise ConnectorError("BD_CORPUS_ADMIN_LOGIN_REQUIRED", 422)
             session = identity.login(login, getpass.getpass("Admin password: "), tenant)

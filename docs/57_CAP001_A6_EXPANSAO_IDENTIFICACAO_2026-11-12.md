@@ -691,3 +691,16 @@ python scripts/a6_audience_contextual.py
 ```
 
 Esperado cadastro 12/480 técnico/0 científico se grants inalterados; se falhar novamente, parar, não resetar senha diretamente no SQLite. Preflight contextual CONTEXTUAL_READINESS, classification_scope_allowed=false. Após sucesso fazer backup como já documentado. Se checkpoint local previamente validado disponível e flag TAPI_SYSTEM_ONE_ENABLED=1, teste opcional com `--synthetic-smoke --report-name "a6-contextual-synthetic-<stamp>.json"` (TAPI_SYSTEM_ONE_LOCAL_MODEL_DIR aponta para diretório existente fora do projeto). Não executar --execute em base real enquanto policy negar. Próximo resolver escopo técnico efetivo de classificação e contexto de fontes, validar modelo local em smoke e então avaliar corpus, sem simular revisão humana.
+
+
+### Correção de ergonomia do login — somente senha
+
+Por solicitação do responsável, o CLI `a6_corpus_bridge.py --register-profiles` agora localiza automaticamente o único admin habilitado do tenant no SQLite existente e solicita apenas a senha (getpass); não imprime o login, não tenta autenticar em várias contas e mantém IdentityStore, RBAC, contador de falhas e revogação de sessão. Zero/múltiplos admins habilitados ou conta única temporariamente bloqueada interrompem antes do prompt de senha; --admin explícito continua disponível para ambientes ambíguos ou PostgreSQL. Não faz reset, bootstrap ou mudança de credenciais. Substitui a instrução anterior de prompt de login. Se senha incorreta, parar e não insistir. 6 testes puros executados (0,03s, blobs fe97db0/130fe7c verificados); teste integrado CLI com IdentityStore real e registro simulado publicado, não executado localmente. Esperado 578 integral se 571 preservados. Sem mudança do DB operacional pelo assistente.
+
+```powershell
+git pull --ff-only
+python -m pytest -q tests/test_local_admin_selection.py tests/test_discovery_contextual_integration.py
+python scripts/a6_corpus_bridge.py --manifest artifacts/private/bd_manifest_a6_v8.json --register-profiles --confirm-all-ingestion-stopped
+```
+
+Executar registro somente após testes e com ingestão parada; senha exclusivamente no terminal local. Não é nova autorização institucional.

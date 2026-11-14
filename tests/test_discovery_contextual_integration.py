@@ -36,3 +36,41 @@ def test_real_contextual_execution_denied_before_model_or_database(capsys, monke
     assert report["scientific_admissions"] == 0
     assert main([]) == 0
     assert json.loads(capsys.readouterr().out)["status"] == "CONTEXTUAL_READINESS"
+
+
+def test_registration_prompts_only_password_for_unique_local_admin(tmp_path, monkeypatch, capsys):
+    from scripts import a6_corpus_bridge as bridge
+    from test_discovery_batch_a4 import manifest, VIEWER
+    from tapi_gate0.identity import sessions
+    from sqlalchemy import select
+    engine = engine_for("sqlite:///" + (tmp_path / "identity.sqlite").as_posix())
+    try:
+        metadata.create_all(engine)
+        identity = IdentityStore(engine)
+        password = "fixture-password-123"
+        identity.bootstrap("tenant-a", "Fixture", "not-admin", password)
+        frame = tmp_path / "manifest.json"
+        frame.write_text(manifest(approved=1).model_dump_json(), encoding="utf-8")
+        monkeypatch.setenv("TAPI_DATABASE_URL", str(engine.url))
+        monkeypatch.setenv("TAPI_TENANT_ID", "tenant-a")
+        monkeypatch.setenv("TAPI_META_IG_ID", VIEWER)
+        prompts = []
+        monkeypatch.setattr(bridge.getpass, "getpass", lambda prompt: (prompts.append(prompt), password)[1])
+        def no_login_prompt(*args):
+            raise AssertionError("unexpected login prompt")
+        monkeypatch.setattr("builtins.input", no_login_prompt)
+        def register(db, principal, manifest, viewer, *, stopped):
+            assert principal.tenant_id == "tenant-a" and principal.role == "admin"
+            assert stopped and viewer == VIEWER
+            return {"status": "SAMPLING_PROFILES_REGISTERED", "database_mutated": False}
+        monkeypatch.setattr(bridge, "register_sampling_profiles", register)
+        assert bridge.main(["--manifest", str(frame), "--register-profiles",
+                            "--confirm-all-ingestion-stopped"]) == 0
+        assert prompts == ["Admin password: "]
+        result = json.loads(capsys.readouterr().out)
+        assert result["status"] == "SAMPLING_PROFILES_REGISTERED"
+        assert "not-admin" not in json.dumps(result)
+        with engine.connect() as db:
+            assert db.execute(select(sessions.c.revoked_at)).scalar_one() is not None
+    finally:
+        engine.dispose()
