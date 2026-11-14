@@ -858,3 +858,19 @@ python scripts/a6_supervised_scheduler.py --manifest artifacts/private/bd_manife
 ```
 
 Scheduler somente prévia; não executar sem token/expiry reais e quota/saúde confirmados. Antes de expandir, concluir relatório para manter partição. Nenhuma alteração de escopo, pesos ou pagamentos.
+
+
+### Análise editorial real e preview do agente — 14/11/2026 UTC
+
+Operador: 21/21 focais PASS 0,34s; EXPLORATORY_EDITORIAL_COMPLETED 02:55:47 UTC, a6-editorial-20261113-235544.json. Técnico global 48 top, ABIHPEC 21/48, 472 posts/8 perfis suportados intraperfil, 51 top, 24 em comum com top48 de população comparável, Jaccard 0,32. Semântico 240/10, 228/6 suportados, top24 intraperfil, 21 em comum com top23 comparável, Jaccard 0,807692. Quatro diferenças pp (técnico global/intra; semântico global/intra): vendas +22,552448/+16,512656/+13,320463/+14,756258; link na bio +27,691454/+5,128205/+23,296703/+17,1875; Reels -9,027778/+5,616879/+3,240741/+3,676471. Idade 90–364 mais frequente nos quatro; viés idade/fonte e cobertura temática/CTA baixa. Não inferir causa nem recomendação de formato. Scheduler 02 UTC quota local 0/80 reservada, histórico proposto abraselnorn, contaazul, menteempreendedora, máximo 12 requisições e 120 observações (não previsão de novas), único blocker BD_SCHEDULER_TOKEN_EXPIRY_REQUIRED, OAuth NOT_CHECKED/UNKNOWN. Não inventar validade do token.
+
+CAP-005 IMP-071/076 e CAP-007: `--agent-preview` implica editorial, reaproveita as 480 linhas revalidadas no mesmo fluxo e rechecagem final de escopo. Preview privado determinístico com findings/reference_posts/creatives/confidence_flag/explanation, três modos explicitamente limitados. Hipóteses somente se diferença positiva nos quatro recortes sobrepostos, >=3 casos top, >=2 perfis top e >=5 observados top em cada recorte; critérios de engenharia não significância, sem ajuste de idade, nem replicação independente. Referências do top semântico global/intraperfil, até 5 perfis distintos, content/snapshot/hash/tier. Sensibilidade por reamostragem de 1.000 médias de contrastes intraperfil ponderados igualmente, com >=3 perfis com top/rest observados; ranking fixo, intervalo descritivo, não IC populacional nem bootstrap com recomputação do ranking; IMP-058 ainda parcial. Biblioteca autoral de cinco rascunhos de vendas quando a hipótese passa; valida CreativeSpecHandoff existente, referências verificadas localmente; escolha de CTA e formato não é evidência de superioridade; não copiar legenda de terceiros, não afirmar performance, não gravar Studio. Resultado privado, stdout somente hipóteses agregadas e contagens; sem alteração de API/MCP, DB, grants, modelo, rede, merge ou produção. Quatro novos testes publicados, ainda não executados pelo assistente. Próximo validação real e integração com Studio/agent autorizada por operação, expansão das fontes. Sem alegar LangGraph completo ou CAP-007 final.
+
+```powershell
+git pull --ff-only
+python -m pytest -q tests/test_discovery_editorial_agent.py tests/test_discovery_editorial_descriptive.py tests/test_discovery_audience_exploratory.py tests/test_discovery_corpus_readiness.py
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+python scripts/a6_exploratory_ranking.py --agent-preview --manifest artifacts/private/bd_manifest_a6_v8.json --input-name a6-grounded-real-20261113-230031.json --report-name "a6-agent-preview-$stamp.json" --confirm-all-ingestion-stopped
+```
+
+Executar antes de ampliar inventário. Próximo ciclo aquisição: obter data real do token via Meta Access Token Debugger e configurar TAPI_META_TOKEN_EXPIRES_AT (ISO 8601 com fuso), TAPI_META_DATA_ACCESS_EXPIRES_AT somente se informada, TAPI_META_REQUIRE_TOKEN_EXPIRY=1; prévia novamente. Não enviar token ou segredo ao chat. Não executar se blocker/expiração/integridade. Execução supervisionada usa flags existentes, relatório exclusivo e novo slot; manter R$0. 

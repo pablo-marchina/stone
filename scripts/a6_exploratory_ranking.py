@@ -20,12 +20,15 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--agent-preview", action="store_true", help="Private exploratory agent findings and draft CreativeSpecs; implies editorial")
     p.add_argument("--editorial", action="store_true", help="Compute descriptive editorial coverage and ranking sensitivity")
     p.add_argument("--manifest", type=Path, required=True)
     p.add_argument("--input-name", required=True)
     p.add_argument("--report-name", required=True)
     p.add_argument("--confirm-all-ingestion-stopped", action="store_true")
     a = p.parse_args(argv)
+    if a.agent_preview:
+        a.editorial = True
     engine = None
     try:
         if not a.confirm_all_ingestion_stopped:
@@ -95,9 +98,19 @@ def main(argv=None):
             editorial_private = editorial.pop("private_rankings")
             result["editorial"] = editorial
             result["status"] = "EXPLORATORY_EDITORIAL_COMPLETED"
+        agent_private = {}
+        if a.agent_preview:
+            from tapi_gate0.discovery_editorial_agent import build_agent_preview
+            agent_private = build_agent_preview(rows, tenant=tenant, as_of=ready["as_of"], manifest_sha256=frame.fingerprint())
+            result["agent_preview"] = {k:v for k,v in agent_private.items() if k not in ("findings","reference_posts","creatives")}
+            result["agent_preview"].update(findings_count=len(agent_private["findings"]),
+                reference_posts_count=len(agent_private["reference_posts"]), creatives_count=len(agent_private["creatives"]),
+                hypotheses=[{k:v for k,v in f.items() if k != "reference_content_ids"} for f in agent_private["findings"]])
+            result["status"] = "EXPLORATORY_AGENT_PREVIEW_COMPLETED"
+        require_scoped_research(engine, tenant, frame, viewer)
         fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
-            json.dump({**result, "private_rows": rows, "top_ids_private": top, **({"editorial_private_rankings": editorial_private} if a.editorial else {})}, stream, indent=2)
+            json.dump({**result, "private_rows": rows, "top_ids_private": top, **({"editorial_private_rankings": editorial_private} if a.editorial else {}), **({"agent_preview_private": agent_private} if a.agent_preview else {})}, stream, indent=2)
         print(json.dumps({**result, "report_name": a.report_name}))
         return 0
     except ConnectorError as exc:
