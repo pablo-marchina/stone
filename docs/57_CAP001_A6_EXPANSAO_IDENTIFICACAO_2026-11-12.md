@@ -777,3 +777,30 @@ conda run --no-capture-output -n tapi-s1 python scripts/a6_audience_contextual.p
 ```
 
 Executar real somente se smoke retornar CONTEXTUAL_SYNTHETIC_SMOKE e seis candidatos. Se bloqueado, enviar somente JSON agregado de diagnóstico e não executar real. Usar mesmos pesos e ambiente; não reinstalar/descarregar indiscriminadamente. Sem merge, rede, nova aprovação ou inferência real pelo assistente.
+
+
+### Primeira inferência real de audiência — baseline V1 e desafio semântico
+
+Operador confirmou 12 testes focais PASS (1,79s). Falha de importação safetensors resolvida ao desativar .venv e ativar diretamente Conda tapi-s1; DEPENDENCIES_OK, sem reinstalação reportada. Smoke e real concluídos com revisão e173bca1f0c4217d7a55b3b0c705d5ece8a0218d, hash de pesos 9efe0f88c99f2aa794452e9559dc60e98d60d9fa2bf1b60cf2710411b6da5b4e. Runtime torch 2.15.0, gliner2 2.1.0, transformers 5.22.1, safetensors 0.8.0. Carga 28.636,504 ms smoke / 12.648,396 ms real; warnings de tipo gliner2/extractor e torch.jit.script; não bloqueantes, investigar em atualização de deps.
+
+Relatório privado `a6-contextual-real-20261113-223541.json`: 480/480, 12 escopos, manifesto 3c57b923292aa4c69fd67506c474c01f78606593a0b68af96cabb0a1cb43325c. Matriz lexical x modelo:
+- explícito: 5 positivo, 2 negativo, 0 abstenção (7)
+- menção: 30 positivo, 12 negativo, 0 abstenção (42)
+- sem sinal: 342 positivo, 85 negativo, 4 abstenção (431)
+- total: 377/99/4, nenhum targeting final, revisão/admissão, acesso externo ou mutação DB.
+
+Smoke `a6-contextual-smoke-20261113-223541.json`: explícito 0/2/0, menção 1/0/0, sem sinal 2/1/0. Portanto o caso direto positivo e o caso de exclusão foram ambos negativos, mera menção foi positiva. Não tratar 377 como elegíveis; baixa abstenção e confusão de destinatário vs menção são sinais de fragilidade, não estimativa de erro do corpus. O identificador mpe_targeted e labels sim/nao/indefinido são pouco descritivos; hipótese a testar, não causa comprovada.
+
+CAP-003 IMP-064/065: novo `--audience-benchmark` sintético exclusivo sem manifesto/DB; reusa checkpoint validado, preflight e flags offline. 30 fixtures congeladas antes da primeira execução V2, 10 positivos (6 diretos, 4 implícitos com sinal de microatividade), 8 negativos (3 exclusões, 5 consumidor) e 12 incertos (4 menções, 8 ambiguidade). Inclui 6 casos do smoke anterior (não holdout). Compara baseline V1, classes descritivas PT, EN e consenso dos dois (discordância ou saída inválida abstém). Mesmo modelo, não avaliadores independentes. Métricas de engenharia: matriz 3x3, matches exatos, positivos corretos, positivos sobre negativo/incerto, negativos sobre positivo, abstenções. Não escolher variante automaticamente, não inferir no corpus, não modificar V1, não contar gold independente nem precisão real. Critério de decisão a priori: priorizar menor positivo indevido nos 20 negativos/incertos, depois recuperação dos 10 positivos, monitorar excesso de abstenção; se nenhuma alternativa reduzir risco mantendo recuperação útil, investigar abordagem híbrida com spans verificáveis e/ou novo classificador local, não liberar admissão. Relatório privado contém somente IDs sintéticos, hashes, labels e tempos; stdout agregado. 5 testes puros PASS 0,04s, blobs f62e91d/1d505f7 verificados; integração CLI simulada publicada, ainda não executada aqui. Sem novo backup necessário, 588 integral anterior não reportado; 594 esperados se preservados. Nenhuma alteração de autorização, DB, modelo ou rede pelo assistente.
+
+```powershell
+git pull --ff-only
+python -m pytest -q tests/test_discovery_audience_benchmark.py tests/test_discovery_contextual_integration.py
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$model = "C:\Models\tapi\gliner25-multi-decide"
+$env:TAPI_SYSTEM_ONE_ENABLED = "1"
+python scripts/a6_audience_contextual.py --audience-benchmark --model-dir "$model" --report-name "a6-audience-benchmark-$stamp.json"
+$env:TAPI_SYSTEM_ONE_ENABLED = "0"
+```
+
+Usar ambiente tapi-s1 ativado diretamente. Não repetir V1/corpus até comparar desafio; classificação científica não liberada. Próximo passo: avaliar resultados, desenvolver evidência verificável por span e política de abstenção; em paralelo expansão de fontes e rubrica observável. Sem merge.

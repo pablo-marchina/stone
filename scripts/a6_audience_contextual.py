@@ -76,6 +76,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--synthetic-smoke", action="store_true")
+    modes.add_argument("--audience-benchmark", action="store_true", help="Fixed synthetic challenge; compare V1 and descriptive prompts")
     modes.add_argument("--execute", action="store_true")
     parser.add_argument("--manifest", type=Path)
     parser.add_argument("--model-dir", type=Path)
@@ -92,6 +93,8 @@ def main(argv=None):
     details = []
     try:
         frame = None
+        if args.audience_benchmark and args.manifest is not None:
+            raise ConnectorError("BD_AUDIENCE_BENCHMARK_SYNTHETIC_ONLY", 422)
         if args.manifest is not None and not args.synthetic_smoke:
             from tapi_gate0.discovery_batch import BatchManifest
             from tapi_gate0.discovery_local_db import validate_existing_database_url
@@ -104,7 +107,7 @@ def main(argv=None):
             plan = plan_research(engine, tenant, frame, viewer)
             status["local_caption_scope_sources"] = plan["scoped_sources"]
             status["local_caption_scope_allowed"] = bool(plan["sources"]) and all(r["action"] == "ALREADY_PROVISIONED" for r in plan["sources"])
-        if not args.synthetic_smoke and not args.execute:
+        if not args.synthetic_smoke and not args.execute and not args.audience_benchmark:
             print(json.dumps({"status": "CONTEXTUAL_READINESS", **status}))
             return 0
         if args.execute:
@@ -156,6 +159,23 @@ def main(argv=None):
             if (not isinstance(preflight, dict) or
                     preflight.get("topic") not in ("vendas", "finanças", "marketing")):
                 raise RuntimeError("REAL_GLINER_CLASSIFY_TEXT_OUTPUT_INCOMPATIBLE")
+            if args.audience_benchmark:
+                stage = "audience_benchmark"
+                from tapi_gate0.discovery_audience_benchmark import run_challenge
+                challenge = run_challenge(extractor, lambda cid, caption: evaluate_text(
+                    decider, tenant="synthetic", cid=cid, creator="fixture", caption=caption)["status"])
+                cases = challenge.pop("cases")
+                report = {"status": "AUDIENCE_BENCHMARK_COMPLETED", **status,
+                          **challenge, "synthetic_only": True,
+                          "model_revision": checkpoint["revision"],
+                          "model_weights_sha256": checkpoint["files"]["model.safetensors"]["sha256"],
+                          "targeting_decisions": 0, "database_mutated": False}
+                stage = "private_report_write"
+                fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                    json.dump({**report, "cases": cases}, stream, ensure_ascii=False, indent=2)
+                print(json.dumps({**report, "report_name": args.report_name}, ensure_ascii=False))
+                return 0
             stage = "synthetic_inference" if args.synthetic_smoke else "corpus_inference"
             if args.synthetic_smoke:
                 for i, caption in enumerate(FIXTURES):

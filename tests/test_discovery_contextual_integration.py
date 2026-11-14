@@ -123,3 +123,36 @@ def test_contextual_synthetic_cli_with_simulated_model(tmp_path, monkeypatch, ca
     saved = json.loads((tmp_path/"artifacts"/"private"/"test.json").read_text(encoding="utf-8"))
     assert len(saved["private_evidence"]) == 6
     assert runner.FIXTURES[0] not in json.dumps(saved, ensure_ascii=False)
+
+
+def test_audience_benchmark_cli_simulated_model(tmp_path, monkeypatch, capsys):
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+    from scripts import a6_audience_contextual as runner
+    from tapi_gate0.system_one_e1 import LocalGLiNERDecider
+    monkeypatch.setenv("TAPI_SYSTEM_ONE_ENABLED", "1")
+    monkeypatch.setattr(runner, "ROOT", tmp_path)
+    model = tmp_path / "model"
+    model.mkdir()
+    checkpoint = {"manifest_present": True, "revision": "a"*40,
+                  "files": {"model.safetensors": {"sha256": "b"*64}}}
+    monkeypatch.setattr(runner, "_checkpoint_api", lambda: (lambda path: checkpoint, lambda path: None))
+    class Fake:
+        def classify_text(self, text, heads):
+            return {key: values[0] for key, values in heads.items()}
+    monkeypatch.setattr(runner, "_model_runtime", lambda: (
+        lambda path: LocalGLiNERDecider(path, _test_model=Fake()),
+        SimpleNamespace(inference_mode=nullcontext)))
+    assert runner.main(["--audience-benchmark", "--model-dir", str(model),
+                        "--report-name", "challenge.json"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "AUDIENCE_BENCHMARK_COMPLETED"
+    assert report["synthetic_cases"] == 30
+    assert report["metrics"]["semantic_consensus"]["positive_on_negative"] == 8
+    assert not report["scientifically_validated"]
+    assert "cases" not in report
+    saved = json.loads((tmp_path/"artifacts"/"private"/"challenge.json").read_text(encoding="utf-8"))
+    assert len(saved["cases"]) == 30
+    assert runner.FIXTURES[0] not in json.dumps(saved, ensure_ascii=False)
+    assert runner.main(["--audience-benchmark", "--manifest", "unused.json"]) == 2
+    assert json.loads(capsys.readouterr().out)["code"] == "BD_AUDIENCE_BENCHMARK_SYNTHETIC_ONLY"
