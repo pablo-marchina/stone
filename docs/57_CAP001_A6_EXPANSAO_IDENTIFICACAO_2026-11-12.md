@@ -756,3 +756,24 @@ $env:TAPI_SYSTEM_ONE_ENABLED = "0"
 ```
 
 Esperar CONTEXTUAL_SYNTHETIC_SMOKE, 6 casos sintéticos e matriz somando 6; se totalmente abstida, não seguir para real antes de diagnosticar. Execução real CONTEXTUAL_CANDIDATES, 480 se base inalterada; matriz pareada soma 480 e marginais lexicais 7/42/431, nenhuma decisão final, nenhum review/admissão, database_mutated=false, external_data_accessed=false. Compartilhar apenas stdout agregado, não relatório privado. Não alegar precisão científica, nem inferir relevância por ausência de sinal. Model version e hash devem coincidir com checkpoint validado. Se erro, registrar código e corrigir, sem repetir autenticação ou provisão. Registro documental de evidência, sem alteração executável, nenhum merge, rede, inferência ou DB operacional pelo assistente. Próxima implementação depende da distribuição semântica real e critérios de evidência/abstenção; expansão de fontes continua pendente, com quota atual e credencial real verificadas antes de nova consulta.
+
+
+### Backup pós-contextos e falha de inferência — 14/11/2026 UTC
+
+Operador: BACKUP_RESTORE_VERIFIED 01:21:08 UTC, `tapi-a6-contexts-20261113-222106.sqlite3`, SHA-256 `e5a61f9759952a72d7a3a9ec6ff89749c5870197bd8375d6bb6ffe399942a87b`, 5.869.568 bytes, backup 474 ms/restore 102 ms, integridade/FK/inventário OK, 1.453 eventos/outbox (+12), 605 posts/12 perfis; nenhum restore vivo. Checkpoint model.safetensors existe no caminho esperado; smoke e execução real falharam ambos BD_CONTEXTUAL_LOCAL_ERROR (escopo real 12/true). Não há causa raiz observável no código anterior; nenhum resultado de classificação válido, nenhuma admissão. Não repetir cadastro/backup sem nova mutação nem baixar pesos novamente.
+
+Correção: CLI registra etapa de falha (scope_preflight, model_path, private_report_preflight, checkpoint_import, checkpoint_validation, runtime_import, model_load, model_api_preflight, synthetic_inference/corpus_inference, result_validation, private_report_write), tipo limitado de exceção, códigos/módulos allowlist e número de candidatos anteriores à falha, nunca mensagem bruta/traceback/legenda/segredo. Versões instaladas de torch/gliner2/transformers/safetensors, carga real explícita e preflight sintético idêntico ao E1.1, antes de inferência de audiência. Smoke totalmente abstido falha em vez de PASS. Sem alteração de grant, policy, checkpoint ou banco. 7 testes puros PASS 0,05s, blobs f21876c/b256d52 conferidos; dois testes CLI simulados novos publicados, não executados neste ambiente. Regressão 579 anterior não reportada; 588 esperados se preservada. Não afirmar correção da causa raiz ainda.
+
+```powershell
+git pull --ff-only
+python -m pytest -q tests/test_contextual_diagnostics.py tests/test_discovery_contextual_integration.py
+$model = "C:\Models\tapi\gliner25-multi-decide"
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$env:TAPI_SYSTEM_ONE_ENABLED = "1"
+$env:HF_HUB_OFFLINE = "1"
+$env:TRANSFORMERS_OFFLINE = "1"
+$env:HF_DATASETS_OFFLINE = "1"
+conda run --no-capture-output -n tapi-s1 python scripts/a6_audience_contextual.py --synthetic-smoke --model-dir "$model" --report-name "a6-contextual-smoke-$stamp.json"
+```
+
+Executar real somente se smoke retornar CONTEXTUAL_SYNTHETIC_SMOKE e seis candidatos. Se bloqueado, enviar somente JSON agregado de diagnóstico e não executar real. Usar mesmos pesos e ambiente; não reinstalar/descarregar indiscriminadamente. Sem merge, rede, nova aprovação ou inferência real pelo assistente.

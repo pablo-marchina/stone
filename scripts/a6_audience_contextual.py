@@ -6,12 +6,13 @@ requires existing operation-specific policy to permit Instagram classification.
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
+from time import perf_counter
 import json
 import os
 from pathlib import Path
 import re
 
-from sqlalchemy.exc import SQLAlchemyError
 from tapi_gate0.connectors import ConnectorError
 from tapi_gate0.discovery_audience_contextual import (
     POLICY, compare_candidate, paired_counts, require_caption_classification,
@@ -19,6 +20,7 @@ from tapi_gate0.discovery_audience_contextual import (
 from tapi_gate0.discovery_audience_signals import assess_caption
 from tapi_gate0.policy import decide, Operation
 from tapi_gate0.discovery_caption_research import require_scoped_research, plan_research
+from tapi_gate0.contextual_diagnostics import safe_failure
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = (
@@ -43,6 +45,33 @@ def evaluate_text(decider, *, tenant, cid, creator, caption, rights=None):
     return compare_candidate(evidence, answer, lexical)
 
 
+def _checkpoint_api():
+    # Direct script invocation and namespace-package imports in pytest.
+    try:
+        from scripts.prepare_gliner25_local_checkpoint import validate_local_checkpoint, _not_inside_project
+    except ModuleNotFoundError as exc:
+        if exc.name not in ("scripts", "scripts.prepare_gliner25_local_checkpoint"):
+            raise
+        from prepare_gliner25_local_checkpoint import validate_local_checkpoint, _not_inside_project
+    return validate_local_checkpoint, _not_inside_project
+
+
+def _model_runtime():
+    from tapi_gate0.system_one_e1 import LocalGLiNERDecider
+    import torch
+    return LocalGLiNERDecider, torch
+
+
+def _runtime_versions():
+    values = {}
+    for name in ("torch", "gliner2", "transformers", "safetensors"):
+        try:
+            values[name] = importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            values[name] = None
+    return values
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     modes = parser.add_mutually_exclusive_group()
@@ -58,6 +87,9 @@ def main(argv=None):
     status = {"policy_version": POLICY, "classification_scope_allowed": decision.permitted,
               "classification_policy_code": decision.code, "external_data_accessed": False,
               "scientific_admissions": 0, "human_reviews": 0, "scientifically_validated": False}
+    stage = "scope_preflight"
+    diagnostic = {}
+    details = []
     try:
         frame = None
         if args.manifest is not None and not args.synthetic_smoke:
@@ -84,10 +116,12 @@ def main(argv=None):
             status["local_caption_scope_policy"] = require_scoped_research(engine, tenant, frame, viewer)
         if os.getenv("TAPI_SYSTEM_ONE_ENABLED") != "1":
             raise ConnectorError("SYSTEM_ONE_EXPERIMENT_DISABLED", 403)
+        stage = "model_path"
         path = args.model_dir or os.getenv("TAPI_SYSTEM_ONE_LOCAL_MODEL_DIR")
         if not path:
             raise ConnectorError("LOCAL_SYSTEM_ONE_WEIGHTS_DIRECTORY_REQUIRED", 422)
         path = Path(path).expanduser().resolve(strict=True)
+        stage = "private_report_preflight"
         if not args.report_name or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,100}\.json", args.report_name):
             raise ConnectorError("BD_CONTEXTUAL_PRIVATE_REPORT_REQUIRED", 422)
         private = ROOT / "artifacts" / "private"
@@ -99,19 +133,30 @@ def main(argv=None):
             raise ConnectorError("BD_CONTEXTUAL_REPORT_EXISTS", 409)
         # Existing pinned-checkpoint verification. No remote downloads.
         os.environ.update(HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1", HF_DATASETS_OFFLINE="1")
-        try:
-            from scripts.prepare_gliner25_local_checkpoint import validate_local_checkpoint, _not_inside_project
-        except ModuleNotFoundError:
-            from prepare_gliner25_local_checkpoint import validate_local_checkpoint, _not_inside_project
-        from tapi_gate0.system_one_e1 import LocalGLiNERDecider
-        import torch
+        stage = "checkpoint_import"
+        validate_local_checkpoint, _not_inside_project = _checkpoint_api()
+        stage = "checkpoint_validation"
         _not_inside_project(path)
         checkpoint = validate_local_checkpoint(path)
         if not checkpoint["manifest_present"] or not re.fullmatch(r"[a-f0-9]{40}", checkpoint["revision"] or ""):
             raise ConnectorError("PINNED_CHECKPOINT_MANIFEST_REQUIRED", 422)
+        status["runtime_versions"] = _runtime_versions()
+        stage = "runtime_import"
+        LocalGLiNERDecider, torch = _model_runtime()
+        stage = "model_load"
         decider = LocalGLiNERDecider(path)
-        details = []
+        started = perf_counter()
         with torch.inference_mode():
+            extractor = decider._load()
+            status["model_load_ms"] = round((perf_counter() - started) * 1000, 3)
+            stage = "model_api_preflight"
+            preflight = extractor.classify_text(
+                "A loja vendeu mais produtos esta semana.",
+                {"topic": ["vendas", "finanças", "marketing"]})
+            if (not isinstance(preflight, dict) or
+                    preflight.get("topic") not in ("vendas", "finanças", "marketing")):
+                raise RuntimeError("REAL_GLINER_CLASSIFY_TEXT_OUTPUT_INCOMPATIBLE")
+            stage = "synthetic_inference" if args.synthetic_smoke else "corpus_inference"
             if args.synthetic_smoke:
                 for i, caption in enumerate(FIXTURES):
                     cid = "fixture." + str(i)
@@ -133,11 +178,15 @@ def main(argv=None):
                     raise ValueError("BD_CONTEXTUAL_PARTITION_MISMATCH")
                 require_scoped_research(engine, tenant, frame, viewer)
                 status["manifest_sha256"] = frame.fingerprint()
+        stage = "result_validation"
+        if args.synthetic_smoke and all(r["status"] == "MODEL_ABSTAIN" for r in details):
+            raise ValueError("BD_CONTEXTUAL_SMOKE_ALL_ABSTAINED")
         report = {"status": "CONTEXTUAL_SYNTHETIC_SMOKE" if args.synthetic_smoke else "CONTEXTUAL_CANDIDATES",
             **status, "synthetic_only": bool(args.synthetic_smoke), "assessed_captions": len(details),
             "paired_counts": paired_counts(details), "model_revision": checkpoint["revision"],
             "model_weights_sha256": checkpoint["files"]["model.safetensors"]["sha256"],
             "targeting_decisions": 0, "database_mutated": False}
+        stage = "private_report_write"
         fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
             json.dump({**report, "private_evidence": details}, stream, ensure_ascii=False, indent=2)
@@ -145,12 +194,16 @@ def main(argv=None):
         return 0
     except ConnectorError as exc:
         code = exc.code
-    except (OSError, ValueError, RuntimeError, SQLAlchemyError, KeyError, TypeError, ImportError):
+        diagnostic = {"failure_stage": stage}
+    except Exception as exc:
+        # Never print raw exception text (may contain real captions or private paths).
         code = "BD_CONTEXTUAL_LOCAL_ERROR"
+        diagnostic = safe_failure(exc, stage)
     finally:
         if engine is not None:
             engine.dispose()
-    print(json.dumps({"status": "BLOCKED", "code": code, **status}))
+    print(json.dumps({"status": "BLOCKED", "code": code, **status, **diagnostic,
+                      "completed_candidates_before_failure": len(details), "database_mutated": False}))
     return 2
 
 

@@ -74,3 +74,52 @@ def test_registration_prompts_only_password_for_unique_local_admin(tmp_path, mon
             assert db.execute(select(sessions.c.revoked_at)).scalar_one() is not None
     finally:
         engine.dispose()
+
+
+def test_contextual_synthetic_reports_safe_checkpoint_failure(tmp_path, monkeypatch, capsys):
+    from scripts import a6_audience_contextual as runner
+    monkeypatch.setenv("TAPI_SYSTEM_ONE_ENABLED", "1")
+    monkeypatch.setattr(runner, "ROOT", tmp_path)
+    model = tmp_path / "model"
+    model.mkdir()
+    def fail(path):
+        raise ValueError("CHECKPOINT_REQUIRED_FILE_MISSING: secret/path")
+    monkeypatch.setattr(runner, "_checkpoint_api", lambda: (fail, lambda path: None))
+    assert runner.main(["--synthetic-smoke", "--model-dir", str(model),
+                        "--report-name", "test.json"]) == 2
+    report = json.loads(capsys.readouterr().out)
+    assert report["failure_stage"] == "checkpoint_validation"
+    assert report["reason_code"] == "CHECKPOINT_REQUIRED_FILE_MISSING"
+    assert report["completed_candidates_before_failure"] == 0
+    assert "secret" not in json.dumps(report)
+
+
+def test_contextual_synthetic_cli_with_simulated_model(tmp_path, monkeypatch, capsys):
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+    from scripts import a6_audience_contextual as runner
+    from tapi_gate0.system_one_e1 import LocalGLiNERDecider
+    monkeypatch.setenv("TAPI_SYSTEM_ONE_ENABLED", "1")
+    monkeypatch.setattr(runner, "ROOT", tmp_path)
+    model = tmp_path / "model"
+    model.mkdir()
+    checkpoint = {"manifest_present": True, "revision": "a"*40,
+                  "files": {"model.safetensors": {"sha256": "b"*64}}}
+    monkeypatch.setattr(runner, "_checkpoint_api", lambda: (lambda path: checkpoint, lambda path: None))
+    class Fake:
+        def classify_text(self, text, heads):
+            return {key: values[0] for key, values in heads.items()}
+    monkeypatch.setattr(runner, "_model_runtime", lambda: (
+        lambda path: LocalGLiNERDecider(path, _test_model=Fake()),
+        SimpleNamespace(inference_mode=nullcontext)))
+    assert runner.main(["--synthetic-smoke", "--model-dir", str(model),
+                        "--report-name", "test.json"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "CONTEXTUAL_SYNTHETIC_SMOKE"
+    assert report["assessed_captions"] == 6
+    assert sum(sum(row.values()) for row in report["paired_counts"].values()) == 6
+    assert report["scientific_admissions"] == 0
+    assert "private_evidence" not in report
+    saved = json.loads((tmp_path/"artifacts"/"private"/"test.json").read_text(encoding="utf-8"))
+    assert len(saved["private_evidence"]) == 6
+    assert runner.FIXTURES[0] not in json.dumps(saved, ensure_ascii=False)
