@@ -49,7 +49,7 @@ def source_gate(source, grant, now):
     return "TECHNICAL_SCOPE_MATCHED"
 
 
-def readiness_report(engine, tenant, manifest, viewer, *, _caption_observer=None):
+def readiness_report(engine, tenant, manifest, viewer, *, _caption_observer=None, _record_observer=None):
     """Aggregate only. No caption export, model inference, registration or admission."""
     from sqlalchemy import select
     from pydantic import ValidationError
@@ -132,6 +132,8 @@ def readiness_report(engine, tenant, manifest, viewer, *, _caption_observer=None
             per_source[sid].append(stage)
             if _caption_observer is not None and stage == STAGES[7]:
                 _caption_observer(manifest_by_id[sid], cid, posts[cid].caption)
+            if _record_observer is not None and stage == STAGES[7]:
+                _record_observer(manifest_by_id[sid], posts[cid], latest[cid])
     sources = []
     for source in manifest.sources:
         sid = source.expected_ig_id

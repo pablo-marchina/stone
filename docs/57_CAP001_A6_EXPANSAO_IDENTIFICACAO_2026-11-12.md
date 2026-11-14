@@ -825,3 +825,19 @@ $env:TAPI_SYSTEM_ONE_ENABLED = "0"
 ```
 
 Usar tapi-s1 diretamente, escritores parados; esperar GROUNDED_CONTEXTUAL_CANDIDATES ou GROUNDED_BENCHMARK_NOT_PASSED. Enviar somente stdout agregado. Suíte integral 645 esperados se 594 preservados, não reportados.
+
+
+### V3 real concluída: cobertura insuficiente e ranking exploratório separado
+
+Operador reportou 62/62 focais PASS em 6,32s; gate sintético passou, híbrido 24/30 + 11/18 acertos, 12/16 positivos corretos, zero positivos em negativos/incertos. Real 480/480: 1 positivo Sebrae, 0 negativos, 479 abstenções; 379 âncora insuficiente, 80 citação, 20 relato, 1 destinatário+ação. V1 reproduziu 377/99/4. Relatório privado a6-grounded-real-20261113-230031.json. Não tratar abstidos como negativos nem V1 como elegibilidade. Regra conservadora insuficiente para cobertura real.
+
+CAP-002 IMP-055/057 e CAP-001 IMP-170: novo ranking descritivo local, sem admissão, sem alterar card oficial. Reutiliza relatório V3 e revalida manifesto, escopo vigente, inventário com trace, hashes de legenda e spans via recálculo de regra, consenso e partição exata; predições salvas não são assinadas/reexecutadas nem independentes. Estratos disjuntos: positivo grounded, consenso sem confirmação, sinal isolado lexical/modelo, inconclusivo e negativo grounded. Ranking técnico e cenário exploratório consenso+grounded separados, ER fração exata, últimos snapshots observados, ceil 10%, desempate ID, empate no corte sinalizado, medianas globais/por estrato/fonte e top IDs apenas no arquivo privado. Não é ranking científico final, não uso pelo agente nem release, não recomendação causal. Escopo existente e escritores parados; sem chamada modelo, rede, custo ou DB. Três testes unitários novos publicados, não executados pelo assistente. Próximo verificar resultados e retomar expansão do corpus, não ajustar regras repetidamente com base em apenas 48 exemplos. Sem merge.
+
+```powershell
+git pull --ff-only
+python -m pytest -q tests/test_discovery_audience_exploratory.py tests/test_discovery_corpus_readiness.py
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+python scripts/a6_exploratory_ranking.py --manifest artifacts/private/bd_manifest_a6_v8.json --input-name a6-grounded-real-20261113-230031.json --report-name "a6-exploratory-ranking-$stamp.json" --confirm-all-ingestion-stopped
+```
+
+Executar antes de expandir/modificar o manifesto ou inventário para preservar partição exata; enviar stdout agregado. Se inventário mudou, gerar relatório correspondente, não descartar linhas silenciosamente.
