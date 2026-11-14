@@ -43,10 +43,10 @@ function recoverUnsavedText() {
 function status(message) { $('status').textContent = message; }
 function canWrite() { return ['admin','editor'].includes(model.principal?.role); }
 function controls() {
-  const logged = !!model.token, editing = logged && !!model.doc && canWrite();
+  const logged = !!model.token, editing = logged && !!model.doc && canWrite() && !model.opening;
   $('login').disabled = logged;
   $('logout').disabled = !logged;
-  $('create').disabled = !logged || !canWrite();
+  $('create').disabled = !logged || !canWrite() || model.opening;
   $('open').disabled = !logged || model.opening;
   $('library-refresh').disabled = !logged || model.libraryBusy;
   $('library-next').disabled = !logged || model.libraryBusy || !model.libraryAfter;
@@ -223,6 +223,8 @@ async function restoreRevision(direction) {
   }catch(error){status('Histórico indisponível: '+error.message);}
 }
 async function create() {
+  if (!model.token || model.opening || model.saving) return;
+  if (model.pendingText && !(await flushText())) return;
   try {
     const spec = {spec_id:'spec.'+crypto.randomUUID().replaceAll('-','').slice(0,18),
       tenant_id:model.principal.tenant_id,
@@ -277,7 +279,7 @@ async function loadLibrary(more=false) {
       button.addEventListener('click',async()=>{
         if(model.token!==token || model.opening)return;
         $('document-id').value=item.document_id;
-        if(await open()){
+        if(await open() && model.token===token && model.doc?.document_id===item.document_id){
           $('library-provenance').textContent=item.historical_provenance==='recorded'
             ? 'Proveniência histórica registrada: vendas · '+item.historical_reference_count+' referências. Escopo atual não verificado; sem validação científica ou aprovação de publicação.'
             : item.historical_provenance==='invalid'
