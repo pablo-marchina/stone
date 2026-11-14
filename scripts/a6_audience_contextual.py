@@ -6,6 +6,7 @@ requires existing operation-specific policy to permit Instagram classification.
 from __future__ import annotations
 
 import argparse
+from collections import Counter, defaultdict
 import importlib.metadata
 from time import perf_counter
 import json
@@ -78,6 +79,7 @@ def main(argv=None):
     modes.add_argument("--synthetic-smoke", action="store_true")
     modes.add_argument("--audience-benchmark", action="store_true", help="Fixed synthetic challenge; compare V1 and descriptive prompts")
     modes.add_argument("--execute", action="store_true")
+    parser.add_argument("--grounded", action="store_true", help="Compare grounded rules and semantic consensus; real run requires synthetic gate")
     parser.add_argument("--manifest", type=Path)
     parser.add_argument("--model-dir", type=Path)
     parser.add_argument("--report-name")
@@ -93,6 +95,8 @@ def main(argv=None):
     details = []
     try:
         frame = None
+        if args.grounded and not (args.audience_benchmark or args.execute):
+            raise ConnectorError("BD_AUDIENCE_GROUNDED_MODE_REQUIRED", 422)
         if args.audience_benchmark and args.manifest is not None:
             raise ConnectorError("BD_AUDIENCE_BENCHMARK_SYNTHETIC_ONLY", 422)
         if args.manifest is not None and not args.synthetic_smoke:
@@ -149,6 +153,8 @@ def main(argv=None):
         stage = "model_load"
         decider = LocalGLiNERDecider(path)
         started = perf_counter()
+        challenge_cases = []
+        challenge_summary = None
         with torch.inference_mode():
             extractor = decider._load()
             status["model_load_ms"] = round((perf_counter() - started) * 1000, 3)
@@ -159,14 +165,25 @@ def main(argv=None):
             if (not isinstance(preflight, dict) or
                     preflight.get("topic") not in ("vendas", "finanças", "marketing")):
                 raise RuntimeError("REAL_GLINER_CLASSIFY_TEXT_OUTPUT_INCOMPATIBLE")
-            if args.audience_benchmark:
-                stage = "audience_benchmark"
-                from tapi_gate0.discovery_audience_benchmark import run_challenge
-                challenge = run_challenge(extractor, lambda cid, caption: evaluate_text(
+            if args.grounded:
+                stage = "audience_grounded_benchmark"
+                from tapi_gate0.discovery_audience_grounded import run_grounded_challenge
+                challenge_summary = run_grounded_challenge(extractor, lambda cid, caption: evaluate_text(
                     decider, tenant="synthetic", cid=cid, creator="fixture", caption=caption)["status"])
-                cases = challenge.pop("cases")
-                report = {"status": "AUDIENCE_BENCHMARK_COMPLETED", **status,
-                          **challenge, "synthetic_only": True,
+                challenge_cases = challenge_summary.pop("cases")
+            if args.audience_benchmark or (args.grounded and not challenge_summary["engineering_gate_passed"]):
+                stage = "audience_benchmark"
+                if args.grounded:
+                    challenge, cases = challenge_summary, challenge_cases
+                else:
+                    from tapi_gate0.discovery_audience_benchmark import run_challenge
+                    challenge = run_challenge(extractor, lambda cid, caption: evaluate_text(
+                        decider, tenant="synthetic", cid=cid, creator="fixture", caption=caption)["status"])
+                    cases = challenge.pop("cases")
+                blocked = bool(args.execute)
+                report = {"status": "GROUNDED_BENCHMARK_NOT_PASSED" if blocked else
+                          ("GROUNDED_AUDIENCE_BENCHMARK_COMPLETED" if args.grounded else "AUDIENCE_BENCHMARK_COMPLETED"),
+                          **status, **challenge, "synthetic_only": True,
                           "model_revision": checkpoint["revision"],
                           "model_weights_sha256": checkpoint["files"]["model.safetensors"]["sha256"],
                           "targeting_decisions": 0, "database_mutated": False}
@@ -175,7 +192,7 @@ def main(argv=None):
                 with os.fdopen(fd, "w", encoding="utf-8") as stream:
                     json.dump({**report, "cases": cases}, stream, ensure_ascii=False, indent=2)
                 print(json.dumps({**report, "report_name": args.report_name}, ensure_ascii=False))
-                return 0
+                return 2 if blocked else 0
             stage = "synthetic_inference" if args.synthetic_smoke else "corpus_inference"
             if args.synthetic_smoke:
                 for i, caption in enumerate(FIXTURES):
@@ -190,9 +207,18 @@ def main(argv=None):
                     # grant invented by the model or supplied by a report.
                     require_scoped_research(engine, tenant, frame, viewer)
                     creator = stable_id("creator", "instagram", source.expected_ig_id)
-                    details.append({"content_id": cid, "username": source.username,
-                        **evaluate_text(decider, tenant=tenant, cid=cid, creator=creator, caption=caption,
-                                        rights="DEC-018:offline_bd_caption_candidate_classification:" + source.expected_ig_id)})
+                    candidate = evaluate_text(decider, tenant=tenant, cid=cid, creator=creator, caption=caption,
+                                        rights="DEC-018:offline_bd_caption_candidate_classification:" + source.expected_ig_id)
+                    if args.grounded:
+                        from tapi_gate0.discovery_audience_benchmark import semantic_candidates
+                        from tapi_gate0.discovery_audience_grounded import grounded_candidate
+                        semantic = semantic_candidates(extractor, caption)
+                        grounding = grounded_candidate(caption, semantic["semantic_consensus"])
+                        if grounding["caption_sha256"] != candidate["caption_sha256"]:
+                            raise ValueError("BD_CONTEXTUAL_EVIDENCE_MISMATCH")
+                        candidate.update(v1_status=candidate["status"], status=grounding["status"],
+                                         semantic_predictions=semantic, grounding=grounding)
+                    details.append({"content_id": cid, "username": source.username, **candidate})
                 ready = readiness_report(engine, tenant, frame, viewer, _caption_observer=observe)
                 if len(details) != ready["first_blocking_stage"]["CAPTION_AVAILABLE_FOR_ASSESSMENT"]:
                     raise ValueError("BD_CONTEXTUAL_PARTITION_MISMATCH")
@@ -206,10 +232,21 @@ def main(argv=None):
             "paired_counts": paired_counts(details), "model_revision": checkpoint["revision"],
             "model_weights_sha256": checkpoint["files"]["model.safetensors"]["sha256"],
             "targeting_decisions": 0, "database_mutated": False}
+        if args.grounded:
+            from tapi_gate0.discovery_audience_grounded import VERSION, LABELS
+            by_source = defaultdict(Counter)
+            for row in details:
+                by_source[row["username"]][row["status"]] += 1
+            report.update(status="GROUNDED_CONTEXTUAL_CANDIDATES", grounding_policy=VERSION,
+                          synthetic_benchmark=challenge_summary,
+                          per_source={name: {label: counts[label] for label in LABELS}
+                                      for name, counts in sorted(by_source.items())},
+                          grounding_reasons=dict(Counter(row["grounding"]["reason"] for row in details)),
+                          v1_paired_counts=paired_counts([{**r, "status": r["v1_status"]} for r in details]))
         stage = "private_report_write"
         fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
-            json.dump({**report, "private_evidence": details}, stream, ensure_ascii=False, indent=2)
+            json.dump({**report, "private_evidence": details, **({"synthetic_cases_detail": challenge_cases} if args.grounded else {})}, stream, ensure_ascii=False, indent=2)
         print(json.dumps({**report, "report_name": args.report_name}, ensure_ascii=False))
         return 0
     except ConnectorError as exc:

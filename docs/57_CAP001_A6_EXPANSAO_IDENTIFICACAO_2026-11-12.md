@@ -804,3 +804,24 @@ $env:TAPI_SYSTEM_ONE_ENABLED = "0"
 ```
 
 Usar ambiente tapi-s1 ativado diretamente. Não repetir V1/corpus até comparar desafio; classificação científica não liberada. Próximo passo: avaliar resultados, desenvolver evidência verificável por span e política de abstenção; em paralelo expansão de fontes e rubrica observável. Sem merge.
+
+
+### Benchmark de audiência V2 reportado; candidato híbrido rastreável
+
+Operador: 11/11 testes focais PASS (6,16s); AUDIENCE_BENCHMARK_COMPLETED 30 casos, mesmos pesos/revisão/runtime, carga 43.957,737 ms. Matriz por variante (acertos / positivos corretos / positivos em negativos / positivos em incertos / negativos em positivos / abstenções): V1 7/0/1/3/10/0; PT 16/8/1/8/0/7; EN 15/9/1/11/0/4; consenso 17/8/0/7/0/11. Consenso recupera 8/10 e evita positivo em negativos, mas 7/12 incertos positivos; nenhuma variante isolada habilita admissão. V1 real 377/99/4 permanece baseline, não elegibilidade.
+
+CAP-003/IMP-064/065: `discovery_audience_grounded.py` adiciona regra conservadora com âncora de destinatário explicitamente MPE ou microatividade e ação próxima, spans de offsets e SHA-256 do trecho e legenda, veto a citação/relato/audiência ampla/negação próxima; negativos apenas exclusão explícita ou pistas restritas de consumidor. Híbrido exige concordância da regra e do consenso PT/EN; discordância abstém. Limitações: padrões PT heurísticos, falsos positivos e negativos ainda possíveis; guardas globais podem reduzir recall; spans não equivalem a prova independente de porte. Não rotular audiência final nem admitir posts. Sem novos dados externos. Avaliação separa 30 casos já conhecidos e 18 novos sintéticos autorais (6/6/6), não gold independente nem holdout externo. Regra isolada obteve 29/30 e 16/18 nesses exemplos (positivos 10/10 e 6/6; sem positivos em negativos/incertos); isso não demonstra desempenho real, pois fixtures e regras compartilham desenho. Híbrido com pesos reais ainda não executado. 55 testes puros PASS em 0,08s (50 novos + 5 anteriores), blobs verificados; teste CLI simulado adicional publicado, não executado neste ambiente. Critério de engenharia pré-fixado para piloto híbrido real: zero positivos nos negativos/incertos em ambas as divisões, recuperação >=5/10 e >=3/6, respectivamente. Não constitui aceite científico.
+
+CLI `--execute --grounded` reusa mesmo checkpoint, roda os 48 casos antes de qualquer inferência real e, se passar, continua na mesma carga para comparar 480 legendas, V1 e híbrido, matrizes e contagens por fonte. Se falhar, grava somente relatório sintético com GROUNDED_BENCHMARK_NOT_PASSED, código 2; sem inferência do corpus. `--audience-benchmark --grounded` opcional sem manifesto/DB. Nenhuma mutação/alteração de grants/policy, não é etapa de autorização adicional. Sem merge ou nova chamada Meta. Relatório privado sem texto bruto, preserva V1 separado; classificação ainda candidata. Próximo integrar seleção de corpus automatizada com evidência/ranking explicitamente não validado e expandir fontes (quota/token reais continuam necessários).
+
+```powershell
+git pull --ff-only
+python -m pytest -q tests/test_discovery_audience_grounded.py tests/test_discovery_audience_benchmark.py tests/test_discovery_contextual_integration.py
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$model = "C:\Models\tapi\gliner25-multi-decide"
+$env:TAPI_SYSTEM_ONE_ENABLED = "1"
+python scripts/a6_audience_contextual.py --execute --grounded --manifest artifacts/private/bd_manifest_a6_v8.json --model-dir "$model" --confirm-all-ingestion-stopped --report-name "a6-grounded-real-$stamp.json"
+$env:TAPI_SYSTEM_ONE_ENABLED = "0"
+```
+
+Usar tapi-s1 diretamente, escritores parados; esperar GROUNDED_CONTEXTUAL_CANDIDATES ou GROUNDED_BENCHMARK_NOT_PASSED. Enviar somente stdout agregado. Suíte integral 645 esperados se 594 preservados, não reportados.
