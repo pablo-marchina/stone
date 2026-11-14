@@ -11,7 +11,7 @@ from typing import Annotated
 
 from fastapi import Depends, FastAPI, Header, Request
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
@@ -60,6 +60,10 @@ def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_ht
     if web_dir.is_dir():
         app.mount("/app", StaticFiles(directory=web_dir, html=True), name="product-ui")
 
+        @app.get("/", include_in_schema=False)
+        def product_home():
+            return RedirectResponse(url="/app/", status_code=307)
+
     @app.middleware("http")
     async def require_tls(request:Request,call_next):
         if request.url.scheme!="https":
@@ -68,7 +72,10 @@ def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_ht
                 return JSONResponse(status_code=403, content={"code":"HTTPS_REQUIRED"},
                                     headers={"Cache-Control":"no-store"})
         response=await call_next(request)
-        response.headers["Cache-Control"]="no-store"
+        # Enforce no-store globally without erasing explicitly private responses.
+        # Never preserve cacheable directives supplied by an endpoint.
+        directives={part.strip().lower() for part in response.headers.get("Cache-Control","").split(",")}
+        response.headers["Cache-Control"]="private, no-store" if "private" in directives else "no-store"
         response.headers["X-Content-Type-Options"]="nosniff"
         response.headers["Referrer-Policy"]="no-referrer"
         response.headers["X-Frame-Options"]="DENY"

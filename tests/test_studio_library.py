@@ -42,11 +42,19 @@ def test_library_auth_pagination_historical_and_tenant(tmp_path,monkeypatch):
             assert login.status_code==200
             return {"Authorization":"Bearer "+login.json()["access_token"]}
         url="/v1/studio/documents"
-        assert client.get(url).status_code==401
+        root=client.get("/",follow_redirects=False)
+        assert root.status_code==307 and root.headers["location"]=="/app/"
+        assert root.headers["Cache-Control"]=="no-store"
+        assert client.get("/").status_code==200
+        assert client.get("/app/studio.html").status_code==200
+        denied=client.get(url)
+        assert denied.status_code==401 and denied.headers["Cache-Control"]=="no-store"
         a,b=headers("tenant-a"),headers("tenant-b")
         assert client.get(url,headers=b).json()["items"]==[]
         first=client.get(url+"?limit=2",headers=a)
         assert first.status_code==200 and first.headers["Cache-Control"]=="private, no-store"
+        assert first.headers["X-Content-Type-Options"]=="nosniff"
+        assert first.headers["X-Frame-Options"]=="DENY"
         data=first.json()
         assert len(data["items"])==2
         assert all(i["historical_provenance"]=="recorded" and i["historical_reference_count"]==1 for i in data["items"])
