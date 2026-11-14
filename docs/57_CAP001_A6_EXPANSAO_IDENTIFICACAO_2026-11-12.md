@@ -874,3 +874,21 @@ python scripts/a6_exploratory_ranking.py --agent-preview --manifest artifacts/pr
 ```
 
 Executar antes de ampliar inventário. Próximo ciclo aquisição: obter data real do token via Meta Access Token Debugger e configurar TAPI_META_TOKEN_EXPIRES_AT (ISO 8601 com fuso), TAPI_META_DATA_ACCESS_EXPIRES_AT somente se informada, TAPI_META_REQUIRE_TOKEN_EXPIRY=1; prévia novamente. Não enviar token ou segredo ao chat. Não executar se blocker/expiração/integridade. Execução supervisionada usa flags existentes, relatório exclusivo e novo slot; manter R$0. 
+
+
+### Preview real do agente e handoff Studio — 14/11/2026 UTC
+
+Operador: 25/25 focais PASS (1,45s); EXPLORATORY_AGENT_PREVIEW_COMPLETED 03:00:48 UTC, a6-agent-preview-20261114-000046.json, 2 hipóteses, 8 referências, 5 CreativeSpecs autorais. Contrastes equal-profile-weighted em pp (técnico/semântico): vendas +12,283615/+12,073413, reamostragem [-4,750567;34,668604]/[1,111111;30,823413]; CTA link na bio -14,387755/+3,229167, intervalos [-50,974026;23,831169]/[-32,5;38,958333]. CTA sensível à composição, não recomendar superioridade. Vendas segue hipótese exploratória; sem causalidade/validação independente. Scheduler 03 UTC: quota 0/80, inválido BD_META_EXPIRY_CONFIGURATION_INVALID por entrada 13/11/2026 (não ISO 8601); se vencimento real, data anterior ao corte. Não inventar validade; renovar token pelo fluxo oficial e confirmar prazo real, manter scheduler bloqueado até preflight.
+
+CAP-023 IMP-174..183 e CAP-007: handoff CLI `--persist-studio-drafts` implica agent preview, rederiva do relatório grounded e reaudita o corpus vigente; cinco specs de vendas convertem para DesignDocument de três páginas editáveis, layout autoral neutro não homologado pela marca, sem mídia de terceiros, aprovação draft, reference_status unverified, rights pending_review. ID determinístico por hash de provenance (manifesto, spec, snapshots e evidência). Persistência SQLite local explícita, login admin existente e sessão revogada, todos escritores parados, tenant lock e lock de grants, rechecagem de escopo e hashes/snapshots referenciados em transação única, eventos/outbox por documento. Reuso verifica versão inicial/evento e preserva edições correntes, conflito reverte lote. Arquivo privado com recibos/documentos/proveniência; stdout IDs de drafts (não IDs de fontes), contagens; falha de escrita pós-commit possível, reexecução idempotente com novo report-name. Sem publicação, render final, mídia externa, nova migração ou API; não é aprovação de direitos. Origem operator_draft é enum existente do contrato, não revisão humana; evento indica template autoral. Três novos testes publicados pendentes, um usa SQLite real com guardas simulados. Não houve escrita no DB operacional pelo assistente. Backup verificado antes de executar, sem merge. Token independente da edição local.
+
+```powershell
+git pull --ff-only
+python -m pytest -q tests/test_discovery_studio_handoff.py tests/test_discovery_editorial_agent.py tests/test_agent_studio_handoff_integration.py
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+python scripts/a6_backup_restore_drill.py --output-name "tapi-pre-studio-$stamp.sqlite3" --confirm-all-writers-stopped
+if ($LASTEXITCODE -eq 0) {
+    python scripts/a6_exploratory_ranking.py --persist-studio-drafts --manifest artifacts/private/bd_manifest_a6_v8.json --input-name a6-grounded-real-20261113-230031.json --report-name "a6-studio-handoff-$stamp.json" --confirm-all-ingestion-stopped --confirm-all-writers-stopped
+}
+```
+Executar no ambiente tapi-s1 com API e escritores parados. Resultado esperado EXPLORATORY_STUDIO_DRAFTS_COMPLETED; após isso abrir os documentos por ID no Studio local. Não publicar; backup prévio não é restore live. Se inventário/manifesto mudou, não persistir usando relatório antigo. 

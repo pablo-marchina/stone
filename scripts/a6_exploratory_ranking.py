@@ -1,5 +1,6 @@
 """Reaudit saved grounded report and rank local metadata; no inference or external release."""
 import argparse
+import getpass
 from datetime import datetime
 import hashlib
 import json
@@ -20,6 +21,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--persist-studio-drafts", action="store_true", help="Create authenticated local editable drafts; implies agent preview")
+    p.add_argument("--confirm-all-writers-stopped", action="store_true")
+    p.add_argument("--admin", help="Existing local admin login; otherwise select unique enabled SQLite admin")
     p.add_argument("--agent-preview", action="store_true", help="Private exploratory agent findings and draft CreativeSpecs; implies editorial")
     p.add_argument("--editorial", action="store_true", help="Compute descriptive editorial coverage and ranking sensitivity")
     p.add_argument("--manifest", type=Path, required=True)
@@ -27,10 +31,16 @@ def main(argv=None):
     p.add_argument("--report-name", required=True)
     p.add_argument("--confirm-all-ingestion-stopped", action="store_true")
     a = p.parse_args(argv)
+    if a.persist_studio_drafts:
+        a.agent_preview = True
     if a.agent_preview:
         a.editorial = True
     engine = None
+    identity_session_written = False
+    studio_write_attempted = False
     try:
+        if a.persist_studio_drafts and not a.confirm_all_writers_stopped:
+            raise ConnectorError("BD_STUDIO_LOCAL_ADMIN_STOP_REQUIRED",403)
         if not a.confirm_all_ingestion_stopped:
             raise ConnectorError("BD_CORPUS_ADMIN_STOP_REQUIRED", 403)
         private = ROOT / "artifacts" / "private"
@@ -110,26 +120,53 @@ def main(argv=None):
         require_scoped_research(engine, tenant, frame, viewer)
         fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
-            json.dump({**result, "private_rows": rows, "top_ids_private": top, **({"editorial_private_rankings": editorial_private} if a.editorial else {}), **({"agent_preview_private": agent_private} if a.agent_preview else {})}, stream, indent=2)
+            studio_private = {}
+            if a.persist_studio_drafts:
+                from tapi_gate0.discovery_studio_handoff import prepare_drafts, persist_drafts
+                from tapi_gate0.identity import IdentityStore
+                from tapi_gate0.local_admin_selection import select_admin_login
+                if engine.dialect.name != "sqlite":
+                    raise ConnectorError("BD_STUDIO_LOCAL_ADMIN_STOP_REQUIRED",403)
+                drafts = prepare_drafts(agent_private, tenant)
+                receipts = []
+                if drafts:
+                    try:
+                        from scripts.a6_corpus_bridge import inspect_local_admins
+                    except ModuleNotFoundError as exc:
+                        if exc.name not in ("scripts", "scripts.a6_corpus_bridge"):
+                            raise
+                        from a6_corpus_bridge import inspect_local_admins
+                    login = a.admin or select_admin_login(inspect_local_admins(engine,tenant)["admins"])
+                    identity = IdentityStore(engine)
+                    identity_session_written = True  # failed auth can also mutate lock state
+                    session = identity.login(login,getpass.getpass("Admin password: "),tenant)
+                    principal = identity.resolve(session.access_token)
+                    try:
+                        studio_write_attempted = True
+                        receipts = persist_drafts(engine,principal,frame,viewer,drafts,stopped=True)
+                    finally:
+                        identity.revoke(session.access_token,principal)
+                created = sum(r["action"]=="CREATED" for r in receipts)
+                studio_private = {"receipts":receipts,"drafts":[{"document":doc.model_dump(mode="json"),"provenance":provenance} for doc,provenance in drafts]}
+                result.update(status="EXPLORATORY_STUDIO_DRAFTS_COMPLETED",
+                    studio_drafts_created=created,studio_drafts_reused=len(receipts)-created,
+                    studio_documents=[r["document_id"] for r in receipts],
+                    studio_mutated=bool(created),identity_session_written=identity_session_written,
+                    database_mutated=identity_session_written,publication_approved=False)
+            json.dump({**result, "private_rows": rows, "top_ids_private": top, **({"editorial_private_rankings": editorial_private} if a.editorial else {}), **({"agent_preview_private": agent_private} if a.agent_preview else {}), **({"studio_handoff_private":studio_private} if a.persist_studio_drafts else {})}, stream, indent=2)
         print(json.dumps({**result, "report_name": a.report_name}))
         return 0
     except ConnectorError as exc:
         code = exc.code
     except Exception as exc:
-        # Avoid echoing captions, paths or SQL.
-        code = "BD_EXPLORATORY_LOCAL_ERROR"
-        if isinstance(exc, ValueError) and exc.args and str(exc.args[0]) in {
-            "BD_EXPLORATORY_REPORT_SCOPE_MISMATCH", "BD_EXPLORATORY_REPORT_PARTITION_MISMATCH",
-            "BD_EXPLORATORY_EVIDENCE_MISMATCH", "BD_EXPLORATORY_CONSENSUS_MISMATCH",
-            "BD_EXPLORATORY_INVALID_LABEL", "BD_EXPLORATORY_PRIVATE_PATH_INVALID",
-            "BD_EXPLORATORY_PRIVATE_ROOT_REDIRECTED", "BD_EXPLORATORY_PRIVATE_NAME_REQUIRED",
-            "BD_EXPLORATORY_REPORT_TOO_LARGE", "BD_EXPLORATORY_INVALID_METRICS",
-            "BD_EXPLORATORY_EMPTY_OR_DUPLICATE"}:
-            code = str(exc.args[0])
+        from tapi_gate0.identity import IdentityFailure
+        code = exc.code if isinstance(exc,IdentityFailure) else "BD_EXPLORATORY_LOCAL_ERROR"
+        if isinstance(exc,ValueError) and exc.args and isinstance(exc.args[0],str) and re.fullmatch(r"BD_(?:EXPLORATORY|STUDIO)_[A-Z_]+",exc.args[0]):
+            code = exc.args[0]
     finally:
         if engine is not None:
             engine.dispose()
-    print(json.dumps({"status":"BLOCKED", "code":code, "database_mutated":False,
+    print(json.dumps({"status":"BLOCKED", "code":code, "database_mutated":identity_session_written, "studio_write_attempted":studio_write_attempted,
                       "external_data_accessed":False, "scientific_admissions":0}))
     return 2
 
