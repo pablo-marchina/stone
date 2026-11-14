@@ -727,3 +727,32 @@ python scripts/a6_audience_contextual.py --manifest artifacts/private/bd_manifes
 ```
 
 Executar registro somente após regressão e backup aprovados, escritores parados. Esperar 12 contextos/escopos locais, 0 humanos/admissões, local_caption_scope_allowed=true e classification_scope_allowed=false (negação global preservada). Após checkpoint local verificado e smoke sintético, testar inferência local real com --execute --manifest ... --confirm-all-ingestion-stopped --report-name exclusivo, TAPI_SYSTEM_ONE_ENABLED=1 e --model-dir diretório existente fora do projeto. Não baixar modelo automaticamente nem compartilhar relatórios privados.
+
+
+## Aceite operacional dos contextos e primeira inferência real no corpus — 14/11/2026 UTC
+
+Operador reportou dois BACKUP_RESTORE_VERIFIED: 01:09:55 e 01:11:29 UTC, ambos SHA-256 `a155dc802b367889aeb80a174ffb1e826329cab7050996888d239d6ea9fe5cd2`, 5.853.184 bytes, integrity/foreign_key ok, inventory_matches=true. Mais recente `tapi-a6-registered-20261113-221128.sqlite3`, backup 108 ms, restauração descartável 73 ms; anterior 291/55 ms. Migração 0012, 605 posts, 10 criadores, 12 perfis, 695 snapshots, 1.441 eventos/outbox; nenhuma restauração sobre banco vivo. Ambos são pré-provisionamento dos contextos, não preservam os novos eventos. Novo backup pós-contexto necessário.
+
+CAPTION_RESEARCH_PROVISIONED confirmou 12 novos contextos/escopos, 0 anteriores, 0 reviews/admissões. Data card às 01:12:45 UTC: 12 perfis e contextos documentais ativos, 480 posts tecnicamente elegíveis/contextualizados e excluídos por avaliação individual pendente, zero excluídos por falta de contexto, 125 formato não prioritário. Campo por fonte source_context_registered segue false porque representa exclusivamente a tabela de revisão humana; não confundir com documentary_context_coverage. CONTEXTUAL_READINESS confirmou local_caption_scope_allowed=true, 12 fontes, classificação global false (negação preservada). Inventário 605/10, 30 runs não vazios auditados, zero inválidos, sem rede. Nenhuma regressão integral nova enviada; 579 é expectativa, não evidência de PASS.
+
+Próximo passo é executar o caminho de inferência existente, não reprovisionar os contextos nem criar outro gate. Checkpoint E1.1 previamente executado pelo operador (docs/36) no ambiente Conda tapi-s1, caminho C:\Models\tapi\gliner25-multi-decide, revisão e173bca1f0c4217d7a55b3b0c705d5ece8a0218d, SHA-256 publicado 9efe0f88c99f2aa794452e9559dc60e98d60d9fa2bf1b60cf2710411b6da5b4e. Testar existência, reutilizar sem download. Se ausente, interromper; não iniciar serviço pago. Manter todos os escritores parados durante backup/inferência e não ativar flags Meta; flags de Hugging Face/transformers offline.
+
+```powershell
+git pull --ff-only
+python -m pytest -q
+python scripts/verify_zero_spend.py
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+python scripts/a6_backup_restore_drill.py --output-name "tapi-a6-contexts-$stamp.sqlite3" --confirm-all-writers-stopped
+
+$model = "C:\Models\tapi\gliner25-multi-decide"
+$env:TAPI_SYSTEM_ONE_ENABLED = "1"
+$env:HF_HUB_OFFLINE = "1"
+$env:TRANSFORMERS_OFFLINE = "1"
+$env:HF_DATASETS_OFFLINE = "1"
+conda run --no-capture-output -n tapi-s1 python scripts/a6_audience_contextual.py --synthetic-smoke --model-dir "$model" --report-name "a6-contextual-smoke-$stamp.json"
+# Somente após smoke concluído e conferir matriz (não confundir candidatos com acurácia):
+conda run --no-capture-output -n tapi-s1 python scripts/a6_audience_contextual.py --execute --manifest artifacts/private/bd_manifest_a6_v8.json --model-dir "$model" --confirm-all-ingestion-stopped --report-name "a6-contextual-real-$stamp.json"
+$env:TAPI_SYSTEM_ONE_ENABLED = "0"
+```
+
+Esperar CONTEXTUAL_SYNTHETIC_SMOKE, 6 casos sintéticos e matriz somando 6; se totalmente abstida, não seguir para real antes de diagnosticar. Execução real CONTEXTUAL_CANDIDATES, 480 se base inalterada; matriz pareada soma 480 e marginais lexicais 7/42/431, nenhuma decisão final, nenhum review/admissão, database_mutated=false, external_data_accessed=false. Compartilhar apenas stdout agregado, não relatório privado. Não alegar precisão científica, nem inferir relevância por ausência de sinal. Model version e hash devem coincidir com checkpoint validado. Se erro, registrar código e corrigir, sem repetir autenticação ou provisão. Registro documental de evidência, sem alteração executável, nenhum merge, rede, inferência ou DB operacional pelo assistente. Próxima implementação depende da distribuição semântica real e critérios de evidência/abstenção; expansão de fontes continua pendente, com quota atual e credencial real verificadas antes de nova consulta.
