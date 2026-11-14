@@ -1,10 +1,12 @@
 """Authenticated CAP-023 draft document API. No external publish/render."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, Header
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, Header, Query
 from pydantic import BaseModel, ConfigDict
 
 from .identity import IdentityFailure, Principal
+from .domain import Id
+from .studio_library import DraftLibraryPage, list_drafts
 from .studio_e1 import CreativeSpec, DesignDocument, StudioError, StudioStore, TextLayerPatch
 from .studio_canvas_c2 import (StudioCanvasStore, UploadPNG, AssetRecord, PlaceImage, MoveLayer, LayerOrder)
 from .studio_pages_e3 import StudioPagesService, DuplicatePage, DeletePage, ReorderPage, RestoreVersion
@@ -51,6 +53,15 @@ def router_for_studio(identity, store: StudioStore):
         # Old clients remain compatible; new browser sends If-Match on every write.
         assert_etag(store.get(tenant, document_id), if_match, expected_version)
 
+
+    @router.get("/documents", response_model=DraftLibraryPage)
+    def library(response: Response, limit: int = Query(20, ge=1, le=50),
+                after: Id | None = None, p: Principal = Depends(principal)):
+        response.headers["Cache-Control"] = "private, no-store"
+        try:
+            return list_drafts(store.engine, p.tenant_id, limit=limit, after=after)
+        except StudioError as exc:
+            as_http(exc)
 
     @router.post("/documents", response_model=DesignDocument, status_code=201)
     def create_draft(body: CreateDraft, response: Response, p: Principal = Depends(principal)):

@@ -892,3 +892,10 @@ if ($LASTEXITCODE -eq 0) {
 }
 ```
 Executar no ambiente tapi-s1 com API e escritores parados. Resultado esperado EXPLORATORY_STUDIO_DRAFTS_COMPLETED; após isso abrir os documentos por ID no Studio local. Não publicar; backup prévio não é restore live. Se inventário/manifesto mudou, não persistir usando relatório antigo. 
+
+
+### Handoff Studio real e biblioteca — 14/11/2026 UTC
+
+Operador 8/8 focais PASS 5,42s, warning Starlette/httpx não bloqueante. Backup pré-Studio verificado 03:10:50 UTC, tapi-pre-studio-20261114-001048.sqlite3 SHA 944b16770f7c3fd7e1ac0aa1409576117f1e00b43c6cc193fe40009f5d8bc9f5, 5.869.568 bytes, 594/218ms, integridade/FK/inventário OK; 0 documentos antes. EXPLORATORY_STUDIO_DRAFTS_COMPLETED 03:10:54 UTC, 5 novos/0 reuso, 5 carrosséis planejados com 3 páginas, sessão escrita, DB mutado, sem publicação/admissão. a6-studio-handoff-20261114-001048.json. Pós-backup e inspeção real de UI/export pendentes. Token ainda bloqueado, não alterado.
+
+CAP-023: biblioteca autenticada GET /v1/studio/documents (CT-STUDIO-LIBRARY-01), paginação lexical, resumo de revisão atual e recibo histórico verificável (não grant atual nem validade científica), sem exposição de IDs de fontes ou payloads. UI lista/atualiza/pagina e abre via ID sem copiar terminal, limpa lista logout, preserva texto pendente antes de abrir; usa textContent. Teste integrado publicado, pendente; sem mudança DB/migração, sem merge. Próximo testar UI e exportação local, backup pós-Studio; retomar aquisição com token válido real. 

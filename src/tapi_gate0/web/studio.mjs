@@ -5,6 +5,7 @@ const model = {
   token: null, principal: null, doc: null, selection: null, drag: null,
   preview: null, bitmaps: new Map(), pendingImages: new Map(),
   pageId: null, dragPageId: null, undoStack: [], redoStack: [],
+  libraryAfter:null, libraryBusy:false, libraryEpoch:0, opening:false,
   etag: null, pendingText: null, saveTimer: null, saving: false, proposal:null,
 };
 const canvas = $('canvas');
@@ -46,7 +47,9 @@ function controls() {
   $('login').disabled = logged;
   $('logout').disabled = !logged;
   $('create').disabled = !logged || !canWrite();
-  $('open').disabled = !logged;
+  $('open').disabled = !logged || model.opening;
+  $('library-refresh').disabled = !logged || model.libraryBusy;
+  $('library-next').disabled = !logged || model.libraryBusy || !model.libraryAfter;
   $('save-text').disabled = !editing || model.selection?.kind !== 'text';
   $('insert-image').disabled = !editing || !$('file').files?.length || !$('rights').checked;
   $('file').disabled = !editing;
@@ -92,6 +95,10 @@ function reset() {
   recoveryStore(null);
   timelineEditor?.reset();
   model.token = null; model.principal = null; model.doc = null;
+  model.libraryEpoch++;model.libraryAfter=null;model.libraryBusy=false;model.opening=false;
+  $('draft-library').replaceChildren();$('library-next').hidden=true;
+  $('library-status').textContent='Entre para consultar seus documentos.';
+  $('library-provenance').textContent='';
   model.selection = null; model.drag = null; model.preview = null;
   model.pageId=null;model.dragPageId=null;model.undoStack=[];model.redoStack=[];
   model.etag=null;model.pendingText=null;model.proposal=null;clearTimeout(model.saveTimer);model.saveTimer=null;
@@ -111,7 +118,7 @@ async function login() {
     model.principal = await api('/v1/auth/me');
     $('password').value = '';
     status('Autenticado como ' + model.principal.role);
-    controls();
+    controls();void loadLibrary();
   } catch (error) { reset(); status('Falha de autenticação: '+error.message); }
 }
 async function logout() {
@@ -225,13 +232,66 @@ async function create() {
     const doc = await api('/v1/studio/documents', {method:'POST',
       payload:{document_id:$('document-id').value.trim(),spec}});
     showDocument(doc,{resetHistory:true}); status('Rascunho criado e persistido. Versão 1.');
+    $('library-provenance').textContent='';void loadLibrary();
   } catch(error){status('Não foi possível criar: '+error.message);}
 }
 async function open() {
+  if (!model.token || model.opening || model.saving) {
+    if(model.saving)status('Aguarde o salvamento antes de trocar de documento.');
+    return false;
+  }
+  const token=model.token, id=$('document-id').value.trim();
+  model.opening=true;controls();
   try {
-    const doc = await api('/v1/studio/documents/'+encodeURIComponent($('document-id').value.trim()));
-    showDocument(doc,{resetHistory:true});status('Rascunho aberto do banco.');recoverUnsavedText();
-  } catch(error){status('Não foi possível abrir: '+error.message);}
+    if(model.pendingText && !(await flushText()))return false;
+    if(model.token!==token)return false;
+    // Fetch directly here so stale responses cannot replace the current ETag.
+    const response=await fetch('/v1/studio/documents/'+encodeURIComponent(id),{
+      headers:{Accept:'application/json',Authorization:'Bearer '+token},cache:'no-store'});
+    if(!response.ok)throw new Error('HTTP '+response.status);
+    const doc=await response.json();
+    if(model.token!==token)return false;
+    model.etag=response.headers.get('ETag');
+    showDocument(doc,{resetHistory:true});$('library-provenance').textContent='';
+    status('Rascunho aberto do banco.');recoverUnsavedText();return true;
+  } catch(error){if(model.token===token)status('Não foi possível abrir: '+error.message);return false;}
+  finally{if(model.token===token){model.opening=false;controls();}}
+}
+async function loadLibrary(more=false) {
+  if(!model.token || model.libraryBusy || (more && !model.libraryAfter))return;
+  const token=model.token, epoch=++model.libraryEpoch;
+  const after=more?model.libraryAfter:null;
+  model.libraryBusy=true;controls();
+  $('library-status').textContent='Consultando rascunhos…';
+  try {
+    const data=await api('/v1/studio/documents?limit=20'+(after?'&after='+encodeURIComponent(after):''));
+    if(model.token!==token || epoch!==model.libraryEpoch)return;
+    const host=$('draft-library');
+    if(!more)host.replaceChildren();
+    for(const item of data.items){
+      const button=document.createElement('button');button.type='button';button.className='library-draft';
+      const title=document.createElement('strong');title.textContent=item.title;
+      const meta=document.createElement('span');
+      meta.textContent=item.pages+' pág. · v'+item.version+' · '+(item.historical_provenance==='recorded'?'Hipótese exploratória':'Rascunho');
+      button.append(title,meta);
+      button.addEventListener('click',async()=>{
+        if(model.token!==token || model.opening)return;
+        $('document-id').value=item.document_id;
+        if(await open()){
+          $('library-provenance').textContent=item.historical_provenance==='recorded'
+            ? 'Proveniência histórica registrada: vendas · '+item.historical_reference_count+' referências. Escopo atual não verificado; sem validação científica ou aprovação de publicação.'
+            : item.historical_provenance==='invalid'
+              ? 'Proveniência histórica inconsistente ou indisponível. Não utilizar como evidência.'
+              : 'Sem recibo exploratório registrado. Rascunho não aprovado.';
+        }
+      });
+      host.append(button);
+    }
+    model.libraryAfter=data.next_after;$('library-next').hidden=!data.next_after;
+    $('library-status').textContent=host.children.length?host.children.length+' rascunho(s) listado(s).':'Nenhum rascunho disponível.';
+  }catch(error){if(model.token===token && epoch===model.libraryEpoch){
+    $('library-status').textContent='Falha ao consultar biblioteca: '+error.message;
+  }}finally{if(model.token===token && epoch===model.libraryEpoch){model.libraryBusy=false;controls();}}
 }
 function layerList() { return activePage()?.layers || []; }
 function renderLayerNavigation() {
@@ -522,6 +582,8 @@ $('login').addEventListener('click',login);
 $('logout').addEventListener('click',logout);
 $('create').addEventListener('click',create);
 $('open').addEventListener('click',open);
+$('library-refresh').addEventListener('click',()=>loadLibrary());
+$('library-next').addEventListener('click',()=>loadLibrary(true));
 $('save-text').addEventListener('click',saveText);
 // Save edited text on blur as well as explicit Save, without silently overwriting
 // concurrent edits: the version check in the server remains authoritative.

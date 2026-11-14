@@ -28,3 +28,5 @@
 .timeline-fields label{display:block;margin:6px 0}
 .timeline-fields textarea,.timeline-fields input,.timeline-fields select{max-width:100%}
 #timeline-job-status{display:block;font-size:.85rem;overflow-wrap:anywhere}
+
+.library-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px}.library-heading button,#library-next{background:#edf4ef;color:#275c43}.library-draft{display:flex;flex-direction:column;gap:4px;text-align:left;width:100%;background:#f5f9f6;color:#20332c;border:1px solid #d2ded4;margin:5px 0;overflow-wrap:anywhere}.library-draft span{font-size:11px;font-weight:400;color:#466454}.library-draft:hover{background:#e7f1e9}.library-draft:focus-visible{outline:3px solid #39a37e}#library-provenance{overflow-wrap:anywhere}

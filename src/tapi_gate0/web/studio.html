@@ -22,6 +22,11 @@
       <label>Senha <input id="password" type="password" autocomplete="current-password"></label>
       <div class="buttons"><button id="login">Entrar</button><button id="logout" disabled>Sair</button></div>
       <h2>2. Criar ou abrir</h2>
+      <div class="library-heading"><strong>Biblioteca de rascunhos</strong><button id="library-refresh" disabled>Atualizar</button></div>
+      <p id="library-status" class="hint" role="status">Entre para consultar seus documentos.</p>
+      <div id="draft-library" role="group" aria-label="Rascunhos do tenant"></div>
+      <button id="library-next" hidden disabled>Mais rascunhos</button>
+      <p id="library-provenance" class="hint" aria-live="polite"></p>
       <label>ID do documento <input id="document-id" value="design.demo"></label>
       <label>Objetivo <input id="objective" value="Criar exemplo educativo de finanças"></label>
       <label>Título <input id="headline" value="Organize seu caixa"></label>
