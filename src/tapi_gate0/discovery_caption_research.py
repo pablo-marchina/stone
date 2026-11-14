@@ -248,8 +248,10 @@ def provision_research(engine, principal, manifest, viewer, *, stopped):
 
 def require_scoped_research(engine, tenant, manifest, viewer):
     """Dedicated local capability; never changes the global external deny gate."""
-    plan = plan_research(engine, tenant, manifest, viewer)
-    if not plan["sources"] or any(r["action"] != "ALREADY_PROVISIONED" for r in plan["sources"]):
+    with engine.connect() as db:
+        _idle(db, tenant)
+        rows = _rows(db, tenant, manifest, viewer, now_utc())
+    if not rows or any(a != "ALREADY_PROVISIONED" for _, a, _ in rows):
         raise ConnectorError("BD_CONTEXTUAL_CLASSIFICATION_SCOPE_BLOCKED", 403)
     return VERSION
 

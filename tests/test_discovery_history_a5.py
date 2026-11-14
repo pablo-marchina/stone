@@ -487,6 +487,10 @@ def test_documentary_context_scope_and_revocation(tmp_path):
         assert result["new_contexts_and_scopes"] == 1
         assert provision_research(engine, admin, frame, VIEWER, stopped=True)["new_contexts_and_scopes"] == 0
         assert require_scoped_research(engine, TENANT, frame, VIEWER)
+        from tapi_gate0.discovery_history import cycle_lease
+        with cycle_lease(engine, TENANT, "fixture-research-active"):
+            with pytest.raises(ConnectorError, match="BD_CORPUS_INGESTION_ACTIVE"):
+                require_scoped_research(engine, TENANT, frame, VIEWER)
         assert not decide("instagram_metadata", "classify").permitted
         card = corpus.corpus_data_card(engine, TENANT)
         assert card["sampling_frame"]["with_reviewed_source_context"] == 0
