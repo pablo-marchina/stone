@@ -160,3 +160,39 @@ def test_stale_preview_cannot_double_claim(context):
     with pytest.raises(ConnectorError, match="BD_SCHEDULER_STOP_REVIEW_REQUIRED"):
         s._claim(store, TENANT, r)
     assert len(ledger(store)) == 1 and not calls
+
+
+def test_compact_local_preflight_never_echoes_token_or_deferred_names(monkeypatch):
+    import json
+    for name in s.EXECUTION_FLAGS:
+        monkeypatch.setenv(name,"1")
+    monkeypatch.setenv("TAPI_INSTAGRAM_ACCESS_TOKEN","secret-fixture-not-for-output")
+    plan={"selected_sources":["source-a"],"deferred":[{"username":"other","reason":"SOURCE_NOT_APPROVED"}],
+          "meta_auth":{"status":"NOT_CHECKED"},"meta_credential_expiry":{"status":"WITHIN_DECLARED_WINDOW","provider_verified":False},
+          "daily_request_budget":80,"conservative_reserved_pages_today":0,
+          "max_official_requests":4,"max_observations_to_persist":40}
+    report={"execution_blockers":[],"plans":{"history":plan},"proposed_mode":"history",
+            "preferred_mode":"history","slot":"2026-11-14T03:00:00+00:00","state":{"status":"NEVER_RUN"},
+            "tenant_coverage":{"unique_media_ids":605}}
+    result=s.local_preflight_summary(report)
+    assert result["status"]=="SCHEDULER_LOCAL_READY"
+    assert result["token_present"] and not result["provider_verified"] and not result["database_mutated"]
+    assert result["deferred_reason_counts"]=={"SOURCE_NOT_APPROVED":1}
+    assert "secret-fixture-not-for-output" not in json.dumps(result) and "other" not in json.dumps(result)
+    monkeypatch.delenv("TAPI_INSTAGRAM_ACCESS_TOKEN")
+    monkeypatch.delenv(s.EXECUTION_FLAGS[0])
+    report["execution_blockers"]=["BD_META_EXPIRY_CONFIGURATION_INVALID"]
+    blocked=s.local_preflight_summary(report)
+    assert blocked["status"]=="SCHEDULER_LOCAL_BLOCKED"
+    assert set(blocked["execution_blockers"])=={"BD_META_EXPIRY_CONFIGURATION_INVALID","BD_SCHEDULER_FLAGS_REQUIRED","BD_SCHEDULER_TOKEN_REQUIRED"}
+    assert report["execution_blockers"]==["BD_META_EXPIRY_CONFIGURATION_INVALID"]
+
+
+def test_cycle_summary_excludes_private_evidence():
+    result=s.cycle_summary({"mode":"history","status":"BATCH_COMPLETED",
+        "tenant_coverage_before":{"unique_media_ids":605},"tenant_coverage_after":{"unique_media_ids":606},
+        "batch":{"counts":{"new_records":1},"sources":[{"username":"source-a","new_records":1,
+                  "evidence":[{"caption":"private"}],"audit_all_traces_valid":True}]}})
+    assert result["counts"]["new_records"]==1
+    assert result["sources"]==[{"username":"source-a","new_records":1,"audit_all_traces_valid":True}]
+    assert result["scientific_admissions"]==0

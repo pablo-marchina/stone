@@ -12,7 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from tapi_gate0.connectors import ConnectorError
 from tapi_gate0.discovery_batch import BatchManifest
 from tapi_gate0.discovery_local_db import validate_existing_database_url
-from tapi_gate0.discovery_scheduler import acknowledge_stop, execute_tick, preview_tick
+from tapi_gate0.discovery_scheduler import acknowledge_stop, execute_tick, preview_tick, local_preflight_summary, cycle_summary
 from tapi_gate0.identity import IdentityFailure, IdentityStore
 from tapi_gate0.ingestion import IngestionStore
 from tapi_gate0.sa_store import engine_for
@@ -25,6 +25,7 @@ def main(argv=None):
     parser.add_argument("--manifest", type=Path)
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--execute", action="store_true")
+    group.add_argument("--check-ready", action="store_true", help="Compact local preflight; nonzero exit if blocked or no due sources")
     group.add_argument("--acknowledge-stop", type=int, metavar="EVENT_SEQ")
     parser.add_argument("--confirm-all-ingestion-stopped", action="store_true")
     parser.add_argument("--admin", default="admin")
@@ -62,6 +63,8 @@ def main(argv=None):
             store = IngestionStore(engine)
             if not args.execute:
                 report = preview_tick(store, tenant, manifest, viewer, **options)
+                if args.check_ready:
+                    report = local_preflight_summary(report)
             else:
                 if not os.getenv("TAPI_INSTAGRAM_ACCESS_TOKEN"):
                     raise ConnectorError("BD_SCHEDULER_TOKEN_REQUIRED", 403)
@@ -82,10 +85,13 @@ def main(argv=None):
                     stream.flush()
                     os.fsync(stream.fileno())
                 # Keep full cycle/evidence private; only a safe summary on stdout.
+                cycle = report.get("cycle")
                 report = {k: v for k, v in report.items() if k not in {"plans", "cycle"}}
+                if cycle is not None:
+                    report["cycle_summary"] = cycle_summary(cycle)
                 report["report_name"] = args.report_name
         print(json.dumps(report, ensure_ascii=False))
-        return 0 if report["status"] in {"SCHEDULER_PLAN_ONLY", "SCHEDULER_COMPLETED",
+        return 0 if report["status"] in {"SCHEDULER_PLAN_ONLY", "SCHEDULER_LOCAL_READY", "SCHEDULER_COMPLETED",
                                          "SCHEDULER_NO_DUE_SOURCES", "SCHEDULER_STOP_ACKNOWLEDGED"} else 4
     except (ConnectorError, IdentityFailure) as exc:
         code = exc.code

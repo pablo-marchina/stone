@@ -149,11 +149,57 @@ def _finish(store, tenant, seq, slot, result, cycle_key=None):
                        "result": result, "cycle_key": cycle_key})
 
 
+
+EXECUTION_FLAGS = ("TAPI_BD_SCHEDULER_ENABLED", "TAPI_BD_CONTINUOUS_ENABLED",
+                   "TAPI_BD_TECHNICAL_INGEST", "TAPI_OFFICIAL_METADATA_READS",
+                   "TAPI_ZERO_BILLING_CONFIRMED", "TAPI_META_REQUIRE_TOKEN_EXPIRY")
+
+
+def local_preflight_summary(report):
+    """Read-only CLI readiness, not a provider check or reservation."""
+    from collections import Counter
+    missing_flags = [name for name in EXECUTION_FLAGS if os.getenv(name) != "1"]
+    token_present = bool(os.getenv("TAPI_INSTAGRAM_ACCESS_TOKEN", "").strip())
+    blockers = list(report["execution_blockers"])
+    if missing_flags:
+        blockers.append("BD_SCHEDULER_FLAGS_REQUIRED")
+    if not token_present:
+        blockers.append("BD_SCHEDULER_TOKEN_REQUIRED")
+    plan = report["plans"][report["proposed_mode"] or report["preferred_mode"]]
+    if not report["proposed_mode"] and not blockers:
+        blockers.append("BD_SCHEDULER_NO_DUE_SOURCES")
+    return {"schema_version":"tapi-bd-scheduler-preflight.v1",
+            "status":"SCHEDULER_LOCAL_READY" if not blockers else "SCHEDULER_LOCAL_BLOCKED",
+            "slot":report["slot"],"state":report["state"],"proposed_mode":report["proposed_mode"],
+            "execution_blockers":blockers,"missing_flags":missing_flags,"token_present":token_present,
+            "meta_auth":plan["meta_auth"],"meta_credential_expiry":plan["meta_credential_expiry"],
+            "selected_sources":plan["selected_sources"],
+            "deferred_reason_counts":dict(Counter(r["reason"] for r in plan["deferred"])),
+            "daily_request_budget":plan["daily_request_budget"],
+            "reserved_pages_today":plan["conservative_reserved_pages_today"],
+            "max_official_requests":plan["max_official_requests"],
+            "max_observations_to_persist":plan["max_observations_to_persist"],
+            "tenant_coverage":report["tenant_coverage"],"provider_verified":False,
+            "external_data_accessed":False,"database_mutated":False,"scientific_admissions":0}
+
+
+def cycle_summary(cycle):
+    """Expose counts and outcome, never raw observations or provider payloads."""
+    batch = cycle.get("batch", {})
+    return {"mode":cycle["mode"],"status":cycle["status"],
+            "tenant_coverage_before":cycle["tenant_coverage_before"],
+            "tenant_coverage_after":cycle["tenant_coverage_after"],
+            "counts":batch.get("counts",{}),
+            "sources":[{k:r[k] for k in ("username","status","new_records","refreshed_records",
+                                         "pages_examined","audit_all_traces_valid") if k in r}
+                       for r in batch.get("sources",[])],
+            "failure_code":batch.get("failure_code"),
+            "scientific_admissions":0}
+
+
 def execute_tick(store, tenant, manifest, viewer, *, max_sources=3, daily_budget=80,
                  refresh_hours=24, token=None, http=None):
-    if os.getenv("TAPI_BD_SCHEDULER_ENABLED") != "1" or any(os.getenv(k) != "1" for k in (
-            "TAPI_BD_CONTINUOUS_ENABLED", "TAPI_BD_TECHNICAL_INGEST",
-            "TAPI_OFFICIAL_METADATA_READS", "TAPI_ZERO_BILLING_CONFIRMED", "TAPI_META_REQUIRE_TOKEN_EXPIRY")):
+    if any(os.getenv(k) != "1" for k in EXECUTION_FLAGS):
         raise ConnectorError("BD_SCHEDULER_FLAGS_REQUIRED", 403)
     report = preview_tick(store, tenant, manifest, viewer, max_sources=max_sources,
                           daily_budget=daily_budget, refresh_hours=refresh_hours)
