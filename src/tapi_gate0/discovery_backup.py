@@ -8,6 +8,8 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+import shutil
+import struct
 import tempfile
 import time
 
@@ -29,6 +31,39 @@ def _identifier(name: str) -> str:
     return '"' + name.replace('"', '""') + '"'
 
 
+def _table_fingerprint(conn, name):
+    """Compare logical values, not SQLite file layout or only row counts.
+
+    Row hashes are sorted as bytes (multiset, including duplicates), then
+    aggregated; no individual row, credential or row hash is returned.
+    """
+    hashes = []
+    for row in conn.execute("SELECT * FROM " + _identifier(name)):
+        h = hashlib.sha256()
+        for value in row:
+            if value is None:
+                tag, raw = b"N", b""
+            elif isinstance(value, bytes):
+                tag, raw = b"B", value
+            elif isinstance(value, str):
+                tag, raw = b"T", value.encode("utf-8")
+            elif isinstance(value, int):
+                tag, raw = b"I", str(value).encode("ascii")
+            elif isinstance(value, float):
+                tag, raw = b"F", struct.pack(">d", value)
+            else:
+                raise BackupError("BACKUP_UNSUPPORTED_SQLITE_VALUE")
+            h.update(tag)
+            h.update(len(raw).to_bytes(8, "big"))
+            h.update(raw)
+        hashes.append(h.digest())
+    total = hashlib.sha256(b"tapi-sqlite-table-multiset.v1")
+    total.update(len(hashes).to_bytes(8, "big"))
+    for digest in sorted(hashes):
+        total.update(digest)
+    return len(hashes), total.hexdigest()
+
+
 def _inventory(conn, tenant: str) -> dict:
     schema = conn.execute("SELECT type,name,tbl_name,sql FROM sqlite_master "
                           "WHERE name NOT LIKE 'sqlite_%' ORDER BY type,name").fetchall()
@@ -43,14 +78,16 @@ def _inventory(conn, tenant: str) -> dict:
     versions = [r[0] for r in conn.execute("SELECT version_num FROM alembic_version ORDER BY version_num")]
     if versions != ["0012_bd_history_checkpoints"]:
         raise BackupError("BACKUP_MIGRATION_NOT_EXPECTED")
-    counts = {name: conn.execute("SELECT count(*) FROM " + _identifier(name)).fetchone()[0]
-              for name in sorted(tables)}
+    fingerprints = {name: _table_fingerprint(conn, name) for name in sorted(tables)}
+    counts = {name: value[0] for name, value in fingerprints.items()}
+    table_hashes = {name: value[1] for name, value in fingerprints.items()}
     records, unique, profiles = conn.execute(
         "SELECT count(*),count(DISTINCT source_item_id),count(DISTINCT source_account_id) "
         "FROM ingestion_records WHERE tenant_id=? AND platform='instagram' AND metadata_only=1",
         (tenant,)).fetchone()
     return {"schema_sha256": hashlib.sha256(json.dumps(schema, ensure_ascii=False).encode()).hexdigest(),
             "migration_versions": versions, "table_counts": counts,
+            "table_content_sha256": table_hashes,
             "tenant_coverage": {"technical_records": records, "unique_media_ids": unique,
                                 "profiles_with_technical_records": profiles,
                                 "cross_source_duplicate_records": records - unique}}
@@ -101,6 +138,11 @@ def backup_and_restore_drill(source: Path, destination: Path, tenant: str, *, st
         with closing(_readonly(source)) as live:
             # Freeze one SQLite read snapshot for inventory and backup.
             live.execute("BEGIN")
+            pages = live.execute("PRAGMA page_count").fetchone()[0]
+            page_size = live.execute("PRAGMA page_size").fetchone()[0]
+            # Reserve room for both the retained copy and disposable restore.
+            if shutil.disk_usage(destination.parent).free < 2 * pages * page_size + 64 * 1024 * 1024:
+                raise BackupError("BACKUP_STORAGE_INSUFFICIENT")
             inventory = _inventory(live, tenant)
             _integrity(live)
             fd = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -123,11 +165,13 @@ def backup_and_restore_drill(source: Path, destination: Path, tenant: str, *, st
                     if _inventory(check, tenant) != inventory:
                         raise BackupError("RESTORE_INVENTORY_MISMATCH")
             restore_elapsed_ms = round((time.monotonic() - restore_start) * 1000)
-        return {"schema_version": "tapi-sqlite-backup-drill.v1", "status": "BACKUP_RESTORE_VERIFIED",
+        return {"schema_version": "tapi-sqlite-backup-drill.v2", "status": "BACKUP_RESTORE_VERIFIED",
                 "captured_at": captured_at, "backup_name": destination.name,
                 "backup_sha256": _sha256(destination), "backup_bytes": destination.stat().st_size,
                 "backup_elapsed_ms": backup_elapsed_ms, "restore_drill_elapsed_ms": restore_elapsed_ms,
                 "integrity_check": "ok", "foreign_key_check": "ok", "inventory_matches": True,
+                "logical_table_contents_match": True,
+                "logical_fingerprint_kind": "typed_row_multiset_sha256.v1",
                 "restore_target_disposable": True, "live_restore_performed": False,
                 "scope": "all_tenants_private_os_operator", "all_writers_stopped_attested": True,
                 "inventory": inventory, "external_data_accessed": False,
