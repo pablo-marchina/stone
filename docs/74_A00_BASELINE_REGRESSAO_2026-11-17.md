@@ -267,3 +267,60 @@ python -c "import os,json; from tapi_gate0.discovery_local_db import validate_ex
 Enviar resultados dos testes e JSONs (não copiar o banco).
 Sem repetir benchmark ou alterar dados. Próximo: A00.4 revisão
 PRs (merge só com autorização) e A01.3 Data Explorer integrado.
+
+## A00.3 / A01 — retorno de testes e Data Explorer integrado
+Operador: 29 PASS / 1 FAIL (30 testes), zero-spend PASS.
+Falha test_inventory_pagination_filters_and_snapshot_history:
+snapshot escolhido likes=10, esperado 20. Os testes de backup
+passaram; backup operacional ainda não foi reportado.
+Causa provável: resolução do relógio em gravações consecutivas
+gera observed_at igual; ordenação existente usa snapshot_id como
+desempate determinístico, que não expressa ordem de criação.
+O traceback não contém timestamps/IDs; empate original não
+comprovado. Não mudar seleção por quantidade de curtidas.
+Fixture agora usa relógio injetado, tempos distintos no passado
+e grants temporalmente coerentes. Novo teste força empate e
+confirma política comum observed_at DESC, snapshot_id DESC.
+API informa snapshot_order e latest_snapshot_timestamp_tie;
+nenhuma mudança na ordem do ranking, ingestão ou DB. Ordenação
+causal por evento/versionamento é trabalho futuro caso necessário;
+não inferir ordem cronológica em empate.
+
+A01.3 parcial (IMP-081/082): inventory.mjs integrado ao Dashboard
+existente, sem nova página/login, token em memória. Link âncora
+Data Explorer, carregamento após login admin/researcher/service,
+filtros allowlist plataforma/formato/setor/conta/handle ou ID,
+25 itens por página, detalhes e snapshots paginados, estado vazio,
+erro, negado, carregamento e limpeza no logout. Resposta obsoleta
+descartada por epoch e sessão. Proteção adicional no wrapper api:
+401 de token anterior não revoga sessão mais nova. Sem HTML
+arbitrário, texto de legenda, player, links externos, ranking,
+admissão ou novas operações. Zero diferente de indisponível.
+Empate temporal indicado no detalhe. Não há promoção de
+metadados para evidência científica. 1 novo teste Python,
+4 Node; não executados pelo assistente. UI não verificada no browser.
+Sem migrações, escrita operacional ou merge.
+
+### Próxima validação
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+conda activate tapi-asr
+python -m pytest -q tests/test_discovery_backup.py tests/test_corpus_inventory.py tests/test_a00_baseline.py tests/test_a00_inspect_report.py
+node --test tests/test_inventory_ui.mjs tests/test_evidence_lab_ui.mjs
+node --check src/tapi_gate0/web/main.mjs
+node --check src/tapi_gate0/web/inventory.mjs
+python scripts/verify_zero_spend.py
+```
+Esperado 31 Python, 11 Node nos dois arquivos. Se qualquer
+falha, preservar logs; não executar backup se testes falharem.
+Com todos os testes PASS e writers parados, executar o backup v2
+e consulta agregada conforme comandos anteriores. Só depois
+reiniciar Uvicorn local com configuração existente, abrir /app/,
+login habitual, clicar Data Explorer, selecionar detalhes e
+testar filtros/paginação/logout. Validar contagens reais, não
+assumir que todos os 1065 registros têm grant atual/registro.
+A00.3 aguarda execução real, A00.4 revisão/merge pendente,
+A01.4 ligação de avaliações/evidências, A01.5 contrato compartilhado,
+A02 autorização por ativo continuam pendentes.
