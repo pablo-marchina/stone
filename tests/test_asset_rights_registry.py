@@ -195,3 +195,27 @@ def test_nonempty_registry_downgrade_refused(tmp_path,monkeypatch):
             assert db.scalar(select(func.count()).select_from(authorities))==1
     finally:
         engine.dispose()
+
+
+def test_vault_with_real_signed_registry_and_revocation(registry,tmp_path):
+    from tapi_gate0.asset_vault import AssetVault
+    f=registry
+    data=b"\x00\x00\x00\x0cftypisom"
+    target=f.target.model_copy(update={"sha256":sha256(data).hexdigest()})
+    retention=Permission(operation="retain",purpose="research_analysis",field="video")
+    f.svc.provision(f.anchor,TENANT,"instagram",f.rv)
+    f.svc.register_grant(f.anchor,f.grant(target=target,permissions=(retention,PERMISSION)),
+        verified_approval_digest="b"*64)
+    root=tmp_path/"vault"
+    root.mkdir(mode=0o700)
+    vault=AssetVault(root,b"v"*32,f.svc)
+    kwargs={"mime":"video/mp4","purpose":"research_analysis"}
+    assert vault.retain(f.anchor,"grant.fixture",target,data=data,**kwargs)["status"]=="retained"
+    assert vault.read_for_processing(f.anchor,"grant.fixture",target,**kwargs)==data
+    revoked=f.state(2,revoked_asset_ids=(target.asset_id,))
+    f.svc.advance(f.anchor,TENANT,"instagram",revoked)
+    with pytest.raises(AssetRightsDenied,match="ROLLBACK"):
+        vault.read_for_processing(f.anchor,"grant.fixture",target,**kwargs)
+    with pytest.raises(AssetRightsDenied,match="ASSET_RIGHTS_REVOKED"):
+        vault.read_for_processing(f.pin(revoked),"grant.fixture",target,**kwargs)
+    assert len(list(root.iterdir()))==1  # Physical purge remains separate.
