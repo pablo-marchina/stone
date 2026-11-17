@@ -15,6 +15,7 @@ from sqlalchemy import and_, select
 
 from .connectors import ConnectorError
 from .corpus import corpus_profiles
+from .corpus_rubric_read import read_stored_rubric
 from .domain import ContentItem, Creator, MetricsCreate
 from .identity import IdentityFailure, Principal, WRITE_RESEARCH
 from .ingestion import ingestion_records, source_grants
@@ -203,6 +204,7 @@ def get_inventory_item(engine, tenant, content_id, *, snapshot_limit=100, snapsh
         history = snapshots[snapshot_offset:snapshot_offset + snapshot_limit]
         return {**_scope(now), "item": _entry(row, post, creator, snapshots, now),
                 "snapshots": [_metric(m) for m in history],
+                "stored_rubric": read_stored_rubric(db, tenant, post, now),
                 "snapshot_offset": snapshot_offset, "snapshot_limit": snapshot_limit,
                 "next_snapshot_offset": snapshot_offset + len(history) if snapshot_offset + len(history) < len(snapshots) else None}
 
