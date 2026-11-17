@@ -80,7 +80,7 @@ def main(argv=None):
                          "caption_sha256": saved[cid]["caption_sha256"]}
             if a.editorial:
                 row.update(format=post.media_type.value, published_at=post.published_at.isoformat(),
-                           sector=sampling_sector(source.sampling_stratum),
+                           sector=sampling_sector(source.sampling_stratum), caption_chars=len(post.caption),
                            **caption_features(post.caption, TOPICS, CTA))
             rows.append(row)
         ready = readiness_report(engine, tenant, frame, viewer, _record_observer=observe)
@@ -107,6 +107,8 @@ def main(argv=None):
             editorial = analyze_editorial(rows)
             editorial_private = editorial.pop("private_rankings")
             result["editorial"] = editorial
+            from tapi_gate0.discovery_rubric_coverage import rubric_coverage
+            result["rubric_coverage"] = rubric_coverage(rows)
             result["status"] = "EXPLORATORY_EDITORIAL_COMPLETED"
         agent_private = {}
         if a.agent_preview:
