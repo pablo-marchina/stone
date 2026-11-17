@@ -144,6 +144,38 @@ def extract_ocr(row,root,binary,tessdata):
     return result,observations
 
 
+def validate_asset_binding(row):
+    fusion.validate_fragments(row["media_sha256"],row["fragments"])
+    if (row["caption_sha256"]!=fusion.digest(row["caption"])
+            or row["audio"]["pcm_sha256"]!=row["decoded_pcm_sha256"]
+            or row["vad"]["pcm_sha256"]!=row["decoded_pcm_sha256"]
+            or [frame["timestamp_s"] for frame in row["ocr_frames"]]!=[0,3]):
+        raise fusion.FusionError("FUSION_SOURCE_BINDING_INVALID")
+    for f in row["fragments"]:
+        loc=f["locator"]
+        if f["modality"]=="caption":
+            valid=f["text"]==row["caption"] and loc["caption_sha256"]==row["caption_sha256"]
+        elif f["modality"]=="audio":
+            valid=loc["source_pcm_sha256"]==row["decoded_pcm_sha256"] and any(
+                seg["text"]==f["text"] and seg["text_sha256"]==f["text_sha256"]
+                and seg["start_s"]==loc["start_s"] and seg["end_s"]==loc["end_s"]
+                and seg["chunk_pcm_sha256"]==loc["chunk_pcm_sha256"]
+                for seg in row["audio"]["segments"])
+        else:
+            valid=any(frame["media_sha256"]==row["media_sha256"]
+                and frame["timestamp_s"]==loc["timestamp_s"]
+                and frame["frame_sha256"]==loc["frame_sha256"]
+                and frame["frame_png_sha256"]==loc["frame_png_sha256"]
+                and frame["view_sha256"]==loc["view_sha256"]
+                and frame["words"]==loc["words"]
+                and f["text"]==" ".join(w["text"] for w in frame["words"])
+                and f["semantic_eligible"]==frame["complete_primary_and_supporting_sequence_retained"]
+                for frame in row["ocr_frames"])
+        if not valid:
+            raise fusion.FusionError("FUSION_SOURCE_BINDING_INVALID")
+    return True
+
+
 def run_shared_fixture_benchmark(model_dir,tessdata_dir):
     os.environ.update(HF_HUB_OFFLINE="1",TRANSFORMERS_OFFLINE="1",HF_HUB_DISABLE_TELEMETRY="1")
     asr.require_temp_capacity()
@@ -207,6 +239,7 @@ def run_shared_fixture_benchmark(model_dir,tessdata_dir):
                 row["fragments"].append(fusion.fragment(row["media_sha256"],"audio",s["text"],
                     {"start_s":s["start_s"],"end_s":s["end_s"],"source_pcm_sha256":s["source_pcm_sha256"],
                      "chunk_pcm_sha256":s["chunk_pcm_sha256"],"timestamp_kind":audio["timestamp_kind"]}))
+            row["asset_binding_verified"]=validate_asset_binding(row)
             row["arms"]={name:fusion.fuse(row["media_sha256"],row["fragments"],modalities)
                          for name,modalities in fusion.ARMS.items()}
     del model
@@ -214,7 +247,7 @@ def run_shared_fixture_benchmark(model_dir,tessdata_dir):
     if asr.verify_checkpoint(model_dir,"medium")!=checkpoint:
         raise asr.ASRError("ASR_CHECKPOINT_CHANGED")
     scores=fusion.evaluate(prepared)
-    integrity=all(r["source_pixels_and_pcm_verified"] and r["temporal_passed"] for r in prepared)
+    integrity=all(r["source_pixels_and_pcm_verified"] and r["asset_binding_verified"] and r["temporal_passed"] for r in prepared)
     negatives=[r for r,c in zip(prepared,CASES) if not c[2]]
     negative_calls=sum(r["audio"]["asr_calls"] for r in negatives)
     gate=scores["engineering_gate_passed"] and integrity and negative_calls==0 and len(prepared)==len(CASES)
