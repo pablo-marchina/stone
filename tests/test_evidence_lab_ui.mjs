@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {stateCounts,armRows} from '../src/tapi_gate0/web/evidence_lab.mjs';
+import {stateCounts,armRows,initEvidenceLab} from '../src/tapi_gate0/web/evidence_lab.mjs';
 
 test('candidate, measurement, abstention and unassessed stay separate',()=>{
   assert.deepEqual(stateCounts({a:{state:'candidate'},b:{state:'measurement_only'},
@@ -29,4 +29,31 @@ test('dashboard exposes both Studio destinations and Studio has return and evide
   assert.match(studio,/href="#studio-canvas"/);
   assert.match(studio,/id="studio-canvas"/);
   assert.doesNotMatch(dashboard,/Somente atividades sintéticas aparecem aqui/);
+});
+
+test('login shortcut and consult action reflect Studio authentication',()=>{
+  const nodes=new Map();
+  const previous=globalThis.document;
+  globalThis.document={getElementById(id){
+    if(!nodes.has(id))nodes.set(id,{hidden:false,disabled:false,textContent:'',
+      replaceChildren(){},addEventListener(){},focus(){}});
+    return nodes.get(id);
+  }};
+  try{
+    let token=null;
+    const lab=initEvidenceLab({api:()=>{throw Error('unexpected request');},getToken:()=>token});
+    assert.equal(nodes.get('evidence-refresh').disabled,true);
+    assert.equal(nodes.get('evidence-login-link').hidden,false);
+    token='test-session';lab.controls();
+    assert.equal(nodes.get('evidence-refresh').disabled,false);
+    assert.equal(nodes.get('evidence-login-link').hidden,true);
+    assert.match(nodes.get('evidence-status').textContent,/Sessão do Studio ativa/);
+    token=null;lab.reset();
+    assert.equal(nodes.get('evidence-refresh').disabled,true);
+    assert.equal(nodes.get('evidence-login-link').hidden,false);
+    assert.match(nodes.get('evidence-status').textContent,/Entre no Creative Studio/);
+  }finally{
+    if(previous===undefined)delete globalThis.document;
+    else globalThis.document=previous;
+  }
 });
