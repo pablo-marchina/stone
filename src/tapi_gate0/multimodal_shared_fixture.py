@@ -116,6 +116,7 @@ def build_decode_fixture(case,root,ffmpeg,espeak):
 def extract_ocr(row,root,binary,tessdata):
     from PIL import Image
     result=[]
+    observations=[]
     for timestamp,raw in row["frames"]:
         stem=row["case_id"]+"_"+str(timestamp)
         path=root/(stem+".png")
@@ -133,10 +134,14 @@ def extract_ocr(row,root,binary,tessdata):
                  "frame_sha256":_sha(raw),"frame_png_sha256":source_hash,
                  "view_sha256":provenance["view_sha256"],"words":words,
                  "complete_text_verified":False}
+        observations.append({**locator,"media_sha256":row["media_sha256"],
+                             "primary_words":first,"supporting_words":second,
+                             "complete_primary_and_supporting_sequence_retained":complete,
+                             "observation_status":"candidate" if words else "abstained"})
         if words:
             result.append(fusion.fragment(row["media_sha256"],"ocr"," ".join(w["text"] for w in words),
                 locator,semantic_eligible=complete))
-    return result
+    return result,observations
 
 
 def run_shared_fixture_benchmark(model_dir,tessdata_dir):
@@ -162,7 +167,7 @@ def run_shared_fixture_benchmark(model_dir,tessdata_dir):
         for case in CASES:
             with asr.asr_stage("shared_fixture",case[0]):
                 row=build_decode_fixture(case,root,binaries["ffmpeg"],binaries["espeak-ng"])
-                fragments=extract_ocr(row,root,binaries["tesseract"],tessdata_dir)
+                fragments,row["ocr_frames"]=extract_ocr(row,root,binaries["tesseract"],tessdata_dir)
                 if row["caption"]:
                     fragments.append(fusion.fragment(row["media_sha256"],"caption",row["caption"],
                         {"caption_sha256":row["caption_sha256"],"source":"authored_fixture_caption"}))
@@ -171,6 +176,8 @@ def run_shared_fixture_benchmark(model_dir,tessdata_dir):
                 prepared.append(row)
         if ocr.verify_tessdata(tessdata_dir)!=languages:
             raise fusion.FusionError("FUSION_LANGUAGE_DATA_CHANGED")
+    if len({r["media_sha256"] for r in prepared})!=len(prepared):
+        raise fusion.FusionError("FUSION_DUPLICATE_MEDIA_ASSET")
     with asr.asr_stage("vad"):
         get_vad_model.cache_clear()
         try:
