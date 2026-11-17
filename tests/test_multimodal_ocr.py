@@ -77,3 +77,20 @@ def test_local_ocr_integration_when_installed():
     assert len(report["cases"])==6 and report["real_media_processed"]==0
     # Quality failures are measured and recorded by CLI, not hidden as test failures.
     assert isinstance(report["engineering_gate_passed"],bool)
+
+
+def test_explicit_tsv_renderer_without_configs(monkeypatch,tmp_path):
+    calls=[]
+    def fake(binary,args,**kwargs):
+        calls.append(args)
+        return HEADER+b"5\t12\t20\t50\t32\t96.1\tTexto\n"
+    monkeypatch.setattr(ocr,"_run",fake)
+    rows=ocr.parse_tsv(ocr.ocr_tsv("tesseract",tmp_path/"fixture.png",tmp_path))
+    assert rows[0]["text"]=="Texto"
+    assert calls[0][-4:]==["-c","tessedit_create_tsv=1","-c","tessedit_create_txt=0"]
+    assert "tsv" not in calls[0]
+
+
+def test_plain_text_still_rejected():
+    with pytest.raises(ocr.OCRError,match="OCR_INVALID_TSV"):
+        ocr.parse_tsv(b"Organize suas vendas\r\n")
