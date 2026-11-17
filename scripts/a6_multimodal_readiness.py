@@ -33,10 +33,14 @@ def main(argv=None):
     mode.add_argument("--synthetic-temporal",action="store_true")
     mode.add_argument("--synthetic-asr",action="store_true")
     p.add_argument("--model-dir",type=Path,help="Pinned local ASR checkpoint directory only")
+    p.add_argument("--asr-candidate",choices=("small","medium"),default="small")
+    p.add_argument("--asr-suite",choices=("baseline","challenge"),default="baseline")
     p.add_argument("--report-name")
     a=p.parse_args(argv)
     try:
         from tapi_gate0.multimodal_asr import ASRError,verify_checkpoint,run_asr_fixture_benchmark
+        if (a.asr_candidate!="small" or a.asr_suite!="baseline") and not (a.synthetic_asr or (a.check_ready and a.model_dir and a.asr_suite=="baseline")):
+            raise ASRError("ASR_MODEL_MODE_REQUIRED")
         if a.model_dir and not (a.check_ready or a.synthetic_asr):
             raise ASRError("ASR_MODEL_MODE_REQUIRED")
         if a.check_ready:
@@ -44,7 +48,7 @@ def main(argv=None):
                 raise TemporalError("TEMPORAL_REPORT_MODE_REQUIRED")
             result=readiness()
             if a.model_dir:
-                result["asr_checkpoint"]=verify_checkpoint(a.model_dir)
+                result["asr_checkpoint"]=verify_checkpoint(a.model_dir,a.asr_candidate)
                 result["asr_checkpoint_verified"]=True  # published weight digest, not all companion hashes
             print(json.dumps(result))
             return 0
@@ -62,7 +66,10 @@ def main(argv=None):
         if a.synthetic_asr:
             if a.model_dir is None:
                 raise ASRError("ASR_LOCAL_MODEL_DIRECTORY_REQUIRED")
-            report=run_asr_fixture_benchmark(a.model_dir)
+            if a.asr_candidate=="small" and a.asr_suite=="baseline":
+                report=run_asr_fixture_benchmark(a.model_dir)
+            else:
+                report=run_asr_fixture_benchmark(a.model_dir,candidate=a.asr_candidate,suite=a.asr_suite)
         else:
             report=run_temporal_fixture_benchmark()
         fd=os.open(target,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
