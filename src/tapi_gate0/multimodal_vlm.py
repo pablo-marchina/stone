@@ -219,7 +219,7 @@ def metrics(rows):
 
 
 @contextmanager
-def local_server(executable,model_dir):
+def local_server(executable,model_dir,*,schema=SCHEMA,prompt=PROMPT):
     import httpx
     with tempfile.TemporaryDirectory(prefix="tapi-vlm-server-") as temp:
         root=Path(temp)
@@ -265,9 +265,9 @@ def local_server(executable,model_dir):
                     encoded=base64.b64encode(image).decode("ascii")
                     response=client.post("/v1/chat/completions",json={"model":alias,"temperature":0,
                         "seed":20261117,"max_tokens":64,"stream":False,
-                        "response_format":{"type":"json_object","schema":SCHEMA},
+                        "response_format":{"type":"json_object","schema":schema},
                         "messages":[{"role":"user","content":[{"type":"image_url","image_url":{"url":"data:image/png;base64,"+encoded}},
-                                                                {"type":"text","text":PROMPT}]}]})
+                                                                {"type":"text","text":prompt}]}]})
                     response.raise_for_status()
                     if len(response.content)>100_000:
                         raise VLMError("VLM_RESPONSE_SIZE_INVALID")
