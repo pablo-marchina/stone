@@ -195,6 +195,8 @@ def from_environment():
     url=os.environ.get("TAPI_DATABASE_URL")
     if not url:raise RuntimeError("TAPI_DATABASE_URL is required for secure mode")
     lab_config=config_from_env(os.environ)
+    if lab_config is not None and os.environ.get("TAPI_ALLOW_HTTP_LOOPBACK")!="1":
+        raise ValueError("EVIDENCE_LAB_LOOPBACK_MODE_REQUIRED")
     lab=EvidenceLab(lab_config) if lab_config is not None else None
     return create_secure_app(url,initialize_schema=False,
         allow_http_local=os.environ.get("TAPI_ALLOW_HTTP_LOOPBACK")=="1",evidence_lab=lab)
