@@ -50,3 +50,22 @@
 .studio-nav{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:10px}.studio-nav a{display:inline-flex;padding:8px 12px;border:1px solid currentColor;border-radius:6px;text-decoration:none}.studio-nav a:hover{text-decoration:underline}.studio-nav a:focus-visible{outline:3px solid #166647;outline-offset:3px}#evidence-lab,#studio-canvas{scroll-margin-top:20px}
 
 .evidence-login-link{display:inline-block;margin:0 0 16px;padding:10px 14px;border:1px solid #166647;border-radius:6px;color:#166647;font-weight:700;text-decoration:none}.evidence-login-link[hidden]{display:none}.evidence-login-link:hover{text-decoration:underline}.evidence-login-link:focus-visible{outline:3px solid #166647;outline-offset:3px}#studio-access{scroll-margin-top:20px}
+
+/* Readable evidence cards; raw JSON stays available inside native disclosure. */
+.evidence-field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.evidence-field-grid .evidence-field{margin:0;padding:14px;border-color:#d0ddd4;border-radius:9px}
+.evidence-field-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.evidence-field-heading h4{margin:0;font-size:.9rem}
+.evidence-value{font-size:1.15rem;font-weight:700;margin:10px 0 5px;color:#17553b}
+.evidence-field .hint{font-size:.78rem;margin:6px 0 10px}
+.evidence-state.candidate{color:#166647;background:#edf7ef}.evidence-state.measurement_only{color:#435869;background:#eff4f8}
+.evidence-state.abstained{color:#855015;background:#fff4df}.evidence-state.not_assessed{color:#59655e;background:#f3f5f3}
+.evidence-support{margin:8px 0;background:#f2f7f3;padding:9px;border-left:3px solid #74a688;border-radius:4px;font-size:.8rem}
+.evidence-support blockquote{margin:6px 0;font-size:.85rem;line-height:1.5}.evidence-support p{margin:6px 0}
+.evidence-technical{margin:10px 0 0;min-width:0;font-size:.77rem;color:#53675a}
+.evidence-technical summary{display:list-item;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.evidence-technical pre{color:#20332c;background:#f5f7f5;padding:8px;border-radius:5px;font-size:11px}
+.evidence-gates{display:flex;flex-wrap:wrap;gap:8px}.evidence-provenance p,.evidence-case-counts{font-size:.8rem;line-height:1.5}
+.evidence-case-counts{margin:12px 0;color:#53675a}.evidence-warning{color:#855015;font-size:.8rem}
+.evidence-table th[scope=row]{font-weight:500}.evidence-table th,.evidence-table td{color:#20332c}
+@media(max-width:1150px){.evidence-field-grid{grid-template-columns:1fr}}
