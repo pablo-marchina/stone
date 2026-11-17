@@ -25,6 +25,7 @@ from .ingestion import IngestionStore, ConnectorError, router_for_ingestion
 from .discovery_ingestion import router_for_discovery_ingestion
 from .discovery_technical import router_for_discovery_technical
 from .corpus import router_for_corpus
+from .corpus_inventory import router_for_inventory
 from .ui import router_for_authenticated_view
 from .agent_api_e1 import router_for_evidence_agent
 from .studio_e1 import StudioStore  # registers studio tables before schema initialization
@@ -113,6 +114,7 @@ def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_ht
     app.include_router(router_for_discovery_ingestion(identity,ingestion))
     app.include_router(router_for_discovery_technical(identity,ingestion))
     app.include_router(router_for_corpus(identity,engine))
+    app.include_router(router_for_inventory(current_principal,engine))
     app.include_router(router_for_evidence_agent(identity,domain))
     app.include_router(router_for_studio(identity,StudioStore(engine)))
     app.include_router(router_for_lab(current_principal,evidence_lab))
