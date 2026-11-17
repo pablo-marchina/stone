@@ -1,5 +1,6 @@
 import { SSEParser } from './events.mjs';
-import { initInventory } from './inventory.mjs?v=a01-replay-1';
+import { initInventory } from './inventory.mjs?v=a04-ranking-1';
+import { initRanking } from './ranking.mjs?v=a04-ranking-1';
 
 const $ = id => document.getElementById(id);
 const state = { token: null, principal: null, overview: null, controller: null, events: new Map(), connected: false, retry: 0, refreshPending: false, generation: 0 };
@@ -55,6 +56,7 @@ async function login(evt) {
     state.principal = await api('/v1/auth/me');
     authenticatedView(true);
     inventory.reset();
+  ranking.reset();
     void inventory.load();
     await refresh();
     void connectEvents();
@@ -68,6 +70,7 @@ function logout() {
   state.token = null; state.principal = null; state.overview = null; state.events.clear(); state.retry = 0;
   $('kpis').replaceChildren(); $('events').replaceChildren(); $('posts-table').replaceChildren(); $('pipeline-graph').replaceChildren();
   inventory.reset();
+  ranking.reset();
   authenticatedView(false); setConnection(false);
   if (oldToken) void fetch('/v1/auth/logout', { method:'POST', headers:{Authorization:`Bearer ${oldToken}`} }).catch(() => {});
 }
@@ -163,6 +166,7 @@ async function connectEvents() {
   }
 }
 const inventory = initInventory({api,getPrincipal:()=>state.principal});
+const ranking = initRanking({api,getPrincipal:()=>state.principal,openDetail:id=>inventory.openDetail(id)});
 $('login-form').addEventListener('submit',login);
 $('logout').addEventListener('click',logout);
 $('refresh').addEventListener('click',()=>refresh().catch(err=>{$('footer-status').textContent=err.message;}));
