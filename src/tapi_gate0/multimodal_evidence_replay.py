@@ -137,6 +137,7 @@ def compose(row,observations,modalities):
     if len(set(modalities))!=len(modalities) or not set(modalities)<=set(MODALITIES):
         fail("EVIDENCE_ARM_INVALID")
     fragments=row["fragments"]
+    fusion.validate_fragments(row["media_sha256"],fragments)
     fields={f:state(reason=REQUIREMENTS[f],state_name="not_assessed") for f in RUBRIC_FIELD_NAMES}
     text_modalities=tuple(m for m in modalities if m in fusion.MODALITIES)
     fields["tema_principal"]={**fusion.field_candidate("tema_principal",fragments,text_modalities),"measurement":None,"canonical":False}
@@ -157,7 +158,8 @@ def measurements(row,fields):
         measurement={"characters":len(row["caption"]),"caption_sha256":row["caption_sha256"]})
     fields["hook_primeiros_3s"]=state(reason="OPENING_OBSERVATIONS_NOT_SEMANTIC_HOOK",state_name="measurement_only",
         measurement={"opening_samples":opening,"timestamp_kind":temporal["timestamp_kind"],
-            "audio_segments":[s for s in row["audio"]["segments"] if s["start_s"]<3],
+            "audio_segments_overlapping_opening":[s for s in row["audio"]["segments"] if s["start_s"]<3],
+            "audio_segment_text_not_clipped_at_3s":True,
             "ocr_frames":[f for f in row["ocr_frames"] if f["timestamp_s"]<3]})
     fields["ritmo_cortes_0a10"]=state(reason="TRANSITION_COUNT_NOT_CALIBRATED_SCORE",state_name="measurement_only",
         measurement={"transition_candidates":temporal["transition_candidates"],"count":temporal["transition_candidate_count"],
