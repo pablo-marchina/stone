@@ -248,14 +248,15 @@ def run_asr_fixture_benchmark(model_dir,candidate="small",suite="baseline"):
     # Set before importing the model library. Local directory and tokenizer
     # are mandatory; no model ID is passed to the inference constructor.
     os.environ.update(HF_HUB_OFFLINE="1",TRANSFORMERS_OFFLINE="1",HF_HUB_DISABLE_TELEMETRY="1")
-    if version("faster-whisper")!=ASR_VERSION:
-        raise ASRError("ASR_RUNTIME_VERSION_MISMATCH")
-    espeak,ffmpeg=shutil.which("espeak-ng"),shutil.which("ffmpeg")
-    if not espeak or not ffmpeg:
-        raise ASRError("ASR_LOCAL_BINARY_UNAVAILABLE")
-    versions={name:version(name) for name in ("faster-whisper","ctranslate2","numpy","tokenizers","huggingface-hub")}
-    versions["espeak-ng"]=_run(espeak,["--version"],output_limit=100000).decode("utf-8","replace").splitlines()[0]
-    versions["ffmpeg"]=_run(ffmpeg,["-version"],output_limit=100000).decode("utf-8","replace").splitlines()[0]
+    with asr_stage("runtime_preflight"):
+        if version("faster-whisper")!=ASR_VERSION:
+            raise ASRError("ASR_RUNTIME_VERSION_MISMATCH")
+        espeak,ffmpeg=shutil.which("espeak-ng"),shutil.which("ffmpeg")
+        if not espeak or not ffmpeg:
+            raise ASRError("ASR_LOCAL_BINARY_UNAVAILABLE")
+        versions={name:version(name) for name in ("faster-whisper","ctranslate2","numpy","tokenizers","huggingface-hub")}
+        versions["espeak-ng"]=_run(espeak,["--version"],output_limit=100000).decode("utf-8","replace").splitlines()[0]
+        versions["ffmpeg"]=_run(ffmpeg,["-version"],output_limit=100000).decode("utf-8","replace").splitlines()[0]
     with asr_stage("model_load"):
         from faster_whisper import WhisperModel
         started=perf_counter()
