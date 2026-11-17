@@ -26,6 +26,7 @@ from .discovery_ingestion import router_for_discovery_ingestion
 from .discovery_technical import router_for_discovery_technical
 from .corpus import router_for_corpus
 from .corpus_inventory import router_for_inventory
+from .corpus_caption_replay import CaptionReplay, config_from_env as replay_config_from_env
 from .ui import router_for_authenticated_view
 from .agent_api_e1 import router_for_evidence_agent
 from .studio_e1 import StudioStore  # registers studio tables before schema initialization
@@ -41,7 +42,7 @@ def _token(request:Request):
     return token
 
 
-def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_http_local:bool=False, evidence_lab:EvidenceLab|None=None) -> FastAPI:
+def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_http_local:bool=False, evidence_lab:EvidenceLab|None=None, caption_replay_config=None) -> FastAPI:
     engine=engine_for(database_url)
     domain=SqlDomainStore(engine)
     if initialize_schema:
@@ -114,7 +115,10 @@ def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_ht
     app.include_router(router_for_discovery_ingestion(identity,ingestion))
     app.include_router(router_for_discovery_technical(identity,ingestion))
     app.include_router(router_for_corpus(identity,engine))
-    app.include_router(router_for_inventory(current_principal,engine))
+    if caption_replay_config is not None and not allow_http_local:
+        raise ValueError('CAPTION_REPLAY_LOOPBACK_MODE_REQUIRED')
+    caption_replay=CaptionReplay(engine,caption_replay_config) if caption_replay_config is not None else None
+    app.include_router(router_for_inventory(current_principal,engine,caption_replay))
     app.include_router(router_for_evidence_agent(identity,domain))
     app.include_router(router_for_studio(identity,StudioStore(engine)))
     app.include_router(router_for_lab(current_principal,evidence_lab))
@@ -201,4 +205,5 @@ def from_environment():
         raise ValueError("EVIDENCE_LAB_LOOPBACK_MODE_REQUIRED")
     lab=EvidenceLab(lab_config) if lab_config is not None else None
     return create_secure_app(url,initialize_schema=False,
-        allow_http_local=os.environ.get("TAPI_ALLOW_HTTP_LOOPBACK")=="1",evidence_lab=lab)
+        allow_http_local=os.environ.get("TAPI_ALLOW_HTTP_LOOPBACK")=="1",evidence_lab=lab,
+        caption_replay_config=replay_config_from_env(os.environ))
