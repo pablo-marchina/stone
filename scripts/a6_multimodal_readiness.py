@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import tempfile
 
 from tapi_gate0.multimodal_temporal import TemporalError, run_temporal_fixture_benchmark
 from tapi_gate0.policy import Operation, decide
@@ -18,6 +19,8 @@ def readiness():
     modules={name:importlib.util.find_spec(name) is not None for name in ("cv2","numpy","faster_whisper","transformers")}
     return {"status":"MULTIMODAL_LOCAL_READINESS","binaries":binaries,"modules":modules,
             "synthetic_temporal_ready":binaries["ffmpeg"] and binaries["ffprobe"],
+            "free_bytes":{"repository_volume":shutil.disk_usage(ROOT).free,
+                          "temporary_volume":shutil.disk_usage(tempfile.gettempdir()).free},
             "asr_checkpoint_verified":False,"vlm_checkpoint_verified":False,
             "asr_evaluated":False,"vlm_evaluated":False,
             "real_media_processing_allowed":False,
@@ -36,9 +39,10 @@ def main(argv=None):
     p.add_argument("--tessdata-dir",type=Path,help="Local OCR language files only")
     p.add_argument("--model-dir",type=Path,help="Pinned local ASR checkpoint directory only")
     p.add_argument("--asr-candidate",choices=("small","medium"),default="small")
-    p.add_argument("--asr-suite",choices=("baseline","challenge"),default="baseline")
+    p.add_argument("--asr-suite",choices=("baseline","challenge","guarded"),default="baseline")
     p.add_argument("--report-name")
     a=p.parse_args(argv)
+    stage="arguments"
     try:
         from tapi_gate0.multimodal_asr import ASRError,verify_checkpoint,run_asr_fixture_benchmark
         from tapi_gate0.multimodal_ocr import OCRError,verify_tessdata,run_ocr_fixture_benchmark
@@ -51,9 +55,12 @@ def main(argv=None):
         if a.check_ready:
             if a.report_name:
                 raise TemporalError("TEMPORAL_REPORT_MODE_REQUIRED")
+            stage="readiness"
             result=readiness()
             if a.model_dir:
+                stage="checkpoint_preflight"
                 result["asr_checkpoint"]=verify_checkpoint(a.model_dir,a.asr_candidate)
+                result["free_bytes"]["model_volume"]=shutil.disk_usage(a.model_dir).free
                 result["asr_checkpoint_verified"]=True  # published weight digest, not all companion hashes
             if a.tessdata_dir:
                 result["ocr_language_data_sha256"]=verify_tessdata(a.tessdata_dir)
@@ -64,13 +71,17 @@ def main(argv=None):
             raise TemporalError("TEMPORAL_SYNTHETIC_POLICY_DENIED")
         if not a.report_name or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,100}\.json",a.report_name):
             raise TemporalError("TEMPORAL_PRIVATE_REPORT_NAME_REQUIRED")
+        stage="report_storage_preflight"
         private=ROOT/"artifacts"/"private"
         if private.resolve()!=private.absolute():
             raise TemporalError("TEMPORAL_PRIVATE_ROOT_REDIRECTED")
         private.mkdir(mode=0o700,parents=True,exist_ok=True)
+        if shutil.disk_usage(private).free<64*1024*1024:
+            raise TemporalError("TEMPORAL_REPORT_STORAGE_INSUFFICIENT")
         target=private/a.report_name
         if target.exists() or target.is_symlink():
             raise TemporalError("TEMPORAL_PRIVATE_REPORT_EXISTS")
+        stage="benchmark"
         if a.synthetic_asr:
             if a.model_dir is None:
                 raise ASRError("ASR_LOCAL_MODEL_DIRECTORY_REQUIRED")
@@ -84,12 +95,15 @@ def main(argv=None):
             report=run_ocr_fixture_benchmark(a.tessdata_dir)
         else:
             report=run_temporal_fixture_benchmark()
+        stage="report_write"
         fd=os.open(target,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
         with os.fdopen(fd,"w",encoding="utf-8") as stream:
             json.dump(report,stream,ensure_ascii=False,indent=2)
+        stage="summary"
         summary={k:v for k,v in report.items() if k!="cases"}
         if a.synthetic_asr:
-            summary["case_summary"]=[{k:r[k] for k in ("case_id","reference_words","hypothesis_words","word_errors","wer","duration_s","inference_ms","real_time_factor")} for r in report["cases"]]
+            summary["case_summary"]=[{**{k:r[k] for k in ("case_id","reference_words","hypothesis_words","word_errors","wer","duration_s","inference_ms","real_time_factor")},
+                                      **{k:r[k] for k in ("inference_attempted","abstention_reason") if k in r}} for r in report["cases"]]
         elif a.synthetic_ocr:
             summary["case_summary"]=[{k:r[k] for k in ("case_id","reference_words","hypothesis_words","word_errors","wer","cer","inference_ms")} for r in report["cases"]]
         else:
@@ -106,8 +120,14 @@ def main(argv=None):
         print(json.dumps({**summary,"report_name":a.report_name}))
         return 0 if report["engineering_gate_passed"] else 2
     except Exception as exc:
-        code=exc.args[0] if isinstance(exc,(TemporalError,ASRError,OCRError)) and exc.args and re.fullmatch(r"(?:TEMPORAL|ASR|OCR)_[A-Z_]+",str(exc.args[0])) else "TEMPORAL_LOCAL_ERROR"
-        print(json.dumps({"status":"BLOCKED","code":code,"synthetic_only":True,
+        code=exc.args[0] if isinstance(exc,(TemporalError,ASRError,OCRError)) and exc.args and re.fullmatch(r"(?:TEMPORAL|ASR|OCR)_[A-Z_]+",str(exc.args[0])) else ("ASR_LOCAL_ERROR" if a.synthetic_asr else "OCR_LOCAL_ERROR" if a.synthetic_ocr else "TEMPORAL_LOCAL_ERROR")
+        diagnostic_stage=getattr(exc,"stage",stage)
+        diagnostic_type=getattr(exc,"exception_type",type(exc).__name__)
+        diagnostic_case=getattr(exc,"case_id",None)
+        # Only code-owned identifiers; never emit exception text, paths or input data.
+        safe=lambda value: value if isinstance(value,str) and re.fullmatch(r"[A-Za-z0-9_]{1,80}",value) else None
+        print(json.dumps({"status":"BLOCKED","code":code,"stage":safe(diagnostic_stage),
+                          "exception_type":safe(diagnostic_type),"case_id":safe(diagnostic_case),"synthetic_only":True,
                           "real_media_processed":0,"external_data_accessed":False,
                           "database_mutated":False,"scientific_admissions":0}))
         return 2
