@@ -1,4 +1,4 @@
-import { FIELDS, STATES } from './evidence_lab.mjs?v=a01-rubric-2';
+import { FIELDS, STATES } from './evidence_lab.mjs?v=a01-replay-1';
 // A01.3: private technical inventory, no ranking, media, caption export or admission.
 const ROOT='/v1/corpus/inventory';
 const FORMATS={reels:'Reels',carrossel:'Carrossel',imagem:'Imagem',short:'Short'};
