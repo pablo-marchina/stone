@@ -1,5 +1,6 @@
 from datetime import timedelta
 import json
+from itertools import count
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,8 +20,8 @@ PASSWORD = "inventory-test-password-2026"
 ACCOUNT = "17841400011122233"
 
 
-def seed(engine, tenant, handle="test_profile"):
-    now = now_utc()
+def seed(engine, tenant, handle, clock):
+    now = clock()
     store = IngestionStore(engine)
     store.grant(tenant, "founder", GrantCreate(platform=Platform.INSTAGRAM,
         source_account_id=ACCOUNT, approval_reference="test-fixture-inventory-grant",
@@ -30,7 +31,7 @@ def seed(engine, tenant, handle="test_profile"):
         evidence_reference="test-fixture-registered-profile"))
     with engine.begin() as db:
         db.execute(update(source_grants).where(source_grants.c.tenant_id==tenant)
-            .values(technical_verified_at=now_utc().isoformat()))
+            .values(technical_verified_at=clock().isoformat()))
     for i, kind in enumerate((MediaType.REELS, MediaType.CAROUSEL, MediaType.IMAGE)):
         item = NormalizedItem(platform=Platform.INSTAGRAM, source_account_id=ACCOUNT,
             source_item_id=str(17900000000011111+i), creator_handle=handle, media_type=kind,
@@ -45,7 +46,7 @@ def seed(engine, tenant, handle="test_profile"):
 
 
 @pytest.fixture
-def app(tmp_path):
+def app(tmp_path, monkeypatch):
     app = create_secure_app("sqlite:///"+str(tmp_path/"inventory.sqlite3"),
         initialize_schema=True,allow_http_local=True)
     identity = app.state.identity_store
@@ -53,8 +54,17 @@ def app(tmp_path):
     with identity.engine.begin() as db:
         db.execute(insert(tenants).values(tenant_id="tenantB",name="B"))
         db.execute(insert(memberships).values(user_id="founder",tenant_id="tenantB",role="admin"))
-    seed(identity.engine,"tenantA","alpha_fixture")
-    seed(identity.engine,"tenantB","beta_fixture")
+    # Explicitly distinct observation times, independent of Windows clock
+    # resolution and random snapshot IDs. All fixture times remain in the past.
+    base = now_utc() - timedelta(minutes=10)
+    ticks = count()
+    def clock():
+        return base + timedelta(seconds=next(ticks))
+    with monkeypatch.context() as m:
+        m.setattr("tapi_gate0.ingestion.now_utc", clock)
+        m.setattr("tapi_gate0.corpus.now_utc", clock)
+        seed(identity.engine,"tenantA","alpha_fixture",clock)
+        seed(identity.engine,"tenantB","beta_fixture",clock)
     yield app
     identity.engine.dispose()
 
@@ -74,6 +84,7 @@ def test_inventory_pagination_filters_and_snapshot_history(app):
     first=page["items"][0]
     assert first["handle"]=="alpha_fixture" and first["media_type"]=="reels"
     assert first["latest_snapshot"]["likes"]==20 and first["valid_snapshot_count"]==2
+    assert not first["latest_snapshot_timestamp_tie"]
     assert first["caption_available"] and not first["caption_text_returned"]
     assert "private fixture caption" not in json.dumps(page)
     assert not first["media_processing_allowed"]
@@ -140,3 +151,25 @@ def test_invalid_snapshot_and_inconsistent_post_identity_not_exposed(app):
     from tapi_gate0.connectors import ConnectorError
     with pytest.raises(ConnectorError,match="INVENTORY_CONTENT_NOT_FOUND"):
         get_inventory_item(engine,"tenantA",cid)
+
+
+def test_equal_observation_times_report_ambiguity_and_keep_stable_order(app):
+    engine=app.state.identity_store.engine
+    first=list_inventory(engine,"tenantA",InventoryFilter(limit=1))["items"][0]
+    cid=first["content_id"]
+    detail=get_inventory_item(engine,"tenantA",cid)
+    time=detail["snapshots"][0]["observed_at"]
+    with engine.begin() as db:
+        for s in detail["snapshots"]:
+            raw=db.scalar(select(metrics_snapshots.c.payload).where(
+                metrics_snapshots.c.tenant_id=="tenantA",metrics_snapshots.c.id==s["snapshot_id"]))
+            payload=json.loads(raw)
+            payload["observed_at"]=time
+            db.execute(update(metrics_snapshots).where(metrics_snapshots.c.tenant_id=="tenantA",
+                metrics_snapshots.c.id==s["snapshot_id"]).values(observed_at=time,payload=json.dumps(payload)))
+    tied=get_inventory_item(engine,"tenantA",cid)
+    ids=sorted([s["snapshot_id"] for s in detail["snapshots"]],reverse=True)
+    assert [s["snapshot_id"] for s in tied["snapshots"]]==ids
+    assert tied["item"]["latest_snapshot"]["snapshot_id"]==ids[0]
+    assert tied["item"]["latest_snapshot_timestamp_tie"] is True
+    assert tied["snapshot_order"]=="observed_at_desc_snapshot_id_desc"
