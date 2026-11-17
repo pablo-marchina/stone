@@ -16,7 +16,7 @@
   </header>
   <main class="workspace">
     <aside class="panel">
-      <h2>1. Acesso</h2>
+      <h2 id="studio-access">1. Acesso</h2>
       <p class="hint">Entre com a mesma organização e credenciais do painel. A sessão do Studio é independente.</p>
       <label>Tenant <input id="tenant" value="local-research" autocomplete="organization"></label>
       <label>Usuário <input id="username" autocomplete="username"></label>
@@ -156,7 +156,8 @@
       <section id="evidence-lab" class="evidence-lab" aria-labelledby="evidence-title">
         <div class="library-heading"><h2 id="evidence-title">Evidence Studio · Rubric Lab</h2><button id="evidence-refresh" type="button" disabled>Consultar evidências</button></div>
         <p class="hint">Somente fixtures autorais, leitura privada, sem rótulos canônicos. Não há player nem promoção para a rubrica real.</p>
-        <p id="evidence-status" role="status" aria-live="polite">Entre para consultar as evidências sintéticas.</p>
+        <p id="evidence-status" role="status" aria-live="polite">Entre no Creative Studio para consultar as evidências sintéticas.</p>
+        <a id="evidence-login-link" class="evidence-login-link" href="#studio-access">Ir para autenticação do Studio</a>
         <div id="evidence-metrics" class="evidence-metrics"></div>
         <pre id="evidence-provenance" class="version-diff"></pre>
         <label for="evidence-case">Conteúdo de teste</label><select id="evidence-case" disabled></select>
