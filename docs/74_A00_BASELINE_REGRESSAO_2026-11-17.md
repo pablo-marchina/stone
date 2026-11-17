@@ -324,3 +324,40 @@ assumir que todos os 1065 registros têm grant atual/registro.
 A00.3 aguarda execução real, A00.4 revisão/merge pendente,
 A01.4 ligação de avaliações/evidências, A01.5 contrato compartilhado,
 A02 autorização por ativo continuam pendentes.
+
+## A01.3 — consulta real do operador; A01.4 — rubrica histórica integrada
+Operador reportou Data Explorer autenticado às 19:47 de 17/11:
+1065/1065 registros visíveis, 0 exclusões após join, 25 linhas
+na primeira página, métricas e maturação exibidas. Confirma
+listagem real no browser; detalhes, filtros, paginação, logout,
+testes focais do HEAD 95c301e e backup operacional v2 ainda não
+foram reportados. Não presumir PASS nem admissão científica.
+A01.4: corpus_rubric_read.py projeta somente avaliação histórica
+rubric-v1 / deterministic-text-metadata-v1 / caption-metadata-baseline
+no detalhe do inventário, usando o mesmo tenant e grant vigente.
+Valida identidade payload/índice, timestamp e correspondência
+do ID legado ao fingerprint de legenda atual. Fingerprint
+truncado é vínculo de consistência, não atestação criptográfica
+independente de valores. Não executa classificador, revalidação
+semântica ou nova inferência. Limite 100 avaliações por publicação;
+somente uma baseline correspondente é selecionada. Todos os 20
+campos presentes; candidatos permitidos tipo_post (confere valor),
+tema_principal, tem_cta e tipo_cta (par consistente), apenas
+metadado/legenda e locador correspondente, sem retornar locador
+bruto, legenda, notes ou mídia. Outros campos observados fora
+do escopo são retidos; não observável vira abstenção, não falso.
+Nenhuma alteração em rubrica persistida. Não expõe avaliações
+posteriores de relatórios privados, não reaudita manifesto/trace
+nem verifica direitos por ativo. UI em detalhes da publicação,
+20 campos, contadores e razões traduzidas; compartilhamento de
+vocabulário com Lab sintético, não mistura datasets.
+3 testes Python novos e 1 Node novo; pendentes execução.
+A01.4 parcial; integração de relatórios grounded e envelope
+persistente A01.5 ainda pendentes. Sem schema, escrita, modelo,
+mídia, gastos ou merge.
+Validação: repetir somente focal backup/inventory/baseline/inspector
+(34 Python esperados), Node inventory/evidence (12 esperados),
+zero-spend. Confirmar backup operacional v2 antes de iniciar servidor.
+No Data Explorer abrir Detalhes de uma publicação; conferir 20
+campos, estado e versão, não assumir cobertura sem o resultado.
+Preservar o relatório de backup, não compartilhar SQLite.
