@@ -224,6 +224,17 @@ def router_for_inventory(current_principal, engine, caption_replay=None):
         response.headers["Cache-Control"] = "private, no-store"
         return list_inventory(engine, p.tenant_id, filters)
 
+    @router.get("/ranking")
+    def ranking(response: Response, request: Request, p: Principal = Depends(reader),
+                cohort: Literal["technical_all","semantic_exploratory"] = "technical_all",
+                top_only: bool = True, offset: int = Query(0, ge=0, le=MAX_RECORDS),
+                limit: int = Query(25, ge=1, le=100)):
+        from .corpus_ranking_read import read_ranking
+        response.headers["Cache-Control"] = "private, no-store"
+        local = request.client and request.client.host in ("127.0.0.1","::1","testclient")
+        return read_ranking(engine,p.tenant_id,caption_replay if local else None,
+            cohort=cohort,top_only=top_only,offset=offset,limit=limit)
+
     @router.get("/{content_id}")
     def detail(content_id: str, response: Response, request: Request, p: Principal = Depends(reader),
                snapshot_limit: int = Query(100, ge=1, le=100),
