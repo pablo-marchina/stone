@@ -76,8 +76,13 @@ def _inventory(conn, tenant: str) -> dict:
             conn.execute("SELECT 1 FROM ingestion_runs WHERE status='reserved' LIMIT 1").fetchone()):
         raise BackupError("BACKUP_ACTIVE_INGESTION")
     versions = [r[0] for r in conn.execute("SELECT version_num FROM alembic_version ORDER BY version_num")]
-    if versions != ["0012_bd_history_checkpoints"]:
+    if versions not in (["0012_bd_history_checkpoints"], ["0013_asset_rights_registry"]):
         raise BackupError("BACKUP_MIGRATION_NOT_EXPECTED")
+    rights_tables = {"asset_rights_authorities", "asset_rights_revocations", "asset_rights_grants"}
+    if versions == ["0013_asset_rights_registry"] and not rights_tables <= tables:
+        raise BackupError("BACKUP_SCHEMA_INCOMPLETE")
+    if versions == ["0012_bd_history_checkpoints"] and rights_tables & tables:
+        raise BackupError("BACKUP_MIGRATION_SCHEMA_MISMATCH")
     fingerprints = {name: _table_fingerprint(conn, name) for name in sorted(tables)}
     counts = {name: value[0] for name, value in fingerprints.items()}
     table_hashes = {name: value[1] for name, value in fingerprints.items()}
