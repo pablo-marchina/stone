@@ -208,6 +208,8 @@ def execute(root,expected,profile,name,tessdata=None):
         env["TAPI_OCR_TEST_TESSDATA"]=str(p)
     if shutil.disk_usage(root).free<128*1024*1024:
         raise BaselineError("BASELINE_STORAGE_INSUFFICIENT")
+    if profile=="full" and not info["node_test_files"]:
+        raise BaselineError("BASELINE_NODE_TESTS_MISSING")
     target=private_run_dir(root,name)
     packages={}
     for package in PACKAGES:
@@ -215,12 +217,12 @@ def execute(root,expected,profile,name,tessdata=None):
             packages[package]=version(package)
         except PackageNotFoundError:
             packages[package]=None
-    report={"status":"BASELINE_REGRESSION_COMPLETED","policy_version":"a00-local-baseline.v1",
+    report={"status":"BASELINE_INVENTORY_COMPLETED" if profile=="inventory" else "BASELINE_REGRESSION_COMPLETED","policy_version":"a00-local-baseline.v1",
             "profile":profile,"inventory":info,"python":sys.version.split()[0],
             "conda_environment":os.environ.get("CONDA_DEFAULT_ENV"),"packages":packages,
             "tools":{k:bool(shutil.which(k)) for k in ("git","node","ffmpeg","ffprobe","tesseract","espeak-ng")},
             "ocr_integration_opt_in":tessdata is not None,"steps":[],
-            "operational_database_url_forwarded":False,"external_credentials_forwarded":False,
+            "operational_database_url_forwarded":False,"external_credential_environment_forwarded":False,
             "network_sandbox":False,"global_gates_released":False,"production_approved":False}
     for step,file in (("legacy_gate0","scripts/check_gate0.py"),("zero_spend","scripts/verify_zero_spend.py")):
         report["steps"].append(run_step(root,target,step,[sys.executable,file],env,timeout=120))
@@ -229,11 +231,13 @@ def execute(root,expected,profile,name,tessdata=None):
         tests=["tests"] if profile=="full" else list(SEMANTIC_TESTS)
         report["steps"].append(run_step(root,target,"pytest",
             [sys.executable,"-m","pytest","-q",*tests,"--junitxml",str(xml)],env))
-        report["pytest"]=junit_counts(xml)
+        try:
+            report["pytest"]=junit_counts(xml)
+        except ET.ParseError:
+            report["pytest"]=None
+            report["pytest_junit_invalid"]=True
         if profile=="full":
             node_files=info["node_test_files"]
-            if not node_files:
-                raise BaselineError("BASELINE_NODE_TESTS_MISSING")
             report["steps"].append(run_step(root,target,"node",["node","--test",*node_files],env))
     try:
         check_checkout(root,expected)
@@ -242,8 +246,10 @@ def execute(root,expected,profile,name,tessdata=None):
         report["checkout_unchanged"]=False
     report["checks_passed"]=report["checkout_unchanged"] and all(s["exit_code"]==0 for s in report["steps"])
     if profile!="inventory":
-        report["checks_passed"]=bool(report["checks_passed"] and report["pytest"] and report["pytest"]["tests"]>0)
+        report["checks_passed"]=bool(report["checks_passed"] and report["pytest"] and report["pytest"]["passed"]>0
+            and report["pytest"]["failed"]==report["pytest"]["errors"]==0)
     report["full_regression_profile_executed"]=profile=="full"
+    report["full_regression_without_skips"]=bool(profile=="full" and report["checks_passed"] and report["pytest"]["skipped"]==0)
     report["skips_are_not_passes"]=True
     report["model_benchmarks_reexecuted"]=False
     report["operational_database_tested"]=False
