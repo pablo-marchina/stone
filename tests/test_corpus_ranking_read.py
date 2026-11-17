@@ -53,3 +53,45 @@ def test_rank_rejects_duplicate_and_invalid_query():
     with pytest.raises(ConnectorError,match="QUERY_INVALID"):
         rank_rows(rows(),cohort="other",top_only=True,offset=0,limit=25)
     assert read_ranking(None,"tenant",None,cohort="technical_all",top_only=True,offset=0,limit=25)["status"]=="disabled"
+
+
+def test_read_ranking_requires_exact_current_population_and_snapshot(monkeypatch):
+    from datetime import datetime, timezone, timedelta
+    from hashlib import sha256
+    from types import SimpleNamespace
+    from contextlib import nullcontext
+    from tapi_gate0 import corpus_ranking_read as module, corpus_inventory
+    from tapi_gate0.domain import MediaType, MetricsCreate
+    now=datetime(2026,11,17,tzinfo=timezone.utc)
+    caption="Comente sua dúvida sobre vendas."
+    post=SimpleNamespace(content_id="p",caption=caption,media_type=MediaType.REELS,published_at=now-timedelta(days=30))
+    source=SimpleNamespace(expected_ig_id="12345",username="source",sampling_stratum="entrepreneurship_education")
+    metric=MetricsCreate(snapshot_id="s",tenant_id="tenant",content_id="p",observed_at=now,
+        followers_measured_at=now,likes=2,comments=1,follower_count=100)
+    entry={"source_account_id":"12345","caption_sha256":sha256(caption.encode()).hexdigest(),
+           "snapshot_id":"s","snapshot_payload_sha256":sha256(metric.model_dump_json().encode()).hexdigest(),
+           "audience_tier":"semantic_consensus_only","fields":{k:{"value":None} for k in FIELDS}}
+    replay=SimpleNamespace(config=SimpleNamespace(tenant="tenant",viewer="56789"),frame=object(),
+        _entries={"p":entry},_provenance={"manifest_sha256":"a"*64,"audience_report_sha256":"b"*64})
+    engine=SimpleNamespace(connect=lambda:nullcontext(None))
+    checked=[]
+    monkeypatch.setattr(module,"require_scoped_research",lambda *a:checked.append("scope"))
+    monkeypatch.setattr(corpus_inventory,"_base",lambda *a:([({"source_account_id":"12345"},post,None)],0))
+    monkeypatch.setattr(corpus_inventory,"_snapshots",lambda *a:{"p":[metric]})
+    def readiness(*args,_record_observer):
+        _record_observer(source,post,metric)
+        return {"as_of":now.isoformat(),"first_blocking_stage":{"CAPTION_AVAILABLE_FOR_ASSESSMENT":1}}
+    monkeypatch.setattr(module,"readiness_report",readiness)
+    kwargs={"cohort":"technical_all","top_only":True,"offset":0,"limit":25}
+    result=read_ranking(engine,"tenant",replay,**kwargs)
+    assert checked==["scope","scope"] and result["population_reaudited"]==1
+    assert result["full_population_rechecked"] and result["items"][0]["er_percent"]==3
+    assert caption not in str(result)
+    monkeypatch.setattr(corpus_inventory,"_snapshots",lambda *a:{"p":[metric.model_copy(update={"likes":999})]})
+    with pytest.raises(ConnectorError,match="STALE_REPLAY"):
+        read_ranking(engine,"tenant",replay,**kwargs)
+    monkeypatch.setattr(corpus_inventory,"_snapshots",lambda *a:{"p":[metric]})
+    monkeypatch.setattr(module,"readiness_report",lambda *a,**kw:{"as_of":now.isoformat(),"first_blocking_stage":{"CAPTION_AVAILABLE_FOR_ASSESSMENT":0}})
+    with pytest.raises(ConnectorError,match="STALE_REPLAY"):
+        read_ranking(engine,"tenant",replay,**kwargs)
+    assert read_ranking(engine,"other",replay,**kwargs)["status"]=="disabled"
