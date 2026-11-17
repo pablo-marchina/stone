@@ -90,3 +90,20 @@ def test_grounded_rubric_cli_is_synthetic_only(tmp_path, monkeypatch, capsys):
     assert len(saved["cases"]) == 62
     assert runner.main(["--rubric-grounded-benchmark", "--manifest", "unused.json"]) == 2
     assert json.loads(capsys.readouterr().out)["code"] == "BD_AUDIENCE_BENCHMARK_SYNTHETIC_ONLY"
+
+
+def test_pilot_requires_manifest_and_explicit_unique_fields(capsys):
+    import json
+    from scripts.a6_audience_contextual import main
+    for args in (
+        ["--rubric-grounded-pilot"],
+        ["--rubric-grounded-pilot", "--manifest", "unused.json"],
+        ["--rubric-grounded-pilot", "--manifest", "unused.json",
+         "--rubric-field", "tipo_cta", "--rubric-field", "tipo_cta"],
+    ):
+        assert main(args) == 2
+        result = json.loads(capsys.readouterr().out)
+        assert result["code"] == "BD_RUBRIC_PILOT_EXPLICIT_FIELDS_REQUIRED"
+        assert not result["database_mutated"] and not result["external_data_accessed"]
+    assert main(["--rubric-grounded-benchmark", "--rubric-field", "tipo_cta"]) == 2
+    assert json.loads(capsys.readouterr().out)["code"] == "BD_RUBRIC_PILOT_MODE_REQUIRED"
