@@ -11,7 +11,59 @@ const FIELDS={
   oferta_ou_beneficio_explicito:'Oferta ou benefício',elementos_top5:'Elementos top 5'
 };
 const MODALITIES={caption:'Legenda',audio:'Áudio',ocr:'OCR',vlm:'VLM'};
+const CASE_LABELS={caption_only:'Somente legenda',audio_only:'Somente áudio',ocr_only:'Somente texto na tela',agreement:'Concordância entre modalidades',conflict:'CTAs conflitantes',negative:'Caso negativo',audio_topic:'Tema identificado no áudio'};
+const SCENES={blank:'Fundo uniforme',geometry:'Figuras geométricas',text_card:'Texto visível',uncertain:'Indeterminado'};
+const REASONS={
+  DURATION_SECONDS_NOT_APPROVED_BIN:'Duração medida; faixa da rubrica ainda não atribuída.',
+  CHARACTER_COUNT_NOT_APPROVED_BIN:'Contagem de caracteres; categoria ainda não atribuída.',
+  OPENING_OBSERVATIONS_NOT_SEMANTIC_HOOK:'Amostras da abertura, sem avaliação semântica do hook.',
+  TRANSITION_COUNT_NOT_CALIBRATED_SCORE:'Transições candidatas, sem nota de 0 a 10.',
+  UNIQUE_LEXICAL_ANCHOR_ACROSS_AVAILABLE_MODALITIES:'Um único tema sustentado pelas evidências disponíveis.',
+  DIRECTED_REQUEST_V2:'Solicitação dirigida ao público identificada no mesmo fragmento.',
+  NO_UNAMBIGUOUS_DIRECTED_REQUEST:'Nenhum pedido inequívoco identificado; pode haver conflito ou falta de evidência.',
+  OCR_POSITIVE_WITH_OPTIONAL_VLM_SUPPORT:'Texto detectado pelo OCR, com apoio visual quando disponível.',
+  NO_UNCONFLICTED_POSITIVE_SCREEN_EVIDENCE:'Não há evidência positiva suficiente sem conflito. Não significa ausência de texto.',
+  NO_ANCHOR:'Nenhuma âncora textual suficiente.',
+  CONTEXT_VETO:'Contexto incompatível com uma classificação segura.',
+  CONFLICTING_ANCHORS:'Evidências apontam para classificações diferentes.',
+  metadata:'Requer metadados do conteúdo.',
+  'authorized video or multimodal evidence':'Requer vídeo autorizado ou evidência multimodal suficiente.',
+  'authorized opening segment and semantic evidence':'Requer segmento inicial autorizado e evidência semântica.',
+  'authorized opening segment and calibrated scoring':'Requer segmento inicial autorizado e pontuação calibrada.',
+  'authorized image or video':'Requer imagem ou vídeo autorizado.',
+  'independent external proof':'Requer comprovação externa independente.',
+  'reliable caption or authorized multimodal evidence':'Requer legenda confiável ou evidência multimodal autorizada.',
+  'reliable semantic evidence':'Requer evidência semântica confiável.',
+  'reliable linguistic evidence':'Requer evidência linguística confiável.',
+  'calibrated semantic scoring':'Requer pontuação semântica calibrada.',
+  'validated multimodal evidence and scoring':'Requer evidência multimodal validada e pontuação.'
+};
+export function fieldPresentation(key,field){
+  const m=field.measurement;
+  let value=field.value===null?'—':typeof field.value==='boolean'?(field.value?'Sim':'Não'):String(field.value);
+  if(field.state==='measurement_only'&&m){
+    if(key==='duracao_faixa')value=m.duration_s+' s';
+    else if(key==='legenda_tamanho')value=m.characters+' caracteres';
+    else if(key==='ritmo_cortes_0a10')value=m.count+' transições candidatas';
+    else if(key==='hook_primeiros_3s')value=(m.opening_samples?.length??0)+' amostras · '+(m.audio_segments_overlapping_opening?.length??0)+' segmentos de áudio';
+  }
+  return {value,reason:REASONS[field.reason]||'Consulte a justificativa técnica para este estado.'};
+}
+export function evidenceExcerpt(support,fragments){
+  const spans=support.directed?.spans||support.spans||support.rule?.evidence_spans||[];
+  const matches=fragments.filter(f=>f.modality===support.modality&&f.text_sha256===support.text_sha256);
+  if(matches.length!==1||!spans.length)return [];
+  // Python offsets count Unicode code points, not JS UTF-16 code units.
+  const chars=Array.from(matches[0].text);
+  return spans.filter(s=>Number.isInteger(s.start)&&Number.isInteger(s.end)&&s.start>=0&&s.end>s.start&&s.end<=chars.length)
+    .map(s=>chars.slice(s.start,s.end).join(''));
+}
 const $=id=>document.getElementById(id);
+function technical(payload,label='Dados técnicos e proveniência'){
+  const d=element('details',undefined,'evidence-technical');
+  d.append(element('summary',label),element('pre',JSON.stringify(payload,null,2),'version-diff'));
+  return d;
+}
 function element(tag,text,cls){
   const n=document.createElement(tag);
   if(text!==undefined)n.textContent=String(text);
@@ -50,7 +102,7 @@ export function initEvidenceLab({api,getToken}){
   function reset(){
     epoch++;summary=null;detail=null;busy=false;
     $('evidence-case').replaceChildren();
-    for(const id of ['evidence-metrics','evidence-fields','evidence-fragments','evidence-visual','evidence-ablation','evidence-provenance'])
+    for(const id of ['evidence-metrics','evidence-case-counts','evidence-fields','evidence-fragments','evidence-visual','evidence-ablation','evidence-provenance'])
       $(id).replaceChildren();
     status(getToken()?'Sessão do Studio ativa. Clique em Consultar evidências.':'Entre no Creative Studio para consultar as evidências sintéticas.');
     controls();
@@ -63,16 +115,18 @@ export function initEvidenceLab({api,getToken}){
       const card=element('div',undefined,'evidence-metric');
       card.append(element('strong',v),element('span',STATES[k]));return card;
     }));
-    $('evidence-provenance').textContent='Relatório SHA-256: '+data.report_sha256+
-      '\nGate de composição: '+(data.engineering_gate_passed?'PASS':'FAIL')+
-      ' · Gate do VLM: '+(data.upstream_vlm_gate_passed?'PASS':'FAIL')+
-      '\nDados sintéticos · não canônicos · sem aprovação científica ou de produção.';
+    const gates=element('div',undefined,'evidence-gates');
+    gates.append(element('span','Composição: '+(data.engineering_gate_passed?'PASS':'FAIL'),'evidence-state '+(data.engineering_gate_passed?'candidate':'abstained')),
+      element('span','VLM: '+(data.upstream_vlm_gate_passed?'PASS':'FAIL'),'evidence-state '+(data.upstream_vlm_gate_passed?'candidate':'abstained')));
+    $('evidence-provenance').replaceChildren(gates,element('p','7 conteúdos de teste; 140 células da rubrica. Resultados experimentais, não canônicos.'),
+      technical({report_sha256:data.report_sha256,source_report_sha256:data.source_report_sha256,visual_report_sha256:data.visual_report_sha256,policy_version:data.policy_version}));
     $('evidence-case').replaceChildren(...data.cases.map(c=>{
-      const option=element('option',c.case_id);option.value=c.case_id;return option;
+      const option=element('option',CASE_LABELS[c.case_id]||c.case_id);option.value=c.case_id;return option;
     }));
     $('evidence-ablation').replaceChildren(...armRows(data.ablation).map(r=>{
       const tr=element('tr');
-      tr.append(element('th',r.arm),element('td',r.correct+'/'+r.expected),element('td',r.wrong));
+      const heading=element('th',r.arm);heading.scope='row';
+      tr.append(heading,element('td',r.correct+'/'+r.expected),element('td',r.wrong));
       return tr;
     }));
   }
@@ -83,38 +137,51 @@ export function initEvidenceLab({api,getToken}){
     for(const [key,label] of Object.entries(FIELDS)){
       const f=detail.field_evidence[key];
       if(filter!=='all'&&f.state!==filter)continue;
-      const item=element('details',undefined,'evidence-field');
-      const head=element('summary');
-      head.append(element('span',label),element('span',STATES[f.state],'evidence-state '+f.state));
-      item.append(head);
-      if(f.value!==null)item.append(element('p',typeof f.value==='boolean'?(f.value?'Sim':'Não'):JSON.stringify(f.value)));
-      item.append(element('p',f.reason,'hint'));
-      const payload={measurement:f.measurement,supports:f.supports,vetoes:f.vetoes};
-      item.append(element('pre',JSON.stringify(payload,null,2),'version-diff'));
+      const item=element('article',undefined,'evidence-field');
+      const head=element('div',undefined,'evidence-field-heading');
+      head.append(element('h4',label),element('span',STATES[f.state],'evidence-state '+f.state));
+      const presentation=fieldPresentation(key,f);
+      item.append(head,element('p',presentation.value,'evidence-value'),element('p',presentation.reason,'hint'));
+      for(const support of f.supports||[]){
+        const excerpts=evidenceExcerpt(support,detail.fragments);
+        const words=support.words?.map(w=>w.text).join(' ');
+        const when=support.timestamp_s??support.locator?.timestamp_s??support.locator?.start_s;
+        const origin=element('div',undefined,'evidence-support');
+        origin.append(element('strong',(MODALITIES[support.modality]||'Evidência')+(typeof when==='number'?' · '+when+' s':'')));
+        for(const excerpt of excerpts)origin.append(element('blockquote',excerpt));
+        if(words)origin.append(element('p',words));
+        item.append(origin);
+      }
+      if(f.vetoes?.length)item.append(element('p',f.vetoes.length+' observações de veto ou conflito registradas.','evidence-warning'));
+      item.append(technical({reason:f.reason,measurement:f.measurement,supports:f.supports,vetoes:f.vetoes,canonical:f.canonical}));
       children.push(item);
     }
-    $('evidence-fields').replaceChildren(...children);
+    $('evidence-fields').replaceChildren(...(children.length?children:[element('p','Nenhum campo neste filtro.','hint')]));
   }
   async function loadCase(){
     if(!summary||!getToken())return;
     const active=++epoch,token=getToken(),id=$('evidence-case').value;
-    detail=null;busy=true;$('evidence-fields').replaceChildren();$('evidence-fragments').replaceChildren();$('evidence-visual').replaceChildren();controls();
+    detail=null;busy=true;$('evidence-case-counts').replaceChildren();$('evidence-fields').replaceChildren();$('evidence-fragments').replaceChildren();$('evidence-visual').replaceChildren();controls();
     try{
       const data=await api('/v1/studio/evidence-lab/cases/'+encodeURIComponent(id));
       if(active!==epoch||token!==getToken())return;
-      detail=data;renderFields();
+      detail=data;
+      const counts=stateCounts(data.field_evidence);
+      $('evidence-case-counts').textContent=Object.entries(counts).map(([k,v])=>v+' '+STATES[k].toLowerCase()).join(' · ');
+      renderFields();
       $('evidence-fragments').replaceChildren(...data.fragments.map(f=>{
         const d=element('details',undefined,'evidence-field');
         d.append(element('summary',MODALITIES[f.modality]||f.modality),
-          element('p',f.text),element('pre',JSON.stringify({text_sha256:f.text_sha256,locator:f.locator,semantic_eligible:f.semantic_eligible},null,2),'version-diff'));
+          element('p',f.text),technical({text_sha256:f.text_sha256,locator:f.locator,semantic_eligible:f.semantic_eligible}));
         return d;
       }));
       $('evidence-visual').replaceChildren(...data.visual_observations.map(v=>{
         const d=element('details',undefined,'evidence-field');
-        d.append(element('summary','Frame '+v.timestamp_s+' s · '+(v.prediction?.scene||'Resposta inválida')),
-          element('pre',JSON.stringify(v,null,2),'version-diff'));return d;
-      }),element('pre',JSON.stringify(data.source_rights,null,2),'version-diff'));
-      status('Ativo '+data.case_id+' · '+data.media_sha256+' · '+Object.keys(data.field_evidence).length+' campos. Reprodução indisponível.');
+        d.append(element('summary','Frame '+v.timestamp_s+' s · '+(SCENES[v.prediction?.scene]||'Resposta inválida')),
+          technical(v));return d;
+      }),element('p','Escopo: fixture autoral. Reprodução e processamento de mídia real não autorizados.','hint'),technical(data.source_rights,'Escopo técnico de direitos'));
+      status((CASE_LABELS[data.case_id]||data.case_id)+' · '+Object.keys(data.field_evidence).length+' campos · Reprodução indisponível.');
+      $('evidence-case-counts').append(technical({case_id:data.case_id,media_sha256:data.media_sha256},'Identidade técnica do conteúdo'));
     }catch(error){if(active===epoch&&token===getToken())status('Consulta indisponível: '+error.message);}
     finally{if(active===epoch){busy=false;controls();}}
   }
