@@ -192,50 +192,73 @@ class AssetLineageIndex:
             # permission; no claim of permission to expose their payloads.
             if field in ("ranking_reference","retrieval_index","analysis_run"):
                 field="rubric_evidence"
-            for parent in ref.parent_ids:
-                for root in _ancestors(by_id,parent,now):
-                    anchor=resolve_anchor(root)
-                    _grant(db,anchor,root,now,Permission(operation="retain",purpose=purpose,field=root.target.media_kind))
-                    _grant(db,anchor,root,now,Permission(operation="derive",purpose=purpose,field=field))
+            unique_roots={root.object_id:root for parent in ref.parent_ids for root in _ancestors(by_id,parent,now)}
+            for root in unique_roots.values():
+                anchor=resolve_anchor(root)
+                _grant(db,anchor,root,now,Permission(operation="retain",purpose=purpose,field=root.target.media_kind))
+                _grant(db,anchor,root,now,Permission(operation="derive",purpose=purpose,field=field))
             return self._insert(db,ref.tenant_id,ref.artifact_id,"derived",ref,by_id)
 
-    def invalidate(self,tenant,*,object_ids=(),artifact_ids=()):
-        """Trusted administrative logical invalidation, not a public API.
+    def _invalidate(self,db,tenant,assets,derived,by_id,*,object_ids=(),artifact_ids=(),now):
+        roots={a.object_id for a in assets}
+        artifacts={a.artifact_id for a in derived}
+        requested=set(object_ids)|set(artifact_ids)
+        if not set(object_ids)<=roots or not set(artifact_ids)<=artifacts:
+            _fail("UNKNOWN_NODE")
+        affected=requested|{k for k,(row,ref) in by_id.items()
+            if row["state"]=="invalidated" or ref.retain_until<=now}
+        children={}
+        for item in derived:
+            for parent in item.parent_ids:
+                children.setdefault(parent,[]).append(item.artifact_id)
+        todo=list(affected)
+        while todo:
+            for child in children.get(todo.pop(),()):
+                if child not in affected:
+                    affected.add(child)
+                    todo.append(child)
+        changed=[]
+        for ident in sorted(affected):
+            if by_id[ident][0]["state"]=="active":
+                db.execute(update(nodes).where(nodes.c.tenant_id==tenant,nodes.c.node_id==ident,
+                    nodes.c.state=="active").values(state="invalidated",invalidated_at=now.isoformat()))
+                _event(db,tenant,ident,"invalidated","requested_or_ancestor_or_expired")
+                changed.append(ident)
+        return {"status":"LOGICAL_INVALIDATION_APPLIED","newly_invalidated":changed,
+                "affected_objects":sorted(affected&roots),"affected_artifacts":sorted(affected&artifacts),
+                "filesystem_mutated":False,"media_enabled":False}
 
-        Exact object IDs allow grant-scoped invalidation without revoking
-        unrelated grants for the same source asset. Tombstones are permanent.
-        Also sweeps expired nodes. No filesystem deletion.
-        """
+    def invalidate(self,tenant,*,object_ids=(),artifact_ids=()):
+        """Trusted administrative invalidation and expiry sweep, no deletion."""
         with self._transaction() as db:
             now=now_utc()
             assets,derived,by_id=_load(db,tenant)
-            roots={a.object_id for a in assets}
-            artifacts={a.artifact_id for a in derived}
-            requested=set(object_ids)|set(artifact_ids)
-            if not set(object_ids)<=roots or not set(artifact_ids)<=artifacts:
-                _fail("UNKNOWN_NODE")
-            affected=requested|{k for k,(row,ref) in by_id.items()
-                if row["state"]=="invalidated" or ref.retain_until<=now}
-            children={}
-            for item in derived:
-                for parent in item.parent_ids:
-                    children.setdefault(parent,[]).append(item.artifact_id)
-            todo=list(affected)
-            while todo:
-                for child in children.get(todo.pop(),()):
-                    if child not in affected:
-                        affected.add(child)
-                        todo.append(child)
-            changed=[]
-            for ident in sorted(affected):
-                if by_id[ident][0]["state"]=="active":
-                    db.execute(update(nodes).where(nodes.c.tenant_id==tenant,nodes.c.node_id==ident,
-                        nodes.c.state=="active").values(state="invalidated",invalidated_at=now.isoformat()))
-                    _event(db,tenant,ident,"invalidated","requested_or_ancestor_or_expired")
-                    changed.append(ident)
-            return {"status":"LOGICAL_INVALIDATION_APPLIED","newly_invalidated":changed,
-                    "affected_objects":sorted(affected&roots),"affected_artifacts":sorted(affected&artifacts),
-                    "filesystem_mutated":False,"media_enabled":False}
+            return self._invalidate(db,tenant,assets,derived,by_id,
+                object_ids=object_ids,artifact_ids=artifact_ids,now=now)
+
+    def reconcile_signed_revocations(self,anchor,tenant,platform):
+        """Apply the current signed registry head to its exact issuer scope.
+
+        Registry advancement is deliberately independent: an index failure
+        cannot roll back a revocation. Every preflight rechecks registry
+        rights even before reconciliation. Stale heads deny preflight;
+        no destructive action is taken merely because an anchor is absent.
+        """
+        with self._transaction() as db:
+            now=now_utc()
+            key=_scope(anchor,tenant,platform)
+            _,state=_load_head(db,key,anchor)
+            rv=state.claims
+            if not rv.issued_at<=now<rv.valid_until:
+                _fail("REVOCATION_STALE")
+            assets,derived,by_id=_load(db,tenant)
+            revoked_sources={(s.tenant_id,s.platform,s.source_account_id) for s in rv.revoked_sources}
+            affected=[a.object_id for a in assets
+                if a.issuer_id==anchor.issuer_id and a.target.platform==platform
+                and a.issuer_key_sha256==sha256(anchor.public_key).hexdigest()
+                and (a.grant_id in rv.revoked_grant_ids or a.target.asset_id in rv.revoked_asset_ids
+                    or (tenant,platform,a.target.source_account_id) in revoked_sources)]
+            return self._invalidate(db,tenant,assets,derived,by_id,object_ids=affected,now=now)
 
     def preflight(self,tenant,ident,*,resolve_anchor,permission:Permission):
         """Recheck every root at read boundary. Returns no payload or credential.
