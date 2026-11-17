@@ -1,7 +1,7 @@
 // Read-only synthetic evidence explorer. No token persistence, media player,
 // HTML from evidence, write operations or implicit promotion of candidates.
-const STATES={candidate:'Candidato',measurement_only:'Medição',abstained:'Abstenção',not_assessed:'Não avaliado'};
-const FIELDS={
+export const STATES={candidate:'Candidato',measurement_only:'Medição',abstained:'Abstenção',not_assessed:'Não avaliado'};
+export const FIELDS={
   tipo_post:'Tipo de publicação',duracao_faixa:'Duração',formato_video:'Formato do vídeo',
   hook_primeiros_3s:'Abertura (0–3s)',tipo_hook:'Tipo de hook',forca_hook_0a10:'Força do hook',
   tema_principal:'Tema principal',tem_rosto:'Presença de rosto',criador_e_empreendedor_real:'Criador empreendedor',
