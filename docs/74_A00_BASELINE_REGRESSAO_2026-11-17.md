@@ -497,3 +497,71 @@ Evidências, testar paginação/contrastes/logout. Reportar totais e
 medianas, sem enviar relatórios privados. Próximos: fechar A00.3/6
 com evidência, A02 direitos por ativo, LangGraph e contrato durável.
 Sem merge, schema, gasto, mídia ou gate global liberado.
+
+## A04.2 — ranking técnico reproduzido; A02.1 — PDP de direitos por ativo
+Operador reportou Ranking Explorer A04-RANKING-1: técnico 858 posts,
+21 perfis, top 86, mediana ER 0,037614%, mediana do top 1,307124%,
+Jaccard 0,306569. Paridade nos seis indicadores com V10 anterior.
+Intraperfil 850 posts/19 perfis, sem empate no corte. Primeira página
+25 linhas; contraste e proveniência disponíveis recolhidos. Não confirma
+ranking semântico, expansão de detalhes, paginação, logout ou testes
+automatizados. A00.3 backup real v2 continua sem evidência reportada.
+A04.2 fluxo técnico verificado, IMP-082 parcial. Sem admissão científica.
+
+A02.1 parcial (IMP-044/054/045): asset_rights.py introduz PDP local
+sem I/O. Contratos Pydantic imutáveis e extra=forbid: identidade exata
+(tenant, plataforma, conta, publicação, content_id, asset_id, modalidade,
+SHA256 de bytes), grant assinado Ed25519 com hash da prova de aprovação,
+triplas explícitas operação/finalidade/campo, início/fim/retenção.
+Operações download, retain, process, derive, display, export, publish.
+Nada de combinar listas de campos e finalidades independentemente.
+Âncora de confiança fornecida somente pelo host confiável, não pelo
+request; chave pública e escopo tenant/plataforma. Estado de revogação
+assinado, janela máxima 15 min, revision e digest exatamente iguais
+à referência aceita da autoridade, revogação de grant, asset ou fonte.
+Sem âncora/assinatura/estado/escopo válido, deny. Requer relógio confiável.
+Formato JSON determinístico versionado, não RFC8785. Hash da prova não
+verifica mérito jurídico; requer autoridade legítima e evidência real.
+require_asset_rights é preflight para PEP futuro, não credencial.
+Dependência opcional rights_local (cryptography>=44,<48), sem serviço pago.
+Sem cryptography, assinatura não é verificável, fail-closed.
+Testes usam chaves efêmeras sintéticas, não são grants reais. 23 casos
+esperados incluindo parametrizações; execução pendente. Não instalar
+chave de fixture na operação. Não criar autorização real a partir de
+JSON editável, flag de ambiente, grant de metadados ou hash de arquivo.
+
+Limites: ainda não existe registry durável/provisionamento de autoridade,
+verificação de documento de aprovação, atualização atômica do piso de
+revogação, source grant runtime conectado, PEP de bytes, retenção física,
+revogação em cascata ou jobs. Janela de revogação 15 min é escolha de
+engenharia inicial e não garantia de revogação imediata. As entradas
+legadas policy.decide e inspect_approved_local_media permanecem deny
+para mídia externa; nenhuma nova rota de autorização ou migração.
+A02.1 IMPLEMENTADO_PARCIAL_NAO_TESTADO; próximos: validar PDP, obter
+backup v2 antes de migration 0013/registro durável, PEP por operação,
+proveniência de derivados e testes de revogação. Não alterar DEC018,
+solicitar de novo autorização institucional ampla ou habilitar mídia
+sem evidências técnicas específicas. PRs ainda draft, sem merge.
+
+### Operador: focal e backup
+```powershell
+git pull --ff-only
+conda activate tapi-asr
+python -c "import cryptography; print(cryptography.__version__)"
+python -m pytest -q tests/test_asset_rights.py tests/test_corpus_ranking_read.py tests/test_corpus_caption_replay.py tests/test_corpus_inventory.py tests/test_discovery_backup.py
+node --test tests/test_ranking_ui.mjs tests/test_inventory_ui.mjs tests/test_evidence_lab_ui.mjs
+python scripts/verify_zero_spend.py
+```
+Se cryptography não estiver instalado, instalar somente dependência
+local opcional (pip install "cryptography>=44,<48") antes dos testes.
+Skips criptográficos não equivalem a PASS; não gerar chave operacional.
+Após aprovação, parar todos os writers e realizar backup v2:
+```powershell
+$env:TAPI_TENANT_ID = "local-research"
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+python scripts/a6_backup_restore_drill.py --output-name "a00-baseline-$stamp.sqlite3" --confirm-all-writers-stopped
+```
+Enviar saída dos testes e backup (não arquivo SQLite). Não executar
+nova coleta, modelo, mídia ou merge. Somente após backup validado
+avançar em migração operacional; código de registry pode ser testado
+em banco descartável antes disso.
