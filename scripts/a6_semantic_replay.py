@@ -33,6 +33,7 @@ def main(argv=None):
     mode=parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--input-name")
     mode.add_argument("--cta-challenge",action="store_true")
+    mode.add_argument("--cta-directed-challenge",action="store_true")
     parser.add_argument("--report-name",required=True)
     parser.add_argument("--model-dir",required=True,type=Path)
     args=parser.parse_args(argv)
@@ -73,7 +74,11 @@ def main(argv=None):
             t=perf_counter()
             extractor=LocalGLiNERDecider(path)._load()
             load_ms=round((perf_counter()-t)*1000,3)
-            if args.cta_challenge:
+            if args.cta_directed_challenge:
+                from tapi_gate0.multimodal_cta_directed import run_challenge
+                stage="cta_directed_challenge"
+                output=run_challenge(extractor)
+            elif args.cta_challenge:
                 from tapi_gate0.multimodal_cta_challenge import run_challenge
                 stage="cta_challenge"
                 output=run_challenge(extractor)
@@ -91,7 +96,9 @@ def main(argv=None):
         with os.fdopen(fd,"w",encoding="utf-8") as stream:
             json.dump(output,stream,ensure_ascii=False,indent=2)
         summary={k:v for k,v in output.items() if k!="cases"}
-        if args.cta_challenge:
+        if args.cta_directed_challenge:
+            summary["case_summary"]=[{k:r[k] for k in ("case_id","split","stratum","expected","values")} for r in output["cases"]]
+        elif args.cta_challenge:
             summary["case_summary"]=[{k:r[k] for k in ("case_id","stratum","expected","values")} for r in output["cases"]]
         else:
             summary["case_summary"]=[{"case_id":r["case_id"],"audio_diagnostic":r["audio_diagnostic"],
