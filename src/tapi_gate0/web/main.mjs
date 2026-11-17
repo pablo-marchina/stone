@@ -1,5 +1,5 @@
 import { SSEParser } from './events.mjs';
-import { initInventory } from './inventory.mjs?v=a01-rubric-2';
+import { initInventory } from './inventory.mjs?v=a01-replay-1';
 
 const $ = id => document.getElementById(id);
 const state = { token: null, principal: null, overview: null, controller: null, events: new Map(), connected: false, retry: 0, refreshPending: false, generation: 0 };
