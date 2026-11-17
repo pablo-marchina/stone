@@ -24,6 +24,10 @@ MODEL_REVISION = "536b0662742c02347bc0e980a01041f333bce120"
 MODEL_SHA256 = "3e305921506d8872816023e4c273e75d2419fb89b24da97b4fe7bce14170d671"
 REQUIRED_FILES = ("config.json","model.bin","tokenizer.json","vocabulary.txt")
 ASR_VERSION = "1.2.1"
+MEDIUM_MODEL_ID = "Systran/faster-whisper-medium"
+MEDIUM_REVISION = "7832330bcea9a8d5fd6d6637c49fe5d256e98277"
+MEDIUM_SHA256 = "9b45e1009dcc4ab601eff815b61d80e60ce3fd8c74c1a14f4a282258286b51ae"
+CHALLENGE_VERSION = "bd-asr-fixture-challenge.v2"
 SAMPLE_RATE = 16000
 MAX_SECONDS = 15
 MAX_BYTES = 2*SAMPLE_RATE*MAX_SECONDS
@@ -34,6 +38,15 @@ SPEECH_FIXTURES = (
     ("cta","Salve este conteúdo para revisar mais tarde.",175),
 )
 NEGATIVE_FIXTURES = ("silence","tone")
+CHALLENGE_SPEECH = (
+    ("inventory","Confira o estoque antes de aceitar novos pedidos.",135),
+    ("costs","Calcule os custos fixos e a margem de contribuição.",165),
+    ("planning","Planeje o fluxo de caixa para os próximos meses.",155),
+    ("service","Responda às dúvidas do cliente com clareza e respeito.",180),
+    ("pricing","O preço precisa cobrir as despesas do negócio.",140),
+    ("delivery","Avise o comprador quando a entrega estiver atrasada.",170),
+)
+CHALLENGE_NEGATIVE = ("silence","tone","noise")
 MAX_POOLED_WER = 0.30
 MAX_CASE_WER = 0.50
 
@@ -50,7 +63,13 @@ def _file_hash(path):
     return digest.hexdigest()
 
 
-def verify_checkpoint(model_dir):
+def verify_checkpoint(model_dir,candidate="small"):
+    if candidate=="small":
+        model_id,revision,weights,limit_bytes=MODEL_ID,MODEL_REVISION,MODEL_SHA256,600_000_000
+    elif candidate=="medium":
+        model_id,revision,weights,limit_bytes=MEDIUM_MODEL_ID,MEDIUM_REVISION,MEDIUM_SHA256,1_700_000_000
+    else:
+        raise ASRError("ASR_UNKNOWN_CANDIDATE")
     root=Path(model_dir)
     if not root.is_absolute() or root.is_symlink() or not root.is_dir() or root.resolve()!=root.absolute():
         raise ASRError("ASR_LOCAL_MODEL_DIRECTORY_REQUIRED")
@@ -62,13 +81,13 @@ def verify_checkpoint(model_dir):
     hashes={}
     for name in REQUIRED_FILES:
         path=root/name
-        limit=600_000_000 if name=="model.bin" else 10_000_000
+        limit=limit_bytes if name=="model.bin" else 10_000_000
         if path.is_symlink() or not path.is_file() or not 0<path.stat().st_size<=limit:
             raise ASRError("ASR_CHECKPOINT_FILE_INVALID")
         hashes[name]=_file_hash(path)
-    if hashes["model.bin"]!=MODEL_SHA256:
+    if hashes["model.bin"]!=weights:
         raise ASRError("ASR_MODEL_WEIGHTS_DIGEST_MISMATCH")
-    return {"model_id":MODEL_ID,"model_revision":MODEL_REVISION,
+    return {"model_id":model_id,"model_revision":revision,
             "weights_sha256":hashes["model.bin"],"file_sha256":hashes,
             "weights_digest_verified":True,"supporting_files_independently_verified":False}
 
@@ -99,6 +118,10 @@ def _negative_pcm(kind):
     if kind=="tone":
         return b"".join(struct.pack("<h",round(4096*math.sin(2*math.pi*440*i/SAMPLE_RATE)))
                         for i in range(SAMPLE_RATE*3))
+    if kind=="noise":
+        import random
+        rng=random.Random(20261117)
+        return b"".join(struct.pack("<h",rng.randint(-2048,2048)) for _ in range(SAMPLE_RATE*3))
     raise ASRError("ASR_FIXTURE_INVALID")
 
 
@@ -149,15 +172,15 @@ def _transcribe(model,raw):
             "language_forced":"pt","reference_prompt_used":False}
 
 
-def evaluate_cases(cases):
+def evaluate_cases(cases,speech_fixtures=SPEECH_FIXTURES,negative_fixtures=NEGATIVE_FIXTURES):
     speech=[c for c in cases if c["reference_words"]>0]
     negative=[c for c in cases if c["reference_words"]==0]
     errors=sum(c["word_errors"] for c in speech)
     words=sum(c["reference_words"] for c in speech)
     pooled=errors/words if words else None
-    expected={x[0] for x in SPEECH_FIXTURES}|set(NEGATIVE_FIXTURES)
+    expected={x[0] for x in speech_fixtures}|set(negative_fixtures)
     partition=len(cases)==len(expected) and {c["case_id"] for c in cases}==expected
-    gate=(partition and len(speech)==len(SPEECH_FIXTURES) and len(negative)==len(NEGATIVE_FIXTURES)
+    gate=(partition and len(speech)==len(speech_fixtures) and len(negative)==len(negative_fixtures)
           and pooled is not None and pooled<=MAX_POOLED_WER
           and all(c["wer"]<=MAX_CASE_WER for c in speech)
           and all(c["hypothesis_words"]==0 for c in negative))
@@ -169,8 +192,14 @@ def evaluate_cases(cases):
                              "non_speech_inserted_words":0,"all_cases_required":True}}
 
 
-def run_asr_fixture_benchmark(model_dir):
-    before=verify_checkpoint(model_dir)
+def run_asr_fixture_benchmark(model_dir,candidate="small",suite="baseline"):
+    if suite=="baseline":
+        speech_fixtures,negative_fixtures,policy=SPEECH_FIXTURES,NEGATIVE_FIXTURES,VERSION
+    elif suite=="challenge":
+        speech_fixtures,negative_fixtures,policy=CHALLENGE_SPEECH,CHALLENGE_NEGATIVE,CHALLENGE_VERSION
+    else:
+        raise ASRError("ASR_UNKNOWN_SUITE")
+    before=verify_checkpoint(model_dir,candidate)
     # Set before importing the model library. Local directory and tokenizer
     # are mandatory; no model ID is passed to the inference constructor.
     os.environ.update(HF_HUB_OFFLINE="1",TRANSFORMERS_OFFLINE="1",HF_HUB_DISABLE_TELEMETRY="1")
@@ -192,8 +221,8 @@ def run_asr_fixture_benchmark(model_dir):
     cases=[]
     with tempfile.TemporaryDirectory(prefix="tapi-asr-fixtures-") as temp:
         fixtures=[(cid,text,_speech_pcm(espeak,ffmpeg,temp,cid,text,rate))
-                  for cid,text,rate in SPEECH_FIXTURES]
-        fixtures.extend((cid,"",_negative_pcm(cid)) for cid in NEGATIVE_FIXTURES)
+                  for cid,text,rate in speech_fixtures]
+        fixtures.extend((cid,"",_negative_pcm(cid)) for cid in negative_fixtures)
         for cid,reference,raw in fixtures:
             started=perf_counter()
             observed=_transcribe(model,raw)
@@ -201,12 +230,12 @@ def run_asr_fixture_benchmark(model_dir):
             cases.append({"case_id":cid,"reference":reference,**observed,
                           **word_errors(reference,observed["transcript"]),"inference_ms":latency,
                           "real_time_factor":round(latency/(1000*observed["duration_s"]),6)})
-    if before!=verify_checkpoint(model_dir):
+    if before!=verify_checkpoint(model_dir,candidate):
         raise ASRError("ASR_CHECKPOINT_CHANGED")
-    return {"status":"ASR_FIXTURE_BENCHMARK_COMPLETED","policy_version":VERSION,
+    return {"status":"ASR_FIXTURE_BENCHMARK_COMPLETED","policy_version":policy,"candidate":candidate,"suite":suite,
             "synthetic_only":True,"checkpoint":before,"runtime_versions":versions,
             "model_load_ms":load_ms,"device":"cpu","compute_type":"int8","cases":cases,
-            **evaluate_cases(cases),"asr_evaluated_on_synthetic":True,
+            **evaluate_cases(cases,speech_fixtures,negative_fixtures),"asr_evaluated_on_synthetic":True,
             "asr_validated_on_real_speech":False,"independent_gold":False,
             "real_media_processed":0,"real_media_processing_allowed":False,
             "external_data_accessed":False,"database_mutated":False,
