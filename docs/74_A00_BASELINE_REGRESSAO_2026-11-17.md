@@ -130,3 +130,55 @@ Enviar identidades das falhas e trechos relevantes (remover segredos
 se presentes). Conservar relatório original; a próxima correção
 depende dos sete diagnósticos. Não liberar media/produção, não
 baixar modelos, não alterar DB nem merge.
+
+## A00.2 — diagnóstico e correções das sete falhas (17/11/2026)
+Operador e2a2255: 12/12 testes do runner/inspetor PASS em 0,42s.
+a00_inspect_report recuperou os 7 testes com falha e confirmou hashes
+dos logs; summary SHA256 83a1047e4b316af92ffa606a43539b40c74252bc7df418aa1e9a4e418481ba40,
+JUnit SHA256 c63634089ea6dc81fe8e0150a18ca3c133a1beee9f93be6f3e438dca999d491d
+observado posteriormente, sem digest prévio. Regressão original
+permanece 899 PASS / 7 FAIL / 1 SKIP (commit f69e70f).
+
+### Causas verificadas no traceback e código
+- Quatro falhas em test_discovery_corpus_ingestion: fixture recente
+  de 02/11 tornou-se madura em 17/11. new_records=2, esperado 1.
+  Corrigidos timestamps de fixtures para NOW-30d e NOW-2d; nenhum
+  ajuste ao sampler de produção, grants ou critérios de admissão.
+- Duas falhas em test_discovery_technical_a3: capture de 04/11
+  usava datas fixas; um dos dois posts recentes já ultrapassou 14d.
+  Preservados os valores originais de captura e seus intervalos;
+  replay desloca os timestamps pelo delta a partir de CAPTURE_AS_OF
+  (05/11 01:16 UTC) para NOW. Não representa nova observação real.
+- Uma falha em test_studio_e6: MP4 local criado e recuperado com
+  hash correto; assert de cache esperava no-store, API explicitamente
+  retorna private, no-store e middleware preserva private. Atualizado
+  contrato do teste sem enfraquecer proteção. Verificações posteriores
+  de duração, streams, isolamento e revogação ainda precisam rodar.
+- Novos testes de fronteira para ambos os leitores: exatamente 14d
+  é tecnicamente elegível; 14d menos 1s ainda é recente. MockTransport,
+  relógio de referência explícito, nenhuma chamada real. Não conferir
+  admissão científica à elegibilidade técnica.
+- Cinco commits de correção: a9a22e2, 621a73e, def2706, 2811073,
+  71ff4fa. Somente arquivos de teste, sem alteração de produção.
+  Não executados pelo assistente.
+
+### Próxima validação
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+conda activate tapi-asr
+$env:Path = "C:\Program Files\Tesseract-OCR;C:\Program Files\eSpeak NG;$env:Path"
+$env:ESPEAK_DATA_PATH = "C:\Program Files\eSpeak NG"
+python -m pytest -q tests/test_discovery_corpus_ingestion.py tests/test_discovery_technical_a3.py tests/test_studio_e6.py tests/test_a00_baseline.py tests/test_a00_inspect_report.py
+if ($LASTEXITCODE -ne 0) { throw "Regressao focal falhou; nao executar full" }
+$baseline = (git rev-parse HEAD).Trim()
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+python scripts/a00_baseline.py --expected-head "$baseline" --profile full --report-name "a00-full-$stamp" --tessdata-dir "C:\Models\tapi\tessdata-fast-4.1.0"
+```
+Estimativa de inventário da suíte: 913 testes (907 anteriores +4
+do inspetor +2 de fronteira), com 1 skip opt-in esperado. Confirmar
+contagens reais, não presumir PASS. Suíte semântica anterior 189/189
+no f69e70f; não alterada, mas resultado não certifica novo HEAD.
+A00.2 permanece aguardando regressão; A00.3 e merges não executados.
+Nenhum DB operacional alterado, download de modelos ou gates liberados.
