@@ -71,7 +71,7 @@ def test_read_ranking_requires_exact_current_population_and_snapshot(monkeypatch
     entry={"source_account_id":"12345","caption_sha256":sha256(caption.encode()).hexdigest(),
            "snapshot_id":"s","snapshot_payload_sha256":sha256(metric.model_dump_json().encode()).hexdigest(),
            "audience_tier":"semantic_consensus_only","fields":{k:{"value":None} for k in FIELDS}}
-    replay=SimpleNamespace(config=SimpleNamespace(tenant="tenant",viewer="56789"),frame=object(),
+    replay=SimpleNamespace(config=SimpleNamespace(tenant="tenant",viewer="56789",topic_cta=SimpleNamespace(digest="c"*64),proof_offer=SimpleNamespace(digest="d"*64)),frame=object(),
         _entries={"p":entry},_provenance={"manifest_sha256":"a"*64,"audience_report_sha256":"b"*64})
     engine=SimpleNamespace(connect=lambda:nullcontext(None))
     checked=[]
