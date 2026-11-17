@@ -443,3 +443,57 @@ por dados inventados e não repetir piloto automaticamente. Desativar replay
 com Get-ChildItem Env:TAPI_CAPTION_REPLAY_* | Remove-Item e reiniciar.
 Próximo: ranking exploratório e contrato durável de evidência; A02 direitos
 por ativo antes de mídia real. Nenhum merge.
+
+## A01.5 — replay real confirmado; A04.1/2 — Ranking Explorer
+Operador consultou content.f08418609d2869cd089cf0 (anatex, Reels),
+271 likes/22 comentários/788287 seguidores; snapshot 17/11 11:10.
+Rubrica histórica 1 candidato e 19 abstenções; replay semântico
+retornou consenso semântico, legenda 70 caracteres, 858 registros
+reauditorados às 20:07 e quatro abstenções. Confirma startup e leitura
+real dos relatórios configurados, não acurácia nem cobertura geral de
+UI. A01.5 fluxo operacional verificado; testes recentes e backup v2
+não reportados. Contrato durável e A01.6 integral ainda pendentes.
+
+A04.1/2 parcial (IMP-057/059/064/082): corpus_ranking_read.py reusa
+summarize, analyze_editorial, analyze_rubric e caption_features.
+GET /v1/corpus/inventory/ranking exige roles de pesquisa, loopback,
+replay tenant correspondente, escopo DEC018 e ingestão ociosa.
+Cada consulta/página reaudita toda a partição atual via readiness,
+confere join/grants e snapshots válidos do inventário, vínculo de
+fonte, legenda, snapshot ID e hash de payload contra replay.
+Se qualquer linha estiver ausente, nova, duplicada ou incompatível,
+409 (não gerar ranking parcial). Não é lock transacional distribuído;
+operar com writers de ingestão parados. Sem cache ou nova inferência.
+ER exato Fraction, desempate por content_id, top ceil(n/10), dois
+coortes técnico/semântico, rank global preservado na paginação,
+min 10 posts para intraperfil, Jaccard e leave-one-profile-out.
+Contrastes de quatro campos global/intraperfil e limites por
+missingness, não IC; candidato textual não fato. Sem admissão,
+causalidade, recomendações ou alteração do ranking canônico.
+UI A04-RANKING-1: seção autenticada Ranking Explorer, consulta sob
+demanda, seleção coorte/top ou todos, 25/página, contadores, ER,
+estratos, top intraperfil/sem cobertura, botão Evidências abre o
+mesmo detalhe do Data Explorer. Contrastes e proveniência recolhíveis.
+Logout limpa dados e descarta respostas obsoletas. Não retorna
+legendas, mídia, paths privados ou dados de outro tenant.
+5 testes Python novos (4 ranking +1 rota) e 4 Node; não executados
+pelo assistente. Validar UI e conferir com relatório V10 anterior:
+técnico 858/top86, mediana 0,037614%; semântico 439/top44,
+mediana 0,03323%. Não assumir igualdade antes de executar.
+
+### Operador
+```powershell
+git pull --ff-only
+git rev-parse --short HEAD
+conda activate tapi-asr
+python -m pytest -q tests/test_corpus_ranking_read.py tests/test_corpus_caption_replay.py tests/test_corpus_inventory.py tests/test_discovery_rubric_contrasts.py tests/test_discovery_editorial_descriptive.py tests/test_discovery_backup.py
+node --test tests/test_ranking_ui.mjs tests/test_inventory_ui.mjs tests/test_evidence_lab_ui.mjs
+python scripts/verify_zero_spend.py
+```
+Se todos PASS, executar backup v2 se ainda pendente, writers parados,
+conservar configuração do replay e iniciar servidor. Ctrl+F5, login,
+Ranking Explorer, consultar técnico top 10%, semântico top 10%, abrir
+Evidências, testar paginação/contrastes/logout. Reportar totais e
+medianas, sem enviar relatórios privados. Próximos: fechar A00.3/6
+com evidência, A02 direitos por ativo, LangGraph e contrato durável.
+Sem merge, schema, gasto, mídia ou gate global liberado.
