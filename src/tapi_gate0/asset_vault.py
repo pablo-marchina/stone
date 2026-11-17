@@ -68,8 +68,12 @@ def _binding(anchor,grant_id,target,mime):
         _deny("ASSET_VAULT_GRANT_ID_INVALID")
     # No caller-selected filename, extension, URL or path. Every distinct
     # tenant/source/asset/grant/issuer/key/mime maps to a separate envelope.
-    return json.dumps({"version":"asset-vault.v1","issuer_id":anchor.issuer_id,
-        "issuer_key_sha256":sha256(anchor.public_key).hexdigest(),"grant_id":grant_id,
+    return _binding_fields(anchor.issuer_id,sha256(anchor.public_key).hexdigest(),grant_id,target,mime)
+
+
+def _binding_fields(issuer_id,key_digest,grant_id,target,mime):
+    return json.dumps({"version":"asset-vault.v1","issuer_id":issuer_id,
+        "issuer_key_sha256":key_digest,"grant_id":grant_id,
         "target":target.model_dump(mode="json"),"mime":mime},
         sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()
 
