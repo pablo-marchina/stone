@@ -13,7 +13,7 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from .asset_rights import AssetIdentity, Digest, Id, RightsModel, TrustedAuthority
-from .asset_vault import MIME, MAX_BYTES, _binding
+from .asset_vault import MIME, MAX_BYTES, _binding, _binding_fields
 
 
 class RetainedAssetRef(RightsModel):
@@ -31,6 +31,9 @@ class RetainedAssetRef(RightsModel):
     def consistent(self):
         if self.mime not in MIME.get(self.target.media_kind,()):
             raise ValueError("LINEAGE_ASSET_MIME_INVALID")
+        if self.object_id!=sha256(_binding_fields(self.issuer_id,self.issuer_key_sha256,
+                self.grant_id,self.target,self.mime)).hexdigest():
+            raise ValueError("LINEAGE_OBJECT_BINDING_MISMATCH")
         if any(t.tzinfo is None or t.utcoffset() is None for t in (self.retained_at,self.retain_until)):
             raise ValueError("LINEAGE_AWARE_TIME_REQUIRED")
         if self.retained_at>=self.retain_until:
