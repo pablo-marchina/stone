@@ -70,3 +70,11 @@ def test_cli_joint_requires_explicit_medium(tmp_path,monkeypatch,capsys):
     assert cli.main(args+["--asr-candidate","medium"])==0
     assert json.loads(capsys.readouterr().out)["report_name"]=="joint.json"
     assert cli.main(args+["--asr-candidate","medium"])==2
+
+
+def test_exact_silence_guard_before_vad():
+    r=joint.detect_regions(bytes(96000),lambda _:pytest.fail("VAD must not run"))
+    assert r["intervals"]==[] and not r["vad_inference_attempted"]
+    assert r["guard_reason"]=="EXACT_DIGITAL_SILENCE"
+    r=joint.detect_regions(asr._negative_pcm("tone"),lambda _:[])
+    assert r["vad_inference_attempted"] and r["guard_reason"] is None
