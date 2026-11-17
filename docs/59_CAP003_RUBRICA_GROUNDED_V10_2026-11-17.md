@@ -38,3 +38,30 @@ Próximo: piloto real escopado com proveniência por campo após avaliação;
 melhorar cobertura de audiência em experimento separado; adicionar mídia
 autorizada conforme arquitetura; integrar ao ranking/agente somente com
 evidência suficiente. Não tratar as fixtures como gold independente.
+
+
+## Piloto real condicionado, implementado no mesmo incremento
+`--rubric-grounded-pilot` exige manifesto, campos explicitamente
+selecionados (sem repetição), confirmação de ingestão parada e escopo
+local de pesquisa vigente. Repete o benchmark no mesmo carregamento e
+não processa legendas se algum campo solicitado falhar. Revalida escopo
+antes, durante e depois; usa record observer reauditorado e guarda
+content_id, snapshot_id, hash e offsets em relatório privado. Stdout
+agregado. Nenhuma gravação de rótulo ou mudança no ranking/agent/Studio.
+Tests com transporte simulado publicados, ainda não executados.
+
+Executar primeiro o benchmark sintético acima. Escolher explicitamente
+somente campos true de field_engineering_gate; se nenhum passar, não
+executar o piloto. Exemplo condicional para tema e CTA, somente se ambos
+passarem:
+
+```powershell
+$manifest = "artifacts/private/bd_manifest_a6_v10.json"
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+python scripts/a6_audience_contextual.py --rubric-grounded-pilot --rubric-field tema_principal --rubric-field tipo_cta --manifest $manifest --model-dir "C:\Models\tapi\gliner25-multi-decide" --confirm-all-ingestion-stopped --report-name "a6-rubric-pilot-$stamp.json"
+```
+
+Se um campo falhar, nenhuma inferência real é realizada nessa execução;
+o relatório privado registra o motivo e a evidência do benchmark. O
+escopo global externo continua deny-by-default. O resultado não é
+RubricAssessment validado e não implica aceite de G3.
