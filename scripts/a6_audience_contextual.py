@@ -79,6 +79,7 @@ def main(argv=None):
     modes.add_argument("--synthetic-smoke", action="store_true")
     modes.add_argument("--audience-benchmark", action="store_true", help="Fixed synthetic challenge; compare V1 and descriptive prompts")
     modes.add_argument("--rubric-benchmark", action="store_true", help="Synthetic-only paired semantic rubric challenge")
+    modes.add_argument("--rubric-grounded-benchmark", action="store_true", help="Synthetic-only grounded rubric challenge and field gates")
     modes.add_argument("--execute", action="store_true")
     parser.add_argument("--grounded", action="store_true", help="Compare grounded rules and semantic consensus; real run requires synthetic gate")
     parser.add_argument("--manifest", type=Path)
@@ -98,7 +99,7 @@ def main(argv=None):
         frame = None
         if args.grounded and not (args.audience_benchmark or args.execute):
             raise ConnectorError("BD_AUDIENCE_GROUNDED_MODE_REQUIRED", 422)
-        if (args.audience_benchmark or args.rubric_benchmark) and args.manifest is not None:
+        if (args.audience_benchmark or args.rubric_benchmark or args.rubric_grounded_benchmark) and args.manifest is not None:
             raise ConnectorError("BD_AUDIENCE_BENCHMARK_SYNTHETIC_ONLY", 422)
         if args.manifest is not None and not args.synthetic_smoke:
             from tapi_gate0.discovery_batch import BatchManifest
@@ -112,7 +113,7 @@ def main(argv=None):
             plan = plan_research(engine, tenant, frame, viewer)
             status["local_caption_scope_sources"] = plan["scoped_sources"]
             status["local_caption_scope_allowed"] = bool(plan["sources"]) and all(r["action"] == "ALREADY_PROVISIONED" for r in plan["sources"])
-        if not args.synthetic_smoke and not args.execute and not args.audience_benchmark and not args.rubric_benchmark:
+        if not args.synthetic_smoke and not args.execute and not args.audience_benchmark and not args.rubric_benchmark and not args.rubric_grounded_benchmark:
             print(json.dumps({"status": "CONTEXTUAL_READINESS", **status}))
             return 0
         if args.execute:
@@ -166,12 +167,16 @@ def main(argv=None):
             if (not isinstance(preflight, dict) or
                     preflight.get("topic") not in ("vendas", "finanças", "marketing")):
                 raise RuntimeError("REAL_GLINER_CLASSIFY_TEXT_OUTPUT_INCOMPATIBLE")
-            if args.rubric_benchmark:
+            if args.rubric_benchmark or args.rubric_grounded_benchmark:
                 stage = "rubric_benchmark"
-                from tapi_gate0.discovery_rubric_benchmark import run_rubric_challenge
-                challenge = run_rubric_challenge(extractor)
+                if args.rubric_grounded_benchmark:
+                    from tapi_gate0.discovery_rubric_grounded import run_grounded_rubric_challenge
+                    challenge = run_grounded_rubric_challenge(extractor)
+                else:
+                    from tapi_gate0.discovery_rubric_benchmark import run_rubric_challenge
+                    challenge = run_rubric_challenge(extractor)
                 cases = challenge.pop("cases")
-                report = {"status":"RUBRIC_BENCHMARK_COMPLETED", **status, **challenge,
+                report = {"status":("GROUNDED_RUBRIC_BENCHMARK_COMPLETED" if args.rubric_grounded_benchmark else "RUBRIC_BENCHMARK_COMPLETED"), **status, **challenge,
                           "synthetic_only":True, "database_mutated":False,
                           "model_revision":checkpoint["revision"],
                           "model_weights_sha256":checkpoint["files"]["model.safetensors"]["sha256"]}
