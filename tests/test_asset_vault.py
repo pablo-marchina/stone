@@ -157,3 +157,49 @@ def test_legacy_real_processing_still_denied(vault):
     retain(v)
     with pytest.raises(MediaPermissionError,match="MEDIA_VERIFIED_ASSET_GRANT_REQUIRED"):
         inspect_approved_local_media(str(next(root.iterdir())),TARGET.sha256)
+
+
+@pytest.mark.parametrize("envelope",[b"short",b"X"*64])
+def test_invalid_envelope_reason_preserved(vault,envelope):
+    v,_,root=vault
+    retain(v)
+    path=next(root.iterdir())
+    path.write_bytes(envelope)
+    with pytest.raises(AssetRightsDenied,match="^ASSET_VAULT_ENVELOPE_INVALID$"):
+        read(v)
+    with pytest.raises(AssetRightsDenied,match="^ASSET_VAULT_ENVELOPE_INVALID$"):
+        retain(v)
+    assert path.read_bytes()==envelope
+
+
+def test_authenticated_envelope_still_requires_expected_digest(vault):
+    from tapi_gate0.asset_vault import VERSION,_binding
+    v,_,root=vault
+    retain(v)
+    path=next(root.iterdir())
+    aad=_binding(ANCHOR,"fixture-grant",TARGET,"image/png")
+    nonce=b"n"*12  # Unique in this synthetic test envelope only.
+    altered=DATA+b"unexpected"
+    path.write_bytes(VERSION+nonce+v._cipher.encrypt(nonce,altered,aad))
+    with pytest.raises(AssetRightsDenied,match="^ASSET_VAULT_DIGEST_MISMATCH$"):
+        read(v)
+
+
+def test_actual_os_permission_error_remains_object_unavailable(vault,monkeypatch):
+    v,_,root=vault
+    retain(v)
+    def denied(*args,**kwargs):
+        raise PermissionError("synthetic filesystem failure")
+    with monkeypatch.context() as m:
+        m.setattr("tapi_gate0.asset_vault.os.open",denied)
+        with pytest.raises(AssetRightsDenied,match="^ASSET_VAULT_OBJECT_UNAVAILABLE$") as exc:
+            read(v)
+        assert type(exc.value.__cause__) is PermissionError
+    assert read(v)==DATA
+
+
+def test_missing_envelope_is_not_cryptographic_failure(vault):
+    v,_,root=vault
+    with pytest.raises(AssetRightsDenied,match="^ASSET_VAULT_OBJECT_UNAVAILABLE$"):
+        read(v)
+    assert not list(root.iterdir())
