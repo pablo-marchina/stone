@@ -107,3 +107,65 @@ def test_pilot_requires_manifest_and_explicit_unique_fields(capsys):
         assert not result["database_mutated"] and not result["external_data_accessed"]
     assert main(["--rubric-grounded-benchmark", "--rubric-field", "tipo_cta"]) == 2
     assert json.loads(capsys.readouterr().out)["code"] == "BD_RUBRIC_PILOT_MODE_REQUIRED"
+
+
+@pytest.mark.parametrize("passed", [True, False])
+def test_pilot_gate_precedes_caption_inference(tmp_path, monkeypatch, capsys, passed):
+    import json
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+    from scripts import a6_audience_contextual as runner
+    from tapi_gate0 import discovery_batch, discovery_local_db, sa_store
+    from tapi_gate0 import discovery_corpus_readiness, discovery_rubric_grounded
+    from tapi_gate0.system_one_e1 import LocalGLiNERDecider
+
+    monkeypatch.setenv("TAPI_SYSTEM_ONE_ENABLED", "1")
+    monkeypatch.setenv("TAPI_TENANT_ID", "fixture")
+    monkeypatch.setenv("TAPI_META_IG_ID", "123456")
+    monkeypatch.setenv("TAPI_DATABASE_URL", "fixture")
+    monkeypatch.setattr(runner, "ROOT", tmp_path)
+    model = tmp_path / "model"
+    model.mkdir()
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text("{}", encoding="utf-8")
+    frame = SimpleNamespace(fingerprint=lambda: "c"*64)
+    monkeypatch.setattr(discovery_batch.BatchManifest, "model_validate_json", lambda raw: frame)
+    monkeypatch.setattr(discovery_local_db, "validate_existing_database_url", lambda url: url)
+    monkeypatch.setattr(sa_store, "engine_for", lambda url: SimpleNamespace(dispose=lambda: None))
+    monkeypatch.setattr(runner, "plan_research", lambda *a: {
+        "scoped_sources": 1, "sources": [{"action": "ALREADY_PROVISIONED"}]})
+    monkeypatch.setattr(runner, "require_scoped_research", lambda *a: "fixture-scope")
+    checkpoint = {"manifest_present": True, "revision": "a"*40,
+                  "files": {"model.safetensors": {"sha256": "b"*64}}}
+    monkeypatch.setattr(runner, "_checkpoint_api", lambda: (lambda path: checkpoint, lambda path: None))
+    monkeypatch.setattr(runner, "_model_runtime", lambda: (
+        lambda path: LocalGLiNERDecider(path, _test_model=First()),
+        SimpleNamespace(inference_mode=nullcontext)))
+    monkeypatch.setattr(discovery_rubric_grounded, "run_grounded_rubric_challenge", lambda extractor: {
+        "cases": [], "field_engineering_gate": {"tipo_cta": passed}})
+    observed = []
+    def readiness(*args, _record_observer):
+        observed.append(True)
+        _record_observer(SimpleNamespace(username="fixture"),
+                         SimpleNamespace(content_id="fixture-post", caption="Comente sua dúvida."),
+                         SimpleNamespace(snapshot_id="fixture-snapshot"))
+        return {"first_blocking_stage": {"CAPTION_AVAILABLE_FOR_ASSESSMENT": 1},
+                "as_of": "2026-11-17T00:00:00+00:00"}
+    monkeypatch.setattr(discovery_corpus_readiness, "readiness_report", readiness)
+    exit_code = runner.main(["--rubric-grounded-pilot", "--rubric-field", "tipo_cta",
+                             "--manifest", str(manifest), "--model-dir", str(model),
+                             "--confirm-all-ingestion-stopped", "--report-name", "pilot.json"])
+    report = json.loads(capsys.readouterr().out)
+    saved = json.loads((tmp_path/"artifacts"/"private"/"pilot.json").read_text(encoding="utf-8"))
+    assert exit_code == (0 if passed else 2)
+    assert bool(observed) == passed
+    assert report["assessed_captions"] == int(passed)
+    assert report["rubric_assessments_written"] == report["scientific_admissions"] == 0
+    assert not report["database_mutated"] and not report["candidate_labels_validated"]
+    assert "private_evidence" not in report
+    assert len(saved["private_evidence"]) == int(passed)
+    if passed:
+        assert saved["private_evidence"][0]["snapshot_id"] == "fixture-snapshot"
+        assert report["field_candidate_counts"]["tipo_cta"] == {"comentar": 1}
+    else:
+        assert report["status"] == "GROUNDED_RUBRIC_PILOT_GATE_BLOCKED"
