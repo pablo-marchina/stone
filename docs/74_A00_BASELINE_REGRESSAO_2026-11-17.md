@@ -565,3 +565,64 @@ Enviar saída dos testes e backup (não arquivo SQLite). Não executar
 nova coleta, modelo, mídia ou merge. Somente após backup validado
 avançar em migração operacional; código de registry pode ser testado
 em banco descartável antes disso.
+
+## A00.3 e A02.1 — execução aprovada; A02.2 registro durável
+Operador HEAD 216e45f: cryptography 47.0.0 instalado; 54 Python PASS
+(11,72s, aviso de depreciação Starlette/httpx), 17 Node PASS, sem
+skips, zero-spend PASS. Inclui PDP, ranking, replay, inventário e backup.
+A02.1 núcleo testado, não homologação de operações reais.
+Backup v2 a00-baseline-20261117-202744.sqlite3, capturado
+2026-11-17T23:27:45.453296+00:00, SHA256
+ da5fb2a122843d78580f0b2561cda1cde810c5709e81cbac35278f2c259aa67b
+(10039296 bytes; backup 297ms, restore 234ms), schema 0012,
+integrity/foreign_key ok, equivalência lógica todas as tabelas,
+restore descartável, writers parados declarados. 1065 conteúdos,
+21 perfis, 1169 snapshots, 1065 avaliações, 2455 eventos/outbox,
+5 documentos/5 versões Studio, zero admissão científica. A00.3 concluído
+para essa captura; não mede RPO/RTO produção. Preservar backup privado.
+
+A02.2 parcial IMP-044/045/054/137: asset_rights_registry.py,
+migração 0013_asset_rights_registry (aditiva, três tabelas vazias).
+Autoridades identificadas por tenant/plataforma/emissor, fingerprint
+chave pública, revisão e hash do estado; histórico de revogação assinado
+append-only via serviço; grants vinculados ao content_id, IDs e digest.
+Trust anchor independente fornecido pelo host confiável, não pelo
+banco/HTTP; pin exato da cabeça evita uso enquanto host/DB discordam.
+Provisão requer snapshot assinado correspondente ao pin; registro de
+grant exige digest de evidência verificada pelo host e vínculo de fonte
+ativa, técnica e payload de conteúdo; não verifica documento jurídico.
+Avanço de revogação CAS + transação, revisão crescente, listas cumulativas,
+sem regressão temporal, idempotência sob pin atual. Eventos e outbox
+atômicos, payload mínimo. Decisão lê registro, assinatura, estado e
+fonte a cada chamada. Não é credencial, não é PEP para bytes, não é lock
+que abranja operação de mídia. Sem chaves reais, sem write HTTP, sem
+provisionamento automático, sem migração operacional executada. Registro
+não guarda chaves privadas. Host deve persistir pin externo por escopo
+antes de qualquer uso; recuperação e rotação de chave ainda sem fluxo
+operacional. Revogação física/cascata, retention worker e storage pendentes.
+Downgrade permitido apenas com as três tabelas vazias, nunca apagar
+auditoria existente. Backup v2 agora reconhece 0012/0013 e exige tabelas
+correspondentes à revisão. Migração/schema registrados para fixtures.
+7 testes novos, incluindo teste real Alembic e bloqueio de downgrade
+não vazio. Não executados pelo assistente. A00.4 integração ainda pendente.
+
+### Ensaio antes de migração real
+Com writers parados, atualizar e validar:
+```powershell
+git pull --ff-only
+conda activate tapi-asr
+python -m pytest -q tests/test_asset_rights.py tests/test_asset_rights_registry.py tests/test_discovery_backup.py
+python scripts/verify_zero_spend.py
+```
+Se PASS, rodar ensaio somente sobre backup fixado (sem usar URL live):
+```powershell
+python -m scripts.a02_migration_rehearsal --backup-name "a00-baseline-20261117-202744.sqlite3" --backup-sha256 "da5fb2a122843d78580f0b2561cda1cde810c5709e81cbac35278f2c259aa67b" --tenant "local-research"
+```
+Esperar A02_MIGRATION_REHEARSAL_VERIFIED, tabelas antigas e hashes
+preservados (exceto versão Alembic), 3 novas vazias, integridade/FK,
+downgrade vazio restaura estado, backup inalterado, banco real não acessado.
+Script usa subprocesso Alembic com URL da cópia temporária e ambiente
+filho reduzido; sem sandbox OS. Se falha, preservar diagnóstico.
+Não rodar upgrade operacional ainda; próxima etapa validar ensaio e
+regressão completa, depois upgrade com backup recente confirmado,
+PEP/armazenamento privado e jobs duráveis. Nenhum merge, gate ou mídia.
