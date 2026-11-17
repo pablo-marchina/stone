@@ -152,6 +152,24 @@
       <div class="preview-bar"><h2>Prévia editável</h2><span id="revision">Sem documento</span></div>
       <canvas id="canvas" width="1080" height="1350" tabindex="0" aria-label="Canvas de rascunho editável" aria-describedby="layer-help"></canvas>
       <p class="hint">Visualização raster derivada. O JSON do DesignDocument permanece a fonte da verdade; a exportação só usa os ativos carregados.</p>
+      <section id="evidence-lab" class="evidence-lab" aria-labelledby="evidence-title">
+        <div class="library-heading"><h2 id="evidence-title">Evidence Studio · Rubric Lab</h2><button id="evidence-refresh" type="button" disabled>Consultar evidências</button></div>
+        <p class="hint">Somente fixtures autorais, leitura privada, sem rótulos canônicos. Não há player nem promoção para a rubrica real.</p>
+        <p id="evidence-status" role="status" aria-live="polite">Entre para consultar as evidências sintéticas.</p>
+        <div id="evidence-metrics" class="evidence-metrics"></div>
+        <pre id="evidence-provenance" class="version-diff"></pre>
+        <label for="evidence-case">Conteúdo de teste</label><select id="evidence-case" disabled></select>
+        <label for="evidence-filter">Filtrar campos</label><select id="evidence-filter" disabled>
+          <option value="all">Todos os 20 campos</option><option value="candidate">Candidatos</option>
+          <option value="measurement_only">Medições</option><option value="abstained">Abstenções</option>
+          <option value="not_assessed">Não avaliados</option>
+        </select>
+        <div id="evidence-fields"></div>
+        <h3>Fragmentos de origem</h3><div id="evidence-fragments"></div>
+        <details class="evidence-field"><summary>Ablação: 15 combinações</summary>
+          <div class="evidence-table"><table><thead><tr><th scope="col">Modalidades</th><th scope="col">Acertos</th><th scope="col">Erros</th></tr></thead><tbody id="evidence-ablation"></tbody></table></div>
+        </details>
+      </section>
     </section>
   </main>
 </body>
