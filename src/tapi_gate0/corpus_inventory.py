@@ -6,7 +6,7 @@ The bounded local inventory is intentionally not a ranking implementation.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Response
@@ -69,12 +69,13 @@ def _base(db, tenant, now, *, content_id=None):
     if len(rows) > MAX_RECORDS:
         raise ConnectorError("INVENTORY_LOCAL_LIMIT_EXCEEDED", 409)
     result = {}
-    duplicates = set()
+    from collections import Counter
+    multiplicity = Counter(row["content_id"] for row in rows)
     excluded = 0
     for row in rows:
         cid = row["content_id"]
-        if cid in result:
-            duplicates.add(cid)
+        if multiplicity[cid] != 1:
+            excluded += 1
             continue
         if not _active(row, now):
             excluded += 1
@@ -95,9 +96,6 @@ def _base(db, tenant, now, *, content_id=None):
             excluded += 1
             continue
         result[cid] = (row, post, creator)
-    for cid in duplicates:
-        result.pop(cid, None)
-        excluded += 1
     return list(result.values()), excluded
 
 
