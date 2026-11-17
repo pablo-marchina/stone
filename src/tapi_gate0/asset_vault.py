@@ -105,27 +105,31 @@ class AssetVault:
         return self.root/(sha256(aad).hexdigest()+".enc")
 
     def _read(self,path,aad,target,mime):
-        if path.is_symlink() or path.resolve()!=path or not path.is_file():
-            _deny("ASSET_VAULT_OBJECT_UNAVAILABLE")
+        # AssetRightsDenied inherits PermissionError -> OSError. Keep actual
+        # filesystem error translation separate from all policy/crypto checks.
         try:
+            if path.is_symlink() or path.resolve()!=path or not path.is_file():
+                _deny("ASSET_VAULT_OBJECT_UNAVAILABLE")
             flags=os.O_RDONLY|getattr(os,"O_BINARY",0)|getattr(os,"O_NOFOLLOW",0)
             with os.fdopen(os.open(path,flags),"rb") as stream:
                 info=os.fstat(stream.fileno())
                 if not stat.S_ISREG(info.st_mode) or not OVERHEAD<info.st_size<=MAX_BYTES+OVERHEAD:
                     _deny("ASSET_VAULT_ENVELOPE_INVALID")
                 envelope=stream.read(MAX_BYTES+OVERHEAD+1)
-            if not OVERHEAD<len(envelope)<=MAX_BYTES+OVERHEAD or not envelope.startswith(VERSION):
-                _deny("ASSET_VAULT_ENVELOPE_INVALID")
-            _,invalid_tag=_crypto()
-            try:
-                data=self._cipher.decrypt(envelope[len(VERSION):len(VERSION)+12],
-                    envelope[len(VERSION)+12:],aad)
-            except (invalid_tag,ValueError):
-                _deny("ASSET_VAULT_AUTHENTICATION_FAILED")
-            _validate(data,target,mime)
-            return data
-        except OSError:
-            _deny("ASSET_VAULT_OBJECT_UNAVAILABLE")
+        except AssetRightsDenied:
+            raise
+        except OSError as exc:
+            raise AssetRightsDenied("ASSET_VAULT_OBJECT_UNAVAILABLE") from exc
+        if not OVERHEAD<len(envelope)<=MAX_BYTES+OVERHEAD or not envelope.startswith(VERSION):
+            _deny("ASSET_VAULT_ENVELOPE_INVALID")
+        _,invalid_tag=_crypto()
+        try:
+            data=self._cipher.decrypt(envelope[len(VERSION):len(VERSION)+12],
+                envelope[len(VERSION)+12:],aad)
+        except (invalid_tag,ValueError):
+            _deny("ASSET_VAULT_AUTHENTICATION_FAILED")
+        _validate(data,target,mime)
+        return data
 
     def retain(self,anchor,grant_id,target:AssetIdentity,*,mime:str,purpose:str,data:bytes):
         """Accept already lawfully acquired bytes, never fetch or read a source path.
