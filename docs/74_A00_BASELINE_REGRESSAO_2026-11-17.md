@@ -715,3 +715,67 @@ comandos anteriores. A02.3 não fechado até nova execução. Ensaio 0013
 já aprovado, código de migração inalterado; upgrade operacional ainda
 pendente de regressão e backup recente. Não avançar PEP de mídia
 com regressão aberta. Sem I/O operacional, migration, merge ou gastos.
+
+## A02.3 — regressão integral PASS; A02.4 — upgrade controlado e linhagem
+Operador HEAD 76a9bc8316dca83b746728d58893f5d6db0c1790,
+árvore b45279bff937015c3614d8b465e3ccd29b3d8b95: focal 64/64 PASS
+em 9,11s; zero-spend PASS. Full a02-full-20261117-204437,
+980 coletados / 979 PASS / 0 FAIL / 0 ERROR / 1 SKIP intencional
+(test_operator_actual_triplet_when_configured), pytest 232,743s,
+Node/Gate0 histórico/zero-spend PASS, checkout inalterado.
+pytest.log SHA256 7626e13de51c280fcfe71e468b10ed34376d4893e8cfe68a747dd7b175b2d9c6,
+JUnit SHA256 5bbc85f5903dbf956f9079074bf98c7106366f47bdbef22126a305f76d00101b,
+Node log SHA256 af25bfc6c5f01c1057b2be19c2fc71d46202c393587e1f03699a3fbae5bdfe5f.
+98 módulos, 94 Python test files, 5 Node, 13 migrations, cryptography 47.0.0.
+A00.2 atualizado para esta baseline; vault testado, sem mídia real.
+
+A02 upgrade: scripts/a02_operational_upgrade.py exige HEAD limpo fixado,
+flag explícita --apply-0013 e declaração de writers parados. SQLite existente
+sem redirecionamento, tenant existente, revisão 0012. Cria backup v2 novo
+(exclusivo, verificado com restore descartável), preserva backup original.
+BEGIN IMMEDIATE no banco alvo; confere inventário/hashes contra novo backup
+antes de DDL. Alembic usa conexão fornecida, sem abrir outra conexão;
+DDL e verificação de schema/valores/FK/3 tabelas vazias na mesma transação.
+Se falha antes do commit, rollback; após commit, verificação read-only.
+Falha pós-commit não implica rollback; manter writers parados e inspecionar.
+Não restaura banco automaticamente, não concede direitos, não inicia mídia.
+4 testes novos: sucesso, rollback após DDL real, mudança pós-backup, falta de
+attestation/DB inexistente. Ainda não executados pelo assistente. Alteração
+em migrations/env.py é apenas caminho opcional conexão fornecida; cadeia
+0013 inalterada. Testes em cópias descartáveis antes do upgrade real.
+
+A02.4 parcial: asset_lineage.py define referências imutáveis de objeto
+retido e artefato derivado, digest, grant, emissor, MIME, método/run, pais,
+retention deadline. ID do objeto recalculado com serialização compartilhada
+do vault (sem mudar formato v1). Plano puro de invalidação transitiva por
+asset_id (todos os grants correspondentes), artifact_id e expiração,
+rejeita pais ausentes, IDs duplicados, tenant cruzado, ciclos, derivação
+que antecede pai ou retenção além do pai. Limite 20k nós, até 64 pais;
+nenhum I/O, exclusão física ou autorização. 5 testes novos, pendentes.
+Índice SQL, eventos de invalidação, purge, integração dos PEPs e jobs ainda
+pendentes. Contrato de linhagem não substitui checagem de permissões.
+
+### Operador — testes e upgrade explícito
+Com servidor, agendador e todos os writers parados:
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+conda activate tapi-asr
+python -m pytest -q tests/test_a02_operational_upgrade.py tests/test_asset_lineage.py tests/test_asset_vault.py tests/test_asset_rights.py tests/test_asset_rights_registry.py tests/test_discovery_backup.py
+python scripts/verify_zero_spend.py
+```
+Esperado 73 testes focais, sem skips. Se PASS e quiser aplicar 0013, usar
+URL operacional existente e tenant local-research, não trocar DB:
+```powershell
+$env:TAPI_TENANT_ID = "local-research"
+$baseline = (git rev-parse HEAD).Trim()
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+python -m scripts.a02_operational_upgrade --expected-head "$baseline" --backup-name "a02-pre0013-$stamp.sqlite3" --confirm-all-writers-stopped --apply-0013
+```
+Esperado A02_OPERATIONAL_MIGRATION_VERIFIED, 39 tabelas antigas preservadas,
+3 novas vazias, backup_restore_verified, legacy_logical_contents_match,
+media_enabled=false. Se BLOCKED, não reiniciar nem repetir upgrade às cegas;
+inspecionar revisão e backup. Após sucesso, novo backup 0013 e smoke
+Dashboard/Ranking/Evidence real, sem nova coleta. Regressão full da
+baseline 76a9bc8 já aprovada; novo HEAD ainda focal pendente. Sem merge.
