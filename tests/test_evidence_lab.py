@@ -4,12 +4,12 @@ from copy import deepcopy
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import insert
+from sqlalchemy import insert, select, func
 
 from tapi_gate0 import evidence_lab as lab
 from tapi_gate0.domain import RUBRIC_FIELD_NAMES
 from tapi_gate0.secure_api import create_secure_app
-from tapi_gate0.sa_store import tenants
+from tapi_gate0.sa_store import tenants, rubric_assessments, content_items, domain_events
 from tapi_gate0.identity import memberships
 
 PASSWORD="test-password-with-sufficient-length-123"
@@ -103,7 +103,9 @@ def test_authenticated_tenant_bound_read_only(tmp_path,monkeypatch):
         assert client.get(path,headers=viewer).status_code==401
         html=client.get("/app/studio.html")
         assert html.status_code==200 and 'id="evidence-lab"' in html.text
-        assert 'fixture' not in html.text or 'autorais' in html.text
+        assert "report_sha256" not in html.text
+        with identity.engine.connect() as db:
+            assert all(db.scalar(select(func.count()).select_from(table))==0 for table in (rubric_assessments,content_items,domain_events))
 
 
 def test_disabled_default(tmp_path):
