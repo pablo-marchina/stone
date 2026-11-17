@@ -1,4 +1,4 @@
-"""Offline GLiNER evaluation on the seven saved authored multimodal fixtures."""
+"""Offline GLiNER replay or separate authored CTA stress test."""
 import argparse
 import json
 import os
@@ -30,7 +30,9 @@ def local_report(root,name,*,existing):
 
 def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input-name",required=True)
+    mode=parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--input-name")
+    mode.add_argument("--cta-challenge",action="store_true")
     parser.add_argument("--report-name",required=True)
     parser.add_argument("--model-dir",required=True,type=Path)
     args=parser.parse_args(argv)
@@ -39,15 +41,17 @@ def main(argv=None):
         if not decide("synthetic_local",Operation.EVALUATE_SYNTHETIC.value).permitted:
             raise ValueError("SYNTHETIC_POLICY_DENIED")
         stage="report_validation"
-        source=local_report(ROOT,args.input_name,existing=True)
         target=local_report(ROOT,args.report_name,existing=False)
-        if not 0<source.stat().st_size<=replay.MAX_REPORT_BYTES:
-            raise ValueError("PRIVATE_REPORT_SIZE_INVALID")
-        raw=source.read_bytes()
-        if len(raw)>replay.MAX_REPORT_BYTES:
-            raise ValueError("PRIVATE_REPORT_SIZE_INVALID")
-        report=json.loads(raw)
-        replay.validate_report(report)
+        source=raw=report=None
+        if args.input_name:
+            source=local_report(ROOT,args.input_name,existing=True)
+            if not 0<source.stat().st_size<=replay.MAX_REPORT_BYTES:
+                raise ValueError("PRIVATE_REPORT_SIZE_INVALID")
+            raw=source.read_bytes()
+            if len(raw)>replay.MAX_REPORT_BYTES:
+                raise ValueError("PRIVATE_REPORT_SIZE_INVALID")
+            report=json.loads(raw)
+            replay.validate_report(report)
         if shutil.disk_usage(target.parent).free<64*1024*1024:
             raise ValueError("PRIVATE_REPORT_STORAGE_INSUFFICIENT")
         os.environ.update(HF_HUB_OFFLINE="1",TRANSFORMERS_OFFLINE="1",
@@ -69,12 +73,17 @@ def main(argv=None):
             t=perf_counter()
             extractor=LocalGLiNERDecider(path)._load()
             load_ms=round((perf_counter()-t)*1000,3)
-            stage="semantic_replay"
-            output=replay.replay(report,extractor)
+            if args.cta_challenge:
+                from tapi_gate0.multimodal_cta_challenge import run_challenge
+                stage="cta_challenge"
+                output=run_challenge(extractor)
+            else:
+                stage="semantic_replay"
+                output=replay.replay(report,extractor)
         stage="postflight"
-        if validate_local_checkpoint(path)!=checkpoint or source.read_bytes()!=raw:
+        if validate_local_checkpoint(path)!=checkpoint or (source is not None and source.read_bytes()!=raw):
             raise ValueError("REPLAY_INPUT_CHANGED")
-        output.update(source_report_sha256=sha256(raw).hexdigest(),model_revision=replay.MODEL_REVISION,
+        output.update(source_report_sha256=sha256(raw).hexdigest() if raw is not None else None,model_revision=replay.MODEL_REVISION,
                       model_weights_sha256=replay.MODEL_WEIGHTS,model_load_ms=load_ms,
                       runtime_versions={n:version(n) for n in ("torch","gliner2","transformers","safetensors")})
         stage="report_write"
@@ -82,7 +91,10 @@ def main(argv=None):
         with os.fdopen(fd,"w",encoding="utf-8") as stream:
             json.dump(output,stream,ensure_ascii=False,indent=2)
         summary={k:v for k,v in output.items() if k!="cases"}
-        summary["case_summary"]=[{"case_id":r["case_id"],"audio_diagnostic":r["audio_diagnostic"],
+        if args.cta_challenge:
+            summary["case_summary"]=[{k:r[k] for k in ("case_id","stratum","expected","values")} for r in output["cases"]]
+        else:
+            summary["case_summary"]=[{"case_id":r["case_id"],"audio_diagnostic":r["audio_diagnostic"],
             "all_candidates":{variant:{field:arms["all"][field]["value"] for field in r["expected"]}
                               for variant,arms in r["variants"].items()},
             "audio_cta_diagnostics":[{"rule":p["rule"]["rule_value"],"rule_reason":p["rule"]["reason"],
