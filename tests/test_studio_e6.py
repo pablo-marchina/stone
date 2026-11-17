@@ -152,7 +152,7 @@ def test_real_mp4_pcm_audio_and_tenant_isolation(tmp_path,monkeypatch):
     assert response.content[4:8]==b'ftyp'
     assert sha256(response.content).hexdigest()==outcome.sha256
     assert 'attachment' in response.headers['content-disposition']
-    assert response.headers['cache-control']=='no-store'
+    assert response.headers['cache-control']=='private, no-store'
     path=tmp_path/'draft.mp4';path.write_bytes(response.content)
     probe=subprocess.run(['ffprobe','-v','error','-show_entries',
         'format=duration:stream=codec_type,width,height','-of','json',str(path)],
