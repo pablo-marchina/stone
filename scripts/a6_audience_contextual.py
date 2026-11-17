@@ -81,6 +81,8 @@ def main(argv=None):
     modes.add_argument("--rubric-benchmark", action="store_true", help="Synthetic-only paired semantic rubric challenge")
     modes.add_argument("--rubric-grounded-benchmark", action="store_true", help="Synthetic-only grounded rubric challenge and field gates")
     modes.add_argument("--execute", action="store_true")
+    modes.add_argument("--rubric-grounded-pilot", action="store_true", help="Scoped offline caption candidates; repeat benchmark and require explicit fields")
+    parser.add_argument("--rubric-field", action="append", choices=("tema_principal", "tipo_cta", "prova_social", "oferta_ou_beneficio_explicito", "tom"), default=[])
     parser.add_argument("--grounded", action="store_true", help="Compare grounded rules and semantic consensus; real run requires synthetic gate")
     parser.add_argument("--manifest", type=Path)
     parser.add_argument("--model-dir", type=Path)
@@ -97,6 +99,11 @@ def main(argv=None):
     details = []
     try:
         frame = None
+        if args.rubric_grounded_pilot:
+            if not args.manifest or not args.rubric_field or len(set(args.rubric_field)) != len(args.rubric_field):
+                raise ConnectorError("BD_RUBRIC_PILOT_EXPLICIT_FIELDS_REQUIRED", 422)
+        elif args.rubric_field:
+            raise ConnectorError("BD_RUBRIC_PILOT_MODE_REQUIRED", 422)
         if args.grounded and not (args.audience_benchmark or args.execute):
             raise ConnectorError("BD_AUDIENCE_GROUNDED_MODE_REQUIRED", 422)
         if (args.audience_benchmark or args.rubric_benchmark or args.rubric_grounded_benchmark) and args.manifest is not None:
@@ -113,10 +120,10 @@ def main(argv=None):
             plan = plan_research(engine, tenant, frame, viewer)
             status["local_caption_scope_sources"] = plan["scoped_sources"]
             status["local_caption_scope_allowed"] = bool(plan["sources"]) and all(r["action"] == "ALREADY_PROVISIONED" for r in plan["sources"])
-        if not args.synthetic_smoke and not args.execute and not args.audience_benchmark and not args.rubric_benchmark and not args.rubric_grounded_benchmark:
+        if not args.synthetic_smoke and not args.execute and not args.audience_benchmark and not args.rubric_benchmark and not args.rubric_grounded_benchmark and not args.rubric_grounded_pilot:
             print(json.dumps({"status": "CONTEXTUAL_READINESS", **status}))
             return 0
-        if args.execute:
+        if args.execute or args.rubric_grounded_pilot:
             if frame is None:
                 require_caption_classification()
                 raise ValueError("MANIFEST_REQUIRED")
@@ -167,6 +174,53 @@ def main(argv=None):
             if (not isinstance(preflight, dict) or
                     preflight.get("topic") not in ("vendas", "finanças", "marketing")):
                 raise RuntimeError("REAL_GLINER_CLASSIFY_TEXT_OUTPUT_INCOMPATIBLE")
+            if args.rubric_grounded_pilot:
+                stage = "rubric_grounded_pilot_benchmark"
+                from tapi_gate0.discovery_rubric_grounded import run_grounded_rubric_challenge, grounded_field, VERSION
+                from tapi_gate0.discovery_corpus_readiness import readiness_report
+                challenge = run_grounded_rubric_challenge(extractor)
+                cases = challenge.pop("cases")
+                requested = sorted(args.rubric_field)
+                passed = all(challenge["field_engineering_gate"][field] for field in requested)
+                report = {"status": "GROUNDED_RUBRIC_PILOT_GATE_BLOCKED", **status,
+                          "rubric_policy": VERSION, "requested_fields": requested,
+                          "synthetic_benchmark": challenge, "manifest_sha256": frame.fingerprint(),
+                          "synthetic_only": not passed, "database_mutated": False,
+                          "model_revision": checkpoint["revision"],
+                          "model_weights_sha256": checkpoint["files"]["model.safetensors"]["sha256"],
+                          "assessed_captions": 0, "rubric_assessments_written": 0,
+                          "candidate_labels_validated": False, "automatic_variant_selected": False}
+                if passed:
+                    stage = "rubric_grounded_pilot_inference"
+                    require_scoped_research(engine, tenant, frame, viewer)
+                    def observe(source, post, metric):
+                        require_scoped_research(engine, tenant, frame, viewer)
+                        fields = [grounded_field(extractor, field, post.caption) for field in requested]
+                        details.append({"content_id": post.content_id, "snapshot_id": metric.snapshot_id,
+                                        "username": source.username, "fields": fields})
+                    ready = readiness_report(engine, tenant, frame, viewer, _record_observer=observe)
+                    require_scoped_research(engine, tenant, frame, viewer)
+                    if (len(details) != ready["first_blocking_stage"]["CAPTION_AVAILABLE_FOR_ASSESSMENT"]
+                            or len({row["content_id"] for row in details}) != len(details)):
+                        raise ValueError("BD_CONTEXTUAL_PARTITION_MISMATCH")
+                    counts = {field: Counter() for field in requested}
+                    by_source = defaultdict(lambda: {field: Counter() for field in requested})
+                    for row in details:
+                        for value in row["fields"]:
+                            counts[value["field"]][value["candidate_value"]] += 1
+                            by_source[row["username"]][value["field"]][value["candidate_value"]] += 1
+                    report.update(status="GROUNDED_RUBRIC_PILOT_COMPLETED", assessed_captions=len(details),
+                                  field_candidate_counts={k: dict(v) for k,v in counts.items()},
+                                  per_source={s: {k: dict(v) for k,v in fields.items()}
+                                              for s,fields in sorted(by_source.items())},
+                                  inventory_as_of=ready["as_of"], media_modalities_assessed=False)
+                stage = "private_report_write"
+                fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                    json.dump({**report, "cases": cases, "private_evidence": details}, stream,
+                              ensure_ascii=False, indent=2)
+                print(json.dumps({**report, "report_name": args.report_name}, ensure_ascii=False))
+                return 0 if passed else 2
             if args.rubric_benchmark or args.rubric_grounded_benchmark:
                 stage = "rubric_benchmark"
                 if args.rubric_grounded_benchmark:
