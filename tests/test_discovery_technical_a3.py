@@ -347,3 +347,21 @@ def test_technical_source_verification_never_admits_scientific_corpus(tmp_path):
     assert data_card["observed"]["excluded_source_context_missing"] == 2
     assert data_card["target_reached"] is False
     client.close(); engine.dispose()
+
+
+def test_technical_reader_maturity_boundary_includes_exactly_fourteen_days():
+    from tapi_gate0.discovery_technical import TechnicalDiscoveryReader
+    cutoff = NOW - timedelta(days=14)
+    rows = [dict(OLD[0], timestamp=cutoff.isoformat()),
+            dict(RECENT[0], timestamp=(cutoff + timedelta(seconds=1)).isoformat())]
+    t, calls, client = transport(pages=[rows])
+    try:
+        observations, report = TechnicalDiscoveryReader(t).fetch(
+            request(pages=1), TOKEN, observed_at=NOW)
+        assert len(calls) == 1
+        assert report["counts"]["too_recent"] == 1
+        assert report["counts"]["accepted"] == 1
+        assert [o.item.source_item_id for o in observations] == [OLD[0]["id"]]
+        assert report["provider_data_not_scientifically_reviewed"] is True
+    finally:
+        client.close()
