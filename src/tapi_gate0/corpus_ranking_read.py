@@ -4,8 +4,6 @@ Uses the existing ER and contrast algorithms; never a canonical scientific
 ranking. Refuse the entire ranking if its pinned population is stale.
 """
 from hashlib import sha256
-from math import ceil
-from collections import defaultdict
 
 from .connectors import ConnectorError
 from .discovery_caption_research import require_scoped_research
@@ -38,10 +36,12 @@ def rank_rows(rows, *, cohort, top_only, offset, limit):
     ordered = sorted(group,key=lambda r:(-er(r),r["content_id"]))
     top = set(summary["top_ids_private"][cohort])
     within = set(editorial["private_rankings"][cohort].get("within_profile_top",[]))
+    supported = set(editorial["private_rankings"][cohort].get("percentiles",{}))
     ranked = [{**{k:r[k] for k in ("content_id","username","format","tier","likes","comments","followers",
                 "snapshot_id","observed_at","followers_measured_at","published_at")},
                "rank":i+1,"er_percent":round(float(er(r))*100,6),
-               "top_decile":r["content_id"] in top,"within_profile_top":r["content_id"] in within}
+               "top_decile":r["content_id"] in top,"within_profile_top":r["content_id"] in within,
+               "within_profile_supported":r["content_id"] in supported}
               for i,r in enumerate(ordered)]
     visible = [r for r in ranked if r["top_decile"]] if top_only else ranked
     page = visible[offset:offset+limit]
@@ -108,4 +108,5 @@ def read_ranking(engine, tenant, replay, *, cohort, top_only, offset, limit):
     return {**result,"as_of":ready["as_of"],"manifest_sha256":replay._provenance["manifest_sha256"],
             "audience_report_sha256":replay._provenance["audience_report_sha256"],
             "population_reaudited":len(seen),"denominator":"latest_observed_followers",
-            "full_population_rechecked":True}
+            "full_population_rechecked":True,
+            "rubric_report_sha256":{k:config.topic_cta.digest if k in ("tema_principal","tipo_cta") else config.proof_offer.digest for k in FIELDS}}
