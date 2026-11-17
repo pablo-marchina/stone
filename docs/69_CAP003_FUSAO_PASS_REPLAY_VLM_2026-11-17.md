@@ -79,7 +79,7 @@ $env:TAPI_SYSTEM_ONE_ENABLED="1"
 $env:HF_HUB_OFFLINE="1"
 $env:TRANSFORMERS_OFFLINE="1"
 $stamp=Get-Date -Format "yyyyMMdd-HHmmss"
-python -m pytest -q tests/test_multimodal_semantic_replay.py tests/test_multimodal_vlm.py tests/test_multimodal_fusion.py
+python -m pytest -q tests/test_multimodal_semantic_replay.py tests/test_multimodal_vlm.py tests/test_multimodal_fusion.py -m "not media_integration"
 python scripts/verify_zero_spend.py
 python -m scripts.a6_semantic_replay --model-dir "C:\Models\tapi\gliner25-multi-decide" --input-name "a6-shared-multimodal-20261117-174208.json" --report-name "a6-multimodal-semantic-$stamp.json"
 ```
@@ -88,6 +88,7 @@ Para VLM: ambiente tapi-asr (httpx/Pillow existentes), sem carregar
 GLiNER, verificar RAM/disco:
 ```powershell
 conda activate tapi-asr
+python -m pytest -q tests/test_multimodal_fusion.py -m media_integration
 $vlm="C:\Models\tapi\qwen3-vl-2b-gguf"
 python -m scripts.a6_vlm_benchmark --plan --model-dir "$vlm"
 ```
@@ -124,3 +125,15 @@ Novos módulos/testes não executados pelo assistente, apenas revisão
 estática das APIs/flags upstream. Operador Windows deve validar.
 Sem merge/produção/DB/mídia real/admissão. VLM+fusão semântica,
 calibração 20 campos, direitos por ativo e Evidence Studio pendentes.
+
+## Correção operacional — ambientes separados
+Operador HEAD 4664064 em tapi-s1: 22 PASS / 1 FAIL (ausência de PIL
+em test_shared_lossless_mux_and_timeline); zero-spend PASS.
+Não é reprovação de qualidade de GLiNER/VLM ou da fusão. O mesmo
+mux já passou em tapi-asr no conjunto de 87 testes do HEAD 3fa975e.
+Marcador media_integration registrado e aplicado ao teste que exige
+Pillow e FFmpeg. Rodar 22 testes sem esse marcador em tapi-s1 e o teste
+marcado em tapi-asr; não há skip novo nem mudança de assertions.
+Não instalar Pillow em tapi-s1 apenas para o replay, que consome JSON.
+Benchmark VLM permanece em tapi-asr para reconstruir pixels com
+Pillow 12.3.0 e verificar os hashes. Replay e VLM ainda não executados.
