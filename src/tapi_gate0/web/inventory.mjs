@@ -109,6 +109,44 @@ export function initInventory({api,getPrincipal}){
     const scroll=el('div',undefined,'table-scroll');scroll.append(table);section.append(scroll);
     return section;
   }
+  function renderReplay(replay){
+    const section=el('section',undefined,'inventory-rubric');
+    section.append(el('h4','Evidence Studio · Análise fundamentada de legendas'),
+      el('p','Relatórios experimentais revalidados; separados da rubrica histórica. Não constituem classificação científica.','inventory-hint'));
+    const explanations={disabled:'Relatórios locais ainda não configurados para esta sessão.',
+      outside_report_population:'Publicação fora da população dos relatórios (Reels e carrosséis com legenda elegível).',
+      scope_blocked:'Escopo de pesquisa indisponível, revogado ou ingestão ativa.',
+      stale_row:'Legenda ou snapshot mudou após a reauditoria. Resultado retido.'};
+    if(replay?.status!=='ready'){
+      section.append(el('p',explanations[replay?.status]||'Análise indisponível nesta versão da API.','inventory-hint'));return section;
+    }
+    const tiers={grounded_positive:'Candidato positivo fundamentado',semantic_consensus_only:'Somente consenso semântico',
+      single_model_or_lexical_signal:'Sinal lexical ou de um modelo',unresolved:'Indeterminado',grounded_negative:'Candidato negativo fundamentado'};
+    const dl=el('dl',undefined,'inventory-detail-grid');
+    line(dl,'Público MPE',tiers[replay.audience_tier]||'Indeterminado');
+    line(dl,'Caracteres da legenda',number(replay.caption_characters));
+    line(dl,'População reauditorada',number(replay.population));
+    line(dl,'Reauditoria',date(replay.reaudited_at));
+    section.append(dl);
+    const table=el('table'),head=el('thead'),header=el('tr'),body=el('tbody');
+    for(const name of ['Campo','Estado','Valor','Âncoras lexicais'])header.append(el('th',name));
+    head.append(header);table.append(head,body);
+    for(const [key,cell] of Object.entries(replay.fields)){
+      const tr=el('tr');
+      for(const v of [FIELDS[key]||key,STATES[cell.state]||cell.state,
+        cell.value===null?'—':cell.claim_only?'Alegação textual identificada':cell.value,number(cell.evidence_span_count)])tr.append(el('td',v));
+      body.append(tr);
+    }
+    const scroll=el('div',undefined,'table-scroll');scroll.append(table);section.append(scroll,
+      el('p','Abstenção não significa ausência. Alegações textuais não comprovam fatos. Predições salvas não foram reexecutadas nem verificadas independentemente.','inventory-hint'));
+    const technical=el('details');technical.append(el('summary','Proveniência técnica'),el('pre',JSON.stringify({
+      manifest_sha256:replay.manifest_sha256,audience_report_sha256:replay.audience_report_sha256,
+      caption_sha256:replay.caption_sha256,snapshot_id:replay.snapshot_id,model_revision:replay.model_revision,
+      model_weights_sha256:replay.model_weights_sha256,field_reports:Object.fromEntries(Object.entries(replay.fields).map(([k,v])=>[k,v.report_sha256]))
+    },null,2)));
+    section.append(technical);
+    return section;
+  }
   async function detail(id,offset){
     if(!permitted())return;
     const gen=++detailEpoch;active=id;$('inventory-detail').replaceChildren();
@@ -150,6 +188,7 @@ export function initInventory({api,getPrincipal}){
             'inventory-hint'));
         $('inventory-detail').append(section);
       }
+      $('inventory-detail').append(renderReplay(r.caption_replay));
       $('inventory-detail-status').textContent='Detalhes de '+item.handle+' · '+number(item.valid_snapshot_count)+' snapshots';
       $('inventory-detail-status').focus({preventScroll:false});
     }catch(e){if(gen===detailEpoch&&permitted())$('inventory-detail-status').textContent=e.message;}
