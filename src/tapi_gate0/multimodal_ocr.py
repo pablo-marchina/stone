@@ -115,6 +115,15 @@ def evaluate(cases):
             "gate_criteria":{"max_pooled_wer":MAX_WER,"max_case_wer":MAX_CASE_WER,"negative_words":0}}
 
 
+def ocr_tsv(binary,path,tessdata_dir):
+    # Named tsv config requires tessdata/configs/tsv, absent in minimal
+    # language-only directories. Set renderer variables explicitly instead.
+    return _run(binary,[str(path),"stdout","--tessdata-dir",str(tessdata_dir),
+                        "-l","por+eng","--oem","1","--psm","11",
+                        "-c","tessedit_create_tsv=1","-c","tessedit_create_txt=0"],
+                output_limit=1_000_000)
+
+
 def run_ocr_fixture_benchmark(tessdata_dir):
     from PIL import __version__ as pillow_version
     before=verify_tessdata(tessdata_dir)
@@ -129,8 +138,7 @@ def run_ocr_fixture_benchmark(tessdata_dir):
             path=Path(temp)/(cid+".png")
             digest=generate_image(path,fixture)
             start=perf_counter()
-            words=parse_tsv(_run(binary,[str(path),"stdout","--tessdata-dir",str(tessdata_dir),
-                                        "-l","por+eng","--oem","1","--psm","11","tsv"],output_limit=1_000_000))
+            words=parse_tsv(ocr_tsv(binary,path,tessdata_dir))
             elapsed=round((perf_counter()-start)*1000,3)
             if _file_hash(path)!=digest:
                 raise OCRError("OCR_FIXTURE_CHANGED")
@@ -142,7 +150,7 @@ def run_ocr_fixture_benchmark(tessdata_dir):
     if before!=verify_tessdata(tessdata_dir):
         raise OCRError("OCR_LANGUAGE_DATA_CHANGED")
     return {"status":"OCR_FIXTURE_BENCHMARK_COMPLETED","policy_version":VERSION,
-            "synthetic_only":True,"runtime_versions":{"tesseract":runtime,"pillow":pillow_version},
+            "synthetic_only":True,"renderer":"explicit_tsv_variables","runtime_versions":{"tesseract":runtime,"pillow":pillow_version},
             "language_data_sha256":before,"language_data_independently_verified":False,
             "cases":cases,**evaluate(cases),"ocr_evaluated_on_synthetic":True,
             "ocr_validated_on_real_media":False,"independent_gold":False,
