@@ -60,7 +60,10 @@ def main(argv=None):
                                    "observed_transitions_s":[t["sample_time_s"] for t in r["observation"]["transition_candidates"]],
                                    "duration_s":r["observation"]["duration_s"],
                                    "samples":r["observation"]["samples"],
-                                   "audio_stream_present":r["observation"]["audio_stream_present"]}
+                                   "audio_stream_present":r["observation"]["audio_stream_present"],
+                                   "audio_measurement_passed":r["audio_measurement_passed"],
+                                   "audio_duration_s":r["observation"]["audio_measurements"]["duration_s"]
+                                       if r["observation"]["audio_measurements"] else None}
                                   for r in report["cases"]]
         print(json.dumps({**summary,"report_name":a.report_name}))
         return 0 if report["engineering_gate_passed"] else 2
