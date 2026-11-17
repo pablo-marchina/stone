@@ -37,6 +37,7 @@ def main(argv=None):
     mode.add_argument("--synthetic-asr",action="store_true")
     mode.add_argument("--synthetic-ocr",action="store_true")
     mode.add_argument("--synthetic-vad",action="store_true")
+    mode.add_argument("--synthetic-vad-asr",action="store_true")
     p.add_argument("--tessdata-dir",type=Path,help="Local OCR language files only")
     p.add_argument("--model-dir",type=Path,help="Pinned local ASR checkpoint directory only")
     p.add_argument("--asr-candidate",choices=("small","medium"),default="small")
@@ -48,11 +49,14 @@ def main(argv=None):
         from tapi_gate0.multimodal_asr import ASRError,verify_checkpoint,run_asr_fixture_benchmark
         from tapi_gate0.multimodal_ocr import OCRError,verify_tessdata,run_ocr_fixture_benchmark
         from tapi_gate0.multimodal_vad import VADError,run_vad_fixture_benchmark
+        from tapi_gate0.multimodal_vad_asr import run_vad_asr_benchmark
+        if a.synthetic_vad_asr and (a.asr_candidate!="medium" or a.asr_suite!="baseline"):
+            raise ASRError("ASR_VAD_MEDIUM_REQUIRED")
         if a.tessdata_dir and not (a.check_ready or a.synthetic_ocr):
             raise OCRError("OCR_MODE_REQUIRED")
-        if (a.asr_candidate!="small" or a.asr_suite!="baseline") and not (a.synthetic_asr or (a.check_ready and a.model_dir and a.asr_suite=="baseline")):
+        if (a.asr_candidate!="small" or a.asr_suite!="baseline") and not (a.synthetic_asr or a.synthetic_vad_asr or (a.check_ready and a.model_dir and a.asr_suite=="baseline")):
             raise ASRError("ASR_MODEL_MODE_REQUIRED")
-        if a.model_dir and not (a.check_ready or a.synthetic_asr):
+        if a.model_dir and not (a.check_ready or a.synthetic_asr or a.synthetic_vad_asr):
             raise ASRError("ASR_MODEL_MODE_REQUIRED")
         if a.check_ready:
             if a.report_name:
@@ -97,6 +101,10 @@ def main(argv=None):
             report=run_ocr_fixture_benchmark(a.tessdata_dir)
         elif a.synthetic_vad:
             report=run_vad_fixture_benchmark()
+        elif a.synthetic_vad_asr:
+            if a.model_dir is None:
+                raise ASRError("ASR_LOCAL_MODEL_DIRECTORY_REQUIRED")
+            report=run_vad_asr_benchmark(a.model_dir)
         else:
             report=run_temporal_fixture_benchmark()
         stage="report_write"
@@ -110,6 +118,9 @@ def main(argv=None):
                                       **{k:r[k] for k in ("inference_attempted","abstention_reason") if k in r}} for r in report["cases"]]
         elif a.synthetic_ocr:
             summary["case_summary"]=[{k:r[k] for k in ("case_id","reference_words","hypothesis_words","word_errors","wer","cer","inference_ms")} for r in report["cases"]]
+        elif a.synthetic_vad_asr:
+            summary["case_summary"]=[{**{k:r[k] for k in ("case_id","reference_words","hypothesis_words","word_errors","wer","duration_s","asr_calls","inference_attempted","abstention_reason","asr_inference_ms","vad_inference_ms","real_time_factor")},
+                                      "vad_passed":r["vad_score"]["passed"],"vad_iou":r["vad_score"]["iou"],"segments_count":len(r["segments"])} for r in report["cases"]]
         elif a.synthetic_vad:
             summary["case_summary"]=[{k:r[k] for k in ("case_id","passed","expected_speech_s","detected_speech_s","iou","max_boundary_error_s","false_positive_s","missed_speech_s","inference_ms")} for r in report["cases"]]
         else:
@@ -126,7 +137,7 @@ def main(argv=None):
         print(json.dumps({**summary,"report_name":a.report_name}))
         return 0 if report["engineering_gate_passed"] else 2
     except Exception as exc:
-        code=exc.args[0] if isinstance(exc,(TemporalError,ASRError,OCRError,VADError)) and exc.args and re.fullmatch(r"(?:TEMPORAL|ASR|OCR|VAD)_[A-Z_]+",str(exc.args[0])) else ("ASR_LOCAL_ERROR" if a.synthetic_asr else "OCR_LOCAL_ERROR" if a.synthetic_ocr else "VAD_LOCAL_ERROR" if a.synthetic_vad else "TEMPORAL_LOCAL_ERROR")
+        code=exc.args[0] if isinstance(exc,(TemporalError,ASRError,OCRError,VADError)) and exc.args and re.fullmatch(r"(?:TEMPORAL|ASR|OCR|VAD)_[A-Z_]+",str(exc.args[0])) else ("ASR_LOCAL_ERROR" if (a.synthetic_asr or a.synthetic_vad_asr) else "OCR_LOCAL_ERROR" if a.synthetic_ocr else "VAD_LOCAL_ERROR" if a.synthetic_vad else "TEMPORAL_LOCAL_ERROR")
         diagnostic_stage=getattr(exc,"stage",stage)
         diagnostic_type=getattr(exc,"exception_type",type(exc).__name__)
         diagnostic_case=getattr(exc,"case_id",None)
