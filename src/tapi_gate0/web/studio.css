@@ -30,3 +30,17 @@
 #timeline-job-status{display:block;font-size:.85rem;overflow-wrap:anywhere}
 
 .library-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px}.library-heading button,#library-next{background:#edf4ef;color:#275c43}.library-draft{display:flex;flex-direction:column;gap:4px;text-align:left;width:100%;background:#f5f9f6;color:#20332c;border:1px solid #d2ded4;margin:5px 0;overflow-wrap:anywhere}.library-draft span{font-size:11px;font-weight:400;color:#466454}.library-draft:hover{background:#e7f1e9}.library-draft:focus-visible{outline:3px solid #39a37e}#library-provenance{overflow-wrap:anywhere}
+
+/* IMP-083 — private synthetic evidence inspection, separate from canvas. */
+.evidence-lab{margin-top:24px;padding-top:18px;border-top:1px solid #9ca3af;min-width:0;text-align:left;overflow-wrap:anywhere}
+.evidence-lab h2{font-size:1.1rem}.evidence-lab h3{font-size:1rem;margin:18px 0 8px}
+.evidence-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}
+.evidence-metric{border:1px solid #9ca3af;border-radius:8px;padding:10px;display:grid;gap:4px}
+.evidence-metric strong{font-size:1.4rem}.evidence-metric span{font-size:.8rem}
+.evidence-field{border:1px solid #9ca3af;border-radius:6px;padding:8px;margin:8px 0;min-width:0}
+.evidence-field summary{cursor:pointer;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+.evidence-state{font-size:.75rem;border:1px solid currentColor;border-radius:4px;padding:2px 5px}
+.evidence-field pre,.evidence-lab pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto}
+.evidence-table{overflow:auto}.evidence-table table{width:100%;border-collapse:collapse;text-align:left;font-size:.85rem}
+.evidence-table td,.evidence-table th{padding:6px;border-bottom:1px solid #9ca3af}
+.evidence-lab select{width:100%;margin:4px 0 10px}
