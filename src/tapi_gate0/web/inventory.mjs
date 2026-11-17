@@ -1,4 +1,4 @@
-import { FIELDS, STATES } from './evidence_lab.mjs?v=a01-replay-1';
+import { FIELDS, STATES } from './evidence_lab.mjs?v=a04-ranking-1';
 // A01.3: private technical inventory, no ranking, media, caption export or admission.
 const ROOT='/v1/corpus/inventory';
 const FORMATS={reels:'Reels',carrossel:'Carrossel',imagem:'Imagem',short:'Short'};
@@ -203,5 +203,5 @@ export function initInventory({api,getPrincipal}){
   $('inventory-prev').addEventListener('click',()=>{if(page)void load(Math.max(0,page.offset-page.limit));});
   $('inventory-next').addEventListener('click',()=>{if(page&&page.next_offset!==null)void load(page.next_offset);});
   reset();
-  return {reset,load};
+  return {reset,load,openDetail:id=>void detail(id,0)};
 }
