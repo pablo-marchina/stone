@@ -99,3 +99,21 @@ def test_shared_cli_requires_explicit_models(tmp_path,monkeypatch,capsys):
     assert cli.main(args)==0
     assert json.loads(capsys.readouterr().out)["report_name"]=="shared.json"
     assert cli.main(args)==2
+
+
+def test_asset_binding_rejects_other_pcm_and_frame_order():
+    caption="Salve este post."
+    cap_hash=fusion.digest(caption)
+    row={"media_sha256":ASSET,"caption":caption,"caption_sha256":cap_hash,
+         "decoded_pcm_sha256":"b"*64,"audio":{"pcm_sha256":"b"*64,"segments":[]},
+         "vad":{"pcm_sha256":"b"*64},
+         "ocr_frames":[{"timestamp_s":0},{"timestamp_s":3}],
+         "fragments":[fusion.fragment(ASSET,"caption",caption,{"caption_sha256":cap_hash})]}
+    assert shared.validate_asset_binding(row)
+    row["vad"]["pcm_sha256"]="c"*64
+    with pytest.raises(fusion.FusionError,match="SOURCE_BINDING_INVALID"):
+        shared.validate_asset_binding(row)
+    row["vad"]["pcm_sha256"]="b"*64
+    row["ocr_frames"].reverse()
+    with pytest.raises(fusion.FusionError,match="SOURCE_BINDING_INVALID"):
+        shared.validate_asset_binding(row)
