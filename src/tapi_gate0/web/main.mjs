@@ -5,7 +5,7 @@ const state = { token: null, principal: null, overview: null, controller: null, 
 const stages = [
   ['Coleta', 'creators', 'Fontes autorizadas'],
   ['Corpus', 'posts', 'Conteúdos registrados'],
-  ['Evidências', 'assessments', 'Rubrica e revisão'],
+  ['Evidências', 'assessments', 'Registros de avaliação, não validações'],
   ['Insights', 'insights', 'Análise fundamentada'],
   ['Criação', 'creatives', 'Produção editorial'],
   ['Publicação', null, 'Pendente de habilitação'],
@@ -70,7 +70,7 @@ function renderOverview() {
   const data = state.overview;
   if (!data) return;
   $('tenant-label').textContent = `Organização ${data.tenant_id} · Perfil ${state.principal?.role ?? '—'} · Origem ${data.data_scope}`;
-  const cards = [['Criadores', 'creators', 'Perfis no corpus'], ['Conteúdos', 'posts', 'Posts registrados'], ['Snapshots', 'metrics_snapshots', 'Métricas históricas'], ['Avaliações', 'assessments', 'Rubrica multimodal'], ['Insights', 'insights', 'Evidências fundamentadas'], ['Criativos', 'creatives', 'Versões editoriais']];
+  const cards = [['Criadores', 'creators', 'Perfis no corpus'], ['Conteúdos', 'posts', 'Posts registrados'], ['Snapshots', 'metrics_snapshots', 'Métricas históricas'], ['Avaliações', 'assessments', 'Registros, não validações científicas'], ['Insights', 'insights', 'Evidências fundamentadas'], ['Criativos', 'creatives', 'Versões editoriais (fora da biblioteca Studio)']];
   $('kpis').replaceChildren(...cards.map(([name, key, description], i) => {
     const card = el('article', 'kpi-card');
     card.append(el('span', 'kpi-label', name), el('strong', 'kpi-number', fmt(data.counts[key])), el('span', 'kpi-desc', description));
@@ -86,7 +86,7 @@ function renderOverview() {
   });
   const posts = $('posts-table');posts.replaceChildren();
   if (!data.recent_posts.length) {
-    const tr = el('tr'); const td = el('td','empty-cell','Nenhum conteúdo sintético registrado.'); td.colSpan = 5;tr.append(td);posts.append(tr);
+    const tr = el('tr'); const td = el('td','empty-cell','Nenhum conteúdo registrado.'); td.colSpan = 5;tr.append(td);posts.append(tr);
   } else data.recent_posts.forEach(post => {
     const tr = el('tr'); [post.content_id,post.creator_id,post.media_type,when(post.published_at),post.origin].forEach(v=>tr.append(el('td','',v)));posts.append(tr);
   });
