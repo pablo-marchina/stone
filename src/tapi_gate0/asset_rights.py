@@ -7,10 +7,9 @@ An allow decision is not a reusable bearer credential or permission to bypass
 the still-disabled production entrypoints.
 """
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from enum import Enum
 import json
-import re
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
@@ -178,3 +177,20 @@ def decide_asset(*, authority: TrustedAuthority | None, grant: SignedGrant | Non
     if permission not in g.permissions:
         return deny("ASSET_RIGHTS_SCOPE_MISMATCH")
     return Decision(True,"ASSET_RIGHTS_EXACT_SCOPE","Escopo assinado e estado de revogação correspondentes; execução depende do PEP.")
+
+
+class AssetRightsDenied(PermissionError):
+    pass
+
+
+def require_asset_rights(**scope) -> Decision:
+    """Fail-closed preflight for future PEPs; invoke again at every use.
+
+    No media adapter is enabled by this helper. Future PEPs must additionally
+    bind actual bytes to target.sha256, authenticate the actor, check source
+    grant, enforce retention and recheck on output/commit.
+    """
+    decision = decide_asset(**scope)
+    if not decision.permitted:
+        raise AssetRightsDenied(decision.code)
+    return decision
