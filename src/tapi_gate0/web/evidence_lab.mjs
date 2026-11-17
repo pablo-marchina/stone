@@ -46,7 +46,7 @@ export function initEvidenceLab({api,getToken}){
   function reset(){
     epoch++;summary=null;detail=null;busy=false;
     $('evidence-case').replaceChildren();
-    for(const id of ['evidence-metrics','evidence-fields','evidence-fragments','evidence-ablation','evidence-provenance'])
+    for(const id of ['evidence-metrics','evidence-fields','evidence-fragments','evidence-visual','evidence-ablation','evidence-provenance'])
       $(id).replaceChildren();
     status('Entre para consultar as evidências sintéticas.');
     controls();
@@ -94,7 +94,7 @@ export function initEvidenceLab({api,getToken}){
   async function loadCase(){
     if(!summary||!getToken())return;
     const active=++epoch,token=getToken(),id=$('evidence-case').value;
-    detail=null;busy=true;$('evidence-fields').replaceChildren();$('evidence-fragments').replaceChildren();controls();
+    detail=null;busy=true;$('evidence-fields').replaceChildren();$('evidence-fragments').replaceChildren();$('evidence-visual').replaceChildren();controls();
     try{
       const data=await api('/v1/studio/evidence-lab/cases/'+encodeURIComponent(id));
       if(active!==epoch||token!==getToken())return;
@@ -105,6 +105,11 @@ export function initEvidenceLab({api,getToken}){
           element('p',f.text),element('pre',JSON.stringify({text_sha256:f.text_sha256,locator:f.locator,semantic_eligible:f.semantic_eligible},null,2),'version-diff'));
         return d;
       }));
+      $('evidence-visual').replaceChildren(...data.visual_observations.map(v=>{
+        const d=element('details',undefined,'evidence-field');
+        d.append(element('summary','Frame '+v.timestamp_s+' s · '+(v.prediction?.scene||'Resposta inválida')),
+          element('pre',JSON.stringify(v,null,2),'version-diff'));return d;
+      }),element('pre',JSON.stringify(data.source_rights,null,2),'version-diff'));
       status('Ativo '+data.case_id+' · '+data.media_sha256+' · '+Object.keys(data.field_evidence).length+' campos. Reprodução indisponível.');
     }catch(error){if(active===epoch&&token===getToken())status('Consulta indisponível: '+error.message);}
     finally{if(active===epoch){busy=false;controls();}}
