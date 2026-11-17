@@ -4,10 +4,11 @@ No social-platform acquisition, real-media authorization, semantic hook, cut
 score or RubricAssessment. The low-level reducer receives raw sampled frames;
 only the fixture runner below invokes local media tools.
 """
-from fractions import Fraction
 from hashlib import sha256
 from pathlib import Path
 import json
+import math
+import struct
 import shutil
 import subprocess
 import tempfile
@@ -18,6 +19,7 @@ FPS = 4
 FRAME_BYTES = WIDTH * HEIGHT
 MAX_SECONDS = 8
 MAX_FRAMES = FPS * MAX_SECONDS
+AUDIO_HZ = 16000
 THRESHOLD = 0.20  # mean normalized absolute grayscale difference, not a semantic cut
 FIXTURES = {
     "static": {"colors": ("black", "black", "black"), "expected": [], "audio": False},
@@ -55,6 +57,25 @@ def sample_measurements(raw):
             "transition_candidate_count":len(transitions),
             "semantic_hook_assessed":False,"rubric_cut_score_assessed":False}
 
+
+
+def audio_measurements(raw):
+    """PCM-only signal measurements; no inference of words or speaker identity."""
+    if not raw or len(raw)%2 or len(raw)>2*AUDIO_HZ*MAX_SECONDS:
+        raise TemporalError("TEMPORAL_INVALID_AUDIO_PARTITION")
+    samples=len(raw)//2
+    windows=[]
+    for offset in range(0,min(samples,3*AUDIO_HZ),AUDIO_HZ):
+        end=min(offset+AUDIO_HZ,samples)
+        chunk=raw[offset*2:end*2]
+        energy=sum(value*value for (value,) in struct.iter_unpack("<h",chunk))
+        windows.append({"start_s":offset/AUDIO_HZ,"end_s":end/AUDIO_HZ,
+                        "pcm_sha256":_digest(chunk),
+                        "normalized_rms":round(math.sqrt(energy/(end-offset))/32768,6)})
+    return {"sample_rate_hz":AUDIO_HZ,"samples":samples,"duration_s":samples/AUDIO_HZ,
+            "pcm_sha256":_digest(raw),"opening_windows":windows,
+            "timestamp_kind":"decoded_pcm_timeline_not_original_pts",
+            "speech_recognized":False,"transcript_assessed":False}
 
 def _run(binary, args, *, timeout=30, output_limit=2_000_000):
     if not binary:
@@ -100,10 +121,17 @@ def _measure_generated(ffmpeg,ffprobe,path):
         "-vf",f"fps={FPS},scale={WIDTH}:{HEIGHT},format=gray",
         "-t",str(MAX_SECONDS),"-frames:v",str(MAX_FRAMES),"-threads","1","-f","rawvideo","pipe:1"],
         output_limit=MAX_FRAMES*FRAME_BYTES)
+    audio=None
+    if "audio" in streams:
+        pcm=_run(ffmpeg,["-hide_banner","-loglevel","error","-nostdin",
+            "-protocol_whitelist","file,pipe","-i",str(path),"-map","0:a:0","-vn",
+            "-ac","1","-ar",str(AUDIO_HZ),"-t",str(MAX_SECONDS),"-f","s16le","pipe:1"],
+            output_limit=2*AUDIO_HZ*MAX_SECONDS)
+        audio=audio_measurements(pcm)
     if _digest(path.read_bytes())!=before:
         raise TemporalError("TEMPORAL_FIXTURE_CHANGED")
     return {"media_sha256":before,"duration_s":duration,"audio_stream_present":"audio" in streams,
-            **sample_measurements(raw)}
+            "audio_measurements":audio,**sample_measurements(raw)}
 
 
 def run_temporal_fixture_benchmark():
@@ -120,13 +148,17 @@ def run_temporal_fixture_benchmark():
             actual=[r["sample_time_s"] for r in observation["transition_candidates"]]
             expected=fixture["expected"]
             timing_error=[round(abs(a-b),6) for a,b in zip(actual,expected)] if len(actual)==len(expected) else None
-            passed=(timing_error is not None and all(e<=1/FPS for e in timing_error)
+            audio=observation["audio_measurements"]
+            audio_passed=(audio is not None and abs(audio["duration_s"]-3)<=1/FPS
+                          and len(audio["opening_windows"])==3
+                          and all(w["normalized_rms"]>0.01 for w in audio["opening_windows"])) if fixture["audio"] else audio is None
+            passed=(audio_passed and timing_error is not None and all(e<=1/FPS for e in timing_error)
                     and abs(observation["duration_s"]-3)<=1/FPS
                     and observation["samples"]==3*FPS
                     and observation["audio_stream_present"] is fixture["audio"])
             cases.append({"case_id":key,"expected_transitions_s":expected,
                           "expected_audio_stream":fixture["audio"],
-                          "transition_absolute_errors_s":timing_error,
+                          "transition_absolute_errors_s":timing_error,"audio_measurement_passed":audio_passed,
                           "passed":passed,"observation":observation})
     return {"status":"TEMPORAL_FIXTURE_BENCHMARK_COMPLETED","policy_version":VERSION,
             "tool_versions":versions,"synthetic_only":True,"cases":cases,
