@@ -39,6 +39,7 @@ def main(argv=None):
     mode.add_argument("--synthetic-ocr-consensus",action="store_true")
     mode.add_argument("--synthetic-vad",action="store_true")
     mode.add_argument("--synthetic-vad-asr",action="store_true")
+    mode.add_argument("--synthetic-shared-multimodal",action="store_true")
     p.add_argument("--tessdata-dir",type=Path,help="Local OCR language files only")
     p.add_argument("--model-dir",type=Path,help="Pinned local ASR checkpoint directory only")
     p.add_argument("--asr-candidate",choices=("small","medium"),default="small")
@@ -52,13 +53,17 @@ def main(argv=None):
         from tapi_gate0.multimodal_ocr_consensus import run_ocr_consensus_benchmark
         from tapi_gate0.multimodal_vad import VADError,run_vad_fixture_benchmark
         from tapi_gate0.multimodal_vad_asr import run_vad_asr_benchmark
+        from tapi_gate0.multimodal_fusion import FusionError
+        from tapi_gate0.multimodal_shared_fixture import run_shared_fixture_benchmark
+        if a.synthetic_shared_multimodal and (a.asr_candidate!="medium" or a.asr_suite!="baseline"):
+            raise FusionError("FUSION_MEDIUM_REQUIRED")
         if a.synthetic_vad_asr and (a.asr_candidate!="medium" or a.asr_suite!="baseline"):
             raise ASRError("ASR_VAD_MEDIUM_REQUIRED")
-        if a.tessdata_dir and not (a.check_ready or a.synthetic_ocr or a.synthetic_ocr_consensus):
+        if a.tessdata_dir and not (a.check_ready or a.synthetic_ocr or a.synthetic_ocr_consensus or a.synthetic_shared_multimodal):
             raise OCRError("OCR_MODE_REQUIRED")
-        if (a.asr_candidate!="small" or a.asr_suite!="baseline") and not (a.synthetic_asr or a.synthetic_vad_asr or (a.check_ready and a.model_dir and a.asr_suite=="baseline")):
+        if (a.asr_candidate!="small" or a.asr_suite!="baseline") and not (a.synthetic_asr or a.synthetic_vad_asr or a.synthetic_shared_multimodal or (a.check_ready and a.model_dir and a.asr_suite=="baseline")):
             raise ASRError("ASR_MODEL_MODE_REQUIRED")
-        if a.model_dir and not (a.check_ready or a.synthetic_asr or a.synthetic_vad_asr):
+        if a.model_dir and not (a.check_ready or a.synthetic_asr or a.synthetic_vad_asr or a.synthetic_shared_multimodal):
             raise ASRError("ASR_MODEL_MODE_REQUIRED")
         if a.check_ready:
             if a.report_name:
@@ -111,6 +116,10 @@ def main(argv=None):
             if a.model_dir is None:
                 raise ASRError("ASR_LOCAL_MODEL_DIRECTORY_REQUIRED")
             report=run_vad_asr_benchmark(a.model_dir)
+        elif a.synthetic_shared_multimodal:
+            if a.model_dir is None or a.tessdata_dir is None:
+                raise FusionError("FUSION_LOCAL_MODELS_REQUIRED")
+            report=run_shared_fixture_benchmark(a.model_dir,a.tessdata_dir)
         else:
             report=run_temporal_fixture_benchmark()
         stage="report_write"
@@ -129,6 +138,12 @@ def main(argv=None):
         elif a.synthetic_vad_asr:
             summary["case_summary"]=[{**{k:r[k] for k in ("case_id","reference_words","hypothesis_words","word_errors","wer","duration_s","asr_calls","inference_attempted","abstention_reason","asr_inference_ms","vad_inference_ms","real_time_factor")},
                                       "vad_passed":r["vad_score"]["passed"],"vad_iou":r["vad_score"]["iou"],"segments_count":len(r["segments"])} for r in report["cases"]]
+        elif a.synthetic_shared_multimodal:
+            summary["case_summary"]=[{"case_id":r["case_id"],"expected":r["expected"],
+                                      "all_candidates":{k:r["arms"]["all"][k]["value"] for k in r["expected"]},
+                                      "temporal_passed":r["temporal_passed"],"asr_calls":r["audio"]["asr_calls"],
+                                      "ocr_frames":len(r["ocr_frames"]),"fragment_count":len(r["fragments"])}
+                                     for r in report["cases"]]
         elif a.synthetic_vad:
             summary["case_summary"]=[{k:r[k] for k in ("case_id","passed","expected_speech_s","detected_speech_s","iou","max_boundary_error_s","false_positive_s","missed_speech_s","inference_ms")} for r in report["cases"]]
         else:
@@ -145,7 +160,7 @@ def main(argv=None):
         print(json.dumps({**summary,"report_name":a.report_name}))
         return 0 if report["engineering_gate_passed"] else 2
     except Exception as exc:
-        code=exc.args[0] if isinstance(exc,(TemporalError,ASRError,OCRError,VADError)) and exc.args and re.fullmatch(r"(?:TEMPORAL|ASR|OCR|VAD)_[A-Z_]+",str(exc.args[0])) else ("ASR_LOCAL_ERROR" if (a.synthetic_asr or a.synthetic_vad_asr) else "OCR_LOCAL_ERROR" if (a.synthetic_ocr or a.synthetic_ocr_consensus) else "VAD_LOCAL_ERROR" if a.synthetic_vad else "TEMPORAL_LOCAL_ERROR")
+        code=exc.args[0] if isinstance(exc,(TemporalError,ASRError,OCRError,VADError,FusionError)) and exc.args and re.fullmatch(r"(?:TEMPORAL|ASR|OCR|VAD|FUSION)_[A-Z_]+",str(exc.args[0])) else ("FUSION_LOCAL_ERROR" if a.synthetic_shared_multimodal else "ASR_LOCAL_ERROR" if (a.synthetic_asr or a.synthetic_vad_asr) else "OCR_LOCAL_ERROR" if (a.synthetic_ocr or a.synthetic_ocr_consensus) else "VAD_LOCAL_ERROR" if a.synthetic_vad else "TEMPORAL_LOCAL_ERROR")
         diagnostic_stage=getattr(exc,"stage",stage)
         diagnostic_type=getattr(exc,"exception_type",type(exc).__name__)
         diagnostic_case=getattr(exc,"case_id",None)
