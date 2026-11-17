@@ -122,6 +122,10 @@ async function login() {
     $('password').value = '';
     status('Autenticado como ' + model.principal.role);
     controls();void loadLibrary();
+    if (new URLSearchParams(window.location.search).get("view")==="evidence") {
+      $("evidence-lab").scrollIntoView({block:"start"});
+      void evidenceLab?.load();
+    }
   } catch (error) { reset(); status('Falha de autenticação: '+error.message); }
 }
 async function logout() {
