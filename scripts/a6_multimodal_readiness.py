@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def readiness():
-    binaries={name:bool(shutil.which(name)) for name in ("ffmpeg","ffprobe","tesseract")}
+    binaries={name:bool(shutil.which(name)) for name in ("ffmpeg","ffprobe","tesseract","espeak-ng")}
     modules={name:importlib.util.find_spec(name) is not None for name in ("cv2","numpy","faster_whisper","transformers")}
     return {"status":"MULTIMODAL_LOCAL_READINESS","binaries":binaries,"modules":modules,
             "synthetic_temporal_ready":binaries["ffmpeg"] and binaries["ffprobe"],
@@ -31,13 +31,22 @@ def main(argv=None):
     mode=p.add_mutually_exclusive_group(required=True)
     mode.add_argument("--check-ready",action="store_true")
     mode.add_argument("--synthetic-temporal",action="store_true")
+    mode.add_argument("--synthetic-asr",action="store_true")
+    p.add_argument("--model-dir",type=Path,help="Pinned local ASR checkpoint directory only")
     p.add_argument("--report-name")
     a=p.parse_args(argv)
     try:
+        from tapi_gate0.multimodal_asr import ASRError,verify_checkpoint,run_asr_fixture_benchmark
+        if a.model_dir and not (a.check_ready or a.synthetic_asr):
+            raise ASRError("ASR_MODEL_MODE_REQUIRED")
         if a.check_ready:
             if a.report_name:
                 raise TemporalError("TEMPORAL_REPORT_MODE_REQUIRED")
-            print(json.dumps(readiness()))
+            result=readiness()
+            if a.model_dir:
+                result["asr_checkpoint"]=verify_checkpoint(a.model_dir)
+                result["asr_checkpoint_verified"]=True  # published weight digest, not all companion hashes
+            print(json.dumps(result))
             return 0
         if not decide("synthetic_local",Operation.EVALUATE_SYNTHETIC.value).permitted:
             raise TemporalError("TEMPORAL_SYNTHETIC_POLICY_DENIED")
@@ -50,12 +59,20 @@ def main(argv=None):
         target=private/a.report_name
         if target.exists() or target.is_symlink():
             raise TemporalError("TEMPORAL_PRIVATE_REPORT_EXISTS")
-        report=run_temporal_fixture_benchmark()
+        if a.synthetic_asr:
+            if a.model_dir is None:
+                raise ASRError("ASR_LOCAL_MODEL_DIRECTORY_REQUIRED")
+            report=run_asr_fixture_benchmark(a.model_dir)
+        else:
+            report=run_temporal_fixture_benchmark()
         fd=os.open(target,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
         with os.fdopen(fd,"w",encoding="utf-8") as stream:
             json.dump(report,stream,ensure_ascii=False,indent=2)
         summary={k:v for k,v in report.items() if k!="cases"}
-        summary["case_summary"]=[{"case_id":r["case_id"],"passed":r["passed"],
+        if a.synthetic_asr:
+            summary["case_summary"]=[{k:r[k] for k in ("case_id","reference_words","hypothesis_words","word_errors","wer","duration_s","inference_ms","real_time_factor")} for r in report["cases"]]
+        else:
+            summary["case_summary"]=[{"case_id":r["case_id"],"passed":r["passed"],
                                    "expected_transitions_s":r["expected_transitions_s"],
                                    "observed_transitions_s":[t["sample_time_s"] for t in r["observation"]["transition_candidates"]],
                                    "duration_s":r["observation"]["duration_s"],
@@ -68,7 +85,7 @@ def main(argv=None):
         print(json.dumps({**summary,"report_name":a.report_name}))
         return 0 if report["engineering_gate_passed"] else 2
     except Exception as exc:
-        code=exc.args[0] if isinstance(exc,TemporalError) and exc.args and re.fullmatch(r"TEMPORAL_[A-Z_]+",str(exc.args[0])) else "TEMPORAL_LOCAL_ERROR"
+        code=exc.args[0] if isinstance(exc,(TemporalError,ASRError)) and exc.args and re.fullmatch(r"(?:TEMPORAL|ASR)_[A-Z_]+",str(exc.args[0])) else "TEMPORAL_LOCAL_ERROR"
         print(json.dumps({"status":"BLOCKED","code":code,"synthetic_only":True,
                           "real_media_processed":0,"external_data_accessed":False,
                           "database_mutated":False,"scientific_admissions":0}))
