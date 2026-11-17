@@ -12,6 +12,8 @@ from alembic.config import Config
 from tapi_gate0.asset_rights import (AssetIdentity, Permission, GrantClaims, SignedGrant,
     RevocationClaims, SignedRevocations, TrustedAuthority, AssetRightsDenied, signed_bytes)
 from tapi_gate0.asset_rights_registry import AssetRightsRegistry, authorities, revocations, grants
+from tapi_gate0.asset_lineage_index import AssetLineageIndex, nodes
+from tapi_gate0.asset_lineage import RetainedAssetRef, DerivedArtifactRef, expected_object_id
 from tapi_gate0.connectors import NormalizedItem, Platform
 from tapi_gate0.domain import MediaType
 from tapi_gate0.ingestion import IngestionStore, GrantCreate, source_grants, ingestion_records
@@ -219,3 +221,97 @@ def test_vault_with_real_signed_registry_and_revocation(registry,tmp_path):
     with pytest.raises(AssetRightsDenied,match="ASSET_RIGHTS_REVOKED"):
         vault.read_for_processing(f.pin(revoked),"grant.fixture",target,**kwargs)
     assert len(list(root.iterdir()))==1  # Physical purge remains separate.
+
+
+def indexed(f):
+    retain=Permission(operation="retain",purpose="research_analysis",field="video")
+    derive=Permission(operation="derive",purpose="research_analysis",field="rubric_evidence")
+    f.svc.provision(f.anchor,TENANT,"instagram",f.rv)
+    f.svc.register_grant(f.anchor,f.grant(permissions=(retain,derive,PERMISSION)),
+        verified_approval_digest="b"*64)
+    now=now_utc()
+    ref=RetainedAssetRef(target=f.target,issuer_id=f.anchor.issuer_id,
+        issuer_key_sha256=sha256(f.anchor.public_key).hexdigest(),grant_id="grant.fixture",
+        mime="video/mp4",object_id=expected_object_id(f.anchor,"grant.fixture",f.target,"video/mp4"),
+        byte_count=12,retained_at=now,retain_until=now+timedelta(minutes=20))
+    index=AssetLineageIndex(f.engine)
+    def derived(id,parents):
+        return DerivedArtifactRef(tenant_id=TENANT,artifact_id=id,kind="rubric_evidence",
+            payload_sha256="d"*64,parent_ids=tuple(parents),run_id="run.fixture",method_version="v1",
+            created_at=now,retain_until=now+timedelta(minutes=10))
+    x=derived("x",[ref.object_id])
+    y=derived("y",["x"])
+    return index,ref,x,y,derive
+
+
+def test_lineage_index_signed_revocation_preflight_and_persistent_cascade(registry):
+    f=registry
+    index,ref,x,y,derive=indexed(f)
+    resolve=lambda root:f.anchor
+    assert index.register_retained(f.anchor,ref)
+    assert not index.register_retained(f.anchor,ref)
+    assert index.register_derived(x,resolve_anchor=resolve)
+    assert index.register_derived(y,resolve_anchor=resolve)
+    assert index.preflight(TENANT,"y",resolve_anchor=resolve,permission=derive)["status"]=="PREFLIGHT_ALLOWED"
+    rv=f.state(2,revoked_grant_ids=("grant.fixture",))
+    f.svc.advance(f.anchor,TENANT,"instagram",rv)
+    pin=f.pin(rv)
+    with pytest.raises(AssetRightsDenied,match="ROLLBACK"):
+        index.preflight(TENANT,"y",resolve_anchor=resolve,permission=derive)
+    with pytest.raises(AssetRightsDenied,match="ASSET_RIGHTS_REVOKED"):
+        index.preflight(TENANT,"y",resolve_anchor=lambda root:pin,permission=derive)
+    # Reconciliation remains separate from registry advance; stale pin
+    # never authorizes a destructive action or revives a node.
+    with pytest.raises(AssetRightsDenied,match="ROLLBACK"):
+        index.reconcile_signed_revocations(f.anchor,TENANT,"instagram")
+    result=index.reconcile_signed_revocations(pin,TENANT,"instagram")
+    assert result["newly_invalidated"]==sorted([ref.object_id,"x","y"])
+    assert result["affected_artifacts"]==["x","y"]
+    assert not result["filesystem_mutated"]
+    assert index.reconcile_signed_revocations(pin,TENANT,"instagram")["newly_invalidated"]==[]
+    with pytest.raises(AssetRightsDenied,match="INACTIVE_ANCESTOR"):
+        index.preflight(TENANT,"y",resolve_anchor=lambda root:pin,permission=derive)
+    with f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(nodes).where(nodes.c.state=="invalidated"))==3
+        seqs=db.scalars(select(domain_events.c.seq).where(domain_events.c.aggregate_type=="asset_lineage")).all()
+        assert len(seqs)==6
+        assert db.scalar(select(func.count()).select_from(outbox).where(outbox.c.seq.in_(seqs)))==6
+
+
+def test_lineage_index_rejects_unregistered_parent_wrong_scope_and_tombstone(registry):
+    f=registry
+    index,ref,x,y,derive=indexed(f)
+    resolve=lambda root:f.anchor
+    with pytest.raises(ValueError,match="PARENT_MISSING"):
+        index.register_derived(x,resolve_anchor=resolve)
+    index.register_retained(f.anchor,ref)
+    with pytest.raises(AssetRightsDenied,match="SCOPE_MISMATCH"):
+        index.register_derived(x.model_copy(update={"kind":"ocr"}),resolve_anchor=resolve)
+    with pytest.raises(AssetRightsDenied,match="RETENTION_OUTSIDE_GRANT"):
+        index.register_retained(f.anchor,ref.model_copy(update={"retain_until":now_utc()+timedelta(days=2)}))
+    index.register_derived(x,resolve_anchor=resolve)
+    with pytest.raises(AssetRightsDenied,match="UNKNOWN_NODE"):
+        index.preflight("other","x",resolve_anchor=resolve,permission=derive)
+    index.invalidate(TENANT,artifact_ids=["x"])
+    with pytest.raises(AssetRightsDenied,match="TOMBSTONE"):
+        index.register_derived(x,resolve_anchor=resolve)
+    with pytest.raises(AssetRightsDenied,match="INACTIVE_ANCESTOR"):
+        index.register_derived(y,resolve_anchor=resolve)
+    assert index.preflight(TENANT,ref.object_id,resolve_anchor=resolve,permission=PERMISSION)["status"]=="PREFLIGHT_ALLOWED"
+
+
+def test_lineage_index_expiry_and_source_denial(registry,monkeypatch):
+    from tapi_gate0 import asset_lineage_index as module
+    f=registry
+    index,ref,x,y,derive=indexed(f)
+    index.register_retained(f.anchor,ref)
+    index.register_derived(x,resolve_anchor=lambda root:f.anchor)
+    index.register_derived(y,resolve_anchor=lambda root:f.anchor)
+    with f.engine.begin() as db:
+        db.execute(update(source_grants).where(source_grants.c.tenant_id==TENANT).values(enabled=0))
+    with pytest.raises(AssetRightsDenied,match="SOURCE_DENIED"):
+        index.preflight(TENANT,"y",resolve_anchor=lambda root:f.anchor,permission=derive)
+    monkeypatch.setattr(module,"now_utc",lambda:x.retain_until)
+    result=index.invalidate(TENANT)
+    assert result["newly_invalidated"]==["x","y"]
+    assert result["affected_objects"]==[]
