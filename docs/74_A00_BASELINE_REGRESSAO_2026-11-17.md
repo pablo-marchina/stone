@@ -626,3 +626,64 @@ filho reduzido; sem sandbox OS. Se falha, preservar diagnóstico.
 Não rodar upgrade operacional ainda; próxima etapa validar ensaio e
 regressão completa, depois upgrade com backup recente confirmado,
 PEP/armazenamento privado e jobs duráveis. Nenhum merge, gate ou mídia.
+
+## A02.2 — registro e ensaio aprovados; A02.3 — cofre local de bytes
+Operador HEAD 1e963c7: 46/46 Python PASS em 6,90s, zero-spend PASS.
+Ensaio A02_MIGRATION_REHEARSAL_VERIFIED no backup fixado
+ a00-baseline-20261117-202744.sqlite3 (SHA da5fb2a122843d78580f0b2561cda1cde810c5709e81cbac35278f2c259aa67b):
+0012→0013, 39 tabelas antigas preservadas (exceto controle Alembic),
+3 novas vazias, schema legado e integridade confirmados, downgrade
+vazio verificado, backup inalterado, DB operacional não acessado.
+A02.2 testado em fixtures e cópia real; operação permanece 0012.
+
+A02.3 parcial (IMP-040/044/045/047/054/122/123/126/137/145/146):
+asset_vault.py é biblioteca de host confiável, não endpoint de produção.
+Recebe bytes previamente adquiridos legitimamente, nunca URL/path de
+origem. Exige grant retain antes de validar/escrever; process e retain
+antes e depois de leitura. Reavalia via registry real. Identidade exata
+inclui tenant/plataforma/fonte/post/ativo/digest; AAD inclui emissor,
+fingerprint da chave pública, grant, MIME e identidade. Nome interno
+SHA256 do AAD; sem dedup entre grants/tenants. AES-256-GCM nonce aleatório
+por envelope, chave de 32 bytes fornecida externamente, sem persistir
+chave ou texto claro em disco. Hash e tamanho (40 MB) conferidos antes
+da retenção e após descriptografia. Allowlist de MIME e cabeçalhos
+JPEG/PNG/MP4/WebM/WAV: preflight superficial, não decodificação completa
+nem garantia contra mídia maliciosa. Escrita temporária criptografada,
+fsync e publicação sem sobrescrita via hardlink; falha em filesystem
+incompatível. Rechecagem do grant e limpeza de novo objeto em falha.
+Read retorna bytes apenas ao caller confiável; nenhum player, download,
+export, derivação, publicação ou subprocesso. Sem permissões cruzadas.
+POSIX exige diretório sem group/other; Windows depende de ACL aplicada
+pelo operador (não validada automaticamente). Não é sandbox OS; races
+com processos do mesmo privilégio e janela depois do retorno de bytes
+não são resolvidas. Sem recuperação de staging após crash, índice
+durável de objetos, quotas totais, rotação de chaves, purge automático,
+linhagem de derivados, PEP de inferência ou backup do vault. Backup SQLite
+não inclui bytes. Nenhuma configuração real de chave/diretório/autoridade.
+Legacy inspect_approved_local_media continua deny. 12 testes de vault
++1 integração com registry assinado, pendentes execução; testes usam
+bytes sintéticos apenas (cabeçalhos, não mídia decodificável).
+Decisão de engenharia: AES-GCM e teto 40 MB inicial coerente com adapter
+legado; não é limite institucional. Sem nova migração nem DB live write.
+
+### Próxima validação
+```powershell
+git pull --ff-only
+git status --short
+conda activate tapi-asr
+python -m pytest -q tests/test_asset_vault.py tests/test_asset_rights.py tests/test_asset_rights_registry.py tests/test_discovery_backup.py
+python scripts/verify_zero_spend.py
+```
+Se PASS, regressão integral do novo HEAD com writers parados:
+```powershell
+$env:Path = "C:\Program Files\Tesseract-OCR;C:\Program Files\eSpeak NG;$env:Path"
+$env:ESPEAK_DATA_PATH = "C:\Program Files\eSpeak NG"
+$baseline = (git rev-parse HEAD).Trim()
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+python scripts/a00_baseline.py --expected-head "$baseline" --profile full --report-name "a02-full-$stamp" --tessdata-dir "C:\Models\tapi\tessdata-fast-4.1.0"
+```
+Não executar upgrade operacional até revisar regressão e verificar backup
+atual. O ensaio já aprovado não precisa ser repetido sem mudança na
+migração. Próximo: upgrade 0013 vazio com preflight/backup recente e
+verificação pós-migração, índice/linhagem de objetos, retenção e revogação
+em cascata, PEP antes/durante/depois de inferência. Sem merge ou mídia.
