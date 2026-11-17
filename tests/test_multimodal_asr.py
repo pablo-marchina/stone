@@ -91,3 +91,35 @@ def test_cli_asr_requires_local_checkpoint_and_does_not_run_model(tmp_path,monke
 def test_negative_pcm_is_bounded_and_distinct():
     a,b=asr._negative_pcm("silence"),asr._negative_pcm("tone")
     assert len(a)==len(b)==96000 and not any(a) and any(b)
+
+
+def test_tts_generated_pcm_when_local_tools_available(tmp_path):
+    import shutil
+    espeak,ffmpeg=shutil.which("espeak-ng"),shutil.which("ffmpeg")
+    if not espeak or not ffmpeg:
+        pytest.skip("local eSpeak NG/FFmpeg missing")
+    cid,text,rate=asr.SPEECH_FIXTURES[0]
+    raw=asr._speech_pcm(espeak,ffmpeg,tmp_path,cid,text,rate)
+    assert 0.5<=len(raw)/(2*asr.SAMPLE_RATE)<=asr.MAX_SECONDS
+    assert len(raw)%2==0 and any(raw)
+
+
+def test_asr_report_no_overwrite_and_no_private_text_on_stdout(tmp_path,monkeypatch,capsys):
+    from scripts import a6_multimodal_readiness as cli
+    monkeypatch.setattr(cli,"ROOT",tmp_path)
+    calls=[]
+    def fixture(model_dir):
+        calls.append(model_dir)
+        return {"cases":[{"case_id":"sales","reference_words":7,"hypothesis_words":7,
+                          "word_errors":0,"wer":0,"duration_s":3.,"inference_ms":100,
+                          "real_time_factor":0.033333,"transcript":"private fixture text"}],
+                "engineering_gate_passed":True,"synthetic_only":True}
+    monkeypatch.setattr(asr,"run_asr_fixture_benchmark",fixture)
+    args=["--synthetic-asr","--model-dir",str(tmp_path),"--report-name","asr.json"]
+    assert cli.main(args)==0
+    output=capsys.readouterr().out
+    assert "private fixture text" not in output
+    assert json.loads(output)["case_summary"][0]["wer"]==0
+    assert json.loads((tmp_path/"artifacts"/"private"/"asr.json").read_text())["cases"][0]["transcript"]=="private fixture text"
+    assert cli.main(args)==2
+    assert len(calls)==1
