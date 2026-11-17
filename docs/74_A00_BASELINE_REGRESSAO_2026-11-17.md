@@ -687,3 +687,31 @@ atual. O ensaio já aprovado não precisa ser repetido sem mudança na
 migração. Próximo: upgrade 0013 vazio com preflight/backup recente e
 verificação pós-migração, índice/linhagem de objetos, retenção e revogação
 em cascata, PEP antes/durante/depois de inferência. Sem merge ou mídia.
+
+## A02.3 — reconciliação das falhas de diagnóstico do vault
+Operador HEAD 88f8e83: 59 coletados, 57 PASS / 2 FAIL em 9,24s;
+zero-spend PASS. Falhas test_tamper_wrong_key_and_no_overwrite e
+test_envelope_binding_rejects_copied_object_under_other_grant:
+AUTHENTICATION_FAILED esperado, OBJECT_UNAVAILABLE obtido.
+Causa verificada no código: AssetRightsDenied herda PermissionError,
+que herda OSError; _read capturava a exceção de segurança lançada
+após InvalidTag e traduzia como indisponibilidade de arquivo. Ambos
+os acessos foram negados, sem evidência de bytes liberados. Asserções
+posteriores do primeiro teste (adulteração e não sobrescrita) não
+executadas naquela rodada. Não alterar testes originais para aceitar
+código genérico. 75b056c: restringe tratamento de OSError à leitura
+filesystem, preserva AssetRightsDenied explícito; validação do
+header, autenticação GCM e hash fora do handler. Não muda algoritmo,
+chave, grant, escopo nem entrada operacional.
+8220adb: cinco casos novos distinguem envelope curto/header inválido,
+GCM válido mas digest divergente, PermissionError real de I/O e
+objeto ausente. Verificam não sobrescrita e causa da exceção de I/O.
+6fccdf6: inclui cryptography na proveniência do runner A00.
+64 testes focais esperados, sem skips; novos testes não executados
+pelo assistente. Próxima validação: repetir exatamente a suíte focal
+asset_vault/asset_rights/asset_rights_registry/discovery_backup;
+zero-spend e, somente se PASS, full baseline do novo HEAD conforme
+comandos anteriores. A02.3 não fechado até nova execução. Ensaio 0013
+já aprovado, código de migração inalterado; upgrade operacional ainda
+pendente de regressão e backup recente. Não avançar PEP de mídia
+com regressão aberta. Sem I/O operacional, migration, merge ou gastos.
