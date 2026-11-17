@@ -171,3 +171,87 @@ def test_cli_explicit_medium_challenge(tmp_path,monkeypatch,capsys):
     capsys.readouterr()
     assert cli.main(["--synthetic-temporal","--asr-candidate","medium","--report-name","bad.json"])==2
     assert json.loads(capsys.readouterr().out)["code"]=="ASR_MODEL_MODE_REQUIRED"
+
+
+def test_guard_skips_only_exact_digital_silence(monkeypatch):
+    calls=[]
+    def fake(model,raw):
+        calls.append(raw)
+        return {"transcript":"candidate"}
+    monkeypatch.setattr(asr,"_transcribe",fake)
+    for cid in ("silence","silence_repeat_2","silence_repeat_3"):
+        raw=asr._negative_pcm(cid)
+        result=asr.guarded_transcribe(None,raw)
+        assert not result["inference_attempted"]
+        assert result["abstention_reason"]=="EXACT_DIGITAL_SILENCE"
+        assert result["transcript"]=="" and result["segments"]==[]
+        assert result["pcm_sha256"]==hashlib.sha256(raw).hexdigest()
+    assert not calls
+    for raw in (asr._negative_pcm("tone"),asr._negative_pcm("noise"),b"\x01\x00"+bytes(95998)):
+        assert asr.guarded_transcribe(None,raw)["inference_attempted"]
+    assert len(calls)==3
+    for raw in (b"",b"x",bytes(asr.MAX_BYTES+2)):
+        with pytest.raises(asr.ASRError,match="PCM_INVALID"):
+            asr.guarded_transcribe(None,raw)
+
+
+def test_guarded_repeat_negatives_are_identical_and_required():
+    for cid in ("silence","tone","noise"):
+        assert asr._negative_pcm(cid)==asr._negative_pcm(cid+"_repeat_2")
+    rows=[{"case_id":cid,**asr.word_errors(text,text)} for cid,text,_ in asr.CHALLENGE_SPEECH]+[
+        {"case_id":cid,**asr.word_errors("","")} for cid in asr.GUARDED_NEGATIVE]
+    assert len(rows)==13
+    assert asr.evaluate_cases(rows,asr.CHALLENGE_SPEECH,asr.GUARDED_NEGATIVE)["engineering_gate_passed"]
+    assert not asr.evaluate_cases(rows[:-1],asr.CHALLENGE_SPEECH,asr.GUARDED_NEGATIVE)["engineering_gate_passed"]
+    rows[-2].update(asr.word_errors("","texto"))
+    assert not asr.evaluate_cases(rows,asr.CHALLENGE_SPEECH,asr.GUARDED_NEGATIVE)["engineering_gate_passed"]
+
+
+def test_stage_diagnostic_preserves_known_code_and_cause():
+    with pytest.raises(asr.ASRError) as failure:
+        with asr.asr_stage("inference","sales"):
+            raise RuntimeError("private location")
+    assert str(failure.value)=="ASR_INFERENCE_FAILED"
+    assert failure.value.stage=="inference" and failure.value.case_id=="sales"
+    assert failure.value.exception_type=="RuntimeError"
+    with pytest.raises(asr.ASRError) as failure:
+        with asr.asr_stage("inference","cta"):
+            raise asr.ASRError("ASR_SEGMENT_INVALID")
+    assert str(failure.value)=="ASR_SEGMENT_INVALID"
+    assert failure.value.case_id=="cta"
+
+
+def test_cli_guarded_failure_diagnostic_no_secret(tmp_path,monkeypatch,capsys):
+    from scripts import a6_multimodal_readiness as cli
+    monkeypatch.setattr(cli,"ROOT",tmp_path)
+    def fake(model_dir,candidate,suite):
+        assert (candidate,suite)==("medium","guarded")
+        with asr.asr_stage("inference","delivery"):
+            raise MemoryError("C:/private/path")
+    monkeypatch.setattr(asr,"run_asr_fixture_benchmark",fake)
+    assert cli.main(["--synthetic-asr","--model-dir",str(tmp_path),"--asr-candidate","medium",
+                    "--asr-suite","guarded","--report-name","guarded.json"])==2
+    stdout=capsys.readouterr().out
+    assert "private/path" not in stdout
+    result=json.loads(stdout)
+    assert result["code"]=="ASR_INFERENCE_FAILED"
+    assert result["exception_type"]=="MemoryError" and result["stage"]=="inference"
+    assert result["case_id"]=="delivery"
+    assert not (tmp_path/"artifacts"/"private"/"guarded.json").exists()
+
+
+def test_temp_storage_preflight_fails_before_model(monkeypatch):
+    monkeypatch.setattr(asr.shutil,"disk_usage",lambda _:SimpleNamespace(free=asr.MIN_TEMP_FREE_BYTES-1))
+    with pytest.raises(asr.ASRError,match="TEMP_STORAGE_INSUFFICIENT"):
+        asr.require_temp_capacity()
+
+
+def test_cli_report_storage_preflight(tmp_path,monkeypatch,capsys):
+    from scripts import a6_multimodal_readiness as cli
+    monkeypatch.setattr(cli,"ROOT",tmp_path)
+    monkeypatch.setattr(cli.shutil,"disk_usage",lambda _:SimpleNamespace(free=0))
+    monkeypatch.setattr(asr,"run_asr_fixture_benchmark",lambda *args,**kwargs:pytest.fail("must stop before inference"))
+    assert cli.main(["--synthetic-asr","--model-dir",str(tmp_path),"--report-name","blocked.json"])==2
+    result=json.loads(capsys.readouterr().out)
+    assert result["code"]=="TEMPORAL_REPORT_STORAGE_INSUFFICIENT"
+    assert result["stage"]=="report_storage_preflight"
