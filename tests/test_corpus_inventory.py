@@ -9,10 +9,10 @@ from sqlalchemy import insert, select, update, func
 from tapi_gate0.connectors import NormalizedItem, Platform
 from tapi_gate0.corpus import CorpusProfileCreate, register_profile
 from tapi_gate0.corpus_inventory import InventoryFilter, list_inventory, get_inventory_item
-from tapi_gate0.domain import MediaType
+from tapi_gate0.domain import MediaType, RUBRIC_FIELD_NAMES
 from tapi_gate0.identity import memberships
 from tapi_gate0.ingestion import GrantCreate, IngestionStore, source_grants, ingestion_records
-from tapi_gate0.sa_store import content_items, metrics_snapshots, domain_events, outbox, tenants
+from tapi_gate0.sa_store import content_items, metrics_snapshots, domain_events, outbox, tenants, rubric_assessments
 from tapi_gate0.secure_api import create_secure_app
 from tapi_gate0.storage import now_utc
 
@@ -36,7 +36,7 @@ def seed(engine, tenant, handle, clock):
         item = NormalizedItem(platform=Platform.INSTAGRAM, source_account_id=ACCOUNT,
             source_item_id=str(17900000000011111+i), creator_handle=handle, media_type=kind,
             source_url="https://www.instagram.com/p/Fixture123/",
-            published_at=now-timedelta(days=30+i), caption="private fixture caption",
+            published_at=now-timedelta(days=30+i), caption="private fixture caption. Vendas. Comente sua dúvida.",
             likes=10+i, comments=2, follower_count=100,
             denominator_quality="observed_current_only", metadata_only=True)
         assert store._persist_item(tenant,item)=="created"
@@ -173,3 +173,68 @@ def test_equal_observation_times_report_ambiguity_and_keep_stable_order(app):
     assert tied["item"]["latest_snapshot"]["snapshot_id"]==ids[0]
     assert tied["item"]["latest_snapshot_timestamp_tie"] is True
     assert tied["snapshot_order"]=="observed_at_desc_snapshot_id_desc"
+
+
+def test_stored_rubric_projects_historical_candidates_without_raw_evidence(app):
+    engine=app.state.identity_store.engine
+    first=list_inventory(engine,"tenantA",InventoryFilter(limit=1))["items"][0]
+    cid=first["content_id"]
+    with TestClient(app) as client:
+        headers=auth(client)
+        path="/v1/corpus/inventory/"+cid
+        r=client.get(path,headers=headers)
+        assert r.status_code==200
+        rubric=r.json()["stored_rubric"]
+        assert set(rubric["fields"])==set(RUBRIC_FIELD_NAMES)
+        assert rubric["field_count"]==20
+        assert rubric["state_counts"]=={"candidate":4,"measurement_only":0,"abstained":16,"not_assessed":0}
+        assert rubric["fields"]["tipo_post"]["value"]=="reels"
+        assert rubric["fields"]["tema_principal"]["value"]=="vendas"
+        assert rubric["fields"]["tipo_cta"]["value"]=="comentar"
+        assert rubric["fields"]["hook_primeiros_3s"]["value"] is None
+        assert not rubric["canonical"] and not rubric["semantic_revalidation_performed"]
+        assert rubric["new_model_calls"]==0
+        assert "private fixture caption" not in r.text and "https://" not in r.text
+        IngestionStore(engine).revoke_grant("tenantA","founder",Platform.INSTAGRAM,ACCOUNT)
+        assert client.get(path,headers=headers).status_code==404
+
+
+def test_stored_rubric_withholds_visual_assertion_and_broken_cta_pair(app):
+    engine=app.state.identity_store.engine
+    cid=list_inventory(engine,"tenantA",InventoryFilter(limit=1))["items"][0]["content_id"]
+    with engine.begin() as db:
+        raw=db.scalar(select(rubric_assessments.c.payload).where(
+            rubric_assessments.c.tenant_id=="tenantA",rubric_assessments.c.content_id==cid))
+        payload=json.loads(raw)
+        payload["values"]["tem_rosto"]=True
+        payload["field_evidence"]["tem_rosto"]={"status":"observed","modality":"image","locator":"private-file"}
+        payload["field_evidence"]["tipo_cta"]["locator"]="unrelated-locator"
+        db.execute(update(rubric_assessments).where(rubric_assessments.c.tenant_id=="tenantA",
+            rubric_assessments.c.content_id==cid).values(payload=json.dumps(payload)))
+    result=get_inventory_item(engine,"tenantA",cid)["stored_rubric"]
+    for key in ("tem_rosto","tem_cta","tipo_cta"):
+        assert result["fields"][key]["state"]=="not_assessed"
+        assert result["fields"][key]["value"] is None
+    assert "private-file" not in json.dumps(result)
+    assert result["fields"]["tema_principal"]["value"]=="vendas"
+
+
+def test_stored_rubric_rejects_changed_caption_and_cross_tenant_payload(app):
+    engine=app.state.identity_store.engine
+    cid=list_inventory(engine,"tenantA",InventoryFilter(limit=1))["items"][0]["content_id"]
+    with engine.begin() as db:
+        raw=db.scalar(select(content_items.c.payload).where(content_items.c.tenant_id=="tenantA",content_items.c.id==cid))
+        payload=json.loads(raw);payload["caption"]="another caption"
+        db.execute(update(content_items).where(content_items.c.tenant_id=="tenantA",content_items.c.id==cid)
+            .values(payload=json.dumps(payload)))
+    result=get_inventory_item(engine,"tenantA",cid)["stored_rubric"]
+    assert result["matching_baseline_records"]==0 and result["state_counts"]["not_assessed"]==20
+    other=get_inventory_item(engine,"tenantB",cid)["stored_rubric"]
+    assert other["matching_baseline_records"]==1
+    with engine.begin() as db:
+        raw=db.scalar(select(rubric_assessments.c.payload).where(
+            rubric_assessments.c.tenant_id=="tenantB",rubric_assessments.c.content_id==cid))
+        payload=json.loads(raw);payload["tenant_id"]="tenantA"
+        db.execute(update(rubric_assessments).where(rubric_assessments.c.tenant_id=="tenantB",
+            rubric_assessments.c.content_id==cid).values(payload=json.dumps(payload)))
+    assert get_inventory_item(engine,"tenantB",cid)["stored_rubric"]["state_counts"]["not_assessed"]==20
