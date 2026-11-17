@@ -361,3 +361,27 @@ zero-spend. Confirmar backup operacional v2 antes de iniciar servidor.
 No Data Explorer abrir Detalhes de uma publicação; conferir 20
 campos, estado e versão, não assumir cobertura sem o resultado.
 Preservar o relatório de backup, não compartilhar SQLite.
+
+## A01.4 — QA detalhes reais e detecção de contrato ausente
+Operador consultou content.efbb8e73b8552157e7fef7,
+empreendedorasdabelezagb: imagem, setor beleza, grant vigente até
+17/12, 1 snapshot, 35 likes/1 comentário/65432 seguidores, views
+indisponíveis. Identidade, permissões e histórico exibidos.
+Rubrica não apareceu no conteúdo copiado. Não foi informado HEAD,
+versão dos módulos carregados ou resposta HTTP; não presumir
+causa confirmada. A API a6d5947 retorna stored_rubric mesmo sem
+avaliação compatível; frontend anterior a esse corte não exibe.
+Nova revisão identifica build A01-RUBRIC-2 no título e versiona
+URLs de main/inventory/evidence_lab/CSS. Frontend distingue
+stored_rubric ausente, contrato incompatível e resultado válido
+com 20 campos (inclusive todos não avaliados). Contadores são
+conferidos contra estados; não apresenta promoção canônica.
+Teste Node adicional simula clique real, API antiga e rubrica
+válida sem avaliação, pendente execução. Não alterada política,
+API, dados ou autenticação. Diagnóstico read-only por conteúdo
+pode imprimir schema e contagens sem valores, locadores ou legenda.
+Reiniciar servidor após git pull, Ctrl+F5 e login. Verificar
+marcador A01-RUBRIC-2, consultar detalhes do mesmo post. Se ainda
+falhar, comparar saída local get_inventory_item e resposta HTTP.
+Não iniciar nova inferência nem repetir benchmarks. Backup v2 e
+focal anterior continuam aguardando confirmação; não presumir PASS.
