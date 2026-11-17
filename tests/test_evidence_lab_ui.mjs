@@ -16,3 +16,17 @@ test('ablation counts sum per field without treating denominator as content coun
   }});
   assert.deepEqual(result,[{arm:'Legenda + OCR',correct:8,expected:10,wrong:1}]);
 });
+
+test('dashboard exposes both Studio destinations and Studio has return and evidence anchors',async()=>{
+  const {readFile}=await import('node:fs/promises');
+  const dashboard=await readFile(new URL('../src/tapi_gate0/web/index.html',import.meta.url),'utf8');
+  const studio=await readFile(new URL('../src/tapi_gate0/web/studio.html',import.meta.url),'utf8');
+  assert.match(dashboard,/href="\/app\/studio\.html"/);
+  assert.match(dashboard,/href="\/app\/studio\.html\?view=evidence"/);
+  assert.match(studio,/href="\/app\/"/);
+  assert.match(studio,/href="#evidence-lab"/);
+  assert.match(studio,/id="evidence-lab"/);
+  assert.match(studio,/href="#studio-canvas"/);
+  assert.match(studio,/id="studio-canvas"/);
+  assert.doesNotMatch(dashboard,/Somente atividades sintéticas aparecem aqui/);
+});
