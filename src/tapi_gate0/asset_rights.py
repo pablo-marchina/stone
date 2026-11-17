@@ -84,6 +84,12 @@ class SignedGrant(RightsModel):
     signature: Signature
 
 
+class RevokedSource(RightsModel):
+    tenant_id: Id
+    platform: Literal["instagram","youtube"]
+    source_account_id: Id
+
+
 class RevocationClaims(RightsModel):
     schema_version: Literal["asset-revocations.v1"] = "asset-revocations.v1"
     issuer_id: Id
@@ -92,6 +98,7 @@ class RevocationClaims(RightsModel):
     valid_until: datetime
     revoked_grant_ids: tuple[Id,...] = Field(max_length=10000)
     revoked_asset_ids: tuple[Id,...] = Field(max_length=10000)
+    revoked_sources: tuple[RevokedSource,...] = Field(default=(),max_length=10000)
 
     @model_validator(mode="after")
     def valid_window(self):
@@ -99,7 +106,7 @@ class RevocationClaims(RightsModel):
             raise ValueError("RIGHTS_AWARE_TIMESTAMPS_REQUIRED")
         if not timedelta(0) < self.valid_until-self.issued_at <= MAX_REVOCATION_AGE:
             raise ValueError("RIGHTS_REVOCATION_WINDOW_INVALID")
-        if len(set(self.revoked_grant_ids))!=len(self.revoked_grant_ids) or len(set(self.revoked_asset_ids))!=len(self.revoked_asset_ids):
+        if len(set(self.revoked_grant_ids))!=len(self.revoked_grant_ids) or len(set(self.revoked_asset_ids))!=len(self.revoked_asset_ids) or len(set(self.revoked_sources))!=len(self.revoked_sources):
             raise ValueError("RIGHTS_DUPLICATE_REVOCATION")
         return self
 
@@ -170,7 +177,10 @@ def decide_asset(*, authority: TrustedAuthority | None, grant: SignedGrant | Non
         return deny("ASSET_RIGHTS_REVOCATION_STALE")
     if not g.not_before<=now<min(g.expires_at,g.retain_until):
         return deny("ASSET_RIGHTS_GRANT_INACTIVE")
-    if g.grant_id in rv.revoked_grant_ids or target.asset_id in rv.revoked_asset_ids:
+    source = RevokedSource(tenant_id=target.tenant_id,platform=target.platform,
+        source_account_id=target.source_account_id)
+    if (g.grant_id in rv.revoked_grant_ids or target.asset_id in rv.revoked_asset_ids
+            or source in rv.revoked_sources):
         return deny("ASSET_RIGHTS_REVOKED")
     if g.target!=target:
         return deny("ASSET_RIGHTS_TARGET_MISMATCH")
