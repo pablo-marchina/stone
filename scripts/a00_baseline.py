@@ -166,17 +166,21 @@ def junit_counts(path):
     cases=list(root.iter("testcase"))
     counts={"tests":len(cases),"passed":0,"failed":0,"errors":0,"skipped":0}
     skipped=[]
+    failed=[]
     for c in cases:
+        identity={"class":c.get("classname",""),"name":c.get("name","")}
         if c.find("error") is not None:
             counts["errors"]+=1
+            failed.append({**identity,"kind":"error"})
         elif c.find("failure") is not None:
             counts["failed"]+=1
+            failed.append({**identity,"kind":"failure"})
         elif c.find("skipped") is not None:
             counts["skipped"]+=1
-            skipped.append({"class":c.get("classname",""),"name":c.get("name","")})
+            skipped.append(identity)
         else:
             counts["passed"]+=1
-    return {**counts,"skipped_tests":skipped}
+    return {**counts,"skipped_tests":skipped,"failed_tests":failed}
 
 
 def private_run_dir(root,name):
@@ -245,6 +249,8 @@ def execute(root,expected,profile,name,tessdata=None):
             [sys.executable,"-m","pytest","-q",*tests,"--junitxml",str(xml)],env))
         try:
             report["pytest"]=junit_counts(xml)
+            if xml.is_file():
+                report["pytest_xml_sha256"]=sha256(xml.read_bytes()).hexdigest()
         except ET.ParseError:
             report["pytest"]=None
             report["pytest_junit_invalid"]=True
