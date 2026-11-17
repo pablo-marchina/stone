@@ -25,6 +25,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+markers = ["media_integration: requires local audiovisual runtime (Pillow, FFmpeg)"]
 
 [tool.setuptools.package-data]
 tapi_gate0 = ["sql/*.sql", "web/*"]
