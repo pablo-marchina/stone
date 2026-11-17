@@ -32,9 +32,10 @@ function setConnection(connected) {
 }
 async function api(path, options = {}) {
   const headers = { Accept: 'application/json', ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers };
-  if (state.token) headers.Authorization = `Bearer ${state.token}`;
+  const requestToken = state.token;
+  if (requestToken) headers.Authorization = `Bearer ${requestToken}`;
   const response = await fetch(path, { ...options, headers, cache: 'no-store' });
-  if (response.status === 401 && path !== '/v1/auth/sessions') { logout(); throw new Error('Sua sessão expirou. Entre novamente.'); }
+  if (response.status === 401 && path !== '/v1/auth/sessions') { if (requestToken && state.token === requestToken) logout(); throw new Error('Sua sessão expirou. Entre novamente.'); }
   if (!response.ok) throw new Error(response.status === 403 ? 'Operação negada pela política de acesso.' : `Falha na operação (HTTP ${response.status}).`);
   return response.status === 204 ? null : response.json();
 }
