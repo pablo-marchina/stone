@@ -1,4 +1,5 @@
 import { SSEParser } from './events.mjs';
+import { initInventory } from './inventory.mjs';
 
 const $ = id => document.getElementById(id);
 const state = { token: null, principal: null, overview: null, controller: null, events: new Map(), connected: false, retry: 0, refreshPending: false, generation: 0 };
@@ -52,6 +53,8 @@ async function login(evt) {
     $('password').value = '';
     state.principal = await api('/v1/auth/me');
     authenticatedView(true);
+    inventory.reset();
+    void inventory.load();
     await refresh();
     void connectEvents();
   } catch (error) { $('login-error').textContent = error.message; }
@@ -63,6 +66,7 @@ function logout() {
   state.controller?.abort(); state.controller = null;
   state.token = null; state.principal = null; state.overview = null; state.events.clear(); state.retry = 0;
   $('kpis').replaceChildren(); $('events').replaceChildren(); $('posts-table').replaceChildren(); $('pipeline-graph').replaceChildren();
+  inventory.reset();
   authenticatedView(false); setConnection(false);
   if (oldToken) void fetch('/v1/auth/logout', { method:'POST', headers:{Authorization:`Bearer ${oldToken}`} }).catch(() => {});
 }
@@ -157,6 +161,7 @@ async function connectEvents() {
     await new Promise(resolve=>setTimeout(resolve,Math.min(1000*2**(state.retry-1),10000)));
   }
 }
+const inventory = initInventory({api,getPrincipal:()=>state.principal});
 $('login-form').addEventListener('submit',login);
 $('logout').addEventListener('click',logout);
 $('refresh').addEventListener('click',()=>refresh().catch(err=>{$('footer-status').textContent=err.message;}));
