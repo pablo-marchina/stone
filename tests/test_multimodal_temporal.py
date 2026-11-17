@@ -79,3 +79,23 @@ def test_private_report_and_no_overwrite(tmp_path,monkeypatch,capsys):
     assert runner.main(args)==2
     assert json.loads(capsys.readouterr().out)["code"]=="TEMPORAL_PRIVATE_REPORT_EXISTS"
     assert calls==[True]
+
+
+def test_pcm_measurements_have_hashes_and_no_speech_claim():
+    from tapi_gate0.multimodal_temporal import audio_measurements,AUDIO_HZ
+    import struct
+    import hashlib
+    silence=bytes(AUDIO_HZ*2)
+    signal=struct.pack("<h",16384)*AUDIO_HZ
+    r=audio_measurements(silence+signal)
+    assert r["samples"]==2*AUDIO_HZ and r["duration_s"]==2.
+    assert [w["normalized_rms"] for w in r["opening_windows"]]==[0.,0.5]
+    assert r["opening_windows"][1]["pcm_sha256"]==hashlib.sha256(signal).hexdigest()
+    assert not r["speech_recognized"] and not r["transcript_assessed"]
+
+
+@pytest.mark.parametrize("raw",[b"",b"a",bytes(256002)])
+def test_invalid_pcm_partition(raw):
+    from tapi_gate0.multimodal_temporal import audio_measurements
+    with pytest.raises(TemporalError,match="AUDIO_PARTITION"):
+        audio_measurements(raw)
