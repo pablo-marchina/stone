@@ -49,7 +49,7 @@ ENV_KEYS={"PATH","SYSTEMROOT","WINDIR","COMSPEC","PATHEXT","TEMP","TMP","TMPDIR"
           "ESPEAK_DATA_PATH"}
 PACKAGES=("pytest","fastapi","starlette","pydantic","sqlalchemy","alembic","httpx",
           "numpy","opencv-python-headless","Pillow","faster-whisper","ctranslate2",
-          "onnxruntime","torch","gliner2","transformers","safetensors")
+          "onnxruntime","torch","gliner2","transformers","safetensors","cryptography")
 
 
 class BaselineError(ValueError):
