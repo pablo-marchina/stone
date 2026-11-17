@@ -8,7 +8,6 @@ from importlib.metadata import version
 from pathlib import Path
 from time import perf_counter
 import gc
-import math
 import os
 import shutil
 import tempfile
@@ -58,6 +57,17 @@ def transcribe_regions(model,raw,intervals):
             "inference_attempted":bool(intervals),"asr_calls":len(intervals),
             "abstention_reason":None if intervals else "NO_VAD_SPEECH_REGION",
             "timestamp_kind":"model_estimate_mapped_to_decoded_pcm_not_original_pts"}
+
+
+def detect_regions(raw,detector):
+    n=vad._validate_pcm(raw)
+    if not any(raw):
+        t=perf_counter()
+        return {"pcm_sha256":sha256(raw).hexdigest(),"duration_s":n/asr.SAMPLE_RATE,
+                "intervals":[],"inference_ms":round((perf_counter()-t)*1000,3),
+                "timestamp_kind":"decoded_pcm_sample_indices","vad_inference_attempted":False,
+                "guard_reason":"EXACT_DIGITAL_SILENCE"}
+    return {**vad.inspect_pcm(raw,detector),"vad_inference_attempted":True,"guard_reason":None}
 
 
 def reference_for(cid):
@@ -120,7 +130,7 @@ def run_vad_asr_benchmark(model_dir):
             options=VadOptions(**vad.OPTIONS)
             get_vad_model()
             for cid,raw,expected in fixtures:
-                observation=vad.inspect_pcm(raw,lambda pcm:get_speech_timestamps(pcm,options,sampling_rate=asr.SAMPLE_RATE))
+                observation=detect_regions(raw,lambda pcm:get_speech_timestamps(pcm,options,sampling_rate=asr.SAMPLE_RATE))
                 score=vad.score_intervals(observation["intervals"],expected,len(raw)//2)
                 prepared.append((cid,raw,expected,observation,score))
             if asr._file_hash(asset)!=digest:
@@ -156,7 +166,9 @@ def run_vad_asr_benchmark(model_dir):
             "checkpoint":checkpoint,"vad_asset_sha256":digest,"vad_asset_independently_verified":False,
             "vad_options":vad.OPTIONS,"runtime_versions":{name:version(name) for name in ("faster-whisper","ctranslate2","onnxruntime","numpy","tokenizers","huggingface-hub")},
             "model_load_ms":load_ms,"device":"cpu","compute_type":"int8",
-            "execution_order":"vad_all_then_cache_clear_then_whisper","cases":cases,**evaluate(cases),
+            "execution_order":"exact_silence_guard_then_vad_all_then_cache_clear_then_whisper",
+            "guard_abstentions":sum(not r["vad"]["vad_inference_attempted"] for r in cases),
+            "cases":cases,**evaluate(cases),
             "synthetic_only":True,"asr_integration_evaluated":True,"independent_gold":False,
             "real_media_processed":0,"real_media_processing_allowed":False,"external_data_accessed":False,
             "database_mutated":False,"rubric_assessments_written":0,"scientific_admissions":0,"production_approved":False}
