@@ -385,3 +385,61 @@ marcador A01-RUBRIC-2, consultar detalhes do mesmo post. Se ainda
 falhar, comparar saída local get_inventory_item e resposta HTTP.
 Não iniciar nova inferência nem repetir benchmarks. Backup v2 e
 focal anterior continuam aguardando confirmação; não presumir PASS.
+
+## A01.4 — rubrica histórica verificada no navegador; A01.5 — replay grounded
+Operador confirmou painel histórico de content.efbb8e73b8552157e7fef7:
+20 campos, 3 candidatos (imagem, tem_cta=true, tipo_cta=link na bio),
+17 abstenções, 0 medições/0 não avaliados; deterministic-text-metadata-v1,
+17/11 10:54. Não implica acurácia semântica. Publicação imagem fora
+da população primária do piloto de 858 legendas.
+
+A01.5: corpus_caption_replay.py opt-in vincula manifesto e três relatórios
+privados por nome/digest SHA256, checkpoint fixado e tenant/viewer.
+Reutiliza report_rows/evidence_tier/revalidate_row, reauditoria readiness
+inteira e escopo antes/depois no startup; campos disjuntos, partição exata,
+benchmark rubric gates recalculados. Não reexecuta modelo nem presume
+assinatura/atestação das predições. Hashes locais fixam bytes escolhidos
+pelo operador, não atestam sua origem. Limite de leitura 8 MB por arquivo,
+mesmo leitor privado do Lab sintético. Falha no opt-in impede startup;
+sem configuração, aplicação histórica funciona normalmente.
+Na consulta, somente loopback/tenant/roles de pesquisa e grant vigente;
+escopo DEC018 e ausência de ingestão ativa rechecados, snapshot atual
+(ID + hash do payload) e legenda (hash) vinculados ao replay. Alteração
+ou revogação retém resultado; reauditoria de traces ocorre no startup,
+não a cada GET. Sem texto de legenda, locadores, offsets, dados brutos,
+player, novas inferências, gravação, promoção científica ou ranking.
+UI A01-REPLAY-1 apresenta estrato de audiência, medida de caracteres,
+quatro campos experimentais e proveniência em painel separado. Prova
+social/oferta são alegações textuais, não fatos verificados; abstenção
+não significa negativo. 3 testes novos de wiring (mocks), Node ajustado;
+execução pendente. Testes de revalidação de relatórios existentes devem
+ser reexecutados. Backup operacional v2 e regressão focal ainda sem
+comprovação; não declarar A00.3 concluído.
+
+### Configuração do operador (somente arquivos existentes)
+Com servidor e ingestão parados, validar testes e backup conforme acima.
+```powershell
+$env:TAPI_CAPTION_REPLAY_TENANT = "local-research"
+$refs = @{
+  MANIFEST = "bd_manifest_a6_v10.json"
+  AUDIENCE = "a6-grounded-v10-20261117-112228.json"
+  TOPIC_CTA = "a6-rubric-pilot-20261117-121219.json"
+  PROOF_OFFER = "a6-rubric-proof-offer-20261117-140542.json"
+}
+foreach ($key in $refs.Keys) {
+  $path = Join-Path "artifacts/private" $refs[$key]
+  if (!(Test-Path -LiteralPath $path -PathType Leaf)) { throw "Arquivo ausente: $key" }
+  [Environment]::SetEnvironmentVariable("TAPI_CAPTION_REPLAY_${key}_NAME", $refs[$key], "Process")
+  [Environment]::SetEnvironmentVariable("TAPI_CAPTION_REPLAY_${key}_SHA256", (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant(), "Process")
+}
+if ([string]::IsNullOrWhiteSpace($env:TAPI_META_IG_ID)) { throw "Restaurar viewer IG existente, sem divulgar ID/token" }
+$env:TAPI_ALLOW_HTTP_LOOPBACK = "1"
+python -m uvicorn tapi_gate0.secure_api:from_environment --factory --host 127.0.0.1 --port 8000
+```
+Não iniciar coleta em paralelo. Abrir Reels/carrossel no Data Explorer;
+imagem anterior deve mostrar fora da população, não negativo. Se startup
+bloqueado por partição/snapshot/escopo, preservar diagnóstico, não substituir
+por dados inventados e não repetir piloto automaticamente. Desativar replay
+com Get-ChildItem Env:TAPI_CAPTION_REPLAY_* | Remove-Item e reiniciar.
+Próximo: ranking exploratório e contrato durável de evidência; A02 direitos
+por ativo antes de mídia real. Nenhum merge.
