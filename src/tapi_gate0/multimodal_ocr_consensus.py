@@ -3,7 +3,6 @@
 Same engine and language weights: agreement is not independent confirmation.
 Only generated images are accepted by the benchmark. No canonical evidence.
 """
-from hashlib import sha256
 from pathlib import Path
 from time import perf_counter
 import shutil
@@ -171,6 +170,8 @@ def run_ocr_consensus_benchmark(tessdata_dir):
                      "primary":score_row(cid,reference,first),"supporting":score_row(cid,reference,second),
                      "primary_word_count":len(first),"supporting_word_count":len(second),
                      "accepted_word_count":len(accepted),"discarded_primary_word_count":len(first)-len(accepted),
+                     "complete_primary_sequence_retained":bool(first) and len(first)==len(accepted),
+                     "complete_text_verified":False,
                      "inference_ms":elapsed,"observation_status":"candidate" if accepted else "abstained",
                      "abstention_reason":None if accepted else "NO_RECIPROCAL_CROSS_VIEW_AGREEMENT"}
                 rows.append(row)
