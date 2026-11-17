@@ -123,3 +123,51 @@ def test_asr_report_no_overwrite_and_no_private_text_on_stdout(tmp_path,monkeypa
     assert json.loads((tmp_path/"artifacts"/"private"/"asr.json").read_text())["cases"][0]["transcript"]=="private fixture text"
     assert cli.main(args)==2
     assert len(calls)==1
+
+
+def test_medium_requires_its_own_digest(tmp_path,monkeypatch):
+    for name in asr.REQUIRED_FILES:
+        (tmp_path/name).write_bytes(name.encode())
+    monkeypatch.setattr(asr,"MEDIUM_SHA256",hashlib.sha256(b"model.bin").hexdigest())
+    proof=asr.verify_checkpoint(tmp_path,"medium")
+    assert proof["model_id"]==asr.MEDIUM_MODEL_ID
+    assert proof["model_revision"]==asr.MEDIUM_REVISION
+    with pytest.raises(asr.ASRError,match="WEIGHTS_DIGEST"):
+        asr.verify_checkpoint(tmp_path,"small")
+    with pytest.raises(asr.ASRError,match="UNKNOWN_CANDIDATE"):
+        asr.verify_checkpoint(tmp_path,"arbitrary")
+
+
+def test_challenge_gate_is_separate_and_keeps_thresholds():
+    rows=[{"case_id":cid,**asr.word_errors(text,text)} for cid,text,_ in asr.CHALLENGE_SPEECH]+[
+        {"case_id":cid,**asr.word_errors("","")} for cid in asr.CHALLENGE_NEGATIVE]
+    result=asr.evaluate_cases(rows,asr.CHALLENGE_SPEECH,asr.CHALLENGE_NEGATIVE)
+    assert result["engineering_gate_passed"]
+    assert result["gate_criteria"]==asr.evaluate_cases(_cases())["gate_criteria"]
+    assert not asr.evaluate_cases(rows)["engineering_gate_passed"]
+    assert not set(cid for cid,_,_ in asr.CHALLENGE_SPEECH)&set(cid for cid,_,_ in asr.SPEECH_FIXTURES)
+    rows[-1].update(asr.word_errors("","obrigado"))
+    assert not asr.evaluate_cases(rows,asr.CHALLENGE_SPEECH,asr.CHALLENGE_NEGATIVE)["engineering_gate_passed"]
+
+
+def test_seeded_noise_is_reproducible_bounded_and_nonzero():
+    raw=asr._negative_pcm("noise")
+    assert len(raw)==96000 and any(raw) and raw==asr._negative_pcm("noise")
+    assert raw!=asr._negative_pcm("tone")
+
+
+def test_cli_explicit_medium_challenge(tmp_path,monkeypatch,capsys):
+    from scripts import a6_multimodal_readiness as cli
+    monkeypatch.setattr(cli,"ROOT",tmp_path)
+    calls=[]
+    def fake(model_dir,candidate,suite):
+        calls.append((candidate,suite))
+        return {"cases":[],"engineering_gate_passed":False}
+    monkeypatch.setattr(asr,"run_asr_fixture_benchmark",fake)
+    assert cli.main(["--synthetic-asr","--model-dir",str(tmp_path),"--asr-candidate","medium",
+                    "--asr-suite","challenge","--report-name","challenge.json"])==2
+    assert calls==[("medium","challenge")]
+    assert (tmp_path/"artifacts"/"private"/"challenge.json").is_file()
+    capsys.readouterr()
+    assert cli.main(["--synthetic-temporal","--asr-candidate","medium","--report-name","bad.json"])==2
+    assert json.loads(capsys.readouterr().out)["code"]=="ASR_MODEL_MODE_REQUIRED"
