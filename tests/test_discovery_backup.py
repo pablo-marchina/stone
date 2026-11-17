@@ -49,6 +49,8 @@ def test_backup_and_restore_verifies_counts_hash_and_original(tmp_path):
     assert report["backup_sha256"] == hashlib.sha256(dest.read_bytes()).hexdigest()
     assert report["inventory"]["tenant_coverage"]["unique_media_ids"] == 2
     assert report["inventory"]["table_counts"]["ingestion_records"] == 3
+    assert report["logical_table_contents_match"] is True
+    assert len(report["inventory"]["table_content_sha256"]["ingestion_records"]) == 64
     assert source.read_bytes() == before and report["live_restore_performed"] is False
     assert list(tmp_path.glob("restore-drill-*")) == []
 
@@ -137,3 +139,43 @@ def test_cli_rejects_path_traversal_and_missing_confirmation(tmp_path, monkeypat
     assert cli.main(["--output-name", "valid.sqlite3"]) == 2
     assert json.loads(capsys.readouterr().out)["code"] == "BACKUP_ALL_WRITERS_MUST_STOP"
     assert not (tmp_path / "artifacts").exists()
+
+
+def test_same_counts_changed_payload_is_rejected(tmp_path, monkeypatch):
+    from tapi_gate0 import discovery_backup as module
+    source = seed(tmp_path / "source.sqlite3")
+    before = source.read_bytes()
+    dest = tmp_path / "backup.sqlite3"
+    original = module._copy
+    def altered_copy(src, dst):
+        original(src, dst)
+        dst.execute("UPDATE ingestion_records SET source_item_id='changed' WHERE source_item_id='p1'")
+        dst.commit()
+    monkeypatch.setattr(module, "_copy", altered_copy)
+    with pytest.raises(BackupError, match="BACKUP_INVENTORY_MISMATCH"):
+        backup_and_restore_drill(source, dest, "a", stopped=True)
+    assert not dest.exists() and source.read_bytes() == before
+
+
+def test_logical_fingerprint_order_duplicate_and_type(tmp_path):
+    from tapi_gate0.discovery_backup import _table_fingerprint
+    with closing(sqlite3.connect(":memory:")) as db:
+        db.execute("CREATE TABLE sample(v)")
+        db.executemany("INSERT INTO sample VALUES (?)", [(None,), (b"x",), ("x",), (1,), (1.0,)])
+        a = _table_fingerprint(db, "sample")
+        db.execute("DELETE FROM sample")
+        db.executemany("INSERT INTO sample VALUES (?)", [(1.0,), (1,), ("x",), (b"x",), (None,)])
+        assert _table_fingerprint(db, "sample") == a
+        db.execute("INSERT INTO sample VALUES (1)")
+        assert _table_fingerprint(db, "sample") != a
+
+
+def test_insufficient_space_preserves_source(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    source = seed(tmp_path / "source.sqlite3")
+    before = source.read_bytes()
+    dest = tmp_path / "backup.sqlite3"
+    monkeypatch.setattr("tapi_gate0.discovery_backup.shutil.disk_usage", lambda *_: SimpleNamespace(free=0))
+    with pytest.raises(BackupError, match="BACKUP_STORAGE_INSUFFICIENT"):
+        backup_and_restore_drill(source, dest, "a", stopped=True)
+    assert not dest.exists() and source.read_bytes() == before
