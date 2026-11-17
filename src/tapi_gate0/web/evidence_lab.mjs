@@ -118,7 +118,7 @@ export function initEvidenceLab({api,getToken}){
     const gates=element('div',undefined,'evidence-gates');
     gates.append(element('span','Composição: '+(data.engineering_gate_passed?'PASS':'FAIL'),'evidence-state '+(data.engineering_gate_passed?'candidate':'abstained')),
       element('span','VLM: '+(data.upstream_vlm_gate_passed?'PASS':'FAIL'),'evidence-state '+(data.upstream_vlm_gate_passed?'candidate':'abstained')));
-    $('evidence-provenance').replaceChildren(gates,element('p','7 conteúdos de teste; 140 células da rubrica. Resultados experimentais, não canônicos.'),
+    $('evidence-provenance').replaceChildren(gates,element('p',data.cases.length+' conteúdos de teste; '+data.total_field_cells+' células da rubrica. Resultados experimentais, não canônicos.'),
       technical({report_sha256:data.report_sha256,source_report_sha256:data.source_report_sha256,visual_report_sha256:data.visual_report_sha256,policy_version:data.policy_version}));
     $('evidence-case').replaceChildren(...data.cases.map(c=>{
       const option=element('option',CASE_LABELS[c.case_id]||c.case_id);option.value=c.case_id;return option;
