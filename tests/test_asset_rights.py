@@ -141,3 +141,11 @@ def test_claim_validation_rejects_unsafe_schema(rights):
         state(valid_until=NOW+timedelta(hours=1))
     with pytest.raises(ValidationError):
         AssetIdentity.model_validate(TARGET.model_dump()|{"path":"arbitrary"})
+
+
+def test_source_revocation_denies_all_scoped_assets(rights):
+    _,state,anchor=rights
+    rv=state(revoked_sources=({"tenant_id":"tenant-a","platform":"instagram","source_account_id":"12345"},))
+    assert evaluate(rights,authority=anchor(rv),revocations=rv).code=="ASSET_RIGHTS_REVOKED"
+    other=state(revoked_sources=({"tenant_id":"tenant-b","platform":"instagram","source_account_id":"12345"},))
+    assert evaluate(rights,authority=anchor(other),revocations=other).permitted
