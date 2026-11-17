@@ -182,3 +182,88 @@ contagens reais, não presumir PASS. Suíte semântica anterior 189/189
 no f69e70f; não alterada, mas resultado não certifica novo HEAD.
 A00.2 permanece aguardando regressão; A00.3 e merges não executados.
 Nenhum DB operacional alterado, download de modelos ou gates liberados.
+
+## A00.2 — regressão corrigida confirmada pelo operador
+HEAD 23142eb81481792a203009c2a633624f183cf5b9, árvore
+ca4b65ce03a07ce13d411aeffe14195d67dc66b6.
+47/47 testes focais PASS em 15,13s; full 913 coletados,
+912 PASS / 0 FAIL / 0 ERROR / 1 SKIP em 136,401s (runner).
+Skip é test_operator_actual_triplet_when_configured, intencional.
+Node, Gate0 histórico, zero-spend PASS; checkout inalterado.
+Relatório a00-full-20261117-193122; pytest.log SHA256
+3d72dd8ad849c6f083641741e1ccdd5cfe257d44daec1793354d711c51eeb1b7,
+JUnit SHA256 d94b137c482af57a4f5c2a667d9edc11bb42548fd7a2cffb6c503fa6d6d996e5.
+91 módulos, 88 arquivos Python de teste, 3 Node, 12 migrações.
+A00.2 concluído para esse HEAD. Sem homologação global, DB operacional
+não testado pela suíte, sem merge. Aviso de depreciação Starlette/httpx
+não bloqueante; preservar e avaliar em manutenção, sem upgrade casual.
+
+## A00.3 — backup/restore lógico aprimorado (IMP-144 parcial)
+Reutilizado discovery_backup + script a6_backup_restore_drill.
+Versão tapi-sqlite-backup-drill.v2 compara schema, contagens,
+integrity_check, foreign_key_check, Alembic 0012 e SHA256 lógico
+por tabela, nos três bancos (snapshot da origem, backup e restore
+descartável). Multiset de hashes de linhas tipadas, incluindo NULL,
+BLOB, texto, int e float; mantém duplicatas e não depende da ordem.
+Não retorna conteúdo, credenciais ou hashes individuais de linhas.
+Preflight de espaço: 2x page_count*page_size + 64MiB, no volume
+do destino; não é reserva nem garantia contra concorrência de disco.
+Sem sobrescrita; source mode=ro; restore nunca sobre original.
+Cópia contém todos os tenants e dados privados, não enviar o arquivo.
+A verificação depende da declaração de todos os writers parados;
+não é lock distribuído e não afere RPO/RTO de produção. Complexidade
+de hashes é O(n log n) por tabela, memória proporcional às linhas.
+3 testes novos (alteração mesmo count, multiset e espaço).
+A00.3 implementado, backup real pendente. Sem migrations.
+
+## A01.1/2 — início independente read-only
+Novo corpus_inventory.py e duas rotas GET autenticadas:
+ /v1/corpus/inventory
+ /v1/corpus/inventory/{content_id}
+Escopo admin/researcher/service, igual ao data-card existente.
+Cruza ingestion_records, profiles, grants, content, creators; tenant
+vem da sessão, grant ativo/tecnicamente verificado reavaliado a cada
+requisição, identidade payload/índice validada, registros ambíguos
+recusados. Apenas metadados externos registrados; não inclui fixtures
+nem C2/C3/C4. Não afirma admissão C1, reauditoria do manifesto/traces,
+autorização de mídia ou ranking. Busca handle/ID, filtro formato,
+plataforma, perfil, setor, paginação até 100, snapshots históricos
+válidos ordenados e paginados. Sem legenda em texto, URL, arquivo ou
+payload bruto. Limites defensivos 10k registros e 20k snapshots por
+consulta, sem truncamento silencioso. Lista é inventário atual,
+não snapshot estável entre páginas; contagem excluída refere-se
+apenas às linhas do join. Sem alterações de schema ou banco,
+no-store privado. 3 testes com DB descartável e mocks de dados;
+ainda não executados pelo assistente. UI Data Explorer não integrada.
+Mapeamento incremental IMP-010/012/053/082, sem concluir critérios
+originais; IMP-082 depende também de ranking/links/QA.
+Nenhuma tarefa oficial ou gate promovido.
+
+### Operador: validar backup e serviço, sem nova coleta
+Interromper todos os writers (Uvicorn, agendador, ingestão,
+render workers, scripts que persistem). Usar URL e tenant
+operacionais existentes, sem criar banco ou mudar grants.
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+conda activate tapi-asr
+python -m pytest -q tests/test_discovery_backup.py tests/test_corpus_inventory.py tests/test_a00_baseline.py tests/test_a00_inspect_report.py
+python scripts/verify_zero_spend.py
+```
+Se testes PASS, confirmar configuração:
+```powershell
+if ([string]::IsNullOrWhiteSpace($env:TAPI_DATABASE_URL)) { throw "Reconfigure a URL do banco existente" }
+$env:TAPI_TENANT_ID = "local-research"
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+python scripts/a6_backup_restore_drill.py --output-name "a00-baseline-$stamp.sqlite3" --confirm-all-writers-stopped
+```
+Esperar BACKUP_RESTORE_VERIFIED e logical_table_contents_match=true.
+Depois do backup, executar inspeção somente leitura, sem expor
+legendas ou IDs no stdout:
+```powershell
+python -c "import os,json; from tapi_gate0.discovery_local_db import validate_existing_database_url; from tapi_gate0.sa_store import engine_for; from tapi_gate0.corpus_inventory import list_inventory,InventoryFilter; e=engine_for(validate_existing_database_url(os.environ['TAPI_DATABASE_URL'])); r=list_inventory(e,os.environ['TAPI_TENANT_ID'],InventoryFilter(limit=100)); print(json.dumps({k:v for k,v in r.items() if k!='items'} | {'page_items':len(r['items']), 'page_with_snapshot':sum(x['latest_snapshot'] is not None for x in r['items'])})); e.dispose()"
+```
+Enviar resultados dos testes e JSONs (não copiar o banco).
+Sem repetir benchmark ou alterar dados. Próximo: A00.4 revisão
+PRs (merge só com autorização) e A01.3 Data Explorer integrado.
