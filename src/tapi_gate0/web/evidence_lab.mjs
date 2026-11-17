@@ -36,19 +36,23 @@ export function armRows(ablation){
 }
 export function initEvidenceLab({api,getToken}){
   if(!$('evidence-lab'))return null;
-  let epoch=0,summary=null,detail=null,busy=false;
+  let epoch=0,summary=null,detail=null,busy=false,wasLogged=false;
   const status=text=>{$('evidence-status').textContent=text;};
   function controls(){
-    $('evidence-refresh').disabled=!getToken()||busy;
-    $('evidence-case').disabled=!summary||busy||!getToken();
-    $('evidence-filter').disabled=!detail||!getToken();
+    const logged=Boolean(getToken());
+    $('evidence-login-link').hidden=logged;
+    $('evidence-refresh').disabled=!logged||busy;
+    $('evidence-case').disabled=!summary||busy||!logged;
+    $('evidence-filter').disabled=!detail||!logged;
+    if(logged&&!wasLogged&&!busy&&!summary)status('Sessão do Studio ativa. Clique em Consultar evidências.');
+    wasLogged=logged;
   }
   function reset(){
     epoch++;summary=null;detail=null;busy=false;
     $('evidence-case').replaceChildren();
     for(const id of ['evidence-metrics','evidence-fields','evidence-fragments','evidence-visual','evidence-ablation','evidence-provenance'])
       $(id).replaceChildren();
-    status('Entre para consultar as evidências sintéticas.');
+    status(getToken()?'Sessão do Studio ativa. Clique em Consultar evidências.':'Entre no Creative Studio para consultar as evidências sintéticas.');
     controls();
   }
   function renderSummary(data){
@@ -124,6 +128,7 @@ export function initEvidenceLab({api,getToken}){
     }catch(error){if(active===epoch&&token===getToken())status('Rubric Lab indisponível: '+error.message);}
     finally{if(active===epoch){busy=false;controls();}}
   }
+  $('evidence-login-link').addEventListener('click',()=>{$('username').focus({preventScroll:true});});
   $('evidence-refresh').addEventListener('click',load);
   $('evidence-case').addEventListener('change',loadCase);
   $('evidence-filter').addEventListener('change',renderFields);
