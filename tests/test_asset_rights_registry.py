@@ -171,3 +171,27 @@ def test_migration_rehearsal_preserves_disposable_0012_backup(tmp_path,monkeypat
     assert _sha256(db)==digest
     with pytest.raises(ValueError,match="BACKUP_MISMATCH"):
         drill.rehearsal(tmp_path,db.name,"0"*64,TENANT)
+
+
+def test_nonempty_registry_downgrade_refused(tmp_path,monkeypatch):
+    from sqlalchemy import insert, inspect
+    from tapi_gate0.sa_store import tenants
+    root=Path(__file__).resolve().parents[1]
+    url="sqlite:///"+str(tmp_path/"downgrade.sqlite3")
+    monkeypatch.setenv("TAPI_DATABASE_URL",url)
+    cfg=Config(str(root/"alembic.ini"))
+    cfg.set_main_option("script_location",str(root/"migrations"))
+    command.upgrade(cfg,"0013_asset_rights_registry")
+    engine=engine_for(url)
+    try:
+        with engine.begin() as db:
+            db.execute(insert(tenants).values(tenant_id=TENANT,name="Fixture"))
+            db.execute(insert(authorities).values(tenant_id=TENANT,platform="instagram",
+                issuer_id="fixture",key_sha256="a"*64,revision=1,claims_sha256="b"*64))
+        with pytest.raises(RuntimeError,match="DOWNGRADE_NONEMPTY"):
+            command.downgrade(cfg,"0012_bd_history_checkpoints")
+        assert "asset_rights_authorities" in inspect(engine).get_table_names()
+        with engine.connect() as db:
+            assert db.scalar(select(func.count()).select_from(authorities))==1
+    finally:
+        engine.dispose()
