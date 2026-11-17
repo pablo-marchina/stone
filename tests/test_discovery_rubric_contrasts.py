@@ -116,3 +116,29 @@ def test_contrasts_keep_unknowns_and_rank_population():
     assert theme["global"]["comparisons"][0]["difference_percentage_points"] is None
     assert theme["baseline_agreement"]=={"both_unknown":17,"baseline_only":2,"grounded_only":0,"agree":1,"disagree":0}
     assert result["cohorts"]["semantic_exploratory"]["posts"]==10
+
+
+def test_missingness_bounds_are_not_confidence_intervals():
+    from tapi_gate0.discovery_rubric_contrasts import _candidate_distribution
+    rows=[{"content_id":"a","username":"s","x":"positive_claim"},
+          {"content_id":"b","username":"s","x":None},
+          {"content_id":"c","username":"t","x":None},
+          {"content_id":"d","username":"t","x":None}]
+    r=_candidate_distribution(rows,{"a","b"},"x")
+    assert r["top"]["coverage_fraction"]==0.5 and r["rest"]["coverage_fraction"]==0
+    comparison=r["comparisons"][0]
+    assert comparison["difference_percentage_points"] is None
+    assert comparison["top_full_population_share_bounds"]==[0.5,1.0]
+    assert comparison["rest_full_population_share_bounds"]==[0.0,1.0]
+    assert comparison["difference_missingness_bounds_pp"]==[-50.0,100.0]
+
+
+def test_cli_rubric_contrasts_cannot_write_studio(capsys):
+    import json
+    from scripts.a6_exploratory_ranking import main
+    assert main(["--persist-studio-drafts","--rubric-input-name","pilot.json",
+                 "--manifest","unused.json","--input-name","audience.json",
+                 "--report-name","out.json"])==2
+    report=json.loads(capsys.readouterr().out)
+    assert report["code"]=="BD_EXPLORATORY_RUBRIC_READ_ONLY_REQUIRED"
+    assert not report["database_mutated"] and not report["studio_write_attempted"]
