@@ -16,7 +16,7 @@ from sqlalchemy import and_, select
 from .connectors import ConnectorError
 from .corpus import corpus_profiles
 from .domain import ContentItem, Creator, MetricsCreate
-from .identity import IdentityFailure, Principal, READ_ROLES
+from .identity import IdentityFailure, Principal, WRITE_RESEARCH
 from .ingestion import ingestion_records, source_grants
 from .sa_store import content_items, creators, metrics_snapshots
 from .storage import now_utc
@@ -208,7 +208,7 @@ def router_for_inventory(current_principal, engine):
     router = APIRouter(prefix="/v1/corpus/inventory", tags=["External technical inventory"])
 
     def reader(p: Principal = Depends(current_principal)):
-        if p.role not in READ_ROLES:
+        if p.role not in WRITE_RESEARCH:
             raise IdentityFailure("FORBIDDEN", 403)
         return p
 
