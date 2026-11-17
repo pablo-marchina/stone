@@ -32,3 +32,27 @@ def test_sector():
     assert sampling_sector('ecommerce_education')=='commerce'
     assert sampling_sector('foodservice_association_regional')=='food'
     assert sampling_sector('unrecognized')=='other'
+
+
+@pytest.mark.parametrize("stratum,creator,context_sector,analytic_sector",[
+    ("inclusive_microenterprise_support","sector_organization","cross_sector","other"),
+    ("digital_marketing_education","educator_expert","services","services"),
+    ("beauty_entrepreneurship_education","sector_brand","beauty","beauty"),
+    ("foodservice_platform_education","sector_brand","food","food"),
+    ("fashion_microenterprise_inclusion","sector_organization","commerce","commerce"),
+    ("ecommerce_logistics","sector_brand","commerce","commerce"),
+    ("artisan_market_access","sector_organization","commerce","commerce"),
+    ("pet_retail_education","educator_expert","commerce","commerce"),
+    ("retail_digital_training","sector_organization","commerce","commerce"),
+])
+def test_expanded_sampling_context(stratum,creator,context_sector,analytic_sector):
+    from types import SimpleNamespace
+    from tapi_gate0.discovery_caption_research import source_description
+    source=SimpleNamespace(username="fixture",expected_ig_id="12345",sampling_stratum=stratum,
+        source_evidence_reference="fixture-source-reference",audience_rationale_reference="fixture-rationale",
+        audience_intent="mpe_targeted")
+    context=source_description(source)
+    assert context["creator_type_candidate"]==creator
+    assert context["sector_context_candidate"]==context_sector
+    assert context["business_size_class"]=="unknown"
+    assert sampling_sector(stratum)==analytic_sector

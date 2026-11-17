@@ -46,6 +46,15 @@ SECTORS = {
     "business_financial_management": "services",
     "financial_services_mpe": "services",
     "merchant_payments_mpe": "services",
+    # V9/V10: broad sampling categories; cross-sector remains other.
+    "digital_marketing_education": "services",
+    "beauty_entrepreneurship_education": "beauty",
+    "foodservice_platform_education": "food",
+    "fashion_microenterprise_inclusion": "commerce",
+    "ecommerce_logistics": "commerce",
+    "artisan_market_access": "commerce",
+    "pet_retail_education": "commerce",
+    "retail_digital_training": "commerce",
 }
 
 

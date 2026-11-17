@@ -40,6 +40,16 @@ TYPES = {
     "black_entrepreneurship_creative": ("sector_organization", "cross_sector"),
     "ecommerce_education": ("sector_brand", "commerce"),
     "accounting_mpe": ("sector_brand", "services"),
+    # V9/V10: documentary source context only, never a per-post sector/size label.
+    "inclusive_microenterprise_support": ("sector_organization", "cross_sector"),
+    "digital_marketing_education": ("educator_expert", "services"),
+    "beauty_entrepreneurship_education": ("sector_brand", "beauty"),
+    "foodservice_platform_education": ("sector_brand", "food"),
+    "fashion_microenterprise_inclusion": ("sector_organization", "commerce"),
+    "ecommerce_logistics": ("sector_brand", "commerce"),
+    "artisan_market_access": ("sector_organization", "commerce"),
+    "pet_retail_education": ("educator_expert", "commerce"),
+    "retail_digital_training": ("sector_organization", "commerce"),
 }
 
 
