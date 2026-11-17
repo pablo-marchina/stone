@@ -101,6 +101,7 @@ class CaptionReplay:
                         "claim_only":k in ("prova_social","oferta_ou_beneficio_explicito")}
             self._entries[cid] = {"source_account_id":source.expected_ig_id,
                 "caption_sha256":row["caption_sha256"],"snapshot_id":metric.snapshot_id,
+                "snapshot_payload_sha256":sha256(metric.model_dump_json().encode()).hexdigest(),
                 "audience_tier":tier,"audience_reason":row["grounding"]["reason"],
                 "fields":fields,"caption_characters":len(post.caption)}
         ready = readiness_report(engine,config.tenant,self.frame,config.viewer,_record_observer=observe)
@@ -132,7 +133,8 @@ class CaptionReplay:
             return _status("scope_blocked")
         if (entry["source_account_id"] != row["source_account_id"] or not post.caption
                 or sha256(post.caption.encode()).hexdigest()!=entry["caption_sha256"]
-                or not snapshots or snapshots[0].snapshot_id!=entry["snapshot_id"]):
+                or not snapshots or snapshots[0].snapshot_id!=entry["snapshot_id"]
+                or sha256(snapshots[0].model_dump_json().encode()).hexdigest()!=entry["snapshot_payload_sha256"]):
             return _status("stale_row")
         # Never return raw captions, offsets, private paths, viewer IDs or grant documents.
         return json.loads(json.dumps({**_status("ready"),**self._provenance,**entry,
