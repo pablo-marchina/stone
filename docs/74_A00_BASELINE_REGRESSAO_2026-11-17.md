@@ -525,7 +525,7 @@ verifica mérito jurídico; requer autoridade legítima e evidência real.
 require_asset_rights é preflight para PEP futuro, não credencial.
 Dependência opcional rights_local (cryptography>=44,<48), sem serviço pago.
 Sem cryptography, assinatura não é verificável, fail-closed.
-Testes usam chaves efêmeras sintéticas, não são grants reais. 23 casos
+Testes usam chaves efêmeras sintéticas, não são grants reais. 24 casos
 esperados incluindo parametrizações; execução pendente. Não instalar
 chave de fixture na operação. Não criar autorização real a partir de
 JSON editável, flag de ambiente, grant de metadados ou hash de arquivo.
