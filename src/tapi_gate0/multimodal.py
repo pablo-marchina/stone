@@ -1,4 +1,4 @@
-"""Offline visual-observation adapter for explicitly authorized local media.
+"""Offline visual-observation adapter; arbitrary media entry fails closed.
 
 NEVER downloads from a social platform. Uses optional local OpenCV/Tesseract and
 ffmpeg executables; no paid model service. Positive detections are preliminary,
@@ -12,6 +12,7 @@ from pathlib import Path
 import os
 import shutil
 import subprocess
+import tempfile
 
 
 class MediaPermissionError(Exception):pass
@@ -54,7 +55,7 @@ def _frame_bytes(path:Path,timestamp:float):
     binary=shutil.which('ffmpeg')
     if not binary:raise MediaPermissionError("LOCAL_FFMPEG_UNAVAILABLE")
     cmd=[binary,'-hide_banner','-loglevel','error','-nostdin','-ss',str(timestamp),
-         '-i',str(path),'-frames:v','1','-vf','scale=640:-1',
+         '-protocol_whitelist','file,pipe','-i',str(path),'-frames:v','1','-vf','scale=640:-1',
          '-f','image2pipe','-vcodec','png','pipe:1']
     try:
         result=subprocess.run(cmd,capture_output=True,timeout=12,check=False)
@@ -66,7 +67,35 @@ def _frame_bytes(path:Path,timestamp:float):
 
 
 def inspect_approved_local_media(path:str,expected_sha256:str)->VisualObservation:
-    target,digest=_approved_media(path,expected_sha256)
+    # A matching local path and digest are not a rights grant. No verified
+    # asset-level authorization service is wired to this legacy entrypoint.
+    # Fail before opening any caller-supplied file, even if root/hash match.
+    raise MediaPermissionError("MEDIA_VERIFIED_ASSET_GRANT_REQUIRED")
+
+
+def inspect_generated_visual_fixture()->VisualObservation:
+    """Run only a locally generated black JPEG; accepts no path or bytes."""
+    from .policy import decide,Operation
+    if not decide("synthetic_local",Operation.EVALUATE_SYNTHETIC.value).permitted:
+        raise MediaPermissionError("SYNTHETIC_POLICY_DENIED")
+    try:
+        import cv2
+        import numpy as np
+    except ImportError as exc:
+        raise MediaPermissionError("LOCAL_OPENCV_UNAVAILABLE") from exc
+    with tempfile.TemporaryDirectory(prefix="tapi-visual-fixture-") as temp:
+        target=Path(temp)/"generated-black.jpg"
+        if not cv2.imwrite(str(target),np.zeros((128,192,3),dtype=np.uint8)):
+            raise MediaPermissionError("LOCAL_FIXTURE_GENERATION_FAILED")
+        digest=sha256(target.read_bytes()).hexdigest()
+        observation=_inspect_attested_file(target,digest)
+        if sha256(target.read_bytes()).hexdigest()!=digest:
+            raise MediaPermissionError("LOCAL_FIXTURE_CHANGED")
+        return observation
+
+
+def _inspect_attested_file(target:Path,digest:str)->VisualObservation:
+    # Private implementation helper, not an authorization boundary.
     try:import cv2
     except ImportError as exc:raise MediaPermissionError("LOCAL_OPENCV_UNAVAILABLE") from exc
     import numpy as np
