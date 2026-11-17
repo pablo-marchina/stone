@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>TAPI Stone — Creative Studio C2</title>
+  <title>TAPI Stone — Creative Studio e Rubric Lab</title>
   <link rel="stylesheet" href="./studio.css">
   <script defer src="./studio_export_e4.js"></script>
   <script defer src="./studio_timeline_e8.js"></script>
@@ -11,14 +11,15 @@
 </head>
 <body>
   <header class="top">
-    <div><a class="back" href="/app/">← Painel TAPI</a><h1>Creative Studio <span>C2</span></h1></div>
+    <div><nav class="studio-nav" aria-label="Áreas da plataforma"><a class="back" href="/app/">← Visão operacional</a><a class="back" href="#studio-canvas">Creative Studio</a><a class="back" href="#evidence-lab">Evidence Studio / Rubric Lab</a></nav><h1>Creative Studio <span>C2</span></h1></div>
     <p>Rascunho editável · armazenamento privado · PNG local</p>
   </header>
   <main class="workspace">
     <aside class="panel">
       <h2>1. Acesso</h2>
-      <label>Tenant <input id="tenant" value="tenant.demo" autocomplete="organization"></label>
-      <label>Usuário <input id="username" value="founder" autocomplete="username"></label>
+      <p class="hint">Entre com a mesma organização e credenciais do painel. A sessão do Studio é independente.</p>
+      <label>Tenant <input id="tenant" value="local-research" autocomplete="organization"></label>
+      <label>Usuário <input id="username" autocomplete="username"></label>
       <label>Senha <input id="password" type="password" autocomplete="current-password"></label>
       <div class="buttons"><button id="login">Entrar</button><button id="logout" disabled>Sair</button></div>
       <h2>2. Criar ou abrir</h2>
@@ -148,7 +149,7 @@
       <p class="hint">Arraste camadas no canvas. Não existe publicação externa, vídeo ou previsão de engajamento neste incremento. Os arquivos são prévias locais marcadas RASCUNHO; exigem aprovação editorial e direitos antes da publicação. O JSON versionado permanece canônico.</p>
       <p id="status" role="status" aria-live="polite">Entre para começar.</p>
     </aside>
-    <section class="preview">
+    <section class="preview" id="studio-canvas">
       <div class="preview-bar"><h2>Prévia editável</h2><span id="revision">Sem documento</span></div>
       <canvas id="canvas" width="1080" height="1350" tabindex="0" aria-label="Canvas de rascunho editável" aria-describedby="layer-help"></canvas>
       <p class="hint">Visualização raster derivada. O JSON do DesignDocument permanece a fonte da verdade; a exportação só usa os ativos carregados.</p>
