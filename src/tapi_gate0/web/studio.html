@@ -159,17 +159,19 @@
         <p id="evidence-status" role="status" aria-live="polite">Entre no Creative Studio para consultar as evidências sintéticas.</p>
         <a id="evidence-login-link" class="evidence-login-link" href="#studio-access">Ir para autenticação do Studio</a>
         <div id="evidence-metrics" class="evidence-metrics"></div>
-        <pre id="evidence-provenance" class="version-diff"></pre>
+        <div id="evidence-provenance" class="evidence-provenance"></div>
         <label for="evidence-case">Conteúdo de teste</label><select id="evidence-case" disabled></select>
         <label for="evidence-filter">Filtrar campos</label><select id="evidence-filter" disabled>
           <option value="all">Todos os 20 campos</option><option value="candidate">Candidatos</option>
           <option value="measurement_only">Medições</option><option value="abstained">Abstenções</option>
           <option value="not_assessed">Não avaliados</option>
         </select>
-        <div id="evidence-fields"></div>
+        <div id="evidence-case-counts" class="evidence-case-counts" aria-live="polite"></div>
+        <div id="evidence-fields" class="evidence-field-grid"></div>
         <h3>Fragmentos de origem</h3><div id="evidence-fragments"></div>
         <h3>Observações visuais e escopo</h3><div id="evidence-visual"></div>
-        <details class="evidence-field"><summary>Ablação: 15 combinações</summary>
+        <details class="evidence-field" open><summary>Ablação: 15 combinações</summary>
+          <p class="hint">Acertos entre candidatos esperados em três campos. Não corresponde ao número de conteúdos.</p>
           <div class="evidence-table"><table><thead><tr><th scope="col">Modalidades</th><th scope="col">Acertos</th><th scope="col">Erros</th></tr></thead><tbody id="evidence-ablation"></tbody></table></div>
         </details>
       </section>
