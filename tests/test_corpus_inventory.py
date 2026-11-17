@@ -238,3 +238,16 @@ def test_stored_rubric_rejects_changed_caption_and_cross_tenant_payload(app):
         db.execute(update(rubric_assessments).where(rubric_assessments.c.tenant_id=="tenantB",
             rubric_assessments.c.content_id==cid).values(payload=json.dumps(payload)))
     assert get_inventory_item(engine,"tenantB",cid)["stored_rubric"]["state_counts"]["not_assessed"]==20
+
+
+def test_ranking_route_is_authenticated_and_disabled_without_replay(app):
+    with TestClient(app) as client:
+        path="/v1/corpus/inventory/ranking"
+        assert client.get(path).status_code==401
+        headers=auth(client)
+        response=client.get(path,headers=headers)
+        assert response.status_code==200
+        assert response.json()["status"]=="disabled"
+        assert response.headers["cache-control"]=="private, no-store"
+        assert client.get(path,headers=headers,params={"cohort":"invalid"}).status_code==422
+        assert client.get(path,headers=headers,params={"limit":101}).status_code==422
