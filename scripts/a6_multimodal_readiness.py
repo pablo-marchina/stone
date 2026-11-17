@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def readiness():
     binaries={name:bool(shutil.which(name)) for name in ("ffmpeg","ffprobe","tesseract","espeak-ng")}
-    modules={name:importlib.util.find_spec(name) is not None for name in ("cv2","numpy","faster_whisper","transformers")}
+    modules={name:importlib.util.find_spec(name) is not None for name in ("cv2","numpy","faster_whisper","transformers","onnxruntime")}
     return {"status":"MULTIMODAL_LOCAL_READINESS","binaries":binaries,"modules":modules,
             "synthetic_temporal_ready":binaries["ffmpeg"] and binaries["ffprobe"],
             "free_bytes":{"repository_volume":shutil.disk_usage(ROOT).free,
@@ -36,6 +36,7 @@ def main(argv=None):
     mode.add_argument("--synthetic-temporal",action="store_true")
     mode.add_argument("--synthetic-asr",action="store_true")
     mode.add_argument("--synthetic-ocr",action="store_true")
+    mode.add_argument("--synthetic-vad",action="store_true")
     p.add_argument("--tessdata-dir",type=Path,help="Local OCR language files only")
     p.add_argument("--model-dir",type=Path,help="Pinned local ASR checkpoint directory only")
     p.add_argument("--asr-candidate",choices=("small","medium"),default="small")
@@ -46,6 +47,7 @@ def main(argv=None):
     try:
         from tapi_gate0.multimodal_asr import ASRError,verify_checkpoint,run_asr_fixture_benchmark
         from tapi_gate0.multimodal_ocr import OCRError,verify_tessdata,run_ocr_fixture_benchmark
+        from tapi_gate0.multimodal_vad import VADError,run_vad_fixture_benchmark
         if a.tessdata_dir and not (a.check_ready or a.synthetic_ocr):
             raise OCRError("OCR_MODE_REQUIRED")
         if (a.asr_candidate!="small" or a.asr_suite!="baseline") and not (a.synthetic_asr or (a.check_ready and a.model_dir and a.asr_suite=="baseline")):
@@ -93,6 +95,8 @@ def main(argv=None):
             if a.tessdata_dir is None:
                 raise OCRError("OCR_LOCAL_TESSDATA_REQUIRED")
             report=run_ocr_fixture_benchmark(a.tessdata_dir)
+        elif a.synthetic_vad:
+            report=run_vad_fixture_benchmark()
         else:
             report=run_temporal_fixture_benchmark()
         stage="report_write"
@@ -106,6 +110,8 @@ def main(argv=None):
                                       **{k:r[k] for k in ("inference_attempted","abstention_reason") if k in r}} for r in report["cases"]]
         elif a.synthetic_ocr:
             summary["case_summary"]=[{k:r[k] for k in ("case_id","reference_words","hypothesis_words","word_errors","wer","cer","inference_ms")} for r in report["cases"]]
+        elif a.synthetic_vad:
+            summary["case_summary"]=[{k:r[k] for k in ("case_id","passed","expected_speech_s","detected_speech_s","iou","max_boundary_error_s","false_positive_s","missed_speech_s","inference_ms")} for r in report["cases"]]
         else:
             summary["case_summary"]=[{"case_id":r["case_id"],"passed":r["passed"],
                                    "expected_transitions_s":r["expected_transitions_s"],
@@ -120,7 +126,7 @@ def main(argv=None):
         print(json.dumps({**summary,"report_name":a.report_name}))
         return 0 if report["engineering_gate_passed"] else 2
     except Exception as exc:
-        code=exc.args[0] if isinstance(exc,(TemporalError,ASRError,OCRError)) and exc.args and re.fullmatch(r"(?:TEMPORAL|ASR|OCR)_[A-Z_]+",str(exc.args[0])) else ("ASR_LOCAL_ERROR" if a.synthetic_asr else "OCR_LOCAL_ERROR" if a.synthetic_ocr else "TEMPORAL_LOCAL_ERROR")
+        code=exc.args[0] if isinstance(exc,(TemporalError,ASRError,OCRError,VADError)) and exc.args and re.fullmatch(r"(?:TEMPORAL|ASR|OCR|VAD)_[A-Z_]+",str(exc.args[0])) else ("ASR_LOCAL_ERROR" if a.synthetic_asr else "OCR_LOCAL_ERROR" if a.synthetic_ocr else "VAD_LOCAL_ERROR" if a.synthetic_vad else "TEMPORAL_LOCAL_ERROR")
         diagnostic_stage=getattr(exc,"stage",stage)
         diagnostic_type=getattr(exc,"exception_type",type(exc).__name__)
         diagnostic_case=getattr(exc,"case_id",None)
