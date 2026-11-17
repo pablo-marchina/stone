@@ -92,15 +92,16 @@ test('rubric detail distinguishes old API, incomplete contract and all-abstained
     await explorer.load();
     const click=nodes.get('inventory-rows').children[0].children.at(-1).children[0].events.click;
     click();await new Promise(resolve=>setImmediate(resolve));
-    let panel=nodes.get('inventory-detail').children.at(-1);
+    let panel=nodes.get('inventory-detail').children.at(-2);
     assert.equal(panel.children[0].textContent,'Evidence Studio · Rubrica histórica');
     assert.match(panel.children[1].textContent,/API em execução não retornou/);
     stored_rubric=rubric;
     click();await new Promise(resolve=>setImmediate(resolve));
-    panel=nodes.get('inventory-detail').children.at(-1);
+    panel=nodes.get('inventory-detail').children.at(-2);
     assert.equal(panel.children[0].textContent,'Evidence Studio · Rubrica histórica');
     assert.match(panel.children[3].textContent,/Nenhuma avaliação histórica compatível/);
     assert.equal(panel.children[4].children[0].children[1].children.length,20);
+    assert.match(nodes.get('inventory-detail').children.at(-1).children[2].textContent,/indisponível/);
   }finally{
     if(previous===undefined)delete globalThis.document;else globalThis.document=previous;
   }
