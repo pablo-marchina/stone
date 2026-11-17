@@ -85,3 +85,48 @@ autorização aplicável. A01 consulta read-only pode avançar em paralelo
 após preflight e análise de regressões; sem alterar DB até backup.
 Nenhum gate global liberado. A00.1 em IMPLEMENTADO_NAO_TESTADO no
 corte deste documento. A00, A01–A11 não declarados homologados.
+
+## A00.2 — regressão reportada pelo operador (19:16, 17/11/2026)
+Commit f69e70ff7a913a672b7e22915a9100f39cd29e5c, árvore
+c8b32215221869d161afc02a49cea7bc868d9ddc, ambos perfis limpos.
+91 módulos Python, 87 arquivos Python de testes, 3 Node, 12 migrações.
+Matrizes e mapa A00–A11 conferidos pelo runner, sem alteração.
+- full tapi-asr, Python 3.11.18: 907 testes, 899 PASS, 7 FAIL,
+  1 SKIP (triplet opt-in do Evidence Lab, removido intencionalmente
+  da configuração filha), 0 erros JUnit; pytest exit 1 em 211,529s.
+  Node exit 0, Gate0 histórico exit 0, zero-spend exit 0.
+  Relatório a00-full-20261117-191639, pytest.log SHA256
+  332e591c0cf3d5684a1218ca8b3818bfd0f7455f85d41b7544c80180c0779123.
+- semantic tapi-s1, Python 3.11.18: 189/189 PASS em 3,594s,
+  Gate0/zero-spend exit 0. Relatório a00-semantic-20261117-191639,
+  pytest.log SHA256 8606315a9b960942ccd094ee267330d1269f4372a2639fb9bb6fb3d2960b7bf1.
+  Não somar os 189 aos 899: suíte sobreposta.
+- Ambiente asr sem torch/GLiNER/transformers; ambiente s1 sem
+  Pillow/faster-whisper/ctranslate2/onnxruntime, como provisionado.
+  Nenhuma causa das sete falhas é identificável apenas pelos
+  resumos agregados; não presumir dependência ou regressão específica.
+  Não reexecutar toda a suíte antes de examinar diagnósticos.
+- A00.1 execução confirmada; A00.2 em investigação; PRs continuam
+  Draft, A00.3 backup/restore e A00.4 integração não executados.
+  Não homologar nenhuma capacidade/gate por estes testes.
+
+### Diagnóstico incremental
+Runner passa a incluir failed_tests (identidades, não traceback)
+e SHA256 do XML em novos relatórios. Novo a00_inspect_report
+lê relatório histórico sem executar testes ou escrever arquivos,
+confere os hashes dos logs, contagens JUnit e, se registrado,
+hash do XML. Nos dois relatórios anteriores o XML não tinha digest
+prévio: o novo hash é observação atual, não atestação de integridade
+histórica. Os identificadores parametrizados podem incluir valores;
+revisar antes de compartilhar. Quatro testes novos, pendentes execução.
+```powershell
+git pull --ff-only
+conda activate tapi-asr
+python -m pytest -q tests/test_a00_baseline.py tests/test_a00_inspect_report.py
+python -m scripts.a00_inspect_report --report-name "a00-full-20261117-191639"
+Get-Content "artifacts/private/a00-full-20261117-191639/pytest.log" -Tail 160
+```
+Enviar identidades das falhas e trechos relevantes (remover segredos
+se presentes). Conservar relatório original; a próxima correção
+depende dos sete diagnósticos. Não liberar media/produção, não
+baixar modelos, não alterar DB nem merge.
