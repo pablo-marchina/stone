@@ -19,6 +19,7 @@ from tapi_gate0.ingestion import (
 from tapi_gate0.sa_store import metadata, engine_for, tenants, metrics_snapshots, content_items
 from tapi_gate0 import identity  # noqa: F401
 
+# Keep publication ages relative to the run; no production clock override.
 NOW = datetime.now(timezone.utc)
 TENANT = "pilot-tenant"
 TARGET = "17841400011122233"
@@ -121,11 +122,11 @@ def graph(state, calls):
                 "media": {"data": [
                     {"id": "17900000000011111", "media_type": "VIDEO",
                      "media_product_type": "REELS", "like_count": state["likes"],
-                     "comments_count": 5, "timestamp": "2026-09-01T12:00:00+0000",
+                     "comments_count": 5, "timestamp": (NOW - timedelta(days=30)).isoformat(),
                      "permalink": "https://www.instagram.com/reel/valid1/"},
                     {"id": "17900000000022222", "media_type": "CAROUSEL_ALBUM",
                      "like_count": 10, "comments_count": 2,
-                     "timestamp": "2026-11-02T12:00:00+0000",
+                     "timestamp": (NOW - timedelta(days=2)).isoformat(),
                      "permalink": "https://www.instagram.com/p/recent1/"}
                 ]},
             },
