@@ -29,6 +29,7 @@ from .ui import router_for_authenticated_view
 from .agent_api_e1 import router_for_evidence_agent
 from .studio_e1 import StudioStore  # registers studio tables before schema initialization
 from .studio_api import router_for_studio
+from .evidence_lab import EvidenceLab, config_from_env, router_for_lab
 
 
 def _token(request:Request):
@@ -39,7 +40,7 @@ def _token(request:Request):
     return token
 
 
-def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_http_local:bool=False) -> FastAPI:
+def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_http_local:bool=False, evidence_lab:EvidenceLab|None=None) -> FastAPI:
     engine=engine_for(database_url)
     domain=SqlDomainStore(engine)
     if initialize_schema:
@@ -114,6 +115,7 @@ def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_ht
     app.include_router(router_for_corpus(identity,engine))
     app.include_router(router_for_evidence_agent(identity,domain))
     app.include_router(router_for_studio(identity,StudioStore(engine)))
+    app.include_router(router_for_lab(current_principal,evidence_lab))
 
     @app.exception_handler(ConnectorError)
     async def handle_connector_error(_request:Request,exc:ConnectorError):
@@ -192,5 +194,7 @@ def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_ht
 def from_environment():
     url=os.environ.get("TAPI_DATABASE_URL")
     if not url:raise RuntimeError("TAPI_DATABASE_URL is required for secure mode")
+    lab_config=config_from_env(os.environ)
+    lab=EvidenceLab(lab_config) if lab_config is not None else None
     return create_secure_app(url,initialize_schema=False,
-        allow_http_local=os.environ.get("TAPI_ALLOW_HTTP_LOOPBACK")=="1")
+        allow_http_local=os.environ.get("TAPI_ALLOW_HTTP_LOOPBACK")=="1",evidence_lab=lab)
