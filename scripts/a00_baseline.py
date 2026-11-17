@@ -263,7 +263,7 @@ def execute(root,expected,profile,name,tessdata=None):
     report["full_regression_profile_executed"]=profile=="full"
     report["full_regression_without_skips"]=bool(profile=="full" and report["checks_passed"] and report["pytest"]["skipped"]==0)
     report["skips_are_not_passes"]=True
-    report["model_benchmarks_reexecuted"]=False
+    report["standalone_model_benchmark_commands_invoked"]=False
     report["operational_database_tested"]=False
     with (target/"summary.json").open("x",encoding="utf-8") as stream:
         json.dump(report,stream,ensure_ascii=False,indent=2)
@@ -282,7 +282,8 @@ def main(argv=None):
             raise BaselineError("BASELINE_OCR_FULL_PROFILE_REQUIRED")
         result=execute(ROOT,a.expected_head,a.profile,a.report_name,a.tessdata_dir)
         print(json.dumps({k:v for k,v in result.items() if k!="inventory"}|{"commit":result["inventory"]["commit"],
-            "tree":result["inventory"]["tree"],"matrix_counts":{k:v["rows"] for k,v in result["inventory"]["matrices"].items()},
+            "tree":result["inventory"]["tree"],"inventory_counts":{k:len(result["inventory"][k]) for k in ("python_modules","python_test_files","node_test_files","migrations")},"matrix_counts":{k:v["rows"] for k,v in result["inventory"]["matrices"].items()},
+            "phase_task_counts":result["inventory"]["phase_task_counts"],
             "report_name":a.report_name},ensure_ascii=False))
         return 0 if result["checks_passed"] else 2
     except (BaselineError,FileExistsError,OSError,ValueError,KeyError,subprocess.SubprocessError,ET.ParseError) as exc:
