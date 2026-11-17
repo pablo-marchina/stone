@@ -1,3 +1,4 @@
+import {initEvidenceLab} from "./evidence_lab.mjs";
 // C2: plain browser canvas editor. No paid dependencies, no third-party URLs.
 // The only source of truth is the authenticated DesignDocument persisted server-side.
 const $ = id => document.getElementById(id);
@@ -43,6 +44,7 @@ function recoverUnsavedText() {
 function status(message) { $('status').textContent = message; }
 function canWrite() { return ['admin','editor'].includes(model.principal?.role); }
 function controls() {
+  evidenceLab?.controls();
   const logged = !!model.token, editing = logged && !!model.doc && canWrite() && !model.opening;
   $('login').disabled = logged;
   $('logout').disabled = !logged;
@@ -95,6 +97,7 @@ function reset() {
   recoveryStore(null);
   timelineEditor?.reset();
   model.token = null; model.principal = null; model.doc = null;
+  evidenceLab?.reset();
   model.libraryEpoch++;model.libraryAfter=null;model.libraryBusy=false;model.opening=false;
   $('draft-library').replaceChildren();$('library-next').hidden=true;
   $('library-status').textContent='Entre para consultar seus documentos.';
@@ -579,6 +582,7 @@ async function createStoryboard() {
     status('Storyboard versionado criado; abra a timeline e vincule mídias autorizadas.');
   }catch(error){status('Storyboard rejeitado: '+error.message);}
 }
+const evidenceLab = initEvidenceLab({api,getToken:()=>model.token});
 const timelineEditor = window.StoneTimelineE8?.initTimelineEditor({api, canWrite, getDocument:()=>model.doc, getToken:()=>model.token, status});
 $('login').addEventListener('click',login);
 $('logout').addEventListener('click',logout);
