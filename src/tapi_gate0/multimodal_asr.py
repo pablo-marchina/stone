@@ -3,6 +3,7 @@
 Only internally generated PCM is passed to the recognizer by the benchmark.
 No arbitrary media paths, downloads, external inference or canonical labels.
 """
+from contextlib import contextmanager
 from hashlib import sha256
 from pathlib import Path
 from importlib.metadata import version
@@ -28,6 +29,8 @@ MEDIUM_MODEL_ID = "Systran/faster-whisper-medium"
 MEDIUM_REVISION = "7832330bcea9a8d5fd6d6637c49fe5d256e98277"
 MEDIUM_SHA256 = "9b45e1009dcc4ab601eff815b61d80e60ce3fd8c74c1a14f4a282258286b51ae"
 CHALLENGE_VERSION = "bd-asr-fixture-challenge.v2"
+GUARDED_VERSION = "bd-asr-fixture-guarded.v3"
+MIN_TEMP_FREE_BYTES = 64 * 1024 * 1024
 SAMPLE_RATE = 16000
 MAX_SECONDS = 15
 MAX_BYTES = 2*SAMPLE_RATE*MAX_SECONDS
@@ -47,12 +50,35 @@ CHALLENGE_SPEECH = (
     ("delivery","Avise o comprador quando a entrega estiver atrasada.",170),
 )
 CHALLENGE_NEGATIVE = ("silence","tone","noise")
+GUARDED_NEGATIVE = ("silence","tone","noise","silence_repeat_2","tone_repeat_2","noise_repeat_2","silence_repeat_3")
 MAX_POOLED_WER = 0.30
 MAX_CASE_WER = 0.50
 
 
 class ASRError(ValueError):
-    pass
+    """Sanitized failure; no paths, captions, transcript or exception message on stdout."""
+
+
+@contextmanager
+def asr_stage(stage,case_id=None):
+    try:
+        yield
+    except Exception as exc:
+        if isinstance(exc,ASRError):
+            error=exc
+        else:
+            error=ASRError("ASR_"+stage.upper()+"_FAILED")
+        error.stage=stage
+        error.case_id=case_id
+        error.exception_type=type(exc).__name__
+        if error is exc:
+            raise
+        raise error from exc
+
+
+def require_temp_capacity():
+    if shutil.disk_usage(tempfile.gettempdir()).free<MIN_TEMP_FREE_BYTES:
+        raise ASRError("ASR_TEMP_STORAGE_INSUFFICIENT")
 
 
 def _file_hash(path):
@@ -113,6 +139,8 @@ def word_errors(reference,hypothesis):
 
 
 def _negative_pcm(kind):
+    if kind in GUARDED_NEGATIVE:
+        kind=kind.split("_repeat_")[0]
     if kind=="silence":
         return bytes(2*SAMPLE_RATE*3)
     if kind=="tone":
@@ -172,6 +200,18 @@ def _transcribe(model,raw):
             "language_forced":"pt","reference_prompt_used":False}
 
 
+def guarded_transcribe(model,raw):
+    """Abstain only on exact digital zero. This is not a speech detector."""
+    if not raw or len(raw)%2 or len(raw)>MAX_BYTES:
+        raise ASRError("ASR_PCM_INVALID")
+    if not any(raw):
+        return {"pcm_sha256":sha256(raw).hexdigest(),"duration_s":len(raw)/(2*SAMPLE_RATE),
+                "segments":[],"transcript":"","timestamp_kind":"decoded_pcm_no_model_segments",
+                "language_forced":"pt","reference_prompt_used":False,
+                "inference_attempted":False,"abstention_reason":"EXACT_DIGITAL_SILENCE"}
+    return {**_transcribe(model,raw),"inference_attempted":True,"abstention_reason":None}
+
+
 def evaluate_cases(cases,speech_fixtures=SPEECH_FIXTURES,negative_fixtures=NEGATIVE_FIXTURES):
     speech=[c for c in cases if c["reference_words"]>0]
     negative=[c for c in cases if c["reference_words"]==0]
@@ -197,9 +237,14 @@ def run_asr_fixture_benchmark(model_dir,candidate="small",suite="baseline"):
         speech_fixtures,negative_fixtures,policy=SPEECH_FIXTURES,NEGATIVE_FIXTURES,VERSION
     elif suite=="challenge":
         speech_fixtures,negative_fixtures,policy=CHALLENGE_SPEECH,CHALLENGE_NEGATIVE,CHALLENGE_VERSION
+    elif suite=="guarded":
+        speech_fixtures,negative_fixtures,policy=CHALLENGE_SPEECH,GUARDED_NEGATIVE,GUARDED_VERSION
     else:
         raise ASRError("ASR_UNKNOWN_SUITE")
-    before=verify_checkpoint(model_dir,candidate)
+    with asr_stage("checkpoint_preflight"):
+        before=verify_checkpoint(model_dir,candidate)
+    with asr_stage("temp_preflight"):
+        require_temp_capacity()
     # Set before importing the model library. Local directory and tokenizer
     # are mandatory; no model ID is passed to the inference constructor.
     os.environ.update(HF_HUB_OFFLINE="1",TRANSFORMERS_OFFLINE="1",HF_HUB_DISABLE_TELEMETRY="1")
@@ -211,30 +256,41 @@ def run_asr_fixture_benchmark(model_dir,candidate="small",suite="baseline"):
     versions={name:version(name) for name in ("faster-whisper","ctranslate2","numpy","tokenizers","huggingface-hub")}
     versions["espeak-ng"]=_run(espeak,["--version"],output_limit=100000).decode("utf-8","replace").splitlines()[0]
     versions["ffmpeg"]=_run(ffmpeg,["-version"],output_limit=100000).decode("utf-8","replace").splitlines()[0]
-    from faster_whisper import WhisperModel
-    started=perf_counter()
-    model=WhisperModel(str(model_dir),device="cpu",compute_type="int8",
-                       cpu_threads=4,num_workers=1,local_files_only=True)
-    if not model.model.is_multilingual or model.feature_extractor.sampling_rate!=SAMPLE_RATE:
-        raise ASRError("ASR_MULTILINGUAL_MODEL_REQUIRED")
-    load_ms=round((perf_counter()-started)*1000,3)
+    with asr_stage("model_load"):
+        from faster_whisper import WhisperModel
+        started=perf_counter()
+        model=WhisperModel(str(model_dir),device="cpu",compute_type="int8",
+                           cpu_threads=4,num_workers=1,local_files_only=True)
+        if not model.model.is_multilingual or model.feature_extractor.sampling_rate!=SAMPLE_RATE:
+            raise ASRError("ASR_MULTILINGUAL_MODEL_REQUIRED")
+        load_ms=round((perf_counter()-started)*1000,3)
     cases=[]
     with tempfile.TemporaryDirectory(prefix="tapi-asr-fixtures-") as temp:
-        fixtures=[(cid,text,_speech_pcm(espeak,ffmpeg,temp,cid,text,rate))
-                  for cid,text,rate in speech_fixtures]
-        fixtures.extend((cid,"",_negative_pcm(cid)) for cid in negative_fixtures)
+        fixtures=[]
+        for cid,text,rate in speech_fixtures:
+            with asr_stage("fixture_generation",cid):
+                fixtures.append((cid,text,_speech_pcm(espeak,ffmpeg,temp,cid,text,rate)))
+        for cid in negative_fixtures:
+            with asr_stage("fixture_generation",cid):
+                fixtures.append((cid,"",_negative_pcm(cid)))
         for cid,reference,raw in fixtures:
             started=perf_counter()
-            observed=_transcribe(model,raw)
-            latency=round((perf_counter()-started)*1000,3)
-            cases.append({"case_id":cid,"reference":reference,**observed,
-                          **word_errors(reference,observed["transcript"]),"inference_ms":latency,
-                          "real_time_factor":round(latency/(1000*observed["duration_s"]),6)})
-    if before!=verify_checkpoint(model_dir,candidate):
-        raise ASRError("ASR_CHECKPOINT_CHANGED")
+            with asr_stage("inference",cid):
+                observed=guarded_transcribe(model,raw) if suite=="guarded" else _transcribe(model,raw)
+                latency=round((perf_counter()-started)*1000,3)
+            with asr_stage("scoring",cid):
+                cases.append({"case_id":cid,"reference":reference,**observed,
+                              **word_errors(reference,observed["transcript"]),"inference_ms":latency,
+                              "real_time_factor":round(latency/(1000*observed["duration_s"]),6)})
+    with asr_stage("checkpoint_postflight"):
+        if before!=verify_checkpoint(model_dir,candidate):
+            raise ASRError("ASR_CHECKPOINT_CHANGED")
     return {"status":"ASR_FIXTURE_BENCHMARK_COMPLETED","policy_version":policy,"candidate":candidate,"suite":suite,
             "synthetic_only":True,"checkpoint":before,"runtime_versions":versions,
             "model_load_ms":load_ms,"device":"cpu","compute_type":"int8","cases":cases,
+            "exact_digital_silence_guard":suite=="guarded",
+            "guard_abstentions":sum(r.get("inference_attempted") is False for r in cases),
+            "repeat_negative_cases":sum("_repeat_" in r["case_id"] for r in cases),
             **evaluate_cases(cases,speech_fixtures,negative_fixtures),"asr_evaluated_on_synthetic":True,
             "asr_validated_on_real_speech":False,"independent_gold":False,
             "real_media_processed":0,"real_media_processing_allowed":False,
