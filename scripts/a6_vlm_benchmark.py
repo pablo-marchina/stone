@@ -21,6 +21,7 @@ def main(argv=None):
     mode.add_argument("--plan",action="store_true")
     mode.add_argument("--verify",action="store_true")
     mode.add_argument("--benchmark",action="store_true")
+    mode.add_argument("--single-scene",action="store_true")
     p.add_argument("--model-dir",required=True,type=Path)
     p.add_argument("--server-exe",type=Path)
     p.add_argument("--input-name")
@@ -65,7 +66,11 @@ def main(argv=None):
         if shutil.disk_usage(target.parent).free<vlm.MIN_RUN_DISK:
             raise vlm.VLMError("VLM_REPORT_VOLUME_INSUFFICIENT")
         stage="benchmark"
-        result=vlm.benchmark(report,a.model_dir,a.server_exe)
+        if a.single_scene:
+            from tapi_gate0.multimodal_vlm_single_scene import benchmark
+            result=benchmark(report,a.model_dir,a.server_exe)
+        else:
+            result=vlm.benchmark(report,a.model_dir,a.server_exe)
         if source.read_bytes()!=raw:
             raise vlm.VLMError("VLM_INPUT_REPORT_CHANGED")
         result["source_report_sha256"]=sha256(raw).hexdigest()
@@ -74,7 +79,8 @@ def main(argv=None):
         with os.fdopen(fd,"w",encoding="utf-8") as stream:
             json.dump(result,stream,ensure_ascii=False,indent=2)
         print(json.dumps({**{k:v for k,v in result.items() if k!="cases"},
-            "case_summary":[{k:r[k] for k in ("case_id","suite","expected","prediction","inference_ms","reused_identical_image_result")} for r in result["cases"]],
+            "case_summary":[{**{k:r[k] for k in ("case_id","suite","expected","prediction","inference_ms","reused_identical_image_result")},
+                             **{k:r[k] for k in ("model_scene","inference_attempted","guard_reason") if k in r}} for r in result["cases"]],
             "report_name":a.report_name}))
         return 0 if result["engineering_gate_passed"] else 2
     except Exception as exc:
