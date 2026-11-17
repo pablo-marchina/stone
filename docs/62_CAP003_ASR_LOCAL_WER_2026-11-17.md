@@ -68,6 +68,8 @@ $asrModel = "C:\Models\tapi\faster-whisper-small"
 $env:HF_HUB_DISABLE_TELEMETRY = "1"
 $env:HF_HUB_DISABLE_IMPLICIT_TOKEN = "1"
 Remove-Item Env:HF_HUB_OFFLINE -ErrorAction SilentlyContinue
+Remove-Item Env:TRANSFORMERS_OFFLINE -ErrorAction SilentlyContinue
+python -c "from huggingface_hub import constants; assert not constants.HF_HUB_OFFLINE, 'HF Hub offline'"
 python -c "from huggingface_hub import snapshot_download; snapshot_download('Systran/faster-whisper-small',revision='536b0662742c02347bc0e980a01041f333bce120',local_dir=r'C:\Models\tapi\faster-whisper-small',allow_patterns=['config.json','model.bin','tokenizer.json','vocabulary.txt'],token=False)"
 $env:HF_HUB_OFFLINE = "1"
 $env:TRANSFORMERS_OFFLINE = "1"
