@@ -34,7 +34,7 @@ export function initRanking({api,getPrincipal,openDetail}){
     const body=$('ranking-rows');
     for(const item of r.items){
       const tr=el('tr');
-      for(const v of [num(item.rank),item.username,item.format,tiers[item.tier]||item.tier,num(item.likes),num(item.comments),num(item.followers),pct(item.er_percent),item.top_decile?'Sim':'Não',item.within_profile_top?'Sim':'—'])tr.append(el('td',v));
+      for(const v of [num(item.rank),item.username,item.format,tiers[item.tier]||item.tier,num(item.likes),num(item.comments),num(item.followers),pct(item.er_percent),item.top_decile?'Sim':'Não',item.within_profile_supported?(item.within_profile_top?'Sim':'Não'):'Sem cobertura'])tr.append(el('td',v));
       const td=el('td'),btn=el('button','Evidências','button outline inventory-detail-btn');
       btn.type='button';btn.addEventListener('click',()=>openDetail(item.content_id));td.append(btn);tr.append(td);body.append(tr);
     }
@@ -62,7 +62,7 @@ export function initRanking({api,getPrincipal,openDetail}){
     }
     const provenance=el('details');provenance.append(el('summary','Proveniência e concentração por perfil'),el('pre',JSON.stringify({
       ranking_policy:r.ranking_policy,manifest_sha256:r.manifest_sha256,audience_report_sha256:r.audience_report_sha256,
-      global_top_profiles:s.global_top_profiles,leave_one_profile_out:s.leave_one_profile_out
+      rubric_report_sha256:r.rubric_report_sha256,global_top_profiles:s.global_top_profiles,leave_one_profile_out:s.leave_one_profile_out
     },null,2)));contrasts.append(provenance);
   }
   async function load(offset=0){
