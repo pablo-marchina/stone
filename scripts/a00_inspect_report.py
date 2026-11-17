@@ -50,6 +50,9 @@ def inspect_report(root,name):
         raise BaselineError("A00_REPORT_XML_HASH_MISMATCH")
     counts=junit_counts(xml)
     old=report["pytest"]
+    required={"tests","passed","failed","errors","skipped","skipped_tests"}
+    if not isinstance(old,dict) or not required<=set(old) or not set(old)<=required|{"failed_tests"}:
+        raise BaselineError("A00_REPORT_COUNTS_INVALID")
     for k,v in old.items():
         if counts.get(k)!=v:
             raise BaselineError("A00_REPORT_COUNTS_MISMATCH")
