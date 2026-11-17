@@ -151,6 +151,8 @@ def _entry(row, post, creator, snapshots, now):
         "denominator_quality_latest_ingestion": row["denominator_quality"],
         "latest_snapshot": _metric(latest) if latest else None,
         "valid_snapshot_count": len(snapshots),
+        # IDs break equal timestamps deterministically, not chronologically.
+        "latest_snapshot_timestamp_tie": bool(len(snapshots) > 1 and snapshots[0].observed_at == snapshots[1].observed_at),
         "positive_latest_denominator": bool(latest and latest.follower_count > 0),
         "scientific_eligibility": "NOT_EVALUATED_BY_INVENTORY",
         "manifest_and_trace_reaudit_performed": False,
@@ -162,6 +164,7 @@ def _scope(now):
     return {"schema_version": VERSION, "as_of": now.isoformat(),
             "scope": "registered_external_metadata_with_current_technical_grant",
             "scientific_corpus": False, "ranking": False, "external_data_accessed": False,
+            "snapshot_order": "observed_at_desc_snapshot_id_desc",
             "database_mutated": False, "production_approved": False}
 
 
