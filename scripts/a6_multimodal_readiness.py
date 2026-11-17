@@ -32,6 +32,8 @@ def main(argv=None):
     mode.add_argument("--check-ready",action="store_true")
     mode.add_argument("--synthetic-temporal",action="store_true")
     mode.add_argument("--synthetic-asr",action="store_true")
+    mode.add_argument("--synthetic-ocr",action="store_true")
+    p.add_argument("--tessdata-dir",type=Path,help="Local OCR language files only")
     p.add_argument("--model-dir",type=Path,help="Pinned local ASR checkpoint directory only")
     p.add_argument("--asr-candidate",choices=("small","medium"),default="small")
     p.add_argument("--asr-suite",choices=("baseline","challenge"),default="baseline")
@@ -39,6 +41,9 @@ def main(argv=None):
     a=p.parse_args(argv)
     try:
         from tapi_gate0.multimodal_asr import ASRError,verify_checkpoint,run_asr_fixture_benchmark
+        from tapi_gate0.multimodal_ocr import OCRError,verify_tessdata,run_ocr_fixture_benchmark
+        if a.tessdata_dir and not (a.check_ready or a.synthetic_ocr):
+            raise OCRError("OCR_MODE_REQUIRED")
         if (a.asr_candidate!="small" or a.asr_suite!="baseline") and not (a.synthetic_asr or (a.check_ready and a.model_dir and a.asr_suite=="baseline")):
             raise ASRError("ASR_MODEL_MODE_REQUIRED")
         if a.model_dir and not (a.check_ready or a.synthetic_asr):
@@ -50,6 +55,9 @@ def main(argv=None):
             if a.model_dir:
                 result["asr_checkpoint"]=verify_checkpoint(a.model_dir,a.asr_candidate)
                 result["asr_checkpoint_verified"]=True  # published weight digest, not all companion hashes
+            if a.tessdata_dir:
+                result["ocr_language_data_sha256"]=verify_tessdata(a.tessdata_dir)
+                result["ocr_language_data_independently_verified"]=False
             print(json.dumps(result))
             return 0
         if not decide("synthetic_local",Operation.EVALUATE_SYNTHETIC.value).permitted:
@@ -70,6 +78,10 @@ def main(argv=None):
                 report=run_asr_fixture_benchmark(a.model_dir)
             else:
                 report=run_asr_fixture_benchmark(a.model_dir,candidate=a.asr_candidate,suite=a.asr_suite)
+        elif a.synthetic_ocr:
+            if a.tessdata_dir is None:
+                raise OCRError("OCR_LOCAL_TESSDATA_REQUIRED")
+            report=run_ocr_fixture_benchmark(a.tessdata_dir)
         else:
             report=run_temporal_fixture_benchmark()
         fd=os.open(target,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
@@ -78,6 +90,8 @@ def main(argv=None):
         summary={k:v for k,v in report.items() if k!="cases"}
         if a.synthetic_asr:
             summary["case_summary"]=[{k:r[k] for k in ("case_id","reference_words","hypothesis_words","word_errors","wer","duration_s","inference_ms","real_time_factor")} for r in report["cases"]]
+        elif a.synthetic_ocr:
+            summary["case_summary"]=[{k:r[k] for k in ("case_id","reference_words","hypothesis_words","word_errors","wer","cer","inference_ms")} for r in report["cases"]]
         else:
             summary["case_summary"]=[{"case_id":r["case_id"],"passed":r["passed"],
                                    "expected_transitions_s":r["expected_transitions_s"],
@@ -92,7 +106,7 @@ def main(argv=None):
         print(json.dumps({**summary,"report_name":a.report_name}))
         return 0 if report["engineering_gate_passed"] else 2
     except Exception as exc:
-        code=exc.args[0] if isinstance(exc,(TemporalError,ASRError)) and exc.args and re.fullmatch(r"(?:TEMPORAL|ASR)_[A-Z_]+",str(exc.args[0])) else "TEMPORAL_LOCAL_ERROR"
+        code=exc.args[0] if isinstance(exc,(TemporalError,ASRError,OCRError)) and exc.args and re.fullmatch(r"(?:TEMPORAL|ASR|OCR)_[A-Z_]+",str(exc.args[0])) else "TEMPORAL_LOCAL_ERROR"
         print(json.dumps({"status":"BLOCKED","code":code,"synthetic_only":True,
                           "real_media_processed":0,"external_data_accessed":False,
                           "database_mutated":False,"scientific_admissions":0}))
