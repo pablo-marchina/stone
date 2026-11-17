@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from sqlalchemy import (Table, Column, String, Text, BigInteger, ForeignKeyConstraint,
                         select, insert, update)
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from pydantic import ValidationError
 
 from .asset_rights import (SignedGrant, SignedRevocations, TrustedAuthority,
@@ -21,6 +21,7 @@ from .sa_store import metadata, domain_events, outbox, content_items
 from .ingestion import ingestion_records, source_grants
 from .storage import now_utc
 from .policy import Decision
+from .domain import ContentItem
 
 KEY = ("tenant_id","platform","issuer_id")
 AUTH = "asset_rights_authorities"
@@ -105,11 +106,10 @@ def _load_head(db,key,anchor,*,lock=False):
         _fail("ASSET_REGISTRY_AUTHORITY_NOT_REGISTERED")
     if row["key_sha256"]!=sha256(anchor.public_key).hexdigest():
         _fail("ASSET_REGISTRY_KEY_MISMATCH")
-    # Host floor is independent of the DB; old backups cannot silently
-    # authorize a revision below that floor. Equal revision requires digest.
-    if (row["revision"]<anchor.min_revocation_revision or
-        (row["revision"]==anchor.min_revocation_revision and
-         row["claims_sha256"]!=anchor.revocation_claims_sha256)):
+    # Exact independent host pin; no use while host/DB disagree (including
+    # the interval between advancing DB state and persisting the host pin).
+    if (row["revision"]!=anchor.min_revocation_revision or
+        row["claims_sha256"]!=anchor.revocation_claims_sha256):
         _fail("ASSET_REGISTRY_ROLLBACK")
     item=db.execute(select(revocations).where(*_where(revocations,key),
         revocations.c.revision==row["revision"])).mappings().one_or_none()
@@ -130,7 +130,7 @@ def _source_bound(db,target,now):
         (r.c.source_account_id==g.c.source_account_id)).join(c,
         (r.c.tenant_id==c.c.tenant_id)&(r.c.content_id==c.c.id))
     row=db.execute(select(g.c.approved_at,g.c.expires_at,g.c.technical_verified_at,g.c.enabled,
-        c.c.origin).select_from(join).where(r.c.tenant_id==target.tenant_id,
+        c.c.origin,c.c.payload).select_from(join).where(r.c.tenant_id==target.tenant_id,
         r.c.platform==target.platform,r.c.source_account_id==target.source_account_id,
         r.c.source_item_id==target.source_item_id,r.c.content_id==target.content_id,
         r.c.metadata_only==1)).mappings().one_or_none()
@@ -139,7 +139,10 @@ def _source_bound(db,target,now):
     try:
         approved,verified,expires=(datetime.fromisoformat(row[k]) for k in
             ("approved_at","technical_verified_at","expires_at"))
-        return approved<=verified<=now<expires
+        post=ContentItem.model_validate_json(row["payload"])
+        return (approved<=verified<=now<expires and post.tenant_id==target.tenant_id
+            and post.content_id==target.content_id and post.origin.value==target.platform
+            and not post.is_synthetic)
     except (ValueError,TypeError):
         return False
 
@@ -152,8 +155,9 @@ def _effective_anchor(anchor,row):
 class AssetRightsRegistry:
     """Offline trusted host only; callers must never supply anchors via HTTP.
 
-    The independent host floor must be advanced/persisted outside the DB
-    before operational use after revocation or recovery. No PEP is wired.
+    The independent host pin must match the exact current DB head; persist
+    it outside the DB after a verified advance. Recovery mismatch denies.
+    No PEP is wired.
     """
     def __init__(self,engine):
         self.engine=engine
@@ -260,5 +264,5 @@ class AssetRightsRegistry:
                     grant=grant,revocations=state,target=target,permission=permission,now=now)
         except AssetRightsDenied as exc:
             return Decision(False,str(exc),"Registro de direitos não permite a operação.")
-        except (ValidationError,ValueError,TypeError):
+        except (ValidationError,ValueError,TypeError,SQLAlchemyError):
             return Decision(False,"ASSET_REGISTRY_INVALID_STATE","Registro de direitos inválido.")
