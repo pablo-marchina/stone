@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import and_, select
 
@@ -191,7 +191,7 @@ def list_inventory(engine, tenant, filters: InventoryFilter):
             "items": items}
 
 
-def get_inventory_item(engine, tenant, content_id, *, snapshot_limit=100, snapshot_offset=0):
+def get_inventory_item(engine, tenant, content_id, *, snapshot_limit=100, snapshot_offset=0, caption_replay=None):
     if not 1 <= snapshot_limit <= 100 or not 0 <= snapshot_offset <= MAX_SNAPSHOTS:
         raise ConnectorError("INVENTORY_SNAPSHOT_PAGE_INVALID", 422)
     now = now_utc()
@@ -205,11 +205,12 @@ def get_inventory_item(engine, tenant, content_id, *, snapshot_limit=100, snapsh
         return {**_scope(now), "item": _entry(row, post, creator, snapshots, now),
                 "snapshots": [_metric(m) for m in history],
                 "stored_rubric": read_stored_rubric(db, tenant, post, now),
+                "caption_replay": caption_replay.detail(db,tenant,row,post,snapshots,now) if caption_replay is not None else {"status":"disabled"},
                 "snapshot_offset": snapshot_offset, "snapshot_limit": snapshot_limit,
                 "next_snapshot_offset": snapshot_offset + len(history) if snapshot_offset + len(history) < len(snapshots) else None}
 
 
-def router_for_inventory(current_principal, engine):
+def router_for_inventory(current_principal, engine, caption_replay=None):
     router = APIRouter(prefix="/v1/corpus/inventory", tags=["External technical inventory"])
 
     def reader(p: Principal = Depends(current_principal)):
@@ -224,11 +225,12 @@ def router_for_inventory(current_principal, engine):
         return list_inventory(engine, p.tenant_id, filters)
 
     @router.get("/{content_id}")
-    def detail(content_id: str, response: Response, p: Principal = Depends(reader),
+    def detail(content_id: str, response: Response, request: Request, p: Principal = Depends(reader),
                snapshot_limit: int = Query(100, ge=1, le=100),
                snapshot_offset: int = Query(0, ge=0, le=MAX_SNAPSHOTS)):
         response.headers["Cache-Control"] = "private, no-store"
         return get_inventory_item(engine, p.tenant_id, content_id,
-            snapshot_limit=snapshot_limit, snapshot_offset=snapshot_offset)
+            snapshot_limit=snapshot_limit, snapshot_offset=snapshot_offset,
+            caption_replay=caption_replay if request.client and request.client.host in ('127.0.0.1','::1','testclient') else None)
 
     return router
