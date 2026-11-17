@@ -19,7 +19,7 @@ OBJECT=r"(?:est[ea]|ess[ea]|[oa])\s+(?:post|v[ií]deo|conte[úu]do|publica[çc][
 PATTERNS={
     "salvar":rf"(?:salve|salvem|guarde|guardem)\s+{OBJECT}\b|(?:adicione|coloque)\s+{OBJECT}\s+(?:aos|nos)\s+(?:seus\s+)?favoritos\b",
     "comentar":r"(?:comente|comentem)\s+[^.!?;\n]{2,100}|(?:deixe|deixem|escreva|escrevam)\s+(?:a\s+)?(?:sua\s+)?(?:opini[ãa]o|d[úu]vida|resposta|experi[êe]ncia)\s+(?:na se[çc][ãa]o de|nos)\s+coment[áa]rios\b",
-    "seguir":r"(?:siga|sigam)\s+(?:(?:este|esse|nosso|o)\s+)?(?:perfil|canal|p[áa]gina)\b|(?:passe a|comece a|continue a)\s+acompanhar\s+(?:este|esse|nosso|o)\s+(?:perfil|canal|p[áa]gina)\b",
+    "seguir":r"(?:siga|sigam)\s+(?:(?:est[ea]|ess[ea]|noss[oa]|[oa])\s+)?(?:perfil|canal|p[áa]gina)\b|(?:passe a|comece a|continue a)\s+acompanhar\s+(?:est[ea]|ess[ea]|noss[oa]|[oa])\s+(?:perfil|canal|p[áa]gina)\b",
     "DM":r"(?:envie|mande)\s+(?:uma\s+)?mensagem\s+(?:pelo|no|via)\s+(?:direct|dm|privado)\b|(?:chame|procure)\s+(?:a gente|nos|nossa equipe)\s+(?:no|pelo)\s+(?:privado|direct|dm)\b",
     "link na bio":r"(?:acesse|clique|confira|veja|abra|toque)\s+(?:(?:o|no|pelo)\s+)?(?:link|endere[çc]o)\s+(?:na|da)\s+bio\b",
 }
@@ -44,7 +44,7 @@ NEW_CASES=(
     ("h15","negative",None,(("ocr","A opinião nos comentários foi positiva."),)),
     ("h16","negative",None,(("audio","A equipe respondeu pelo direct ontem."),)),
     ("h17","negative",None,(("caption","O link na bio recebeu muitas visitas."),)),
-    ("h18","negative",None,(("audio","Se você guarde esta publicação, seria apenas um exemplo."),)),
+    ("h18","negative",None,(("audio","Se você guardasse esta publicação, seria apenas uma hipótese."),)),
     ("h19","negative",None,(("caption","Nunca guarde este vídeo desatualizado."),)),
     ("h20","negative",None,(("ocr",'"Siga nosso perfil" era a frase usada na campanha.'),)),
     ("h21","negative",None,(("caption","Guarde este conteúdo."),("audio","Procure nossa equipe no privado."))),
