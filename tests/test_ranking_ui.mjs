@@ -47,3 +47,36 @@ test('ranking navigation and panel are present',async()=>{
   for(const id of ['ranking-form','ranking-summary','ranking-rows','ranking-contrasts','ranking-prev','ranking-next'])
     assert.ok(html.includes('id="'+id+'"'));
 });
+
+test('ready ranking renders metrics and drilldown to the correct content',async()=>{
+  const previous=globalThis.document,nodes=new Map();
+  function node(tag='div'){
+    return {tag,children:[],events:{},disabled:false,textContent:'',value:'',checked:false,
+      append(...items){this.children.push(...items);},replaceChildren(...items){this.children=items;},
+      addEventListener(k,fn){this.events[k]=fn;},reset(){}};
+  }
+  globalThis.document={createElement:node,getElementById(id){if(!nodes.has(id))nodes.set(id,node());return nodes.get(id);}};
+  try{
+    const group={posts:1,profiles:1,median_er_percent:3,top_decile_count:1,top_decile_median_er_percent:3,cutoff_tie:false};
+    let opened=null;
+    initRanking({getPrincipal:()=>({role:'admin'}),openDetail:id=>opened=id,api:async()=>({
+      schema_version:'external-exploratory-ranking-read.v1',status:'ready',canonical:false,full_population_rechecked:true,
+      cohort:'technical_all',cohorts:{technical_all:group},sensitivity:{within_profile_supported_posts:0,
+        within_profile_supported_profiles:0,within_profile_min_posts:10,top_jaccard:null},
+      items:[{rank:1,username:'fixture',format:'reels',tier:'unresolved',likes:2,comments:1,followers:100,
+        er_percent:3,top_decile:true,within_profile_supported:false,within_profile_top:false,content_id:'post1'}],
+      grounded_contrasts:{},total:1,population_reaudited:1,offset:0,limit:25,next_offset:null})});
+    globalThis.document.getElementById('ranking-cohort').value='technical_all';
+    globalThis.document.getElementById('ranking-top-only').checked=true;
+    nodes.get('ranking-form').events.submit({preventDefault(){}});
+    await new Promise(r=>setImmediate(r));
+    const row=nodes.get('ranking-rows').children[0];
+    assert.equal(row.children[7].textContent,'3%');
+    assert.equal(row.children[9].textContent,'Sem cobertura');
+    row.children[10].children[0].events.click();
+    assert.equal(opened,'post1');
+    assert.match(nodes.get('ranking-status').textContent,/1 reauditorados/);
+  }finally{
+    if(previous===undefined)delete globalThis.document;else globalThis.document=previous;
+  }
+});
