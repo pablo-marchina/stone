@@ -1,4 +1,4 @@
-import { FIELDS, STATES } from './evidence_lab.mjs';
+import { FIELDS, STATES } from './evidence_lab.mjs?v=a01-rubric-2';
 // A01.3: private technical inventory, no ranking, media, caption export or admission.
 const ROOT='/v1/corpus/inventory';
 const FORMATS={reels:'Reels',carrossel:'Carrossel',imagem:'Imagem',short:'Short'};
@@ -28,6 +28,16 @@ const RUBRIC_REASONS={
   STORED_ASSERTION_WITHHELD:'Resultado não exibido: fora do escopo ou vínculo inconsistente.',
   INCONSISTENT_CTA_PAIR:'Presença e tipo de CTA não possuem suporte consistente.'
 };
+export function rubricContractStatus(rubric){
+  if(!rubric)return 'missing';
+  if(rubric.schema_version!=='external-stored-rubric-read.v1'||rubric.field_count!==20||
+    !rubric.fields||Object.keys(rubric.fields).length!==20||
+    !Object.keys(FIELDS).every(k=>rubric.fields[k]&&Object.hasOwn(STATES,rubric.fields[k].state))||
+    !rubric.state_counts||!Object.keys(STATES).every(k=>Number.isInteger(rubric.state_counts[k])&&rubric.state_counts[k]>=0)||
+    Object.keys(STATES).some(k=>rubric.state_counts[k]!==Object.values(rubric.fields).filter(f=>f.state===k).length)||
+    rubric.canonical!==false)return 'incompatible';
+  return 'ready';
+}
 export function rubricRows(rubric){
   return Object.entries(FIELDS).map(([key,label])=>{
     const cell=rubric.fields[key];
@@ -128,7 +138,18 @@ export function initInventory({api,getPrincipal}){
       next.addEventListener('click',()=>void detail(id,r.next_snapshot_offset));
       controls.append(prev,next);
       $('inventory-detail').append(el('h4','Identidade e permissões'),dl,el('h4','Histórico de métricas'),scroll,controls);
-      if(r.stored_rubric)$('inventory-detail').append(renderRubric(r.stored_rubric));
+      const rubricStatus=rubricContractStatus(r.stored_rubric);
+      if(rubricStatus==='ready'){
+        $('inventory-detail').append(renderRubric(r.stored_rubric));
+      }else{
+        const section=el('section',undefined,'inventory-rubric');
+        section.append(el('h4','Evidence Studio · Rubrica histórica'),
+          el('p',rubricStatus==='missing'
+            ?'A API em execução não retornou a rubrica. Atualize o repositório, reinicie o servidor e recarregue a página.'
+            :'A resposta da rubrica não corresponde ao contrato esperado. Consulte o diagnóstico antes de utilizar os resultados.',
+            'inventory-hint'));
+        $('inventory-detail').append(section);
+      }
       $('inventory-detail-status').textContent='Detalhes de '+item.handle+' · '+number(item.valid_snapshot_count)+' snapshots';
       $('inventory-detail-status').focus({preventScroll:false});
     }catch(e){if(gen===detailEpoch&&permitted())$('inventory-detail-status').textContent=e.message;}
