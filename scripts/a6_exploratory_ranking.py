@@ -26,6 +26,7 @@ def main(argv=None):
     p.add_argument("--admin", help="Existing local admin login; otherwise select unique enabled SQLite admin")
     p.add_argument("--agent-preview", action="store_true", help="Private exploratory agent findings and draft CreativeSpecs; implies editorial")
     p.add_argument("--editorial", action="store_true", help="Compute descriptive editorial coverage and ranking sensitivity")
+    p.add_argument("--rubric-input-name", action="append", default=[], help="Private grounded rubric pilot report; repeat for disjoint fields; descriptive only")
     p.add_argument("--manifest", type=Path, required=True)
     p.add_argument("--input-name", required=True)
     p.add_argument("--report-name", required=True)
@@ -33,12 +34,16 @@ def main(argv=None):
     a = p.parse_args(argv)
     if a.persist_studio_drafts:
         a.agent_preview = True
-    if a.agent_preview:
+    if a.agent_preview or a.rubric_input_name:
         a.editorial = True
     engine = None
     identity_session_written = False
     studio_write_attempted = False
     try:
+        if a.rubric_input_name and a.persist_studio_drafts:
+            raise ValueError("BD_EXPLORATORY_RUBRIC_READ_ONLY_REQUIRED")
+        if len(a.rubric_input_name)>4 or len(set(a.rubric_input_name))!=len(a.rubric_input_name):
+            raise ValueError("BD_EXPLORATORY_RUBRIC_INPUT_INVALID")
         if a.persist_studio_drafts and not a.confirm_all_writers_stopped:
             raise ConnectorError("BD_STUDIO_LOCAL_ADMIN_STOP_REQUIRED",403)
         if not a.confirm_all_ingestion_stopped:
@@ -46,7 +51,7 @@ def main(argv=None):
         private = ROOT / "artifacts" / "private"
         if private.resolve() != private.absolute():
             raise ValueError("BD_EXPLORATORY_PRIVATE_ROOT_REDIRECTED")
-        for name in (a.input_name, a.report_name):
+        for name in (a.input_name, a.report_name, *a.rubric_input_name):
             if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,100}\.json", name):
                 raise ValueError("BD_EXPLORATORY_PRIVATE_NAME_REQUIRED")
         source, target = private/a.input_name, private/a.report_name
@@ -56,10 +61,29 @@ def main(argv=None):
             raise ValueError("BD_EXPLORATORY_REPORT_TOO_LARGE")
         raw = source.read_bytes()
         frame = BatchManifest.model_validate_json(a.manifest.read_text(encoding="utf-8"))
-        saved = report_rows(json.loads(raw), frame.fingerprint())
+        audience_report = json.loads(raw)
+        saved = report_rows(audience_report, frame.fingerprint())
+        rubric_reports = []
+        rubric_fields = []
+        rubric_hashes = []
         tenant, viewer = os.environ["TAPI_TENANT_ID"], os.environ["TAPI_META_IG_ID"]
         engine = engine_for(validate_existing_database_url(os.environ["TAPI_DATABASE_URL"]))
         require_scoped_research(engine, tenant, frame, viewer)
+        if a.rubric_input_name:
+            from tapi_gate0.discovery_rubric_contrasts import report_rows as rubric_report_rows, revalidate_row, analyze_rubric
+            for name in a.rubric_input_name:
+                rubric_path = private/name
+                if rubric_path.is_symlink() or not rubric_path.is_file() or rubric_path.stat().st_size > 25_000_000:
+                    raise ValueError("BD_EXPLORATORY_RUBRIC_INPUT_INVALID")
+                rubric_raw = rubric_path.read_bytes()
+                fields, records = rubric_report_rows(json.loads(rubric_raw), frame.fingerprint(),
+                    model_revision=audience_report["model_revision"], model_weights_sha256=audience_report["model_weights_sha256"])
+                if set(fields)&set(rubric_fields) or set(records)!=set(saved):
+                    raise ValueError("BD_EXPLORATORY_RUBRIC_PARTITION_MISMATCH")
+                rubric_fields.extend(fields)
+                rubric_reports.append((fields,records))
+                rubric_hashes.append({"fields":fields,"sha256":hashlib.sha256(rubric_raw).hexdigest()})
+            rubric_fields.sort()
         rows = []
         seen = set()
         if a.editorial:
@@ -82,6 +106,11 @@ def main(argv=None):
                 row.update(format=post.media_type.value, published_at=post.published_at.isoformat(),
                            sector=sampling_sector(source.sampling_stratum), caption_chars=len(post.caption),
                            **caption_features(post.caption, TOPICS, CTA))
+            if rubric_reports:
+                values = {}
+                for fields, records in rubric_reports:
+                    values.update(revalidate_row(post.caption, cid, source.username, metric.snapshot_id, records[cid], fields))
+                row["grounded_rubric"] = values
             rows.append(row)
         ready = readiness_report(engine, tenant, frame, viewer, _record_observer=observe)
         if seen != set(saved) or len(seen) != ready["first_blocking_stage"]["CAPTION_AVAILABLE_FOR_ASSESSMENT"]:
@@ -110,6 +139,9 @@ def main(argv=None):
             from tapi_gate0.discovery_rubric_coverage import rubric_coverage
             result["rubric_coverage"] = rubric_coverage(rows)
             result["status"] = "EXPLORATORY_EDITORIAL_COMPLETED"
+        if rubric_reports:
+            result["rubric_candidate_contrasts"] = analyze_rubric(rows, rubric_fields)
+            result["rubric_candidate_contrasts"]["input_reports"] = rubric_hashes
         agent_private = {}
         if a.agent_preview:
             from tapi_gate0.discovery_editorial_agent import build_agent_preview
