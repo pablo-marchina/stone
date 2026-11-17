@@ -23,13 +23,17 @@ VIEWER = "17841459971757521"
 TARGET = "17841403133066329"
 TOKEN = "local-fixture-secret-not-real"
 TENANT = "local-research"
-NOW = datetime(2026, 11, 5, 1, 16, tzinfo=timezone.utc)
+CAPTURE_AS_OF = datetime(2026, 11, 5, 1, 16, tzinfo=timezone.utc)
+NOW = datetime.now(timezone.utc)
+# Replay original capture intervals relative to this run, not as live data.
+# The captured date literals remain in the fixture for traceability.
 
 
 def row(mid, kind, date, likes, comments, url):
     return {"id":mid, "media_type":kind,
             "media_product_type":"REELS" if kind=="VIDEO" else "FEED",
-            "timestamp":date,"like_count":likes,"comments_count":comments,
+            "timestamp":(NOW + (datetime.fromisoformat(date) - CAPTURE_AS_OF)).isoformat(),
+            "like_count":likes,"comments_count":comments,
             "permalink":url,"caption":"Observação sobre MEI e negócios menores."}
 
 RECENT = [
