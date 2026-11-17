@@ -1,3 +1,4 @@
+import { FIELDS, STATES } from './evidence_lab.mjs';
 // A01.3: private technical inventory, no ranking, media, caption export or admission.
 const ROOT='/v1/corpus/inventory';
 const FORMATS={reels:'Reels',carrossel:'Carrossel',imagem:'Imagem',short:'Short'};
@@ -16,6 +17,25 @@ export function snapshotNotice(item){
   if(!item.latest_snapshot)return 'Métricas indisponíveis';
   if(item.latest_snapshot_timestamp_tie)return 'Horários iguais: desempate por ID, sem garantia de ordem cronológica';
   return 'Última observação disponível';
+}
+const RUBRIC_REASONS={
+  NO_MATCHING_STORED_BASELINE:'Não há avaliação histórica correspondente ao registro atual.',
+  NO_STORED_FIELD_EVIDENCE:'Não há evidência registrada para este campo.',
+  BASELINE_NOT_OBSERVABLE:'O método original não conseguiu observar este atributo.',
+  BASELINE_NOT_APPLICABLE:'Marcado como não aplicável no registro original.',
+  STORED_METADATA_MATCH:'Valor registrado coincide com o metadado atual.',
+  HISTORICAL_LEXICAL_CANDIDATE:'Resultado lexical histórico, sem revalidação semântica.',
+  STORED_ASSERTION_WITHHELD:'Resultado não exibido: fora do escopo ou vínculo inconsistente.',
+  INCONSISTENT_CTA_PAIR:'Presença e tipo de CTA não possuem suporte consistente.'
+};
+export function rubricRows(rubric){
+  return Object.entries(FIELDS).map(([key,label])=>{
+    const cell=rubric.fields[key];
+    return {key,label,state:STATES[cell.state]||cell.state,
+      value:cell.value==null?'—':typeof cell.value==='boolean'?(cell.value?'Sim':'Não'):String(cell.value),
+      reason:RUBRIC_REASONS[cell.reason]||'Consultar o estado técnico.',
+      modality:({metadata:'Metadados',caption:'Legenda'})[cell.modality]||'—'};
+  });
 }
 export function initInventory({api,getPrincipal}){
   const $=id=>document.getElementById(id);
@@ -65,6 +85,20 @@ export function initInventory({api,getPrincipal}){
     finally{if(gen===epoch)$('inventory-submit').disabled=!permitted();}
   }
   function line(dl,label,value){dl.append(el('dt',label),el('dd',value));}
+  function renderRubric(rubric){
+    const section=el('section',undefined,'inventory-rubric');
+    section.append(el('h4','Evidence Studio · Rubrica histórica'),
+      el('p','Avaliações preliminares já armazenadas. Não são rótulos validados; nenhuma inferência nova ou revisão científica foi executada.','inventory-hint'));
+    const counts=el('div',undefined,'inventory-rubric-counts');
+    for(const [key,label] of Object.entries(STATES))counts.append(el('span',label+': '+number(rubric.state_counts[key])));
+    section.append(counts,el('p',rubric.assessment_id?'Versão: '+rubric.model_version+' · '+date(rubric.recorded_at):'Nenhuma avaliação histórica compatível.','inventory-hint'));
+    const table=el('table'),head=el('thead'),header=el('tr'),body=el('tbody');
+    for(const label of ['Campo','Estado','Valor','Origem','Justificativa']){const th=el('th',label);th.scope='col';header.append(th);}
+    head.append(header);table.append(head,body);
+    for(const cell of rubricRows(rubric)){const tr=el('tr');for(const v of [cell.label,cell.state,cell.value,cell.modality,cell.reason])tr.append(el('td',v));body.append(tr);}
+    const scroll=el('div',undefined,'table-scroll');scroll.append(table);section.append(scroll);
+    return section;
+  }
   async function detail(id,offset){
     if(!permitted())return;
     const gen=++detailEpoch;active=id;$('inventory-detail').replaceChildren();
@@ -94,6 +128,7 @@ export function initInventory({api,getPrincipal}){
       next.addEventListener('click',()=>void detail(id,r.next_snapshot_offset));
       controls.append(prev,next);
       $('inventory-detail').append(el('h4','Identidade e permissões'),dl,el('h4','Histórico de métricas'),scroll,controls);
+      if(r.stored_rubric)$('inventory-detail').append(renderRubric(r.stored_rubric));
       $('inventory-detail-status').textContent='Detalhes de '+item.handle+' · '+number(item.valid_snapshot_count)+' snapshots';
       $('inventory-detail-status').focus({preventScroll:false});
     }catch(e){if(gen===detailEpoch&&permitted())$('inventory-detail-status').textContent=e.message;}
