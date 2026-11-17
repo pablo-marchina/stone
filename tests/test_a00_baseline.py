@@ -75,7 +75,9 @@ def test_junit_counts_do_not_count_skips_as_passes(tmp_path):
                  '<testcase name="bad"><failure/></testcase><testcase name="error"><error/></testcase></testsuite></testsuites>',encoding="utf-8")
     report=baseline.junit_counts(p)
     assert report=={"tests":4,"passed":1,"failed":1,"errors":1,"skipped":1,
-                    "skipped_tests":[{"class":"","name":"skip"}]}
+                    "skipped_tests":[{"class":"","name":"skip"}],
+                    "failed_tests":[{"class":"","name":"bad","kind":"failure"},
+                                    {"class":"","name":"error","kind":"error"}]}
     assert baseline.junit_counts(tmp_path/"absent.xml") is None
 
 
