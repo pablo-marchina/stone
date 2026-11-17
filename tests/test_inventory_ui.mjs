@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { inventoryQuery, snapshotNotice, initInventory } from '../src/tapi_gate0/web/inventory.mjs';
+import { inventoryQuery, snapshotNotice, initInventory, rubricRows } from '../src/tapi_gate0/web/inventory.mjs';
 
 test('inventory query includes only permitted filters and encodes values',()=>{
   const url=new URL(inventoryQuery({search:'a & b',platform:'instagram',sector:'',tenant_id:'other',token:'secret'},25),'http://localhost');
@@ -50,4 +50,17 @@ test('dashboard includes inventory section, form and same-document navigation',a
   for(const id of ['data-explorer','inventory-form','inventory-status','inventory-rows','inventory-detail','inventory-prev','inventory-next']){
     assert.ok(html.includes('id="'+id+'"'));
   }
+});
+
+test('historical rubric maps all 20 fields without converting abstention to false',async()=>{
+  const {FIELDS}=await import('../src/tapi_gate0/web/evidence_lab.mjs');
+  const fields=Object.fromEntries(Object.keys(FIELDS).map(key=>[key,{state:'abstained',value:null,modality:null,reason:'BASELINE_NOT_OBSERVABLE'}]));
+  fields.tem_cta={state:'candidate',value:true,modality:'caption',reason:'HISTORICAL_LEXICAL_CANDIDATE'};
+  const rows=rubricRows({fields});
+  assert.equal(rows.length,20);
+  assert.equal(rows.find(x=>x.key==='tem_cta').value,'Sim');
+  assert.equal(rows.find(x=>x.key==='tem_cta').modality,'Legenda');
+  assert.match(rows.find(x=>x.key==='tem_cta').reason,/sem revalidação semântica/);
+  assert.equal(rows.find(x=>x.key==='tem_rosto').value,'—');
+  assert.equal(rows.find(x=>x.key==='tem_rosto').state,'Abstenção');
 });
