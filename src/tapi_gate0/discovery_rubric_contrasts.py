@@ -120,6 +120,29 @@ def _agreement(rows, field, baseline):
     return {k:counts[k] for k in ("both_unknown","baseline_only","grounded_only","agree","disagree")}
 
 
+
+def _candidate_distribution(rows, top_ids, field):
+    """Observed-only contrasts plus worst-case missingness bounds, not CIs.
+
+    Unknowns can belong to any candidate category. For claim-only fields,
+    a lack of detected claim cannot be interpreted as absence of the claim.
+    """
+    result = _distribution(rows,top_ids,field)
+    top,rest = result["top"],result["rest"]
+    for group in (top,rest):
+        group["coverage_fraction"] = round(group["observed"]/group["posts"],6) if group["posts"] else None
+    for comparison in result["comparisons"]:
+        def bounds(group,count):
+            if not group["posts"]:
+                return None
+            return [count/group["posts"],(count+group["unknown"])/group["posts"]]
+        a,b = bounds(top,comparison["top_count"]),bounds(rest,comparison["rest_count"])
+        comparison["top_full_population_share_bounds"] = [round(v,6) for v in a] if a is not None else None
+        comparison["rest_full_population_share_bounds"] = [round(v,6) for v in b] if b is not None else None
+        comparison["difference_missingness_bounds_pp"] = [round((a[0]-b[1])*100,6),
+                                                           round((a[1]-b[0])*100,6)] if a is not None and b is not None else None
+    return result
+
 def analyze_rubric(rows, fields):
     """Same ER populations/top ranks, separate candidate-only observables."""
     _require(rows and len({r["content_id"] for r in rows})==len(rows)
@@ -137,8 +160,8 @@ def analyze_rubric(rows, fields):
         within_ids={r["content_id"] for g in source.values() if len(g)>=MIN_PROFILE_POSTS for r in _top(g)}
         result[name]={"posts":len(group),"profiles":len(source),"global_top_count":len(global_ids),
                       "within_profile_supported_posts":len(supported),"within_profile_top_count":len(within_ids),
-                      "fields":{f:{"global":_distribution(flattened,global_ids,"rubric:"+f),
-                                  "within_profile":_distribution(supported,within_ids,"rubric:"+f),
+                      "fields":{f:{"global":_candidate_distribution(flattened,global_ids,"rubric:"+f),
+                                  "within_profile":_candidate_distribution(supported,within_ids,"rubric:"+f),
                                   "candidate_semantics":"caption_claim_only" if f in ("prova_social","oferta_ou_beneficio_explicito") else "caption_candidate",
                                   **({"baseline_agreement":_agreement(group,f,{"tema_principal":"topic","tipo_cta":"cta"}[f])}
                                      if f in ("tema_principal","tipo_cta") else {})}
