@@ -60,3 +60,33 @@ def test_invalid_fields_and_caption_fail_closed():
     for field, text in [("hook_primeiros_3s", "Comente"), ("tipo_cta", ""), ("tipo_cta", "a"*10001)]:
         with pytest.raises(ValueError, match="INPUT_INVALID"):
             rule_evidence(field, text)
+
+
+def test_grounded_rubric_cli_is_synthetic_only(tmp_path, monkeypatch, capsys):
+    import json
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+    from scripts import a6_audience_contextual as runner
+    from tapi_gate0.system_one_e1 import LocalGLiNERDecider
+    monkeypatch.setenv("TAPI_SYSTEM_ONE_ENABLED", "1")
+    monkeypatch.setattr(runner, "ROOT", tmp_path)
+    model = tmp_path / "model"
+    model.mkdir()
+    checkpoint = {"manifest_present": True, "revision": "a"*40,
+                  "files": {"model.safetensors": {"sha256": "b"*64}}}
+    monkeypatch.setattr(runner, "_checkpoint_api", lambda: (lambda path: checkpoint, lambda path: None))
+    monkeypatch.setattr(runner, "_model_runtime", lambda: (
+        lambda path: LocalGLiNERDecider(path, _test_model=First()),
+        SimpleNamespace(inference_mode=nullcontext)))
+    assert runner.main(["--rubric-grounded-benchmark", "--model-dir", str(model),
+                        "--report-name", "grounded-rubric.json"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "GROUNDED_RUBRIC_BENCHMARK_COMPLETED"
+    assert report["synthetic_cases"] == 62
+    assert report["synthetic_only"] and not report["database_mutated"]
+    assert not report["real_caption_inference_allowed"]
+    assert "cases" not in report
+    saved = json.loads((tmp_path/"artifacts"/"private"/"grounded-rubric.json").read_text(encoding="utf-8"))
+    assert len(saved["cases"]) == 62
+    assert runner.main(["--rubric-grounded-benchmark", "--manifest", "unused.json"]) == 2
+    assert json.loads(capsys.readouterr().out)["code"] == "BD_AUDIENCE_BENCHMARK_SYNTHETIC_ONLY"
