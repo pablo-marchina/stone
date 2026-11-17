@@ -44,3 +44,5 @@
 .evidence-table{overflow:auto}.evidence-table table{width:100%;border-collapse:collapse;text-align:left;font-size:.85rem}
 .evidence-table td,.evidence-table th{padding:6px;border-bottom:1px solid #9ca3af}
 .evidence-lab select{width:100%;margin:4px 0 10px}
+
+.evidence-lab{width:100%}.evidence-lab summary:focus-visible,.evidence-lab select:focus-visible{outline:2px solid #166647;outline-offset:3px}.evidence-lab select{padding:8px;border:1px solid #a0b6a6;border-radius:6px;background:white;color:#20332c}.evidence-lab label{display:block;font-size:.85rem;font-weight:600}
