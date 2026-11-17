@@ -26,6 +26,7 @@ from .discovery_ingestion import router_for_discovery_ingestion
 from .discovery_technical import router_for_discovery_technical
 from .corpus import router_for_corpus
 from .corpus_inventory import router_for_inventory
+from . import asset_rights_registry  # register schema only; no trust configured
 from .corpus_caption_replay import CaptionReplay, config_from_env as replay_config_from_env
 from .ui import router_for_authenticated_view
 from .agent_api_e1 import router_for_evidence_agent
