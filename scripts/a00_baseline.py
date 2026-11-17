@@ -126,7 +126,19 @@ def read_matrices(root):
         for column,allowed in (("capability_ids",caps),("decision_ids",decisions),("gates",gates),("dependencies",set(tasks))):
             if not set(filter(None,row[column].split(";")))<=allowed:
                 raise BaselineError("BASELINE_TASK_REFERENCE_INVALID")
+    raw=(root/"planning/action_2026-11-17/phase_map.json").read_bytes()
+    overlay=json.loads(raw)
+    phases=overlay["phases"]
+    if (overlay.get("kind")!="execution_overlay_not_acceptance"
+            or set(phases)!={f"A{i:02d}" for i in range(12)}
+            or any(not isinstance(ids,list) or not ids for ids in phases.values())):
+        raise BaselineError("BASELINE_PHASE_MAP_INVALID")
+    assigned=[task for ids in phases.values() for task in ids]
+    if len(assigned)!=len(tasks) or set(assigned)!=set(tasks):
+        raise BaselineError("BASELINE_PHASE_PARTITION_INVALID")
     return {"matrices":summaries,"dependency_dag_acyclic":True,
+            "phase_map_sha256":sha256(raw).hexdigest(),
+            "phase_task_counts":{k:len(v) for k,v in sorted(phases.items())},
             "historical_task_status_counts":dict(Counter(r["status"] for r in tasks.values())),
             "imp062_status":tasks["IMP-062"]["status"],"independent_human_review_completed":False,
             "matrix_statuses_are_historical_not_current_certification":True}
