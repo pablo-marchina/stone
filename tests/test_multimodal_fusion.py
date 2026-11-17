@@ -72,6 +72,7 @@ def test_lexical_gate_metrics():
     assert not fusion.evaluate(rows)["engineering_gate_passed"]  # other fields lack support
 
 
+@pytest.mark.media_integration
 def test_shared_lossless_mux_and_timeline(tmp_path):
     binary=shutil.which("ffmpeg")
     if not binary:
