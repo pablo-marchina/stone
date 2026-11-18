@@ -24,7 +24,18 @@ from .asset_processor_results import (SHARED_AV_METHOD, SharedAVSource, SharedAV
 from .asset_rights import AssetRightsDenied
 
 METHOD=SHARED_AV_METHOD
-CASES=("inventory","silence")
+# Fixed audiovisual recipes. Keep the two original recipes byte-compatible.
+RECIPES={
+    "inventory":("inventory","sales"),
+    "silence":("silence","blank"),
+    "agreement":("agreement","sales"),
+    "conflict":("conflict","sales"),
+    "complementary":("cta","sales"),
+    "audio_only":("cta","blank"),
+    "screen_only":("silence","sales"),
+    "tone_negative":("tone","blank"),
+}
+CASES=tuple(RECIPES)
 PROCESSORS=("temporal","ocr","asr_vad","vlm")
 WIDTH,HEIGHT,FPS=960,540,4
 PIXELS=WIDTH*HEIGHT
@@ -79,7 +90,7 @@ class AuthoredFixture:
 
     @property
     def screen_case(self):
-        return "sales" if self.case=="inventory" else "blank"
+        return RECIPES[self.case][1]
 
 
 def _decoder(binary,data,source):
@@ -124,17 +135,18 @@ def prepare(case):
     """
     if case not in CASES:
         _deny("CASE")
-    wav,meta=asr.fixture(case)
+    speech,screen=RECIPES[case]
+    wav,meta=asr._authored_fixture(speech)
     pcm=asr._pcm(wav)
     count=(meta["samples"]+3999)//4000
     if not 5<=count<=60:
         _deny("DURATION")
-    png,_=ocr.fixture("sales" if case=="inventory" else "blank")
+    png,_=ocr.fixture(screen)
     rgb=_rgb(png)
     gray=rgb[::3]
     # In positive case choose the opposite uniform intensity so the
     # deterministic transition at one second is actually observable.
-    first=bytes([0 if sum(gray)>127*len(gray) else 255])*len(rgb) if case=="inventory" else rgb
+    first=bytes([0 if sum(gray)>127*len(gray) else 255])*len(rgb) if screen=="sales" else rgb
     raw=first*4+rgb*(count-4)
     samples=tuple(_sample((first if i<4 else rgb)[::3]) for i in range(min(count,32)))
     binary,binary_hash=temporal._runtime()
@@ -178,7 +190,7 @@ def _adapter_plan(fixture,processor,paths):
     if processor=="asr_vad" and a is not None:
         return asr._plan(fixture.wav,json.loads(fixture.asr_meta_json),a)
     if processor=="vlm" and v is not None and s is not None:
-        expected="text_card" if fixture.case=="inventory" else "blank"
+        expected="text_card" if fixture.screen_case=="sales" else "blank"
         return vlm._plan_image(fixture.png,expected,"shared_"+fixture.case,v,s)
     _deny("PROCESSOR_CONFIG")
 
@@ -260,7 +272,7 @@ def run(queue,vault,store,lease,*,fixture,paths):
         quality=None
         if spec.processor=="temporal":
             observation=_temporal_result(samples)
-            expected=[1000] if fixture.case=="inventory" else []
+            expected=[1000] if fixture.screen_case=="sales" else []
             if [x.current.time_ms for x in observation.candidates]!=expected:
                 _deny("TEMPORAL_GATE")
         elif spec.processor=="ocr":
@@ -278,7 +290,7 @@ def run(queue,vault,store,lease,*,fixture,paths):
         elif spec.processor=="vlm":
             output,model_resources=windows._run_vlm_fixture(code,fixture.png,check,
                 limits=windows.VlmFixtureLimits(),max_output=vlm.MAX_OUTPUT)
-            expected="text_card" if fixture.case=="inventory" else "blank"
+            expected="text_card" if fixture.screen_case=="sales" else "blank"
             observation,calls=vlm._result_for_image(fixture.png,expected,output)
             observation=observation.model_copy(update={"frame":frame})
         else:

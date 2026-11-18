@@ -4,6 +4,7 @@ Only a trusted host can evaluate selected persisted processor results. No
 model invocation, arbitrary caption, API, write, ranking or publication.
 """
 from typing import Literal
+from itertools import combinations
 from pydantic import Field, model_validator
 from .asset_processor_results import Contract, Digest, Id
 from .asset_candidate_evidence import (_validate_selection, _assemble_in_transaction,
@@ -186,6 +187,20 @@ def _evaluate(bundle):
 
 
 def evaluate_candidate_bundle(store,tenant,object_id,artifact_ids,*,purpose):
+    return _evaluate_authorized(store,tenant,object_id,artifact_ids,purpose=purpose,ablation=False)
+
+
+def evaluate_shared_av_ablation(store,tenant,object_id,artifact_ids,*,purpose):
+    """All 15 nonempty subsets of the four persisted shared processors.
+
+    One authorized snapshot, no model invocation, no training or admission.
+    This is retrospective replay; excluding a modality does not establish
+    realized savings or permission to omit its checks in a future router.
+    """
+    return _evaluate_authorized(store,tenant,object_id,artifact_ids,purpose=purpose,ablation=True)
+
+
+def _evaluate_authorized(store,tenant,object_id,artifact_ids,*,purpose,ablation):
     """One local transaction; derive rubric permission before decrypt and after decision.
 
     Only in-memory candidates, no retain/display/export rights conferred.
@@ -204,9 +219,29 @@ def evaluate_candidate_bundle(store,tenant,object_id,artifact_ids,*,purpose):
         _grant(db,q.resolve_anchor(root),root,now,permission)
         bundle,by_id,bindings=_assemble_in_transaction(store,db,now,tenant,object_id,artifact_ids,purpose=purpose,by_id=by_id)
         try:
-            result=_evaluate(bundle)
+            result=_ablation(bundle) if ablation else _evaluate(bundle)
         except ValueError:
             raise AssetRightsDenied("ASSET_S1_CONTRACT") from None
         fresh=_recheck_bundle(store,db,now,by_id,bindings,purpose=purpose)
         _grant(db,q.resolve_anchor(root),root,fresh,permission)
         return result
+
+
+def _ablation(bundle):
+    """Private pure reducer, not an authorization entrypoint."""
+    entries=bundle.entries
+    if (len(entries)!=4 or any(e.observation.shared_av is None for e in entries)
+            or {e.observation.result.processor for e in entries}!={"temporal","ocr","asr_vad","vlm"}):
+        raise AssetRightsDenied("ASSET_S1_SHARED_AV_COMPLETE_REQUIRED")
+    arms={}
+    for size in range(1,5):
+        for selected in combinations(entries,size):
+            processors=tuple(e.observation.result.processor for e in selected)
+            # Selection is exclusively from the authenticated, sorted snapshot.
+            subset=bundle.model_copy(update={"entries":selected})
+            decision=_evaluate(subset)
+            arms["+".join(processors)]=decision
+    return {"schema_version":"shared-av-ablation.v1",
+            "source_fingerprint":bundle.fingerprint(),"arms":arms,
+            "inference_reexecuted":False,"scientific_evidence":False,
+            "canonical_rubric":False}

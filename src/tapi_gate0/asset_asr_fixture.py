@@ -31,6 +31,12 @@ RATE=16000
 MAX_PCM=480000
 CASES=("inventory","silence","tone")
 REFERENCE="Confira o estoque antes de aceitar novos pedidos."
+# Fixed authored challenge phrases; no caller-provided TTS text.
+SHARED_SPEECH={
+    "agreement":"Organize suas vendas e acompanhe suas vendas.",
+    "conflict":"Calcule os custos fixos e a margem de contribuição.",
+    "cta":"Salve este conteúdo para revisar mais tarde.",
+}
 VAD_PIN="4cbf549b8326f60f80f2536d9eefeb450a9abe83365a098031c89719f1be17d2"
 OPTIONS={"threshold":0.5,"min_speech_duration_ms":250,"min_silence_duration_ms":300,"speech_pad_ms":150}
 RUNTIME_PACKAGES=("faster-whisper","ctranslate2","onnxruntime","numpy","tokenizers","huggingface-hub","av")
@@ -51,14 +57,16 @@ def _hash(path,limit):
     return h.hexdigest()
 
 
-def _speech_pcm():
+def _speech_pcm(reference=REFERENCE):
+    if reference not in (REFERENCE,*SHARED_SPEECH.values()):
+        raise ValueError("ASR_FIXTURE_SPEECH_NOT_AUTHORED")
     espeak,ffmpeg=shutil.which("espeak-ng"),shutil.which("ffmpeg")
     if not espeak or not ffmpeg:
         raise ValueError("ASR_FIXTURE_SYNTH_TOOLS_REQUIRED")
     # Authored ASCII phrase, no caller-controlled text or input file. Only
     # synthetic output is generated outside the protected media job.
     env={k:os.environ[k] for k in ("SystemRoot","WINDIR","ESPEAK_DATA_PATH") if k in os.environ}
-    a=subprocess.run([str(Path(espeak).resolve(strict=True)),"-v","pt-br","-b","1","-s","135","--stdout",REFERENCE],
+    a=subprocess.run([str(Path(espeak).resolve(strict=True)),"-v","pt-br","-b","1","-s","135","--stdout",reference],
         stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=30,check=True,env=env,shell=False,close_fds=True)
     if not 0<len(a.stdout)<=4_000_000:
         raise ValueError("ASR_FIXTURE_TTS_SIZE")
@@ -77,9 +85,16 @@ def _speech_pcm():
 def fixture(case):
     if case not in CASES:
         raise ValueError("ASR_FIXTURE_UNKNOWN")
+    return _authored_fixture(case)
+
+
+def _authored_fixture(case):
+    if case not in (*CASES,*SHARED_SPEECH):
+        raise ValueError("ASR_FIXTURE_UNKNOWN")
     expected=[]
-    if case=="inventory":
-        speech=_speech_pcm()
+    reference=REFERENCE if case=="inventory" else SHARED_SPEECH.get(case,"")
+    if reference:
+        speech=_speech_pcm(reference)
         expected=[{"start":2*RATE,"end":2*RATE+len(speech)//2}]
         raw=bytes(4*RATE)+speech+bytes(2*RATE)
     elif case=="silence":
@@ -93,7 +108,7 @@ def fixture(case):
     if _pcm(data)!=raw:
         raise ValueError("ASR_FIXTURE_WAV_ROUNDTRIP")
     return data,{"case":case,"pcm_sha256":_digest(raw),"samples":len(raw)//2,
-                 "expected_regions":expected,"reference":REFERENCE if expected else ""}
+                 "expected_regions":expected,"reference":reference if expected else ""}
 
 
 def _pcm(data):
