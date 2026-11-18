@@ -2750,3 +2750,127 @@ Se tudo PASS, repetir v2 com mesmos modelos e PCM:
 Enviar HEAD, JSON final e se falhar a última linha
 ASR_RECOVERY_PROGRESS + traceback. Nenhum perfil selecionado
 até reconciliar evidência. Não repetir v1 nem full neste passo.
+
+
+## A02.7.3 — supervisor validado, encerramento de tuning Medium e cobertura (18/11/2026)
+
+Operador reportou 29/29 supervisor PASS em 6,85s, 124/124
+focal ASR em 5,31s, zero-spend PASS, 14/14 avaliações v2
+completas sem falha nativa. Sete pins PCM iguais aos v1.
+Console recebido SHA256
+fd32a3ded2bda68a7b1a5cb13ea786ea178b1ddbb3ab73833f96c70dc13b1fd9.
+Sem HEAD local impresso; HEAD remoto na reconciliação
+169706a. Full strict ainda não repetido; último 20aea11.
+Não extrapolar uma rodada concluída como garantia de
+ausência futura de falhas de encerramento.
+
+Beam10: quality 5/6, semântica 4/6, gate FAIL. Hashes
+das hipóteses coincidem com v1 baseline nos sete inputs,
+inclusive silêncio, tom e CTA UTF8. Inventory WER .375,
+estoque ausente, 17063ms. Agreement WER 0, 17328ms.
+Conflict .222222, 17516ms. CTA argv .5714286, salve e
+conteúdo ausentes, 17625ms. UTF8 .2857143, conteúdo
+presente, salve ausente, 16468ms. Nenhum ganho semântico.
+Word_context_500ms: quality 3/6, semântica 3/6, gate
+FAIL. Inventory, agreement, CTA argv e UTF8 rejeitados
+por ASR_RECOVERY_WORD_TIMESTAMP; conflict passa .222222,
+hash de hipótese diferente, semântica igual ao baseline,
+17782ms. Negativos ambos passam sem ASR. Não inferir
+WER dos rejeitados por timestamp.
+
+Decisão IMP-129: encerrar exploração beam/contexto
+no Medium nestes fixtures; baixo ganho marginal. Não
+aumentar tolerância, trocar frases, corrigir transcript
+por oracle ou baixar WER. Manter baseline atual.
+Comparar Small já pinado se disponível localmente;
+não baixar automaticamente. Priorizar também cobertura
+e abstenção explícita, separadamente da recuperação.
+Sem nova aprovação, release, gates ou operações externas.
+
+Commits:
+- c60f6cd: round v3 small_baseline, 7 avaliações, mesmos
+  pins PCM v1, mesmo VAD, beam5, CPU int8, 4 threads e
+  orçamento supervisor existente. Usa verify_checkpoint
+  small existente (Systran/faster-whisper-small, revisão
+  536b0662742c02347bc0e980a01041f333bce120, peso SHA256
+  3e305921506d8872816023e4c273e75d2419fb89b24da97b4fe7bce14170d671).
+  Somente diretório local explícito --small-model-dir; sem
+  download, fallback ou promoção. Não reduzir orçamento
+  declarado com base no tamanho de checkpoint. Medium
+  permanece default do adaptador, v1/v2 preservados.
+- cd28b6e: evaluate_shared_av_coverage_guard em transação
+  de direitos existente, somente shared AV autenticado,
+  sem nova inferência/persistência. Compara baseline e
+  versão guardada, sem promoção. Evidência ausente ou
+  abstenção insuficiente em ASR/OCR/VLM suprime candidatos
+  de tema/CTA; OCR/VLM ausente/insuficiente suprime texto.
+  Se ASR e OCR observados, tema exige suporte de ambos.
+  Controle no_observable_signal é distinto de insuficiente,
+  utilizável somente nesta política sintética, não prova de
+  ausência em todo vídeo real. CTA complementar preservado
+  quando modalidades utilizáveis; não garante ausência
+  de conflito não reconhecido. Abstenção conserva suportes
+  e vetos, sem inventar valor. Revalida direitos/lineage.
+  3 casos surrogates adicionais, 9 policy no total, e
+  2 testes ASR de seleção/pin explícitos. Strict shared_av
+  mínimo 22 (era 19), kernel 8 preservado. Nenhuma mudança
+  na fusão default, schema DB ou contrato público.
+- bb9a91c: coverage_details com estado/razão, comparação
+  SHARED_AV_COVERAGE_GUARD nos clipes completos, mede
+  wrong_nonabstained, missed_candidates, exact_match e
+  suppressed_fields contra oracle autoral já congelado.
+  Não executa novos modelos, não muda critérios dos testes
+  nativos nem transforma falha ASR em candidato.
+- f83c38b: report v3 inclui identidade/hashes do checkpoint.
+
+Tradeoff esperado (ainda não medido na versão nova):
+suprimir venda em inventory com áudio observado mas
+sem tema reconhecido, porém também suprimir tema vendas
+em complementary (OCR vendas + fala CTA). Não selecionar
+guard automaticamente; precisa comparação risco-cobertura.
+Partial replay não libera mídia nem faz continuar um lease
+falho. Direitos atuais ainda necessários para todos os
+artefatos selecionados e derive rubric_evidence. Sem gold
+independente, sem rubrica canônica. A02.7.3 quality ainda
+FAIL, A02.7.4 roteamento não aprovado. VLM quality FAIL
+preservado. IMP-063/064/136/137/129 incrementais, sem
+alteração de matrizes (Base v6.1), schema, grants ou merge.
+
+5 testes novos esperados neste incremento; não executados
+pelo assistente (inspeção de diff, sem checkout Windows).
+Small local disponível não confirmado. Se indisponível,
+registrar not_available e continuar avaliação determinística
+da cobertura; não inventar resultado nem bloquear indefinidamente
+o desenvolvimento de infraestrutura independente do ASR.
+Não repetir full antes de reconciliar os casos nativos.
+
+### Operador — validação focal e comparação Small
+Parar writers/servidor, reutilizar ambiente anterior.
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+& $py docs/base_atemporal/ferramentas/validar_espelho.py
+& $py -m pytest -q --tb=short tests/test_asset_asr_fixture.py tests/test_asset_processor_results.py tests/test_a00_baseline.py tests/test_multimodal_asr.py tests/test_multimodal_vad_asr.py
+& $py -m pytest -q --tb=short tests/test_asset_rights_registry.py -k test_shared_av_ablation_policy_and_rights
+& $py scripts/verify_zero_spend.py
+```
+Esperados 126 focal e 9 policy, sem skip. Se PASS, verificar
+diretório Small já existente (ajustar se salvo em outro path):
+```powershell
+$small = "C:\Models\tapi\faster-whisper-small"
+if (Test-Path -LiteralPath $small -PathType Container) {
+    & $py scripts/a02_asr_recovery.py --model-dir "$env:TAPI_ASR_TEST_MODEL_DIR" --small-model-dir "$small" --round v3
+} else {
+    Write-Output "ASR_SMALL_NOT_AVAILABLE"
+}
+```
+Enviar HEAD, focal/policy e JSON (ou indisponibilidade).
+O hash do peso é validado antes da inferência; erro de
+pin não é motivo para atualizar hash ou baixar modelo
+automaticamente. Se Small também falhar, encerrar esta
+comparação local e desenvolver percurso protegido de
+evidência parcial/abstenção com qualidade explicitamente
+reprovada, preservando o benchmark original e o strict.
+Não repetir v1/v2 ou full neste passo.
