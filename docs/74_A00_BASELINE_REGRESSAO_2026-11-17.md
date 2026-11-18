@@ -2665,3 +2665,88 @@ Se focal PASS sem novos skips, rodar exclusivamente:
 Enviar HEAD e JSON. Não repetir v1 nem full strict nesse passo.
 Se falha de PCM, não atualizar pins automaticamente; investigar
 ambiente. Se falha native/cleanup parar e preservar log.
+
+
+## A02.7.3 — recuperação v2 interrompida, correção supervisor Windows (18/11/2026)
+
+Operador: focal ASR/contratos/runner/ASR+VAD 123/123 PASS
+em 9,71s, zero-spend PASS. CLI --round v2 interrompida em
+asset_windows_job._run_fixture_output por DESCENDANTS_REMAIN
+(após communicate e validação de saída). Sem JSON de rodada,
+sem caso/perfil identificado, sem HEAD local impresso no
+trecho. HEAD remoto na reconciliação d321680. Não inferir
+resultado de WER ou semântica da v2, nem afirmar ausência
+de processos remanescentes a partir do traceback. Última
+regressão integral aprovada permanece 20aea11.
+
+Diagnóstico de código: o supervisor consultava ActiveProcesses
+enquanto mantinha o handle de Popen do root já encerrado.
+A documentação Win32 de JOBOBJECT_BASIC_ACCOUNTING_INFORMATION
+explica que o contador pode decrementar somente após a liberação
+das referências ao processo encerrado. CPython Windows Popen
+mantém _handle e o libera na finalização do objeto (Handle.Close).
+Fontes públicas:
+- https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-jobobject_basic_accounting_information
+- https://github.com/python/cpython/blob/main/Lib/subprocess.py
+Hipótese consistente com o erro, não causa comprovada no host.
+Não remover verificação nem presumir que era apenas race.
+
+Commits:
+- 42a1794: release explícito do handle do root encerrado antes
+  de interpretar contabilidade; grace de até 1s somente com
+  TotalProcesses==ActiveProcesses==1, dentro do deadline original,
+  check de direitos/lease a cada polling. Nenhum PASS enquanto
+  ActiveProcesses != 0. Histórico com mais de um processo e
+  contagem ativa não zero continua rejeitado imediatamente.
+  Cleanup mantém o Job Object aberto, termina árvore em falha,
+  espera root e libera handle mesmo no caminho de erro, verifica
+  árvore vazia, fecha job e revalida antes de devolver resultado.
+  Não reabre PID, não altera flags, limites, orçamento ou
+  tolerância ASR. Usa API privada CPython Handle.Close já no
+  contexto de dependência Windows Popen._handle. Sem suporte
+  garantido a outros runtimes. 4 novos testes: handle antes
+  de accounting, grace/timeout/rights, rejeição de root sem
+  exit comprovado, 24 probes nativos sequenciais root-only.
+  Regressão strict kernel mínimo 8 (era 7). Testes antigos
+  de descendente real, timeout, memória, CPU, host crash e
+  exclusividade preservados.
+- f47a390: hash de asset_windows_job.py passa a compor runtime
+  ASR, evitando equivalência silenciosa de configuração após
+  mudança de supervisor. Progresso sanitizado por caso/perfil/
+  transporte/pin PCM e contador (stderr, stdout permanece JSON
+  final), um novo teste de abortar sem iniciar o próximo arm
+  se native/cleanup falhar. Não salvar resultados parciais
+  como aprovação, não auto-retry, não alterar os sete pins PCM.
+
+5 testes novos esperados (4 portáveis, 1 nativo). Não executados
+pelo assistente; inspeção de diff e fonte pública, sem Windows
+ou modelos disponíveis. Não repetir full até resolver recuperação.
+Métricas de subprocesso anteriores não incluem a espera de
+contabilidade pós-exit. Nenhuma alteração de schema, grants,
+modelo, TTS, critérios WER/VAD, DAG, gates, mídia real ou merge.
+IMP-063/064/136/137 parciais. R$0, DEC-018 preservada.
+
+### Operador — validação antes de repetir v2
+Parar servidor/writers e não executar outros probes em paralelo.
+Não matar processos por nome/PID; se SESSION_JOB_BUSY ou erro
+de cleanup persistir, preservar logs e investigar antes de retry.
+
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+& $py docs/base_atemporal/ferramentas/validar_espelho.py
+& $py -m pytest -q --tb=short tests/test_asset_windows_job.py
+& $py -m pytest -q --tb=short tests/test_asset_asr_fixture.py tests/test_asset_processor_results.py tests/test_a00_baseline.py tests/test_multimodal_asr.py tests/test_multimodal_vad_asr.py
+& $py scripts/verify_zero_spend.py
+```
+Esperar kernel 8/8 nativos, arquivo Windows sem skip, focal
+ASR 124/124 e zero-spend/espelho PASS. Contagens são expectativas.
+Se tudo PASS, repetir v2 com mesmos modelos e PCM:
+```powershell
+& $py scripts/a02_asr_recovery.py --model-dir "$env:TAPI_ASR_TEST_MODEL_DIR" --round v2
+```
+Enviar HEAD, JSON final e se falhar a última linha
+ASR_RECOVERY_PROGRESS + traceback. Nenhum perfil selecionado
+até reconciliar evidência. Não repetir v1 nem full neste passo.
