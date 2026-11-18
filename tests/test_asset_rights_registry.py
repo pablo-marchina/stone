@@ -863,3 +863,26 @@ def test_supervisor_cancel_during_child_kills_and_fences(queue_fixture,monkeypat
     assert len(seen)==1 and seen[0].poll() is not None
     assert f.queue.status(TENANT,spec.job_id)["receipt_sha256"] is None
     assert f.queue.acknowledge_cancel(lease)["state"]=="canceled"
+
+
+def test_supervisor_revocation_during_child_kills_and_withholds_receipt(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_supervisor as supervisor
+    f=queue_fixture
+    monkeypatch.setattr(supervisor,"_CHILD","import time; time.sleep(30)")
+    original=supervisor.subprocess.Popen
+    seen=[]
+    spec,lease=_probe_job(f)
+    rv=f.q.f.state(2,revoked_asset_ids=(f.q.ref.target.asset_id,))
+    def start(*args,**kwargs):
+        process=original(*args,**kwargs);seen.append(process)
+        f.q.f.svc.advance(f.q.f.anchor,TENANT,"instagram",rv)
+        f.queue.resolve_anchor=lambda ref:f.q.f.pin(rv)
+        return process
+    monkeypatch.setattr(supervisor.subprocess,"Popen",start)
+    with pytest.raises(AssetRightsDenied,match="ASSET_RIGHTS_REVOKED"):
+        supervisor.run_fixture_probe(f.queue,f.q.vault,lease)
+    assert len(seen)==1 and seen[0].poll() is not None
+    assert f.queue.status(TENANT,spec.job_id)["receipt_sha256"] is None
+    f.q.index.reconcile_signed_revocations(f.q.f.pin(rv),TENANT,"instagram")
+    assert f.queue.reconcile_invalidated(TENANT)["changed"]==[spec.job_id]
+    assert f.queue.acknowledge_cancel(lease)["state"]=="canceled"
