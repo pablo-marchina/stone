@@ -92,6 +92,20 @@ class ModelFixtureLimits(JobLimits):
             raise JobError("MODEL_FIXTURE_LIMIT_INVALID")
 
 
+@dataclass(frozen=True)
+class VlmFixtureLimits(JobLimits):
+    """Fixed Qwen3-VL CPU fixture budget, distinct from Whisper."""
+    memory_mib: int = 4096
+    cpu_user_seconds: int = 240
+    active_processes: int = 2
+    wall_seconds: int = 90
+
+    def __post_init__(self):
+        values=(self.memory_mib,self.cpu_user_seconds,self.active_processes,self.wall_seconds)
+        if any(type(v) is not int for v in values) or values!=(4096,240,2,90):
+            raise JobError("VLM_FIXTURE_LIMIT_INVALID")
+
+
 # Snapshot admission guard, not a reservation or continuous memory guarantee.
 MODEL_MIN_PHYSICAL_MIB = 4096
 MODEL_COMMIT_RESERVE_MIB = 1024
@@ -125,7 +139,7 @@ def model_host_capacity():
 
 
 def require_model_headroom(limits):
-    if type(limits) is not ModelFixtureLimits:
+    if type(limits) not in (ModelFixtureLimits,VlmFixtureLimits):
         raise JobError("MODEL_FIXTURE_LIMIT_INVALID")
     snapshot=model_host_capacity()
     physical=snapshot["available_physical_bytes"]
@@ -278,37 +292,37 @@ _MODEL_ERRORS=(b"MemoryError",b"ImportError",b"OSError",b"RuntimeError",b"ValueE
 _MODEL_REASONS=(b"memory",b"dll",b"file",b"other")
 
 
-def _model_trace(output):
+def _model_trace(output,*,prefix=b"TAPI_ASR",stages=_MODEL_STAGES):
     """Parse only bounded allowlisted markers, then opaque result bytes."""
     stage="unknown"; error="unknown"; reason="unknown"; last=-1
     if type(output) is not bytes:
         return stage,error,reason,None
     rest=output[:32768]
-    for _ in range(len(_MODEL_STAGES)+1):
+    for _ in range(len(stages)+1):
         line,sep,tail=rest.partition(b"\n")
         if not sep:
             break
-        if line.startswith(b"TAPI_ASR_STAGE:"):
-            name=line.removeprefix(b"TAPI_ASR_STAGE:")
-            if name not in _MODEL_STAGES or _MODEL_STAGES.index(name)<=last:
+        if line.startswith(prefix+b"_STAGE:"):
+            name=line.removeprefix(prefix+b"_STAGE:")
+            if name not in stages or stages.index(name)<=last:
                 break
             if last==-1 and name!=b"bootstrap":
                 break
-            last=_MODEL_STAGES.index(name);stage=name.decode("ascii");rest=tail
-        elif line.startswith(b"TAPI_ASR_ERROR:"):
-            parts=line.removeprefix(b"TAPI_ASR_ERROR:").split(b":")
+            last=stages.index(name);stage=name.decode("ascii");rest=tail
+        elif line.startswith(prefix+b"_ERROR:"):
+            parts=line.removeprefix(prefix+b"_ERROR:").split(b":")
             if len(parts)==2 and parts[0] in _MODEL_ERRORS and parts[1] in _MODEL_REASONS:
                 error,reason=(x.decode("ascii") for x in parts)
             break
-        elif line==b"TAPI_ASR_RESULT" and stage=="serialize" and len(output)<=32768:
+        elif line==prefix+b"_RESULT" and stage=="serialize" and len(output)<=32768:
             return stage,error,reason,tail if tail else None
         else:
             break
     return stage,error,reason,None
 
 
-def _model_failure(output,returncode,metrics):
-    stage,error,reason,_=_model_trace(output)
+def _model_failure(output,returncode,metrics,*,trace=_model_trace):
+    stage,error,reason,_=trace(output)
     code=f"0x{returncode & 0xffffffff:08x}" if type(returncode) is int else "unknown"
     peak=metrics.get("peak_job_commit_bytes")
     peak=peak if type(peak) is int and peak>=0 else "unknown"
@@ -332,8 +346,36 @@ def _run_model_fixture(code,data,check,*,limits=ModelFixtureLimits(),max_output=
     return payload,metrics
 
 
+_VLM_STAGES=(b"bootstrap",b"imports",b"model_load",b"inference",b"serialize")
+
+
+def _vlm_trace(output):
+    return _model_trace(output,prefix=b"TAPI_VLM",stages=_VLM_STAGES)
+
+
+def _vlm_failure(output,returncode,metrics):
+    return _model_failure(output,returncode,metrics,trace=_vlm_trace)
+
+
+def _run_vlm_fixture(code,data,check,*,limits=VlmFixtureLimits(),max_output=32768):
+    """Fixed authored PNG + local llama-server, never arbitrary model commands."""
+    if type(limits) is not VlmFixtureLimits or type(max_output) is not int or not 1<=max_output<=32768:
+        raise JobError("FIXTURE_BOUNDS")
+    if type(data) is not bytes or not 1<=len(data)<=131072:
+        raise JobError("FIXTURE_BOUNDS")
+    check()
+    require_model_headroom(limits)
+    metrics={}
+    output=_run_fixture_output(code,data,check,limits=limits,max_output=max_output,
+        expected=None,max_input=131072,metrics=metrics,failure=_vlm_failure)
+    _,_,_,payload=_vlm_trace(output)
+    if payload is None:
+        raise _vlm_failure(output,0,metrics)
+    return payload,metrics
+
+
 def _run_fixture_output(code, data, check, *, limits, max_output, expected,
-                        max_input=131072,metrics=None):
+                        max_input=131072,metrics=None,failure=_model_failure):
     if type(data) is not bytes or not 1 <= len(data) <= max_input:
         raise JobError("FIXTURE_BOUNDS")
     check()
@@ -377,7 +419,7 @@ def _run_fixture_output(code, data, check, *, limits, max_output, expected,
                     raise
                 # Diagnostic readback failure must not hide the original exit.
             if invalid:
-                raise _model_failure(output,process.returncode,metrics)
+                raise failure(output,process.returncode,metrics)
         if invalid:
             raise JobError("PROBE_OUTPUT_INVALID")
         if job.active():

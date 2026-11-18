@@ -388,12 +388,21 @@ def discard_fixture(registry,tmp_path,request):
         assert len(asr_cases)==1 and not temporal_cases and not ocr_cases
         data,_=fixture(asr_cases[0])
         media_kind,mime,output_field="audio","audio/wav","transcript"
+    vlm_cases=[x.removeprefix("vlm_") for x in requested if x.startswith("vlm_")]
+    if vlm_cases:
+        import os
+        if not os.environ.get("TAPI_VLM_TEST_MODEL_DIR") or not os.environ.get("TAPI_VLM_TEST_SERVER_EXE"):
+            pytest.skip("explicit VLM model and server opt-ins required")
+        from tapi_gate0.asset_vlm_fixture import fixture
+        assert len(vlm_cases)==1 and not temporal_cases and not ocr_cases and not asr_cases
+        data,_=fixture(vlm_cases[0])
+        media_kind,mime,output_field="image","image/png","visual_features"
     target=f.target.model_copy(update={"sha256":sha256(data).hexdigest(),"media_kind":media_kind})
     retention=Permission(operation="retain",purpose="research_analysis",field=media_kind)
     processing=Permission(operation="process",purpose="research_analysis",field=media_kind)
     f.svc.provision(f.anchor,TENANT,"instagram",f.rv)
     extra=tuple(Permission(operation=op,purpose="research_analysis",field=output_field)
-        for op in requested if op!="all_processors" and not op.startswith(("temporal_","ocr_","asr_")))
+        for op in requested if op!="all_processors" and not op.startswith(("temporal_","ocr_","asr_","vlm_")))
     if "all_processors" in requested:
         assert not ocr_cases
         extra+=tuple(Permission(operation=op,purpose="research_analysis",field=field)
@@ -1507,6 +1516,98 @@ def test_real_asr_fixture_late_cancel_no_payload(queue_fixture,monkeypatch):
     monkeypatch.setattr(a.windows,"_run_model_fixture",late)
     with pytest.raises(AssetRightsDenied,match="STALE_LEASE"):
         a.run_asr_fixture_windows(f.queue,f.q.vault,DerivedPayloadStore(f.queue,b"d"*32),lease,case="silence",model_dir=directory)
+    assert f.queue.status(TENANT,spec.job_id)["receipt_sha256"] is None
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(payloads))==0
+    assert f.queue.acknowledge_cancel(lease)["state"]=="canceled"
+
+
+def _vlm_job(f,case):
+    import os
+    from tapi_gate0 import asset_vlm_fixture as a
+    model,server=(os.environ.get(k) for k in ("TAPI_VLM_TEST_MODEL_DIR","TAPI_VLM_TEST_SERVER_EXE"))
+    if not model or not server:
+        pytest.skip("explicit VLM model and server opt-ins required")
+    model,server=Path(model),Path(server)
+    config,_=a.plan(case,model,server)
+    spec=f.spec.model_copy(update={"processor":"vlm","method_version":a.METHOD,
+        "configuration_sha256":config["configuration_sha256"]})
+    f.queue.enqueue(spec)
+    return spec,f.queue.claim(TENANT,"worker")["lease"],model,server
+
+
+@_WINDOWS_JOB
+@pytest.mark.parametrize("discard_fixture,case,scene",[
+    (("retain","process","vlm_sales"),"sales","text_card"),
+    (("retain","process","vlm_geometry"),"geometry","geometry"),
+    (("retain","process","vlm_blank"),"blank","blank"),
+],indirect=["discard_fixture"])
+def test_real_vlm_fixture_encrypted_result(queue_fixture,case,scene):
+    import json
+    from tapi_gate0 import asset_vlm_fixture as a,asset_windows_job as w
+    from tapi_gate0.asset_processor_results import decode,validate_binding
+    f=queue_fixture
+    spec,lease,model,server=_vlm_job(f,case)
+    store=DerivedPayloadStore(f.queue,b"d"*32)
+    receipt=a.run_vlm_fixture_windows(f.queue,f.q.vault,store,lease,case=case,model_dir=model,server_exe=server)
+    assert receipt["state"]=="completed" and receipt["payload_persisted"]
+    assert receipt["fixture_case"]==case and receipt["model_calls"]==int(case!="blank")
+    assert receipt["kernel_job_limits_verified"] and receipt["tree_empty_verified"]
+    assert not receipt["media_enabled"] and not receipt["scientific_evidence"] and not receipt["canonical_rubric"]
+    payload=store.read_for_processing(TENANT,receipt["artifact_id"],purpose=spec.purpose)
+    result=decode(payload)
+    assert validate_binding(result,spec=spec,ref=f.q.ref,lease=lease)==result
+    assert result.origin=="adapter_candidate" and result.result.scene==scene
+    assert result.result.text_present==("yes" if scene=="text_card" else "no")
+    assert result.result.frame.frame_sha256==f.q.ref.target.sha256
+    assert receipt["receipt_sha256"]==sha256(payload).hexdigest()
+    resources=receipt["resources"]
+    assert 0<resources["peak_job_commit_bytes"]<=w.VlmFixtureLimits().memory_mib*1024*1024
+    assert 0<=resources["cpu_user_ms"]<=240000 and resources["wall_ms"]>0
+    with f.q.f.engine.connect() as db:
+        envelope=db.scalar(select(payloads.c.envelope))
+        assert len(envelope)==len(payload)+28 and payload not in envelope
+    print("VLM_FIXTURE_METRICS "+json.dumps({"case":case,"scene":scene,"model_calls":receipt["model_calls"],"resources":resources},sort_keys=True))
+
+
+@_WINDOWS_JOB
+@pytest.mark.parametrize("discard_fixture",[("vlm_blank",)],indirect=True)
+def test_real_vlm_fixture_requires_derived_retention(queue_fixture):
+    from tapi_gate0 import asset_vlm_fixture as a
+    f=queue_fixture
+    spec,lease,model,server=_vlm_job(f,"blank")
+    with pytest.raises(AssetRightsDenied,match="SCOPE_MISMATCH"):
+        a.run_vlm_fixture_windows(f.queue,f.q.vault,DerivedPayloadStore(f.queue,b"d"*32),lease,case="blank",model_dir=model,server_exe=server)
+    assert f.queue.status(TENANT,spec.job_id)["receipt_sha256"] is None
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(payloads))==0
+
+
+@_WINDOWS_JOB
+@pytest.mark.parametrize("discard_fixture",[("retain","process","vlm_blank")],indirect=True)
+def test_real_vlm_fixture_wrong_config_before_spawn(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_vlm_fixture as a,asset_windows_job as w
+    f=queue_fixture
+    spec,lease,model,server=_vlm_job(f,"sales")
+    monkeypatch.setattr(w,"_run_vlm_fixture",lambda *x,**y:pytest.fail("must not spawn"))
+    with pytest.raises(AssetRightsDenied,match="VLM_FIXTURE_ONLY"):
+        a.run_vlm_fixture_windows(f.queue,f.q.vault,DerivedPayloadStore(f.queue,b"d"*32),lease,case="sales",model_dir=model,server_exe=server)
+
+
+@_WINDOWS_JOB
+@pytest.mark.parametrize("discard_fixture",[("retain","process","vlm_blank")],indirect=True)
+def test_real_vlm_fixture_late_cancel_no_payload(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_vlm_fixture as a,asset_windows_job as w
+    f=queue_fixture
+    spec,lease,model,server=_vlm_job(f,"blank")
+    original=w._run_vlm_fixture
+    def late(*args,**kwargs):
+        output=original(*args,**kwargs)
+        f.queue.cancel(TENANT,spec.job_id)
+        return output
+    monkeypatch.setattr(w,"_run_vlm_fixture",late)
+    with pytest.raises(AssetRightsDenied,match="STALE_LEASE"):
+        a.run_vlm_fixture_windows(f.queue,f.q.vault,DerivedPayloadStore(f.queue,b"d"*32),lease,case="blank",model_dir=model,server_exe=server)
     assert f.queue.status(TENANT,spec.job_id)["receipt_sha256"] is None
     with f.q.f.engine.connect() as db:
         assert db.scalar(select(func.count()).select_from(payloads))==0

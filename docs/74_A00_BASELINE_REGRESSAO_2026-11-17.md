@@ -1709,3 +1709,82 @@ Se preflight falhar, não executar modelo, enviar valores agregados.
 Se positivo falhar, enviar diagnóstico; sem ampliar cap de novo.
 Se 3 PASS, executar focal completo (275) e espelho/zero-spend,
 avaliar pico, latência e qualidade. Não habilitar mídia real.
+
+
+## A02.6 — ASR/VAD focal aprovado; adapter visual protegido (18/11)
+Operador HEAD 8394df96e7b5736cc33347d350265cb723edd72a:
+275/275 focal PASS em 124,69s, checkout limpo, sem falhas/skips;
+espelho 32/32 e zero-spend PASS. Inventory WER 0,375, IoU
+0,9317703013278856, fronteira 0,1971875s, peak commit 5270040576 bytes,
+CPU user/kernel 24750/6296,875ms, wall 9235ms; silêncio 0/0 chamadas,
+149262336 bytes, 531ms; tom 1/0, 168456192 bytes, 641ms. Reproduz
+execução anterior; WER individual ainda alto. Cap ASR 6GiB mantido,
+não otimizado definitivamente. Evidência agregada do operador.
+
+Novo asset_vlm_fixture.py: synthetic-vlm-qwen3-single-scene-v1.
+3 PNGs autorais 960x540 bytes/SHA256 fixos (texto Organize suas vendas,
+retângulo+triângulo, fundo uniforme). Reusa prompt/schema e guard
+single-scene v2; duas chamadas Qwen3-VL-2B Q4_K_M + mmproj Q8_0,
+uma guard uniforme sem modelo. Presença de texto derivada de scene,
+não independente. Gate integração 3/3 cenas corretas, sem abstenções
+ou erro; conflito blank não uniforme vira uncertain e bloqueia fixture.
+Não substitui benchmark v2 de 26 posições nem falha em texto pequeno.
+Hash do PNG na timeline image t=0, contrato candidato VLM, AEAD e
+fencing/rights; sem rubrica, EvidenceBundle ou admissão científica.
+
+Pin GGUF publicado via verify_checkpoint existente; binário b6907
+SHA256 observado anteriormente obrigatório; hashes DLLs adjacentes,
+sources/versions/config e rechecagem pós-execução. Não atesta supply
+chain, DLLs do SO ou host malicioso. Child -I -S espera input exato
+antes de imports, paths locais explícitos. llama-server nasce dentro
+do Job Object (sem breakaway), CPU 4 threads/ctx2048/np1, max tokens64,
+offline, loopback 127.0.0.1, chave efêmera via LLAMA_API_KEY em env
+reduzido (sem arquivo/argv; acessível a processos privilegiados do
+host), sem proxy ou redirects. Verifica 401 em POST inferência vazio
+sem credencial e alias no endpoint models antes de enviar PNG base64.
+Health/models podem ser públicos, não confiar neles como auth.
+Porta efêmera selecionada antes de bind (janela de corrida), alias
+e auth mitigam, não isolamento de host malicioso. HTTP resposta
+limitada 100KB, JSON estrito, stdout 32KiB com framing sanitizado;
+sem arquivo de mídia temporário, sem servidor persistente.
+Docs runtime pinado:
+https://github.com/ggml-org/llama.cpp/blob/b6907/tools/server/README.md
+
+VlmFixtureLimits separado: 4096MiB commit, 240s CPU user agregado,
+2 processos, 90s wall, lease 120s. Headroom 4GiB físico e 5GiB
+commit disponível, guard antes de spawn, não reserva. Valores
+iniciais de engenharia, não medidos para VLM. ASR e JobLimits
+anteriores intactos. Framing VLM separado, failure callback no
+supervisor, kernel metrics no sucesso e saída inválida; sem raw
+stderr. Sem sandbox rede/FS/token/GPU. Não executar em paralelo.
+22/22 testes VLM novos locais em cópia isolada Linux PASS, com
+reprodução mínima das classes Frame/VLM e guard exact_uniform de
+fonte inspecionada; testes de parser, fixtures, mock HTTP e child
+stub, não inferência Qwen real. 4 novos testes supervisor e 6
+integrações Windows não executados pelo assistente. 307 focal
+esperados (275+22+4+6) com opt-ins ASR/OCR/VLM; sem skips.
+Sem novos downloads/schema/DB/grants/mídia externa/gates/merge.
+
+### Operador — VLM três casos antes da regressão
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+conda activate tapi-asr-recovery
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+$env:TAPI_VLM_TEST_MODEL_DIR = "C:\Models\tapi\qwen3-vl-2b-gguf"
+$servers = @(Get-ChildItem "C:\Models\tapi\llama-b6907" -Recurse -File -Filter llama-server.exe)
+if ($servers.Count -ne 1) { throw "Expected one llama-server.exe" }
+$env:TAPI_VLM_TEST_SERVER_EXE = $servers[0].FullName
+$env:HF_HUB_OFFLINE = "1"
+$env:TRANSFORMERS_OFFLINE = "1"
+& $py -c "import json; from tapi_gate0.asset_windows_job import VlmFixtureLimits,require_model_headroom; print(json.dumps(require_model_headroom(VlmFixtureLimits())))"
+if ($LASTEXITCODE -ne 0) { throw "Headroom insuficiente" }
+& $py -m pytest -q --capture=tee-sys --tb=short tests/test_asset_rights_registry.py -k "test_real_vlm_fixture_encrypted_result"
+```
+3 PASS esperados, enviar VLM_FIXTURE_METRICS. Se falhar, preservar
+diagnóstico, não escalar cap ou flexibilizar oracle. Depois 307
+focais incluindo test_asset_vlm_fixture.py, espelho e zero-spend.
+Full A00 ainda não encaminha opt-ins ASR/VLM, não contar skips.
+Próximo: reconciliação, EvidenceBundle, smoke, piloto autorizado
+quando rights específicos existirem. Nenhum gate liberado.

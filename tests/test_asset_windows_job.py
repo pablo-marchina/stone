@@ -228,3 +228,44 @@ time.sleep(30)
             if str(exc) != "SESSION_JOB_BUSY" or time.monotonic() >= deadline:
                 raise
             time.sleep(0.05)
+
+
+def test_vlm_fixture_budget_is_separate():
+    assert w.VlmFixtureLimits().memory_mib==4096 and w.VlmFixtureLimits().active_processes==2
+    assert w.ModelFixtureLimits().memory_mib==6144 and w.ModelFixtureLimits().active_processes==1
+    with pytest.raises(w.JobError,match="VLM_FIXTURE_LIMIT_INVALID"):
+        replace(w.VlmFixtureLimits(),memory_mib=6144)
+    with pytest.raises(w.JobError,match="FIXTURE_BOUNDS"):
+        w._run_vlm_fixture("",b"x",lambda:None,limits=w.ModelFixtureLimits())
+
+
+def test_vlm_headroom_boundary(monkeypatch):
+    snap={"available_physical_bytes":4096*w.MIB,"available_commit_bytes":5120*w.MIB,"total_physical_bytes":8192*w.MIB}
+    monkeypatch.setattr(w,"model_host_capacity",lambda:snap)
+    assert w.require_model_headroom(w.VlmFixtureLimits())==snap
+    with pytest.raises(w.JobError,match="HEADROOM_INSUFFICIENT"):
+        w.require_model_headroom(w.ModelFixtureLimits())
+    snap["available_commit_bytes"]-=1
+    with pytest.raises(w.JobError,match="HEADROOM_INSUFFICIENT"):
+        w.require_model_headroom(w.VlmFixtureLimits())
+
+
+def test_vlm_trace_separate_and_sanitized():
+    raw=b"TAPI_VLM_STAGE:bootstrap\nTAPI_VLM_STAGE:imports\nTAPI_VLM_STAGE:model_load\nTAPI_VLM_STAGE:inference\nTAPI_VLM_ERROR:RuntimeError:memory\n"
+    assert w._vlm_trace(raw)==("inference","RuntimeError","memory",None)
+    assert "stage=inference" in str(w._vlm_failure(raw,4,{"peak_job_commit_bytes":123}))
+    assert w._model_trace(raw)[3] is None
+    assert w._vlm_trace(b"TAPI_VLM_STAGE:bootstrap\nTAPI_VLM_STAGE:serialize\nTAPI_VLM_RESULT\n{}")[3]==b"{}"
+
+
+def test_vlm_fixture_checks_before_spawn(monkeypatch):
+    events=[]
+    monkeypatch.setattr(w,"require_model_headroom",lambda limits:events.append("admit"))
+    def run(code,data,check,**kwargs):
+        events.append("run")
+        assert kwargs["failure"] is w._vlm_failure and kwargs["max_input"]==131072
+        kwargs["metrics"]["peak_job_commit_bytes"]=123
+        return b"TAPI_VLM_STAGE:bootstrap\nTAPI_VLM_STAGE:serialize\nTAPI_VLM_RESULT\n{}"
+    monkeypatch.setattr(w,"_run_fixture_output",run)
+    assert w._run_vlm_fixture("",b"x",lambda:events.append("check"))==(b"{}",{"peak_job_commit_bytes":123})
+    assert events==["check","admit","run"]
