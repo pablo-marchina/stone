@@ -2578,3 +2578,90 @@ resultados e comparar PCM antes de qualquer promoção; se
 nenhum passa, investigar outro candidato sem reduzir critérios.
 Depois de correção comprovada, repetir testes shared nativos,
 ablação e full strict. Não executar full neste passo.
+
+
+## A02.7.3 — recuperação ASR v1 FAIL, segunda rodada (18/11/2026)
+
+Operador reportou 88/88 PASS em 4,56s, zero-spend PASS e
+14 avaliações completas authored-asr-recovery.v1. Trecho não
+imprime HEAD, portanto não inferir SHA local confirmado;
+HEAD remoto na reconciliação 9412cd4. Console recebido SHA256
+2d27e8fe31b9dab697cc482f1c6adaadbaa4086bd1c4bac1dc01943fc73259b7.
+Sem full strict novo, último aprovado 20aea11.
+
+Baseline argv: qualidade 5/6, semântica 4/6, gate FAIL.
+Inventory WER .375, estoque ausente, IoU .9317703, fronteira
+.1971875s, 20719ms; agreement WER 0, vendas presente,
+24875ms; conflict WER .222222, custos/fixos presentes, 16671ms;
+CTA WER 4/7=.5714286, hipótese 8 palavras, salve/conteúdo ausentes,
+este presente, IoU .9312810, 16843ms. Negativos PASS sem ASR.
+Context_500ms: qualidade/semântica 2/6, gate FAIL; todos os
+cinco inputs com fala (incluindo UTF8) rejeitados por
+ASR_RECOVERY_CONTEXT_TIMESTAMP. Não chegaram a WER, não
+inferir efeito acústico negativo a partir da rejeição de alinhamento.
+CTA utf8_stdin: WER 2/7=.2857143, hipótese 7 palavras, conteúdo
+e este presentes, salve ausente, sem CTA, 15969ms. Novo PCM
+7ea19e0442aeb03a7a5020a0a79f8e9fde097fce9c63c94717c9af3fbb0793cf
+vs argv aba15de4d51a3c6f699b31be456dea7caab466369bbc89fbe8cd1ee4535b08b6.
+Confirma efeito do transporte sobre áudio/resultado nesse host,
+não prova causa única de codificação; controle não substitui input.
+Nenhum perfil promovido, sem correção comprovada.
+
+Commits v2:
+- 820919d: dois perfis experimentais, beam10 (região VAD
+  original e beam 10), word_context_500ms (beam 5, mesmo
+  contexto de 500ms, alinhamento de palavras). Mantém v1
+  acessível via --round v1; v2 default. Baseline original
+  continua default da execução operacional/fixtures.
+- daf82d3: fixa os sete hashes PCM reportados na v1; v2
+  aborta se regeneração divergir. Sumário somente dos perfis
+  executados, exige seis IDs distintos e pins correspondentes,
+  não permite PASS vazio. Seis novos casos unitários.
+O código novo ainda não foi executado pelo assistente; inspeção
+de diff e logs, não benchmark local. 14 avaliações esperadas.
+Beam10 mantém VAD, modelo, temperatura zero, sem prompt
+ou hotwords; limites de supervisor preservados. Pode piorar
+latência/memória ou qualidade; não aumentar limites para PASS.
+Word-context usa timestamps estimados por palavra para avaliar
+a mesma região VAD. Exige correspondência normalizada entre
+todas as palavras e texto do segmento, nenhuma palavra lexical
+sem overlap ou além da tolerância existente 250ms. Não descarta
+palavras, não alarga VAD, não usa referência; reconstitui apenas
+span do segmento pelos limites de palavras alinhadas, preserva
+texto original. Rejeição experimental é distinta de observação
+válida; falhas nativas/estruturais abortam. Não trata timestamps
+do modelo como gold independente. Avaliação de contexto por
+palavra é hipótese, não validação concluída.
+
+R2 compara seis casos argv e CTA utf8 de controle, dois perfis
+(14 avaliações). Os pins v1 são explícitos em asset_asr_recovery.py.
+Mudança de código altera configuração/source hashes, não áudio
+esperado. UTF8 mantém hash distinto. Qualidade WER<=.50, VAD
+IoU>=.60 e fronteira<=.75s, negativos sem hallucination e
+semântica exata dos seis casos argv permanecem. Não escolher
+automaticamente perfil, não ajustar por caso/oráculo. Se ambos
+falharem, manter falha e investigar candidatos locais adicionais
+ou abstenção de tema quando áudio não tem evidência suficiente
+como política experimental separada, sem mascarar WER.
+Nenhum novo gate global, media real, grants, migração, DB,
+merge, gastos ou alteração de matrizes. IMP-063/064/136/137
+parciais. A02.7.4 seletivo ainda não elegível.
+
+### Operador — rodada v2 focal
+Parar writers/servidor, reusar modelos locais anteriores.
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+& $py docs/base_atemporal/ferramentas/validar_espelho.py
+& $py -m pytest -q --tb=short tests/test_asset_asr_fixture.py tests/test_asset_processor_results.py tests/test_a00_baseline.py tests/test_multimodal_asr.py tests/test_multimodal_vad_asr.py
+& $py scripts/verify_zero_spend.py
+```
+Se focal PASS sem novos skips, rodar exclusivamente:
+```powershell
+& $py scripts/a02_asr_recovery.py --model-dir "$env:TAPI_ASR_TEST_MODEL_DIR" --round v2
+```
+Enviar HEAD e JSON. Não repetir v1 nem full strict nesse passo.
+Se falha de PCM, não atualizar pins automaticamente; investigar
+ambiente. Se falha native/cleanup parar e preservar log.
