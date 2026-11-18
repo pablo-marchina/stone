@@ -1612,3 +1612,178 @@ def test_real_vlm_fixture_late_cancel_no_payload(queue_fixture,monkeypatch):
     with f.q.f.engine.connect() as db:
         assert db.scalar(select(func.count()).select_from(payloads))==0
     assert f.queue.acknowledge_cancel(lease)["state"]=="canceled"
+
+
+def _reconcile_revocation(f):
+    rv=f.q.f.state(2,revoked_asset_ids=(f.q.ref.target.asset_id,))
+    f.q.f.svc.advance(f.q.f.anchor,TENANT,"instagram",rv)
+    anchor=f.q.f.pin(rv)
+    f.queue.resolve_anchor=lambda ref:anchor
+    return anchor
+
+
+@pytest.mark.parametrize("discard_fixture",[("retain","process")],indirect=True)
+def test_maintenance_signed_cascade_and_bounded_cleanup(queue_fixture):
+    from tapi_gate0.asset_reconcile import reconcile_tenant,cleanup_tenant
+    f=queue_fixture
+    store=DerivedPayloadStore(f.queue,b"d"*32)
+    receipt=store.finish(_payload_job(f),payload=b"fixture")
+    other=f.spec.model_copy(update={"method_version":"other"})
+    f.queue.enqueue(other)
+    anchor=_reconcile_revocation(f)
+    result=reconcile_tenant(f.queue,TENANT,scopes=((anchor,"instagram"),))
+    assert result["newly_invalidated"]==2 and result["signed_revoked_roots"]==1
+    assert result["roots_covered"]==1 and result["roots_uncovered"]==0
+    assert result["queued_canceled"]==1 and f.queue.status(TENANT,other.job_id)["state"]=="canceled"
+    assert f.queue.status(TENANT,f.spec.job_id)["state"]=="completed"
+    assert f.q.path.exists() and not result["filesystem_mutated"]
+    with pytest.raises(AssetRightsDenied,match="INACTIVE_ANCESTOR"):
+        store.read_for_processing(TENANT,receipt["artifact_id"],purpose=f.spec.purpose)
+    first=cleanup_tenant(f.queue,f.q.vault,store,TENANT,all_io_stopped=True,limit=1)
+    assert first["payloads_purged"]==1 and first["remaining_at_snapshot"]==1 and f.q.path.exists()
+    second=cleanup_tenant(f.queue,f.q.vault,store,TENANT,all_io_stopped=True,limit=1)
+    assert second["root_entries_removed"]==1 and second["remaining_at_snapshot"]==0 and not f.q.path.exists()
+    assert not second["secure_erasure_verified"]
+    assert cleanup_tenant(f.queue,f.q.vault,store,TENANT,all_io_stopped=True)["selected"]==0
+    assert reconcile_tenant(f.queue,TENANT,scopes=((anchor,"instagram"),))["newly_invalidated"]==0
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(payloads).where(payloads.c.envelope.is_(None)))==1
+        assert db.scalar(select(func.count()).select_from(domain_events).where(domain_events.c.event_type=="asset_derived_payload.purged"))==1
+        assert db.scalar(select(func.count()).select_from(domain_events).where(domain_events.c.event_type=="asset_lineage.discarded"))==1
+
+
+def test_maintenance_running_cancel_requires_ack(queue_fixture):
+    from tapi_gate0.asset_reconcile import reconcile_tenant,cleanup_tenant
+    f=queue_fixture
+    lease=_payload_job(f)
+    anchor=_reconcile_revocation(f)
+    result=reconcile_tenant(f.queue,TENANT,scopes=((anchor,"instagram"),))
+    assert result["running_cancel_requested"]==1 and result["cancel_requested_pending"]==1
+    assert not result["workers_stopped_verified"]
+    store=DerivedPayloadStore(f.queue,b"d"*32)
+    with pytest.raises(AssetRightsDenied,match="ACTIVE_LEASES"):
+        cleanup_tenant(f.queue,f.q.vault,store,TENANT,all_io_stopped=True)
+    with pytest.raises(AssetRightsDenied,match="STALE_LEASE"):
+        f.queue.finish(lease,"b"*64)
+    assert f.queue.acknowledge_cancel(lease)["state"]=="canceled"
+    assert cleanup_tenant(f.queue,f.q.vault,store,TENANT,all_io_stopped=True)["root_entries_removed"]==1
+
+
+def test_maintenance_expired_revoked_running_never_requeues(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_jobs as j
+    from tapi_gate0.asset_reconcile import reconcile_tenant
+    f=queue_fixture
+    lease=_payload_job(f)
+    anchor=_reconcile_revocation(f)
+    future=now_utc()+timedelta(seconds=121)
+    monkeypatch.setattr(j,"now_utc",lambda:future)
+    result=reconcile_tenant(f.queue,TENANT,scopes=((anchor,"instagram"),))
+    assert result["running_cancel_requested"]==1 and result["expired_leases_reconciled"]==1
+    assert result["cancel_requested_pending"]==0
+    status=f.queue.status(TENANT,lease.job_id)
+    assert status["state"]=="canceled" and status["reason"]=="cancel_lease_expired"
+    assert f.q.path.exists()
+
+
+def test_maintenance_expired_live_job_requeues(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_jobs as j
+    from tapi_gate0.asset_reconcile import reconcile_tenant
+    f=queue_fixture
+    lease=_payload_job(f)
+    future=now_utc()+timedelta(seconds=121)
+    monkeypatch.setattr(j,"now_utc",lambda:future)
+    result=reconcile_tenant(f.queue,TENANT)
+    assert result["expired_leases_reconciled"]==1 and result["newly_invalidated"]==0
+    status=f.queue.status(TENANT,lease.job_id)
+    assert status["state"]=="queued" and status["reason"]=="lease_expired" and status["attempt"]==1
+    assert status["available_ms"]>j._ms(future)
+    with pytest.raises(AssetRightsDenied,match="STALE_LEASE"):
+        f.queue.finish(lease,"b"*64)
+
+
+def test_maintenance_ttl_without_authority(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_jobs as j
+    from tapi_gate0.asset_reconcile import reconcile_tenant
+    f=queue_fixture
+    f.queue.enqueue(f.spec)
+    future=f.q.ref.retain_until+timedelta(seconds=1)
+    monkeypatch.setattr(j,"now_utc",lambda:future)
+    result=reconcile_tenant(f.queue,TENANT)
+    assert result["roots_uncovered"]==1 and result["scopes_verified"]==0
+    assert result["newly_invalidated"]==1 and result["queued_canceled"]==1
+    assert f.q.path.exists()
+
+
+def test_maintenance_missing_or_stale_authority_not_revocation(queue_fixture):
+    from tapi_gate0.asset_reconcile import reconcile_tenant,cleanup_tenant
+    f=queue_fixture
+    f.queue.enqueue(f.spec)
+    anchor=_reconcile_revocation(f)
+    with pytest.raises(AssetRightsDenied,match="ROLLBACK"):
+        reconcile_tenant(f.queue,TENANT,scopes=((f.q.f.anchor,"instagram"),))
+    with pytest.raises(AssetRightsDenied,match="DUPLICATE_SCOPE"):
+        reconcile_tenant(f.queue,TENANT,scopes=((anchor,"instagram"),(anchor,"instagram")))
+    result=reconcile_tenant(f.queue,TENANT)
+    assert result["newly_invalidated"]==0 and result["roots_uncovered"]==1
+    assert f.queue.status(TENANT,f.spec.job_id)["state"]=="queued"
+    store=DerivedPayloadStore(f.queue,b"d"*32)
+    assert cleanup_tenant(f.queue,f.q.vault,store,TENANT,all_io_stopped=True)["selected"]==0
+    assert f.q.path.exists()
+    assert f.queue.claim(TENANT,"worker")["status"]=="rights_blocked"
+
+
+def test_maintenance_rollback_when_job_transition_fails(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_reconcile as m
+    f=queue_fixture
+    f.queue.enqueue(f.spec)
+    anchor=_reconcile_revocation(f)
+    def fail(*args,**kwargs):
+        raise RuntimeError("fixture transition failure")
+    monkeypatch.setattr(m,"_transition",fail)
+    with pytest.raises(RuntimeError,match="fixture transition"):
+        m.reconcile_tenant(f.queue,TENANT,scopes=((anchor,"instagram"),))
+    assert f.queue.status(TENANT,f.spec.job_id)["state"]=="queued"
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(nodes.c.state).where(nodes.c.node_id==f.q.ref.object_id))=="active"
+        assert db.scalar(select(func.count()).select_from(domain_events).where(domain_events.c.event_type=="asset_lineage.invalidated"))==0
+    # The separately committed signed head still blocks claim.
+    assert f.queue.claim(TENANT,"worker")["status"]=="rights_blocked"
+
+
+@pytest.mark.parametrize("discard_fixture",[("retain","process")],indirect=True)
+def test_maintenance_cleanup_resume_after_partial_commit(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_reconcile as m
+    f=queue_fixture
+    store=DerivedPayloadStore(f.queue,b"d"*32)
+    store.finish(_payload_job(f),payload=b"fixture")
+    anchor=_reconcile_revocation(f)
+    m.reconcile_tenant(f.queue,TENANT,scopes=((anchor,"instagram"),))
+    def fail(*args,**kwargs):
+        raise RuntimeError("fixture discard failure")
+    with monkeypatch.context() as patch:
+        patch.setattr(m,"discard_invalidated",fail)
+        with pytest.raises(RuntimeError,match="fixture discard"):
+            m.cleanup_tenant(f.queue,f.q.vault,store,TENANT,all_io_stopped=True)
+    assert f.q.path.exists()
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(payloads).where(payloads.c.envelope.is_(None)))==1
+    result=m.cleanup_tenant(f.queue,f.q.vault,store,TENANT,all_io_stopped=True)
+    assert result["payloads_purged"]==0 and result["root_entries_removed"]==1
+
+
+def test_maintenance_cleanup_requires_attestation_and_exact_host(queue_fixture):
+    from tapi_gate0.asset_reconcile import cleanup_tenant,reconcile_tenant
+    f=queue_fixture
+    store=DerivedPayloadStore(f.queue,b"d"*32)
+    anchor=_reconcile_revocation(f)
+    reconcile_tenant(f.queue,TENANT,scopes=((anchor,"instagram"),))
+    with pytest.raises(AssetRightsDenied,match="STOPPED_IO_REQUIRED"):
+        cleanup_tenant(f.queue,f.q.vault,store,TENANT,all_io_stopped=1)
+    with pytest.raises(AssetRightsDenied,match="BATCH_INVALID"):
+        cleanup_tenant(f.queue,f.q.vault,store,TENANT,all_io_stopped=True,limit=101)
+    other=AssetJobQueue(f.q.index,resolve_anchor=f.queue.resolve_anchor)
+    with pytest.raises(AssetRightsDenied,match="HOST_MISMATCH"):
+        cleanup_tenant(f.queue,f.q.vault,DerivedPayloadStore(other,b"d"*32),TENANT,all_io_stopped=True)
+    with pytest.raises(AssetRightsDenied,match="TENANT_UNKNOWN"):
+        reconcile_tenant(f.queue,"other")
+    assert f.q.path.exists()

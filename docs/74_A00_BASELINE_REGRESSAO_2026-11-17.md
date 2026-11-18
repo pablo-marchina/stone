@@ -1788,3 +1788,75 @@ focais incluindo test_asset_vlm_fixture.py, espelho e zero-spend.
 Full A00 ainda não encaminha opt-ins ASR/VLM, não contar skips.
 Próximo: reconciliação, EvidenceBundle, smoke, piloto autorizado
 quando rights específicos existirem. Nenhum gate liberado.
+
+
+## A02.6 — regressão consolidada; reconciliação de manutenção (18/11)
+Operador HEAD 43d085ba16e1e96ee5b3d1dc0e75b0a910f0ff20:
+307/307 PASS em 209,46s, zero falhas/erros/skips, espelho 32/32
+e zero-spend PASS. ASR inventory WER 0,375, IoU 0,9317703013278856,
+fronteira 0,1971875s, peak commit 5269770240 bytes, CPU user/kernel
+25953,125/6453,125ms, wall 9641ms; silêncio 0/0 calls, 149262336 bytes,
+562ms; tom 1/0, 168521728 bytes, 641ms. VLM sales text_card 1 call,
+2515156992 bytes, CPU user/kernel 117656,25/4218,75ms, wall 32125ms;
+geometry 1 call, 2515267584 bytes, 120718,75/4171,875ms, wall 32984ms;
+blank guard 0 calls, 24715264 bytes, 312ms. Evidência de console do
+operador, não JUnit novo. Quatro adapters protegidos em fixtures,
+não homologação científica/produtiva. WER individual ainda alto.
+Caps mantidos. Base integral estrutural validada.
+
+Novo asset_reconcile.py, asset-reconciliation.v1, duas operações
+trusted-host explícitas (sem endpoint, daemon ou scheduler):
+reconcile_tenant: uma transação BEGIN IMMEDIATE por tenant, até 32
+escopos (TrustedAuthority, platform) provisionados independentemente,
+validação exata de head, assinatura, janela e issuer/key/scope; sem
+autodiscover de confiança a partir de DB. Scope duplicado ou stale
+aborta tick, sem tombstones parciais. Ausência de scope não equivale
+a revogação; TTL-only explícito permitido e cobertura reportada.
+Invalida raízes revogadas/expiradas e descendentes, reusa _invalidate.
+Cancela queued, sinaliza running, preserva histórico completed;
+invalidação antes de expiração de lease impede retry de input revogado.
+Reusa _expire para retry/exhaustion, não cria tentativa ou mata worker.
+Sem ack automático, sem prova de worker parado. Head revogado
+anteriormente commitado continua negar direitos mesmo se tick falhar.
+Contagens agregadas, outbox/audit existentes, sem payload retornado.
+
+cleanup_tenant: exige atestado explícito de TODOS workers/writers/readers
+parados e vault canônico do tenant fornecido pelo host; valida binding
+queue/index/vault/store e ausência de leases ativos globalmente.
+Limite 1..100 por lote, primeiro derivados AEAD invalidados e depois
+raízes invalidadas sem recibo de descarte v3. Reusa purge_invalidated
+e discard_invalidated com verificações por item; não lê plaintext,
+não usa paths do caller. Cada item commit independente; erro interrompe
+lote, commits anteriores ficam duráveis, retry seleciona restantes.
+Não há lock abrangendo o lote fora da atestação de parada do host,
+não é prova de parada real. Recibos existentes são pulados; não
+audita arquivos reaparecidos, órfãos de staging ou vault incorreto.
+Não secure erase de WAL/backups/SSD nem revoga bytes já entregues.
+Relatório remaining_at_snapshot não garante estado futuro. Sem chaves
+novas, DB operacional ou schema. RAG/cache/exports/treino não
+integrados ainda; IMP-040/045/126/137/145 parcialmente atendidos,
+não fechar IMP/gates. Decisão de engenharia: manutenção explícita
+em vez de agendar daemon antes do piloto.
+
+9 novos testes integração SQLite nas fixtures de rights registry:
+cascata + lote, cancel/ack, revogado expirado sem retry, lease válido
+expirado com retry, TTL, falta/stale/duplicate scope, rollback, retry
+após purge parcial, atestação/binding/tenant. Sintaxe Python dos dois
+trechos compilada localmente; testes de integração não executados
+pelo assistente (checkout completo indisponível). 316 focais esperados
+(307+9); primeiro 9 isolados. Sem merge, gate, grant real ou migração.
+Próximos: EvidenceBundle multimodal, fusão, full runner opt-ins e smoke.
+
+### Operador — manutenção sintética
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+conda activate tapi-asr-recovery
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+& $py docs/base_atemporal/ferramentas/validar_espelho.py
+& $py -m pytest -q --tb=short tests/test_asset_rights_registry.py -k "test_maintenance_"
+& $py scripts/verify_zero_spend.py
+```
+9 PASS esperados sem skips; se PASS, repetir suite focal 316 com
+opt-ins ASR/OCR/VLM anteriores. Não chamar manutenção no DB real.
