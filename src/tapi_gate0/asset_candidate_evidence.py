@@ -61,6 +61,10 @@ class CandidateEvidenceBundle(Contract):
     @model_validator(mode="after")
     def common_root(self):
         processors = []
+        shared = [e.observation.shared_av for e in self.entries]
+        present = [x.source for x in shared if x is not None]
+        if present and (self.media_kind!="video" or len(present)!=len(shared) or any(x!=present[0] for x in present)):
+            raise ValueError("EVIDENCE_SHARED_AV_SOURCE_MISMATCH")
         for entry in self.entries:
             r = entry.observation
             processor = r.result.processor

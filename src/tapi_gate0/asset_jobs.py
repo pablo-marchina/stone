@@ -20,6 +20,7 @@ from .asset_rights import RightsModel,Id,Digest,Permission,AssetRightsDenied
 from .asset_lineage import RetainedAssetRef,DerivedArtifactRef,invalidation_plan
 from .asset_lineage_index import AssetLineageIndex,_load,_ancestors,_grant
 from .storage import now_utc
+from .asset_processor_results import SHARED_AV_METHOD
 
 MAX_PENDING=100
 MAX_TENANT_HISTORY=20000
@@ -151,6 +152,13 @@ def _check_rights(db,spec,resolve_anchor,now):
     for op,field in (("retain",ref.target.media_kind),("process",ref.target.media_kind),
                      ("derive",OUTPUT[spec.processor])):
         _grant(db,anchor,ref,now,Permission(operation=op,purpose=spec.purpose,field=field))
+    if spec.method_version==SHARED_AV_METHOD:
+        if (ref.target.media_kind,ref.mime)!=("video","video/mp4"):
+            _fail("SHARED_AV_ROOT_KIND")
+        # This exact method decodes both streams in memory. Require both
+        # explicit modality scopes in every transactional rights check.
+        for field in ("audio","image"):
+            _grant(db,anchor,ref,now,Permission(operation="process",purpose=spec.purpose,field=field))
     return ref
 
 

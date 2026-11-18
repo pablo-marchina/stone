@@ -8,7 +8,7 @@ from hashlib import sha256
 import json
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator, model_serializer
 
 VERSION = "asset-processor-result.v1"
 MAX_BYTES = 1_000_000
@@ -141,6 +141,48 @@ class Abstention(Contract):
     reason: Literal["fixture_header_only","no_observable_signal","unsupported_modality","insufficient_evidence"]
 
 
+# Distinct identity; existing v1 payloads omit the optional source binding.
+SHARED_AV_METHOD = "synthetic-shared-av-v1"
+
+
+class SharedAVSource(Contract):
+    schema_version: Literal["shared-av-source.v1"] = "shared-av-source.v1"
+    container_sha256: Digest
+    decoder_sha256: Digest
+    rgb_stream_sha256: Digest
+    pcm_sha256: Digest
+    frame_sha256: Digest
+    frame_png_sha256: Digest
+    frame_time_ms: Literal[1000] = 1000
+    frame_width: Literal[960] = 960
+    frame_height: Literal[540] = 540
+    sample_fps: Literal[4] = 4
+    frame_count: Annotated[int, Field(ge=5,le=60)]
+    pcm_samples: Annotated[int, Field(gt=0,le=240000)]
+    temporal_sample_sha256: tuple[Digest,...] = Field(min_length=5,max_length=32)
+    temporal_sampling: Literal["gray64_point_first_8s"] = "gray64_point_first_8s"
+    synthetic_only: Literal[True] = True
+
+    @model_validator(mode="after")
+    def duration_binding(self):
+        if (self.frame_count!=(self.pcm_samples+3999)//4000 or
+                len(self.temporal_sample_sha256)!=min(self.frame_count,32)):
+            raise ValueError("SHARED_AV_DURATION")
+        return self
+
+
+class SharedAVBinding(Contract):
+    source: SharedAVSource
+    adapter_configuration_sha256: Digest
+
+    def configuration(self,processor):
+        raw=json.dumps({"method":SHARED_AV_METHOD,"processor":processor,
+            "source":self.source.model_dump(mode="json"),
+            "adapter_configuration_sha256":self.adapter_configuration_sha256},
+            sort_keys=True,separators=(",",":")).encode()
+        return sha256(raw).hexdigest()
+
+
 class ProcessorResult(Contract):
     schema_version: Literal["asset-processor-result.v1"] = VERSION
     tenant_id: Id
@@ -153,12 +195,43 @@ class ProcessorResult(Contract):
     configuration_sha256: Digest
     origin: Literal["synthetic_fixture","adapter_candidate"]
     result: ASR | OCR | Temporal | VLM | Abstention
+    shared_av: SharedAVBinding | None = None
     scientific_evidence: Literal[False] = False
     canonical_rubric: Literal[False] = False
     calibrated_probability: None = None
 
+    @model_serializer(mode="wrap")
+    def preserve_legacy_encoding(self,handler):
+        result=handler(self)
+        if self.shared_av is None:
+            result.pop("shared_av",None)
+        return result
+
     @model_validator(mode="after")
     def origin_consistent(self):
+        binding=self.shared_av
+        if (binding is not None)!=(self.method_version==SHARED_AV_METHOD):
+            raise ValueError("SHARED_AV_METHOD")
+        if binding is not None:
+            src=binding.source
+            r=self.result
+            if (self.input_sha256!=src.container_sha256 or self.origin!="adapter_candidate" or
+                    self.configuration_sha256!=binding.configuration(r.processor)):
+                raise ValueError("SHARED_AV_BINDING")
+            if isinstance(r,(OCR,VLM)) and (r.frame.time_ms,r.frame.frame_sha256,r.frame.timeline)!=(src.frame_time_ms,src.frame_sha256,"resampled_uniform"):
+                raise ValueError("SHARED_AV_FRAME")
+            if isinstance(r,OCR) and (r.width,r.height)!=(src.frame_width,src.frame_height):
+                raise ValueError("SHARED_AV_FRAME_DIMENSIONS")
+            if isinstance(r,ASR) and r.duration_ms!=(src.pcm_samples*1000+15999)//16000:
+                raise ValueError("SHARED_AV_PCM_DURATION")
+            if isinstance(r,Temporal):
+                if r.samples!=len(src.temporal_sample_sha256):
+                    raise ValueError("SHARED_AV_SAMPLE_COUNT")
+                for transition in r.candidates:
+                    for frame in (transition.previous,transition.current):
+                        i,rem=divmod(frame.time_ms,250)
+                        if rem or i>=r.samples or frame.frame_sha256!=src.temporal_sample_sha256[i]:
+                            raise ValueError("SHARED_AV_SAMPLE_BINDING")
         if isinstance(self.result,Abstention):
             if (self.result.reason=="fixture_header_only") != (self.origin=="synthetic_fixture"):
                 raise ValueError("FIXTURE_ORIGIN_MISMATCH")
@@ -198,6 +271,8 @@ def validate_persisted_binding(result, *, spec, ref, attempt):
         spec.tenant_id,spec.job_id,spec.object_id,ref.target.sha256,attempt,
         spec.purpose,spec.method_version,spec.configuration_sha256,spec.processor):
         raise ValueError("PROCESSOR_RESULT_BINDING")
+    if result.shared_av is not None and (ref.target.media_kind,ref.mime)!=("video","video/mp4"):
+        raise ValueError("SHARED_AV_ROOT_KIND")
     if (ref.target.tenant_id,ref.object_id)!=(spec.tenant_id,spec.object_id):
         raise ValueError("PROCESSOR_RESULT_BINDING")
     return result

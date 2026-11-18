@@ -103,9 +103,13 @@ except Exception as exc:
 
 
 def plan(case,model_dir,server_exe):
+    data,expected=fixture(case)
+    return _plan_image(data,expected,case,model_dir,server_exe)
+
+
+def _plan_image(data,expected,case,model_dir,server_exe):
     from . import asset_windows_job as windows
     from . import multimodal_vlm_single_scene as scene
-    data,expected=fixture(case)
     runtime=_runtime(model_dir,server_exe)
     code=_child(data,model_dir,server_exe)
     config={"method":METHOD,"case":case,"input_sha256":digest(data),"expected":expected,
@@ -218,15 +222,19 @@ def _infer(raw,model_dir,server_exe,*,stage):
 
 
 def result_from_output(case,raw):
-    from .asset_processor_results import VLM,Frame
     data,expected=fixture(case)
+    return _result_for_image(data,expected,raw)
+
+
+def _result_for_image(data,expected,raw):
+    from .asset_processor_results import VLM,Frame
     if type(raw) is not bytes or not 0<len(raw)<=MAX_OUTPUT: raise ValueError("VLM_FIXTURE_OUTPUT_SIZE")
     r=_json(raw)
     if type(r) is not dict or set(r)!={"input_sha256","scene","model_scene","response_sha256","model_calls"} or r["input_sha256"]!=digest(data):
         raise ValueError("VLM_FIXTURE_OUTPUT_BINDING")
-    if type(r["model_calls"]) is not int or r["model_calls"]!=int(case!="blank"):
+    if type(r["model_calls"]) is not int or r["model_calls"]!=int(expected!="blank"):
         raise ValueError("VLM_FIXTURE_CALLS")
-    if case=="blank":
+    if expected=="blank":
         if r["scene"]!="blank" or r["model_scene"] is not None or r["response_sha256"] is not None: raise ValueError("VLM_FIXTURE_GUARD")
     else:
         h=r["response_sha256"]
