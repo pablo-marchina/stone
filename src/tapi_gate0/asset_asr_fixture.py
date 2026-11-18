@@ -130,13 +130,15 @@ def _pcm(data):
     return raw
 
 
-def _runtime(model_dir):
+def _runtime(model_dir,*,candidate="medium"):
+    if candidate not in ("small","medium"):
+        raise ValueError("ASR_FIXTURE_CHECKPOINT_CANDIDATE")
     from . import multimodal_asr as asr
     from . import multimodal_vad as vad
     if vad.OPTIONS!=OPTIONS:
         raise ValueError("ASR_FIXTURE_VAD_OPTIONS_CHANGED")
     model=Path(model_dir)
-    checkpoint=asr.verify_checkpoint(model,"medium")
+    checkpoint=asr.verify_checkpoint(model,candidate)
     versions={n:version(n) for n in RUNTIME_PACKAGES}
     if versions["faster-whisper"]!="1.2.1":
         raise ValueError("ASR_FIXTURE_RUNTIME_VERSION")
@@ -196,8 +198,8 @@ def plan(case,model_dir):
     return _plan(data,meta,model_dir)
 
 
-def _plan(data,meta,model_dir,*,profile="baseline"):
-    runtime=_runtime(model_dir)
+def _plan(data,meta,model_dir,*,profile="baseline",candidate="medium"):
+    runtime=_runtime(model_dir) if candidate=="medium" else _runtime(model_dir,candidate=candidate)
     code=_child(data,model_dir,profile=profile)
     config={"method":METHOD,"case":meta["case"],"input_sha256":_digest(data),"fixture":meta,
             "runtime":runtime,"code_sha256":_digest(code.encode()),"limits":asdict(LIMITS),
@@ -207,6 +209,8 @@ def _plan(data,meta,model_dir,*,profile="baseline"):
             "vad_options":OPTIONS,"device":"cpu","compute_type":"int8","cpu_threads":4}
     if profile!="baseline":
         config["recovery_profile"]=profile
+    if candidate!="medium":
+        config["experimental_checkpoint_candidate"]=candidate
     pin=_digest(json.dumps(config,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode())
     return {**config,"configuration_sha256":pin},code
 

@@ -14,7 +14,7 @@ from . import multimodal_cta_directed as directed
 from .discovery_rubric_grounded import rule_evidence,UNKNOWN
 
 VERSION="authored-asr-recovery.v2"
-ROUNDS={"v1":("baseline","context_500ms"),"v2":("beam10","word_context_500ms")}
+ROUNDS={"v1":("baseline","context_500ms"),"v2":("beam10","word_context_500ms"),"v3":("small_baseline",)}
 CASES=("inventory","agreement","conflict","cta","silence","tone")
 # Operator round v1 PCM pins (18 Nov); v2 must compare exactly these inputs.
 V1_PCM={
@@ -77,27 +77,35 @@ def _score(case,meta,output,*,profile="baseline"):
             "reference_word_count":len(asr._words(meta["reference"]))}
 
 
-def run(model_dir,*,round_id="v2",progress=None):
+def run(model_dir,*,round_id="v2",progress=None,small_model_dir=None):
     if round_id not in ROUNDS:
         raise ValueError("ASR_RECOVERY_ROUND")
     profiles=ROUNDS[round_id]
+    if (round_id=="v3")!=(small_model_dir is not None):
+        raise ValueError("ASR_RECOVERY_EXPLICIT_SMALL_DIRECTORY_REQUIRED")
+    candidate="small" if round_id=="v3" else "medium"
     windows._native_api()
-    model_dir=Path(model_dir)
+    model_dir=Path(small_model_dir if candidate=="small" else model_dir)
     rows=[]
-    total=2*(len(CASES)+1)
+    total=len(profiles)*(len(CASES)+1)
     def notify(event,row):
         if progress is not None:
             progress({"event":event,"round_id":round_id,"case":row["case"],
                 "transport":row["transport"],"profile":row["profile"],
                 "pcm_sha256":row["pcm_sha256"],"completed":len(rows),"total":total})
-    runtime=asr._runtime(model_dir)
+    def current_runtime():
+        return asr._runtime(model_dir) if candidate=="medium" else asr._runtime(model_dir,candidate=candidate)
+    runtime=current_runtime()
     for case,transport in [*((c,"argv") for c in CASES),("cta","utf8_stdin")]:
         data,meta=asr._authored_fixture(case,transport=transport)
         matches_v1=meta["pcm_sha256"]==V1_PCM[(case,transport)]
-        if round_id=="v2" and not matches_v1:
+        if round_id in ("v2","v3") and not matches_v1:
             raise ValueError("ASR_RECOVERY_V1_PCM_MISMATCH")
         for profile in profiles:
-            config,code=asr._plan(data,meta,model_dir,profile=profile)
+            if candidate=="small":
+                config,code=asr._plan(data,meta,model_dir,profile="baseline",candidate="small")
+            else:
+                config,code=asr._plan(data,meta,model_dir,profile=profile)
             if config["runtime"]!=runtime:
                 raise ValueError("ASR_RECOVERY_RUNTIME_CHANGED")
             def check():
@@ -106,19 +114,19 @@ def run(model_dir,*,round_id="v2",progress=None):
             # Fixed synthetic data; no DB lease or external asset. Explicit
             # runtime check before and after each protected child.
             row={"case":case,"transport":transport,"profile":profile,"pcm_sha256":meta["pcm_sha256"],
-                "configuration_sha256":config["configuration_sha256"],"matches_v1_pcm":matches_v1}
+                "configuration_sha256":config["configuration_sha256"],"matches_v1_pcm":matches_v1,"checkpoint_candidate":candidate}
             # Native errors (including failure to verify cleanup) must abort;
             # no next child may start until the operator reconciles them.
             notify("started",row)
             output,metrics=windows._run_model_fixture(code,data,check,limits=asr.LIMITS,max_output=asr.MAX_OUTPUT)
-            row.update(resources=metrics,**_score(case,meta,output,profile=profile))
-            if asr._runtime(model_dir)!=runtime:
+            row.update(resources=metrics,**_score(case,meta,output,profile="baseline" if candidate=="small" else profile))
+            if current_runtime()!=runtime:
                 raise ValueError("ASR_RECOVERY_RUNTIME_CHANGED")
             rows.append(row)
             notify("completed",row)
     summaries=_summaries(rows,profiles)
     return {"status":"ASR_RECOVERY_EXPERIMENT_COMPLETED","policy_version":VERSION,"round_id":round_id,"rows":rows,
-        "profiles":summaries,"tts_transport_exploratory":True,"synthetic_only":True,"independent_gold":False,
+        "profiles":summaries,"checkpoint_candidate":candidate,"tts_transport_exploratory":True,"synthetic_only":True,"independent_gold":False,
         "automatic_profile_selected":False,"canonical_rubric":False,"database_mutated":False}
 
 
