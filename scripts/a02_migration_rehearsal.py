@@ -29,12 +29,14 @@ def schema(db):
     return db.execute("SELECT type,name,tbl_name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type,name").fetchall()
 
 
-def rehearsal(root,name,digest,tenant,*,lineage=False,jobs=False):
-    if lineage and jobs:
+def rehearsal(root,name,digest,tenant,*,lineage=False,jobs=False,payloads=False):
+    if sum((lineage,jobs,payloads))>1:
         raise ValueError("A02_MIGRATION_TRANSITION_INVALID")
     old,new,tables=(NEW,"0014_asset_lineage",{"asset_lineage_nodes"}) if lineage else (OLD,NEW,TABLES)
     if jobs:
         old,new,tables="0014_asset_lineage","0015_asset_jobs",{"asset_processing_jobs","asset_processing_attempts"}
+    if payloads:
+        old,new,tables="0015_asset_jobs","0016_asset_derived_payloads",{"asset_derived_payloads"}
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,100}\.sqlite3",name) or not re.fullmatch(r"[a-f0-9]{64}",digest):
         raise ValueError("A02_MIGRATION_PIN_INVALID")
     private=root/"artifacts"/"private"
@@ -101,9 +103,10 @@ def main(argv=None):
     modes=p.add_mutually_exclusive_group()
     modes.add_argument("--lineage",action="store_true",help="Rehearse 0013 to 0014")
     modes.add_argument("--jobs",action="store_true",help="Rehearse 0014 to 0015")
+    modes.add_argument("--payloads",action="store_true",help="Rehearse 0015 to 0016")
     a=p.parse_args(argv)
     try:
-        result=rehearsal(ROOT,a.backup_name,a.backup_sha256,a.tenant,lineage=a.lineage,jobs=a.jobs)
+        result=rehearsal(ROOT,a.backup_name,a.backup_sha256,a.tenant,lineage=a.lineage,jobs=a.jobs,payloads=a.payloads)
         print(json.dumps(result))
         return 0
     except (ValueError,OSError,sqlite3.Error,subprocess.SubprocessError) as exc:
