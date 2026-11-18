@@ -158,8 +158,11 @@ class FixturePipeline:
             if (stored["state"]!="completed" or stored["reason"]!="encrypted_payload"
                     or receipt.get("artifact_id")!=_artifact_id(spec,stored["receipt_sha256"])):
                 _deny("RECEIPT_MISMATCH")
-            return {**self._status("processed",spec,"completed"),
+            result={**self._status("processed",spec,"completed"),
                     "artifact_id":receipt["artifact_id"],"model_calls":receipt["model_calls"]}
+            if self.plan.mode=="shared_av":
+                result.update({key:receipt[key] for key in ("decode_resources","model_resources","quality")})
+            return result
         first=self.plan.specs[0]
         # Reauthenticate exact persisted typed results under the fusion
         # transaction; never emit a partial final decision.

@@ -248,12 +248,16 @@ def run(queue,vault,store,lease,*,fixture,paths):
         if (binary_hash!=fixture.source.decoder_sha256 or
                 _decoder(binary,actual,fixture.source)!=fixture.decoder_code):
             _deny("DECODER_CHANGED")
+        decode_resources={}
         raw=windows._run_fixture_output(fixture.decoder_code,actual,check,limits=LIMITS,
-            max_input=MAX_CONTAINER,max_output=MAX_DECODE_OUTPUT,expected=fixture.expected_output)
+            max_input=MAX_CONTAINER,max_output=MAX_DECODE_OUTPUT,expected=fixture.expected_output,
+            metrics=decode_resources)
         gray,pcm,samples=_partition(fixture,raw)
         lease=queue.heartbeat(lease)
         frame=Frame(time_ms=1000,frame_sha256=_digest(gray),timeline="resampled_uniform")
         calls=0
+        model_resources=None
+        quality=None
         if spec.processor=="temporal":
             observation=_temporal_result(samples)
             expected=[1000] if fixture.case=="inventory" else []
@@ -268,11 +272,11 @@ def run(queue,vault,store,lease,*,fixture,paths):
                 observation=observation.model_copy(update={"frame":frame})
             calls=1
         elif spec.processor=="asr_vad":
-            output,_=windows._run_model_fixture(code,_wav(pcm),check,limits=asr.LIMITS,max_output=asr.MAX_OUTPUT)
+            output,model_resources=windows._run_model_fixture(code,_wav(pcm),check,limits=asr.LIMITS,max_output=asr.MAX_OUTPUT)
             observation,quality=asr.result_from_output(json.loads(fixture.asr_meta_json),output)
             calls=quality["vad_calls"]+quality["asr_calls"]
         elif spec.processor=="vlm":
-            output,_=windows._run_vlm_fixture(code,fixture.png,check,
+            output,model_resources=windows._run_vlm_fixture(code,fixture.png,check,
                 limits=windows.VlmFixtureLimits(),max_output=vlm.MAX_OUTPUT)
             expected="text_card" if fixture.case=="inventory" else "blank"
             observation,calls=vlm._result_for_image(fixture.png,expected,output)
@@ -290,6 +294,7 @@ def run(queue,vault,store,lease,*,fixture,paths):
         check()
         receipt=store.finish(lease,payload=payload)
         return {**receipt,"model_calls":calls,"synthetic_fixture":True,"canonical_rubric":False,
-                "kernel_job_limits_verified":True,"tree_empty_verified":True}
+                "kernel_job_limits_verified":True,"tree_empty_verified":True,
+                "decode_resources":decode_resources,"model_resources":model_resources,"quality":quality}
     except windows.JobError as exc:
         raise AssetRightsDenied("SHARED_AV_WINDOWS_"+str(exc)) from exc
