@@ -77,13 +77,19 @@ def _score(case,meta,output,*,profile="baseline"):
             "reference_word_count":len(asr._words(meta["reference"]))}
 
 
-def run(model_dir,*,round_id="v2"):
+def run(model_dir,*,round_id="v2",progress=None):
     if round_id not in ROUNDS:
         raise ValueError("ASR_RECOVERY_ROUND")
     profiles=ROUNDS[round_id]
     windows._native_api()
     model_dir=Path(model_dir)
     rows=[]
+    total=2*(len(CASES)+1)
+    def notify(event,row):
+        if progress is not None:
+            progress({"event":event,"round_id":round_id,"case":row["case"],
+                "transport":row["transport"],"profile":row["profile"],
+                "pcm_sha256":row["pcm_sha256"],"completed":len(rows),"total":total})
     runtime=asr._runtime(model_dir)
     for case,transport in [*((c,"argv") for c in CASES),("cta","utf8_stdin")]:
         data,meta=asr._authored_fixture(case,transport=transport)
@@ -103,11 +109,13 @@ def run(model_dir,*,round_id="v2"):
                 "configuration_sha256":config["configuration_sha256"],"matches_v1_pcm":matches_v1}
             # Native errors (including failure to verify cleanup) must abort;
             # no next child may start until the operator reconciles them.
+            notify("started",row)
             output,metrics=windows._run_model_fixture(code,data,check,limits=asr.LIMITS,max_output=asr.MAX_OUTPUT)
             row.update(resources=metrics,**_score(case,meta,output,profile=profile))
             if asr._runtime(model_dir)!=runtime:
                 raise ValueError("ASR_RECOVERY_RUNTIME_CHANGED")
             rows.append(row)
+            notify("completed",row)
     summaries=_summaries(rows,profiles)
     return {"status":"ASR_RECOVERY_EXPERIMENT_COMPLETED","policy_version":VERSION,"round_id":round_id,"rows":rows,
         "profiles":summaries,"tts_transport_exploratory":True,"synthetic_only":True,"independent_gold":False,

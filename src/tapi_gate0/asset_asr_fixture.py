@@ -144,7 +144,7 @@ def _runtime(model_dir):
     if _hash(asset,30_000_000)!=VAD_PIN:
         raise ValueError("ASR_FIXTURE_VAD_PIN")
     root=Path(__file__).resolve().parent
-    sources={n:_hash(root/n,2_000_000) for n in ("asset_asr_fixture.py","multimodal_asr.py","multimodal_vad.py","multimodal_vad_asr.py","multimodal_temporal.py")}
+    sources={n:_hash(root/n,2_000_000) for n in ("asset_asr_fixture.py","multimodal_asr.py","multimodal_vad.py","multimodal_vad_asr.py","multimodal_temporal.py","asset_windows_job.py")}
     return {"checkpoint":checkpoint,"versions":versions,"vad_sha256":VAD_PIN,"source_sha256":sources}
 
 

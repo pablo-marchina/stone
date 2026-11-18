@@ -344,3 +344,33 @@ def test_recovery_round_summary_no_vacuous_pass():
     rows[0]["matches_v1_pcm"]=False
     assert not _summaries(rows,profiles)[profiles[0]]["engineering_gate_passed"]
     assert not _summaries(rows[1:],profiles)[profiles[0]]["complete"]
+
+
+def test_recovery_progress_identifies_failed_arm_without_continuing(monkeypatch):
+    from tapi_gate0 import asset_asr_recovery as recovery
+    from tapi_gate0 import asset_windows_job as windows
+    data=b"fixture"
+    pcm=recovery.V1_PCM[("inventory","argv")]
+    runtime={"checkpoint":"pinned"}
+    monkeypatch.setattr(windows,"_native_api",lambda:None)
+    monkeypatch.setattr(a,"_runtime",lambda p:runtime)
+    monkeypatch.setattr(a,"_authored_fixture",lambda case,transport:(data,{"pcm_sha256":pcm}))
+    monkeypatch.setattr(a,"_plan",lambda data,meta,model_dir,profile:(
+        {"runtime":runtime,"input_sha256":sha256(data).hexdigest(),
+         "configuration_sha256":"a"*64},profile))
+    calls=[]
+    def native(code,data,check,**kw):
+        calls.append(code)
+        check()
+        if len(calls)==2:
+            raise windows.JobError("DESCENDANTS_REMAIN")
+        return b"{}",{}
+    monkeypatch.setattr(windows,"_run_model_fixture",native)
+    monkeypatch.setattr(recovery,"_score",lambda *args,**kw:{"quality_passed":True})
+    events=[]
+    with pytest.raises(windows.JobError,match="DESCENDANTS_REMAIN"):
+        recovery.run("model",round_id="v2",progress=events.append)
+    assert calls==["beam10","word_context_500ms"]
+    assert [(e["event"],e["profile"],e["completed"]) for e in events]==[
+        ("started","beam10",0),("completed","beam10",1),("started","word_context_500ms",1)]
+    assert all(e["case"]=="inventory" and e["total"]==14 and e["pcm_sha256"]==pcm for e in events)
