@@ -14,6 +14,7 @@ from tapi_gate0.asset_rights import (AssetIdentity, Permission, GrantClaims, Sig
 from tapi_gate0.asset_rights_registry import AssetRightsRegistry, authorities, revocations, grants
 from tapi_gate0.asset_lineage_index import AssetLineageIndex, nodes
 from tapi_gate0.asset_jobs import AssetJobQueue, JobSpec, jobs, attempts
+from tapi_gate0.asset_derived_payloads import DerivedPayloadStore, payloads
 from tapi_gate0.asset_lineage import RetainedAssetRef, DerivedArtifactRef, expected_object_id
 from tapi_gate0.connectors import NormalizedItem, Platform
 from tapi_gate0.domain import MediaType
@@ -146,10 +147,11 @@ def test_registry_wrong_key_and_tenant_denied(registry):
         operation="display",purpose="research_analysis",field="video")).permitted
 
 
-@pytest.mark.parametrize('mode',[0,1,2],ids=['0013','0014','0015'])
+@pytest.mark.parametrize('mode',[0,1,2,3],ids=['0013','0014','0015','0016'])
 def test_migration_rehearsal_preserves_disposable_backup(tmp_path,monkeypatch,mode):
     lineage=mode==1
     jobs_mode=mode==2
+    payload_mode=mode==3
     from scripts import a02_migration_rehearsal as drill
     from tapi_gate0.discovery_backup import _sha256
     root=Path(__file__).resolve().parents[1]
@@ -160,7 +162,7 @@ def test_migration_rehearsal_preserves_disposable_backup(tmp_path,monkeypatch,mo
     monkeypatch.setenv("TAPI_DATABASE_URL","sqlite:///"+str(db))
     config=Config(str(root/"alembic.ini"))
     config.set_main_option("script_location",str(root/"migrations"))
-    command.upgrade(config,'0014_asset_lineage' if jobs_mode else drill.NEW if lineage else drill.OLD)
+    command.upgrade(config,'0015_asset_jobs' if payload_mode else '0014_asset_lineage' if jobs_mode else drill.NEW if lineage else drill.OLD)
     engine=engine_for("sqlite:///"+str(db))
     SqlDomainStore(engine).create_tenant(TENANT,"Fixture")
     engine.dispose()
@@ -171,7 +173,7 @@ def test_migration_rehearsal_preserves_disposable_backup(tmp_path,monkeypatch,mo
     shutil.copy2(root/"alembic.ini",tmp_path/"alembic.ini")
     shutil.copytree(root/"src",tmp_path/"src")
     digest=_sha256(db)
-    result=drill.rehearsal(tmp_path,db.name,digest,TENANT,lineage=lineage,jobs=jobs_mode)
+    result=drill.rehearsal(tmp_path,db.name,digest,TENANT,lineage=lineage,jobs=jobs_mode,payloads=payload_mode)
     assert result["status"]=="A02_MIGRATION_REHEARSAL_VERIFIED"
     assert result["backup_unchanged"] and result["empty_downgrade_verified"]
     if lineage:
@@ -180,6 +182,9 @@ def test_migration_rehearsal_preserves_disposable_backup(tmp_path,monkeypatch,mo
     if jobs_mode:
         assert result["to_revision"]=="0015_asset_jobs"
         assert result["new_empty_tables"]==["asset_processing_attempts","asset_processing_jobs"]
+    if payload_mode:
+        assert result["to_revision"]=="0016_asset_derived_payloads"
+        assert result["new_empty_tables"]==["asset_derived_payloads"]
     assert _sha256(db)==digest
     with pytest.raises(ValueError,match="BACKUP_MISMATCH"):
         drill.rehearsal(tmp_path,db.name,"0"*64,TENANT)
@@ -352,7 +357,7 @@ def test_nonempty_lineage_downgrade_refused(tmp_path,monkeypatch):
 
 
 @pytest.fixture
-def discard_fixture(registry,tmp_path):
+def discard_fixture(registry,tmp_path,request):
     from tapi_gate0.asset_indexed_vault import IndexedAssetVault
     from tapi_gate0.asset_discard import discard_invalidated
     f=registry
@@ -360,7 +365,9 @@ def discard_fixture(registry,tmp_path):
     target=f.target.model_copy(update={"sha256":sha256(data).hexdigest()})
     retention=Permission(operation="retain",purpose="research_analysis",field="video")
     f.svc.provision(f.anchor,TENANT,"instagram",f.rv)
-    f.svc.register_grant(f.anchor,f.grant(target=target,permissions=(retention,PERMISSION,Permission(operation="derive",purpose="research_analysis",field="visual_features"))),
+    extra=tuple(Permission(operation=op,purpose="research_analysis",field="visual_features")
+        for op in getattr(request,"param",()))
+    f.svc.register_grant(f.anchor,f.grant(target=target,permissions=(retention,PERMISSION,Permission(operation="derive",purpose="research_analysis",field="visual_features"),*extra)),
         verified_approval_digest="b"*64)
     root=tmp_path/"discard-vault";root.mkdir(mode=0o700)
     now=now_utc()
@@ -886,3 +893,135 @@ def test_supervisor_revocation_during_child_kills_and_withholds_receipt(queue_fi
     f.q.index.reconcile_signed_revocations(f.q.f.pin(rv),TENANT,"instagram")
     assert f.queue.reconcile_invalidated(TENANT)["changed"]==[spec.job_id]
     assert f.queue.acknowledge_cancel(lease)["state"]=="canceled"
+
+
+def _payload_job(f):
+    f.queue.enqueue(f.spec)
+    return f.queue.claim(TENANT,"worker")["lease"]
+
+
+def test_payload_requires_explicit_derived_retention(queue_fixture):
+    f=queue_fixture
+    lease=_payload_job(f)
+    store=DerivedPayloadStore(f.queue,b"d"*32)
+    with pytest.raises(AssetRightsDenied,match="SCOPE_MISMATCH"):
+        store.finish(lease,payload=b"fixture")
+    assert f.queue.status(TENANT,f.spec.job_id)["state"]=="running"
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(payloads))==0
+
+
+@pytest.mark.parametrize("discard_fixture",[("retain",)],indirect=True)
+def test_payload_retention_does_not_authorize_read(queue_fixture):
+    f=queue_fixture
+    store=DerivedPayloadStore(f.queue,b"d"*32)
+    result=store.finish(_payload_job(f),payload=b"fixture")
+    assert result["payload_persisted"]
+    with pytest.raises(AssetRightsDenied,match="SCOPE_MISMATCH"):
+        store.read_for_processing(TENANT,result["artifact_id"],purpose="research_analysis")
+
+
+@pytest.mark.parametrize("discard_fixture",[("retain","process")],indirect=True)
+def test_payload_atomic_encryption_read_and_binding(queue_fixture):
+    f=queue_fixture
+    store=DerivedPayloadStore(f.queue,b"d"*32)
+    data=b"private synthetic derivative"
+    lease=_payload_job(f)
+    result=store.finish(lease,payload=data)
+    ident=result["artifact_id"]
+    assert result["state"]=="completed" and result["reason"]=="encrypted_payload"
+    assert result["receipt_sha256"]==sha256(data).hexdigest()
+    assert not result["scientific_evidence"] and not result["media_enabled"]
+    with f.q.f.engine.connect() as db:
+        envelope=db.scalar(select(payloads.c.envelope))
+        ref=DerivedArtifactRef.model_validate_json(db.scalar(select(nodes.c.payload).where(nodes.c.node_id==ident)))
+        assert len(envelope)==len(data)+28 and data not in envelope
+        assert ref.parent_ids==(f.spec.object_id,) and ref.payload_sha256==result["receipt_sha256"]
+    assert store.read_for_processing(TENANT,ident,purpose="research_analysis")==data
+    with pytest.raises(AssetRightsDenied,match="KEY_MISMATCH"):
+        DerivedPayloadStore(f.queue,b"x"*32).read_for_processing(TENANT,ident,purpose="research_analysis")
+    with pytest.raises(AssetRightsDenied,match="PURPOSE_MISMATCH"):
+        store.read_for_processing(TENANT,ident,purpose="studio_creation")
+    with pytest.raises(AssetRightsDenied,match="UNKNOWN_ARTIFACT"):
+        store.read_for_processing("other",ident,purpose="research_analysis")
+    with pytest.raises(AssetRightsDenied,match="STALE_LEASE"):
+        store.finish(lease,payload=data)
+    with f.q.f.engine.begin() as db:
+        db.execute(update(payloads).values(envelope=envelope[:-1]+bytes([envelope[-1]^1])))
+    with pytest.raises(AssetRightsDenied,match="AUTHENTICATION_FAILED"):
+        store.read_for_processing(TENANT,ident,purpose="research_analysis")
+
+
+@pytest.mark.parametrize("discard_fixture",[("retain","process")],indirect=True)
+def test_payload_late_denial_rolls_back_all_records(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_derived_payloads as module
+    f=queue_fixture
+    store=DerivedPayloadStore(f.queue,b"d"*32)
+    lease=_payload_job(f)
+    original=module._extra
+    calls=[]
+    def deny(*args,**kwargs):
+        calls.append(1)
+        if len(calls)==2:
+            raise AssetRightsDenied("fixture late denial")
+        return original(*args,**kwargs)
+    monkeypatch.setattr(module,"_extra",deny)
+    with pytest.raises(AssetRightsDenied,match="late denial"):
+        store.finish(lease,payload=b"fixture")
+    assert f.queue.status(TENANT,f.spec.job_id)["state"]=="running"
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(payloads))==0
+        assert db.scalar(select(func.count()).select_from(nodes).where(nodes.c.kind=="derived"))==0
+        assert db.scalar(select(func.count()).select_from(domain_events).where(domain_events.c.aggregate_type=="asset_lineage"))==1
+
+
+@pytest.mark.parametrize("discard_fixture",[("retain","process")],indirect=True)
+def test_payload_revocation_and_purge_idempotent(queue_fixture):
+    f=queue_fixture
+    store=DerivedPayloadStore(f.queue,b"d"*32)
+    result=store.finish(_payload_job(f),payload=b"fixture")
+    ident=result["artifact_id"]
+    with pytest.raises(AssetRightsDenied,match="TOMBSTONE_REQUIRED"):
+        store.purge_invalidated(TENANT,ident)
+    rv=f.q.f.state(2,revoked_asset_ids=(f.q.ref.target.asset_id,))
+    f.q.f.svc.advance(f.q.f.anchor,TENANT,"instagram",rv)
+    f.queue.resolve_anchor=lambda ref:f.q.f.pin(rv)
+    with pytest.raises(AssetRightsDenied,match="ASSET_RIGHTS_REVOKED"):
+        store.read_for_processing(TENANT,ident,purpose="research_analysis")
+    f.q.index.reconcile_signed_revocations(f.q.f.pin(rv),TENANT,"instagram")
+    with pytest.raises(AssetRightsDenied,match="INACTIVE_ANCESTOR"):
+        store.read_for_processing(TENANT,ident,purpose="research_analysis")
+    assert store.purge_invalidated(TENANT,ident)=={"status":"PURGED","secure_erasure_verified":False}
+    assert store.purge_invalidated(TENANT,ident)["status"]=="ALREADY_PURGED"
+    with f.q.f.engine.connect() as db:
+        row=db.execute(select(payloads)).mappings().one()
+        assert row["envelope"] is None and row["purged_at"]
+        seqs=db.scalars(select(domain_events.c.seq).where(domain_events.c.aggregate_type=="asset_derived_payload")).all()
+        assert len(seqs)==1
+        assert db.scalar(select(func.count()).select_from(outbox).where(outbox.c.seq.in_(seqs)))==1
+        assert db.scalar(select(nodes.c.state).where(nodes.c.node_id==ident))=="invalidated"
+
+
+@pytest.mark.parametrize("discard_fixture",[("retain","process")],indirect=True)
+def test_payload_quota_and_invalid_size(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_derived_payloads as module
+    f=queue_fixture
+    store=DerivedPayloadStore(f.queue,b"d"*32)
+    lease=_payload_job(f)
+    with pytest.raises(AssetRightsDenied,match="SIZE_INVALID"):
+        store.finish(lease,payload=b"")
+    monkeypatch.setattr(module,"MAX_TENANT_BYTES",30)
+    with pytest.raises(AssetRightsDenied,match="STORAGE_QUOTA"):
+        store.finish(lease,payload=b"fixture")
+    assert f.queue.status(TENANT,f.spec.job_id)["state"]=="running"
+    monkeypatch.setattr(module,"MAX_TENANT_BYTES",100)
+    assert store.finish(lease,payload=b"fixture")["payload_persisted"]
+
+
+@pytest.mark.parametrize("discard_fixture",[("retain","process")],indirect=True)
+def test_payload_reference_only_is_not_readable(queue_fixture):
+    f=queue_fixture
+    store=DerivedPayloadStore(f.queue,b"d"*32)
+    result=f.queue.finish_reference(_payload_job(f),payload=b"fixture")
+    with pytest.raises(AssetRightsDenied,match="UNAVAILABLE"):
+        store.read_for_processing(TENANT,result["artifact_id"],purpose="research_analysis")
