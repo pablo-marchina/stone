@@ -1460,7 +1460,7 @@ def test_real_asr_fixture_encrypted_result(queue_fixture,case):
         assert result.result.state=="abstained" and quality["asr_calls"]==0
         assert quality["vad_calls"]==int(case=="tone")
     resources=receipt["resources"]
-    assert 0<resources["peak_job_commit_bytes"]<=4096*1024*1024
+    assert 0<resources["peak_job_commit_bytes"]<=a.LIMITS.memory_mib*1024*1024
     assert 0<=resources["cpu_user_ms"]<=240000 and resources["wall_ms"]>0
     assert receipt["receipt_sha256"]==sha256(payload).hexdigest()
     with f.q.f.engine.connect() as db:

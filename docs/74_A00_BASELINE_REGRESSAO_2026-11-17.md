@@ -1651,3 +1651,61 @@ com stage/exception/reason/exit/peak_commit_bytes, mais métricas negativas.
 Não repetir automaticamente nem ampliar budget. Se 3 PASS, rodar
 suite focal anterior (268 esperados) e espelho/zero-spend. Nenhuma
 migração, mídia externa, grant real, merge ou gate.
+
+
+## A02.6 — ASR diagnóstico de memória; orçamento revisado v8 (18/11)
+Operador HEAD 51a797e7bfe7c6e9695f29e414e2d69bb76c2910:
+1 FAIL / 2 PASS / 76 deselected, 33,41s. Inventory:
+PROBE_OUTPUT_INVALID;stage=model_load;exception=RuntimeError;
+reason=memory;exit=0x00000004;peak_commit_bytes=4303360000.
+Pico 4104,004 MiB próximo/acima do limite de 4096 MiB (8,004 MiB
+de diferença), forte evidência de orçamento insuficiente no load,
+não prova de pico necessário no sucesso nem exclusão de pressão
+global de commit. Classificação reason=memory é heurística.
+Sem WER/IoU positivo. Silêncio 0 VAD/0 ASR, 149446656 bytes,
+CPU user/kernel 265,625/187,5ms, wall 547ms. Tom 1 VAD/0 ASR,
+168837120 bytes, CPU user/kernel 406,25/203,125ms, wall 609ms.
+Negativos PASS; adapter ainda não aprovado.
+
+Decisão de engenharia: um experimento controlado, orçamento fixo
+ModelFixtureLimits 6144 MiB (6 GiB), somente Whisper Medium fixture,
+mesmos 240s CPU user-mode, 90s wall, 1 processo, lease 120s,
+mesmo checkpoint, parâmetros, oracle, WER/IoU e formato de saída.
+Sem aumento de JobLimits de FFmpeg/OCR ou probe; sem retry/escalada
+automática e sem 8GiB. Método synthetic-asr-vad-whisper-medium-v8,
+hash inclui orçamento e política de admissão. Antes de spawn:
+check de direitos, GlobalMemoryStatusEx (Windows x64), mínimo
+4096 MiB disponíveis físicos e 7168 MiB de commit disponível
+ao processo pai (cap 6144 + reserva 1024). Se insuficiente,
+MODEL_HOST_HEADROOM_INSUFFICIENT com valores agregados, sem spawn.
+Não representa reserva de RAM nem garantia de disponibilidade
+contínua; não confundir commit com RSS ou memória física. Não
+alterar pagefile, liberar apps manualmente; não executar em paralelo.
+O host pode perder headroom entre consultas. Cap ainda no kernel.
+Documentação Microsoft: https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/ns-sysinfoapi-memorystatusex
+
+48 PASS / 7 skip nativos em cópia isolada Linux (34 ASR + 14 supervisor).
+7 novos testes (fronteiras de admissão, bloqueio antes do spawn,
+orçamento fixo e ABI); sem modelo real ou execução Windows aqui.
+Teste de integração verifica teto revisado. Espelho 32/32 intacto.
+275 focais esperados após aprovação, sem skips com opt-ins.
+Não alterar DB/migração/grants, sem mídia externa ou gate.
+
+### Operador — preflight memória e três casos
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+conda activate tapi-asr-recovery
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+$env:TAPI_ASR_TEST_MODEL_DIR = "C:\Models\tapi\faster-whisper-medium"
+$env:HF_HUB_OFFLINE = "1"
+$env:TRANSFORMERS_OFFLINE = "1"
+& $py -c "import json; from tapi_gate0.asset_windows_job import ModelFixtureLimits, require_model_headroom; print(json.dumps(require_model_headroom(ModelFixtureLimits())))"
+if ($LASTEXITCODE -ne 0) { throw "Headroom insuficiente ou consulta falhou" }
+& $py -m pytest -q --capture=tee-sys --tb=short tests/test_asset_rights_registry.py -k "test_real_asr_fixture_encrypted_result"
+```
+Se preflight falhar, não executar modelo, enviar valores agregados.
+Se positivo falhar, enviar diagnóstico; sem ampliar cap de novo.
+Se 3 PASS, executar focal completo (275) e espelho/zero-spend,
+avaliar pico, latência e qualidade. Não habilitar mídia real.

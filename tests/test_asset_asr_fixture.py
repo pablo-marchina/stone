@@ -174,3 +174,36 @@ def test_model_trace_fail_closed_and_no_untrusted_text():
     assert w._model_trace(b'TAPI_ASR_STAGE:serialize\nTAPI_ASR_RESULT\n{}')[3] is None
     assert w._model_trace(b'TAPI_ASR_STAGE:bootstrap\nTAPI_ASR_STAGE:serialize\nTAPI_ASR_RESULT\n'+b'x'*32768)[3] is None
     assert "exit=0xc0000005" in str(w._model_failure(b'',-1073741819,{}))
+
+
+@pytest.mark.parametrize("physical_mib,commit_mib,allowed",[
+    (4096,7168,True),(8192,8192,True),(4095,8192,False),
+    (8192,7167,False),(0,0,False),
+])
+def test_model_host_headroom(monkeypatch,physical_mib,commit_mib,allowed):
+    snapshot={"available_physical_bytes":physical_mib*w.MIB,
+        "available_commit_bytes":commit_mib*w.MIB,"total_physical_bytes":16384*w.MIB}
+    monkeypatch.setattr(w,"model_host_capacity",lambda:snapshot)
+    if allowed:
+        assert w.require_model_headroom(a.LIMITS)==snapshot
+    else:
+        with pytest.raises(w.JobError,match="MODEL_HOST_HEADROOM_INSUFFICIENT"):
+            w.require_model_headroom(a.LIMITS)
+
+
+def test_model_headroom_denial_before_spawn(monkeypatch):
+    events=[]
+    monkeypatch.setattr(w,"model_host_capacity",lambda:{"available_physical_bytes":0,"available_commit_bytes":0})
+    monkeypatch.setattr(w,"_run_fixture_output",lambda *args,**kwargs:pytest.fail("must not spawn"))
+    with pytest.raises(w.JobError,match="MODEL_HOST_HEADROOM_INSUFFICIENT"):
+        w._run_model_fixture("",b"x",lambda:events.append("rights"))
+    assert events==["rights"]
+
+
+def test_model_budget_fixed_and_legacy_limits_unchanged():
+    assert a.LIMITS==w.ModelFixtureLimits(6144,240,1,90)
+    assert w.JobLimits().memory_mib==128
+    for memory in (4096,6145,8192):
+        with pytest.raises(w.JobError,match="MODEL_FIXTURE_LIMIT_INVALID"):
+            replace(a.LIMITS,memory_mib=memory)
+    assert w.C.sizeof(w.MemoryStatus)==64

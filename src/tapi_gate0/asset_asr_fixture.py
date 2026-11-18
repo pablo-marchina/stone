@@ -24,7 +24,7 @@ import wave
 from . import asset_windows_job as windows
 from .asset_processor_results import ASR, Speech, Interval, Abstention, ProcessorResult, encode, decode, validate_binding
 
-METHOD="synthetic-asr-vad-whisper-medium-v7"
+METHOD="synthetic-asr-vad-whisper-medium-v8"
 LIMITS=windows.ModelFixtureLimits()
 MAX_OUTPUT=32768
 RATE=16000
@@ -177,6 +177,8 @@ def _plan(data,meta,model_dir):
     config={"method":METHOD,"case":meta["case"],"input_sha256":_digest(data),"fixture":meta,
             "runtime":runtime,"code_sha256":_digest(code.encode()),"limits":asdict(LIMITS),
             "job_name":windows.JOB_NAME,"job_flags":windows.FLAGS,"max_output":MAX_OUTPUT,
+            "host_min_physical_mib":windows.MODEL_MIN_PHYSICAL_MIB,
+            "host_commit_reserve_mib":windows.MODEL_COMMIT_RESERVE_MIB,
             "vad_options":OPTIONS,"device":"cpu","compute_type":"int8","cpu_threads":4}
     pin=_digest(json.dumps(config,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode())
     return {**config,"configuration_sha256":pin},code

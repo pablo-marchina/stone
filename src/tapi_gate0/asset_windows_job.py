@@ -80,16 +80,62 @@ class JobLimits:
 
 @dataclass(frozen=True)
 class ModelFixtureLimits(JobLimits):
-    """One fixed Whisper Medium CPU fixture budget, not general model limits."""
-    memory_mib: int = 4096
+    """Fixed revised Whisper Medium CPU fixture budget, not general model limits."""
+    memory_mib: int = 6144
     cpu_user_seconds: int = 240
     active_processes: int = 1
     wall_seconds: int = 90
 
     def __post_init__(self):
         values=(self.memory_mib,self.cpu_user_seconds,self.active_processes,self.wall_seconds)
-        if any(type(v) is not int for v in values) or values!=(4096,240,1,90):
+        if any(type(v) is not int for v in values) or values!=(6144,240,1,90):
             raise JobError("MODEL_FIXTURE_LIMIT_INVALID")
+
+
+# Snapshot admission guard, not a reservation or continuous memory guarantee.
+MODEL_MIN_PHYSICAL_MIB = 4096
+MODEL_COMMIT_RESERVE_MIB = 1024
+MIB = 1024 * 1024
+
+
+class MemoryStatus(C.Structure):
+    _fields_ = [("dwLength", DWORD), ("dwMemoryLoad", DWORD)] + [
+        (name, C.c_uint64) for name in ("ullTotalPhys", "ullAvailPhys",
+            "ullTotalPageFile", "ullAvailPageFile", "ullTotalVirtual",
+            "ullAvailVirtual", "ullAvailExtendedVirtual")]
+
+
+def model_host_capacity():
+    """Aggregate local snapshot only. Available commit is for the parent,
+    no greater than system-wide available commit; not a pagefile size."""
+    if sys.platform != "win32" or C.sizeof(HANDLE) != 8:
+        raise JobError("WINDOWS_X64_REQUIRED")
+    api=C.WinDLL("kernel32",use_last_error=True).GlobalMemoryStatusEx
+    api.argtypes=[C.POINTER(MemoryStatus)]
+    api.restype=BOOL
+    status=MemoryStatus()
+    status.dwLength=C.sizeof(status)
+    if not api(C.byref(status)):
+        raise JobError("MODEL_HOST_MEMORY_QUERY_FAILED")
+    if not 0 < status.ullTotalPhys or status.ullAvailPhys > status.ullTotalPhys:
+        raise JobError("MODEL_HOST_MEMORY_QUERY_INVALID")
+    return {"available_physical_bytes":int(status.ullAvailPhys),
+            "available_commit_bytes":int(status.ullAvailPageFile),
+            "total_physical_bytes":int(status.ullTotalPhys)}
+
+
+def require_model_headroom(limits):
+    if type(limits) is not ModelFixtureLimits:
+        raise JobError("MODEL_FIXTURE_LIMIT_INVALID")
+    snapshot=model_host_capacity()
+    physical=snapshot["available_physical_bytes"]
+    commit=snapshot["available_commit_bytes"]
+    needed=(limits.memory_mib+MODEL_COMMIT_RESERVE_MIB)*MIB
+    if physical<MODEL_MIN_PHYSICAL_MIB*MIB or commit<needed:
+        raise JobError(f"MODEL_HOST_HEADROOM_INSUFFICIENT;available_physical_mib={physical//MIB};"
+            f"available_commit_mib={commit//MIB};required_physical_mib={MODEL_MIN_PHYSICAL_MIB};"
+            f"required_commit_mib={needed//MIB}")
+    return snapshot
 
 
 def _native_api():
@@ -273,6 +319,10 @@ def _run_model_fixture(code,data,check,*,limits=ModelFixtureLimits(),max_output=
     """Trusted fixed local ASR fixture only; larger WAV input and kernel metrics."""
     if type(limits) is not ModelFixtureLimits or type(max_output) is not int or not 1<=max_output<=32768:
         raise JobError("FIXTURE_BOUNDS")
+    if type(data) is not bytes or not 1<=len(data)<=480044:
+        raise JobError("FIXTURE_BOUNDS")
+    check()
+    require_model_headroom(limits)
     metrics={}
     output=_run_fixture_output(code,data,check,limits=limits,max_output=max_output,
         expected=None,max_input=480044,metrics=metrics)
