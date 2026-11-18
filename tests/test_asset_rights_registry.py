@@ -1025,3 +1025,41 @@ def test_payload_reference_only_is_not_readable(queue_fixture):
     result=f.queue.finish_reference(_payload_job(f),payload=b"fixture")
     with pytest.raises(AssetRightsDenied,match="UNAVAILABLE"):
         store.read_for_processing(TENANT,result["artifact_id"],purpose="research_analysis")
+
+
+@pytest.mark.parametrize("discard_fixture",[("retain","process")],indirect=True)
+def test_payload_ciphertext_cannot_be_substituted_between_jobs(queue_fixture):
+    f=queue_fixture
+    store=DerivedPayloadStore(f.queue,b"d"*32)
+    first=store.finish(_payload_job(f),payload=b"same synthetic bytes")
+    second_spec=f.spec.model_copy(update={"method_version":"fixture-v2"})
+    f.queue.enqueue(second_spec)
+    second=store.finish(f.queue.claim(TENANT,"worker")["lease"],payload=b"same synthetic bytes")
+    assert first["artifact_id"]!=second["artifact_id"]
+    with f.q.f.engine.begin() as db:
+        envelope=db.scalar(select(payloads.c.envelope).where(payloads.c.artifact_id==first["artifact_id"]))
+        db.execute(update(payloads).where(payloads.c.artifact_id==second["artifact_id"]).values(envelope=envelope))
+    with pytest.raises(AssetRightsDenied,match="AUTHENTICATION_FAILED"):
+        store.read_for_processing(TENANT,second["artifact_id"],purpose="research_analysis")
+    assert store.read_for_processing(TENANT,first["artifact_id"],purpose="research_analysis")==b"same synthetic bytes"
+
+
+@pytest.mark.parametrize("discard_fixture",[("retain","process")],indirect=True)
+def test_payload_nonempty_downgrade_refused_even_after_purge(queue_fixture,monkeypatch):
+    # The disposable registry fixture already has the current metadata schema.
+    # Stamp its revision only to exercise the actual downgrade guard.
+    f=queue_fixture
+    store=DerivedPayloadStore(f.queue,b"d"*32)
+    result=store.finish(_payload_job(f),payload=b"fixture")
+    f.q.index.invalidate(TENANT,artifact_ids=[result["artifact_id"]])
+    store.purge_invalidated(TENANT,result["artifact_id"])
+    root=Path(__file__).resolve().parents[1]
+    url=f.q.f.engine.url.render_as_string(hide_password=False)
+    monkeypatch.setenv("TAPI_DATABASE_URL",url)
+    cfg=Config(str(root/"alembic.ini"))
+    cfg.set_main_option("script_location",str(root/"migrations"))
+    command.stamp(cfg,"0016_asset_derived_payloads")
+    with pytest.raises(RuntimeError,match="ASSET_PAYLOAD_DOWNGRADE_NONEMPTY"):
+        command.downgrade(cfg,"0015_asset_jobs")
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(payloads))==1
