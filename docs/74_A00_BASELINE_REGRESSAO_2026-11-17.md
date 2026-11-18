@@ -2329,3 +2329,144 @@ e diagnosticar. Se PASS, full strict no HEAD limpo, mesmos paths
 e report-name novo, grupos shared_av_contract 4/4 e shared_av 7/7.
 Próximo incremento: reconciliar execução, robustez/ablação
 compartilhada, orçamento e preflight de direitos operacionais.
+
+
+## A02.7.2 — shared AV native PASS (18/11/2026)
+
+Operador HEAD 20aea114c2cbe90422762e2ae6287ad8aa863d39,
+árvore e7e8576b625f422c9a5ffbb6bae80f2121bebf7e.
+Contratos 27/27 em 2s, shared AV 7/7 em 143,94s,
+runner 21/21 em 1,20s, zero-spend PASS. Full strict
+a02-shared-av-20261118-164816: 1295 coletados / 1294 PASS /
+0 FAIL / 0 ERROR / 1 SKIP Lab opt-in; 15/15 grupos, 91 casos
+obrigatórios; pytest 1016,429s, Node 7,913s, checkout inalterado.
+Gate0 histórico, espelho, zero-spend e Node exit 0.
+JUnit SHA256 96e3fe89784aea6f7a0a94f5707e1f9e1886ca240b8e7055431a9a2d6a116f89.
+pytest.log 21f82485387349090725bdf3a4026cbe87c9c61bf9db593b89e4cc59c5e0bb01.
+node.log d2aabaef884b33d387b0f7041cc185919b76a9bc766fb3f9f866b3f658137479.
+117 módulos, 103 arquivos Python de testes, 5 Node, 16 migrações.
+Relato de operador, não inspeção independente dos artefatos locais.
+Lab opt-in PASS separado no SHA 9bd1b6a; não somar contagens.
+
+Manifestos reportados (SHA256):
+- inventory contêiner ec135d29470134176b8ee24349939dc60eb3865d54e82693fa3beb4ef81239c8,
+  RGB 9e4cc10037a0793d8fc9e680c3c9768c5ea4ec84c0ce184208d2fa72ba01272e,
+  PCM a466b1a2a12073c94175aa7202fc55d874b614a4b72ae03612323fd6c79f9a9b,
+  frame a2089e243374b41af7e91847a031e6d80942bc4ba74707b57756231a6ba86641,
+  27 frames / 106381 amostras PCM.
+- silence contêiner 57e11385ecc617926a0e60fad7ec5564025c08a8f51fe5e57827fdbdbcd891d6,
+  RGB d7856ae58457f17c637a57e807c4b05965fb92127809b9eaef9d1cc25ff12ad2,
+  PCM 55873fecc61a79e87ca550c7072e38ccdd7ecb600ace286fe4717952a97c42b0,
+  frame d64bb75f9897d781a54a1e4c4e9571a17a7c447d21a4d40cc16d603951997f87,
+  12 frames / 48000 amostras PCM.
+- FFmpeg comum 1a65d5b0b10d8d9a81d2824a3538046a40ed3607c906b335a166add87613f705.
+Frames 960x540, 1000ms, 4fps, gray64 primeiros 8s, autorais.
+
+Métricas (temporal, OCR, ASR, VLM, nessa ordem):
+inventory decode wall 766/688/687/703ms (2844ms total);
+peak commit 116662272/119091200/118943744/118579200 bytes.
+ASR 21172ms, 5270159360 bytes, user/kernel 47093,75/13609,375ms,
+WER 0,375, IoU 0,9317703013278856, fronteira 0,1971875s.
+VLM 46953ms, 2515099648 bytes, user/kernel 164671,875/7875ms.
+Chamadas 0/1/2/1 (ASR agrega VAD+Whisper).
+silence decode wall 531/500/484/438ms; peak commit
+69730304/70164480/66756608/69586944 bytes.
+ASR guard 1156ms, 150601728 bytes; VLM guard 703ms, 24686592 bytes;
+zero chamadas VAD, Whisper e Qwen. OCR executa uma chamada.
+Não somar picos de jobs sequenciais como pico do host.
+VLM maior componente de wall medido no positivo; não medir throughput
+total com tempos parciais. OCR, geração, hashing, planejamento,
+DB/fusão não medidos separadamente nesse relatório.
+VLM quality benchmark anterior FAIL permanece, sem mídia real,
+admissão, validação independente, gate global ou aprovação produção.
+
+## A02.7.3 — expansão de casos e replay de ablação protegido
+
+Commits:
+- 094debe: seis receitas adicionais fixas, TTS restrito a frases
+  autorais allowlisted, replay de 15 subconjuntos não vazios em
+  evaluate_shared_av_ablation, dentro da mesma transação de direitos.
+- 0139708: oito pipelines nativos e seis testes de política sobre
+  observações surrogates persistidas; preserva chamada legada do ASR
+  inventory. Grupo strict shared_av passa de 7 para 19.
+- 2a45658: métricas OCR nativas e wall do step (inclui preflight,
+  jobs, regeneração, hashes e processamento, não inclui __init__,
+  geração inicial, última fusão ou avaliação de ablação).
+
+Receitas novas: agreement (fala vendas + tela vendas), conflict
+(custos fixos + tela vendas), complementary (CTA salvar + tela
+vendas), audio_only (mesmo CTA + blank), screen_only (silêncio +
+tela vendas), tone_negative (440 Hz + blank). Mantém inventory
+e silence sem intenção de alterar bytes/IDs/configuração anteriores.
+Usa mesmas imagens autorais e parâmetros/limites de ASR/OCR/VLM.
+Não expõe texto TTS arbitrário, não baixa modelos, não cria
+escopo externo. TTS local pode não reproduzir a semântica esperada,
+WER/VAD ou VLM podem falhar; não alterar limiares para obter PASS.
+
+Ablation: exige quatro resultados shared autenticados da mesma
+raiz, mesma fonte e propósito; deriva rubric_evidence antes e
+depois da avaliação, direitos atuais de todos os artefatos,
+ordenação determinística; não usa resultados de outro ativo,
+nem executa inferência adicional ou grava decisões. 15 arms de
+ASR/VAD, OCR, temporal e VLM, sem caption (distinto dos 15 arms
+do Lab anterior). Cada decisão mantém fingerprint da seleção,
+suportes e vetos exclusivamente das modalidades selecionadas.
+A política atual não usa temporal para semântica; teste verifica
+equivalência semântica de arms com/sem temporal, sem desqualificar
+medições temporais. Excluir VLM pode perder veto de conflito visual,
+não confundir ablação retrospectiva com autorização, política
+de roteamento, economia realizada ou segurança de omissão.
+
+Oráculo autoral fixo dos quatro campos (tema, tipo_cta, tem_cta,
+texto_na_tela): inventory (null,null,null,true), silence
+(null,null,null,null), agreement (vendas,null,null,true),
+conflict (null,null,null,true), complementary
+(vendas,salvar,true,true), audio_only (null,salvar,true,null),
+screen_only (vendas,null,null,true), tone_negative
+(null,null,null,null). null = abstenção esperada, não ausência real.
+Cada caso imprime SHARED_AV_ABLATION com 15 arms e contagens full
+wrong_nonabstained/missed_candidates/exact_match. PASS dos testes
+nativos exige integridade, qualidade individual existente e
+invariantes de política/abstenção negativa; não implica
+full_exact_match de cada caso. Erro semântico reportado não é
+silenciosamente convertido em evidência de qualidade.
+Sem gate semântico novo, sem seleção automática de melhor arm.
+
+Seis desafios de política usam resultados tipados artificiais
+persistidos em DB de teste, não mídia decodificada: concordância,
+tema conflitante, complementaridade, CTA conflitante, negação,
+pedido dividido entre modalidades. Testam decisões/vetos,
+partição completa, rejeição de subset na entrada da ablação,
+revogação assinada e ausência de novos eventos/tentativas.
+Não são gold independente nem benchmark de ASR/OCR/VLM.
+Nenhuma alteração de contrato público, migração, matrizes,
+gates ou grants reais; IMP-054/063/064/136/137/145/178 parciais,
+DEC-017/018 vigentes. R$0.
+
+12 casos novos esperados (6 nativos + 6 surrogates).
+Full esperado 1307 coletados, 15 grupos / 103 casos mínimos.
+Não executados pelo assistente: inspeção de diff no GitHub,
+ambiente Windows e modelos locais indisponíveis. PASS pinado
+somente no 20aea11. Smoke restante das interfaces permanece
+pendente e fora das mudanças deste incremento.
+
+### Operador — validação A02.7.3
+Parar writers/servidor. Reusar paths locais e modelos existentes.
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+& $py docs/base_atemporal/ferramentas/validar_espelho.py
+& $py -m pytest -q --tb=short tests/test_asset_asr_fixture.py tests/test_asset_processor_results.py tests/test_a00_baseline.py
+& $py -m pytest -q --tb=short tests/test_asset_rights_registry.py -k test_shared_av_ablation_policy_and_rights
+& $py -m pytest -q --capture=tee-sys --tb=short tests/test_asset_rights_registry.py -k "test_shared_av_ and not test_shared_av_ablation_policy_and_rights"
+& $py scripts/verify_zero_spend.py
+```
+Esperados 6/6 policy, 13/13 restantes shared sem skip; enviar
+SHARED_AV_ABLATION e SHARED_AV_METRICS dos oito casos. Se PASS,
+full strict mesmos quatro paths explícitos e report-name novo.
+Analisar erros/misses mesmo se pytest PASS, comparar arms e
+custos por caso antes de decidir roteamento/cache. A02.7.4:
+reconciliar qualidade e custo, then benchmark de estratégia
+seletiva e preflight operacional; não liberar mídia externa.
