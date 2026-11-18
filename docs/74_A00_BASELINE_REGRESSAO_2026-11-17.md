@@ -2000,3 +2000,96 @@ gate ou production approval. Sem benchmark standalone, DB operacional,
 download ou OS sandbox. API execute preserva primeiro argumento
 tessdata posicional. 13 novos casos de runner; revisão por inspeção,
 execução integral pendente. Sem schema/merge.
+
+
+## A00/A02.6 — regressão strict multimodal PASS (18/11/2026)
+
+Operador reportou HEAD `298426d76db962c649afd1abbeb60452f26ee583`,
+árvore `d3e45319324da70d75f2ca2a1ab2576fe5e2f304`, ambiente
+tapi-asr-recovery, Python 3.11.18. PR #44 draft, base #43.
+Runner isolado 21/21 PASS (1,13s), espelho 32/32 e zero-spend PASS.
+Relatório privado `a02-multimodal-20261118-150119`, policy a00-local-baseline.v2,
+full strict, OCR/ASR/VLM opt-ins true, checkout unchanged, checks_passed=true.
+1272 coletados / 1271 PASS / 0 FAIL / 0 ERROR / 1 SKIP explícito:
+tests.test_evidence_lab.test_operator_actual_triplet_when_configured.
+pytest 672,588s, Node (5 arquivos), Gate0 histórico, zero-spend e espelho
+exit 0. 115 módulos Python, 103 arquivos de testes Python, 16 migrações.
+12/12 grupos JUnit obrigatórios (68 casos) PASS: kernel 7, supervisor 3,
+typed 7, temporal decode 3/integração 6, OCR decode 3/integração 6, ASR 6,
+VLM 6, bundle blank 1, manutenção 9, fusão 11. Não afirmar execução focal
+separada de 343 casos; full cobre a suíte e valida grupos obrigatórios.
+Hashes SHA256 reportados:
+- pytest.xml 1b2c54739c9d072fc045318227a533a4d56df590257a934735f7433b93c126bf
+- pytest.log 134de64983b44205b2dcf32332cea3e3b8887b60b7dff7044300e1ef008726a7
+- node.log 51e855ebbfcd203b6e9bc3eaf722435db5eff335a160e4760b0c6aaa1a3e4884
+- legacy_gate0.log f3115f87c8f4fa3768406a03445a0dacf21b0fe25edea391ba67c4dfcf7338e7
+- zero_spend.log 742195993c63e078537534ccfb5011723ff35dc154585e798f271b2df1ad1d22
+- documentary_mirror.log c1889eee083dcbe651dc1e42b4ad7b0a8c7702499c0f93805c465414d66917b1
+
+Relato do operador, não inspeção independente dos logs/DB/modelos.
+Sem benchmark standalone, DB operacional, sandbox de rede, gates
+globais ou aprovação de produção. Sem nova migração ou inferência real.
+Baseline strict aprovada no SHA testado; A00/A02.6 ainda aguarda opt-in
+Lab e smoke browser. Não repetir full só pela contagem focal; se
+necessário, auditar nodeids no JUnit original. Preserve relatório original.
+Nenhuma homologação de IMP/CT inferida da contagem de testes.
+
+### Validação final do Lab — incremento de teste, IMP-083 parcial (CAP-003/CAP-004, U06/CT-06)
+
+Commit `eae562d94ddbb257c2fbfe62c13377a662e9d346`: amplia exclusivamente
+test_operator_actual_triplet_when_configured em tests/test_evidence_lab.py.
+Reutiliza os relatórios pinados do docs/73 e recomposição real;
+confere 7 IDs distintos, 20 campos, 15 braços, 140 células e contagens
+12/28/16/84, composição PASS e VLM FAIL preservado, sem canonical,
+independent gold, player ou production. Exercita GET autenticado de
+summary e todos os sete casos por TestClient, private/no-store, 401,
+404, 405, logout, correspondência de hash/estado e ausência de linhas
+de corpus/rubrica/eventos. DB SQLite descartável em tmp_path,
+bootstrap/login/logout apenas nele. Nenhuma mudança de runtime,
+schema, permissões ou comportamento do runner. O teste mantém o
+skip explícito se não configurado; não expõe conteúdo dos relatórios.
+Não executado pelo assistente: arquivos privados e ambiente local
+indisponíveis. PASS anterior não transferido ao novo SHA.
+Não implementar A02.7 até reconciliar este teste e smoke aplicável;
+IMP-054/063/064/136/137 permanecem parciais.
+
+Operador: na sessão Windows anterior, com writers/ingestão parados,
+checkout limpo, reusar ambiente e tenant existentes. Pins históricos
+fixos, não recalcular hashes para contornar divergência:
+
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+conda activate tapi-asr-recovery
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+if ([string]::IsNullOrWhiteSpace($env:TAPI_TENANT_ID)) {
+    throw "Reutilize o tenant existente (sem bootstrap operacional)"
+}
+$env:TAPI_EVIDENCE_LAB_TENANT=$env:TAPI_TENANT_ID
+$env:TAPI_EVIDENCE_LAB_SHARED_NAME="a6-shared-multimodal-20261117-174208.json"
+$env:TAPI_EVIDENCE_LAB_SHARED_SHA256="4808374885f1ae860507aa513c93830b0cd62ca8ce062160896912e8f93ea4fc"
+$env:TAPI_EVIDENCE_LAB_VLM_NAME="a6-vlm-single-scene-v2-20261117-182203.json"
+$env:TAPI_EVIDENCE_LAB_VLM_SHA256="9709cc2b7853829fc3056cb5a605ba77b0850ec2ebf4788c34fc8b3d5552200b"
+$env:TAPI_EVIDENCE_LAB_REPORT_NAME="a6-multimodal-evidence-v2-20261117-183535.json"
+$env:TAPI_EVIDENCE_LAB_REPORT_SHA256="bbb4a4d9a267ad2aeee63734d9fdb7288e99b2cb7372f48bb079f5fbc1d04c60"
+& $py docs/base_atemporal/ferramentas/validar_espelho.py
+& $py -m pytest -q --tb=short tests/test_evidence_lab.py
+node --test tests/test_evidence_lab_ui.mjs
+& $py scripts/verify_zero_spend.py
+```
+
+Esperado 5/5 Lab, zero skip; não considerar expectativa resultado.
+Se PASS, iniciar o servidor local usando a configuração operacional
+já existente (docs/73), somente loopback. Smoke: Dashboard login,
+overview/SSE e navegação; Data Explorer inventário/detalhe/rubrica e
+paginação; Ranking população/contrastes/drilldown (replay opt-in já
+configurado, se ausente registrar not_configured); Lab consultar os
+7 casos, filtros, locadores, 15 braços, composição PASS/VLM FAIL,
+logout limpa dados; Studio abrir rascunho existente, verificar editor
+sem salvar, renderizar, exportar ou publicar; logout. Nenhuma escrita
+de corpus/Studio, login/logout podem alterar identidade. Não iniciar
+coleta ou modelo. Registrar HEAD e resultado de cada superfície,
+não confundir smoke manual com E2E automatizado. Se falha, preservar
+log e corrigir antes de avançar. Próximo incremento A02.7: orquestração
+integrada somente em fixtures autorizadas, sem grants reais ou gate.
