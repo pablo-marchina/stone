@@ -1,0 +1,11 @@
+id,proposal,parent,task_ids,capability_ids,protocol,status
+H1.a,Valen 0.8B/2B versus VLM/Qwen e GLiNER,H1,IMP-026;IMP-063;IMP-064;IMP-065;IMP-069;IMP-136,CAP-003,"Mesmo estado, campos observáveis, risco-cobertura e p95; Valen sem execução TAPI.",PROPOSTA_NAO_HOMOLOGADA
+H2.a,ASR/VAD + OCR + frames para hook/CTA,H2,IMP-063;IMP-064;IMP-065;IMP-136,CAP-003,"Ablar modalidades, timestamps, WER e erro de atributo.",PROPOSTA_NAO_HOMOLOGADA
+H3.a,E5/FTS/BGE híbrido e reranking,H3,IMP-025;IMP-071;IMP-072;IMP-073,CAP-009,"Recall@k/nDCG, query congelada, referência sintética ou programática identificada.",PROPOSTA_NAO_HOMOLOGADA
+H4.a,Agente gera criativos com referências verificáveis,H4,IMP-073;IMP-074;IMP-075;IMP-078;IMP-180,CAP-005;CAP-007;CAP-023,"Citações válidas, adequação por checklist; sem avaliação cega independente.",PROPOSTA_NAO_HOMOLOGADA
+H5.a,Cascata System One + fallback generativo,H5,IMP-026;IMP-027;IMP-124;IMP-125;IMP-159,CAP-021,Qualidade/cobertura/custo pareado; abstenção e rollback.,PROPOSTA_NAO_HOMOLOGADA
+H5.b,Stone-S1 Text/Fusion: aluno destilado,H5;H1,IMP-026;IMP-060;IMP-064;IMP-065;IMP-069;IMP-127;IMP-136,CAP-003;CAP-021,"LogReg/MLP sobre embeddings congelados vs professores; direitos de treino, fidelidade não acurácia independente.",PROPOSTA_NAO_HOMOLOGADA
+H5.c,Stone-S1 Native: adaptação Valen,H5.b,IMP-026;IMP-064;IMP-065;IMP-069;IMP-124,CAP-003;CAP-021,"LoRA só após licença, hardware, split e baseline; sem pretraining do zero.",PROPOSTA_NAO_HOMOLOGADA
+H-INT.a,BERTimbau/BERTabaporu para intenção,CAP-011 (nova hipótese condicional),IMP-067;IMP-060;IMP-065;IMP-146,CAP-011,TF-IDF/SVM vs encoder; texto autorizado; proxy não lead confirmado.,PROPOSTA_NAO_HOMOLOGADA
+H6.a,Evidence Lab e Ranking Explorer,H6,IMP-083;IMP-086;IMP-087;IMP-150,CAP-022,"Tarefas e replay; tempo e acessibilidade, sem usuários fictícios.",PROPOSTA_NAO_HOMOLOGADA
+H7.a,Criativos editáveis e workflow,H7,IMP-078;IMP-180;IMP-198;IMP-202,CAP-023,"Linhas de base e verificação de export, sem alegar redução de tempo não medida.",PROPOSTA_NAO_HOMOLOGADA

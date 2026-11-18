@@ -1,5 +1,10 @@
 # TAPI Stone — Plataforma unificada (implementação incremental)
 
+> **Organização e fluxo GitHub:** [branches, PRs, issues e protocolo de sincronização](docs/REPOSITORY_WORKFLOW.md). Acompanhar HEADs atuais; estados históricos não representam a branch ativa.
+
+> **Base documental atemporal v6.1:** consulte [guia de adoção](docs/base_atemporal/INTEGRACAO.md), [índice obrigatório](docs/base_atemporal/00_Indice_e_Protocolo.md) e [Plano Único](planning/base_atemporal/). Os documentos e estados históricos abaixo não substituem essa base. Consulte HEAD/PR/evidência operacional atual antes de executar. Validação documental local: `python docs/base_atemporal/ferramentas/validar_espelho.py`.
+
+
 > **Situação atualizada em 05/11/2026:** ver [decisões pós-v5.2](docs/51_REGISTRO_DECISOES_POS_V52_2026-11-05.md), [matriz de alinhamento](docs/52_MATRIZ_ALINHAMENTO_FONTES_REPOSITORIO_2026-11-05.md), [DEC-018](docs/53_DEC018_CONFIRMACAO_ALCANCE_E_CRITERIO_REVISAO_2026-11-05.md) e [matrizes sincronizadas](docs/54_SINCRONIZACAO_MATRIZES_V52_DEC018_2026-11-05.md). O piloto oficial Meta A3 registrou **3 posts técnicos reais** e snapshots, mas **zero admissões científicas demonstradas**; o Creative Studio E3–E8 foi integrado até o [PR #40](https://github.com/pablo-marchina/stone/pull/40). Não há homologação de produção, corpus-alvo validado, rubrica multimodal completa ou playbook institucional concluído. Abaixo há seções **históricas de implementação incremental**, que não devem ser interpretadas isoladamente como o estado mais recente.
 
 

@@ -1,0 +1,17 @@
+﻿domain_group,entities,task_ids,capability_ids,test_principle
+Identidade,"organization,user,role,connection",IMP-036;IMP-037;IMP-138,CAP-022,Schema/migração/rights/linhagem consistentemente aplicados
+Permissões,"source,source_permission,license_policy",IMP-010;IMP-044;IMP-137;IMP-145,CAP-001;CAP-022,Schema/migração/rights/linhagem consistentemente aplicados
+Criadores,"creator,audience_segment,cursor_checkpoint,source_capability,corpus_coverage",IMP-049;IMP-050;IMP-066;IMP-165;IMP-166;IMP-167;IMP-168;IMP-170,CAP-001;CAP-012,Schema/migração/rights/linhagem consistentemente aplicados
+Conteúdo,"content_item,content_version",IMP-050;IMP-038;IMP-139,CAP-001;CAP-007,Schema/migração/rights/linhagem consistentemente aplicados
+Desempenho,"metric_snapshot,content_performance",IMP-051;IMP-055;IMP-148,CAP-002;CAP-019,Schema/migração/rights/linhagem consistentemente aplicados
+Mídia e prova,"media_asset,transcript,frame_evidence,asset_rights,render_job,render_artifact,timeline_track",IMP-054;IMP-063;IMP-136;IMP-176;IMP-178;IMP-187;IMP-188;IMP-189,CAP-003;CAP-016;CAP-023,Schema/migração/rights/linhagem consistentemente aplicados
+Rubrica humana/modelo,"rubric_assessment,human_label",IMP-011;IMP-061;IMP-065,CAP-003;CAP-004,Schema/migração/rights/linhagem consistentemente aplicados
+Insights,"analysis_run,insight,opportunity",IMP-057;IMP-058;IMP-139,CAP-008,Schema/migração/rights/linhagem consistentemente aplicados
+Modelos e experimentos,"experiment,model_registry,prediction,pilot_measurement,creative_variant",IMP-069;IMP-070;IMP-100;IMP-195;IMP-196,CAP-015;CAP-020;CAP-023,Schema/migração/rights/linhagem consistentemente aplicados
+Planejamento e criação,"editorial_plan,brief,creative_version,creative_project,creative_spec,design_document,design_revision,brand_kit,creative_variant",IMP-068;IMP-078;IMP-085;IMP-174;IMP-175;IMP-177;IMP-179;IMP-180;IMP-181;IMP-182;IMP-191,CAP-007;CAP-013;CAP-023,Schema/migração/rights/linhagem consistentemente aplicados
+Aprovações e derivações,"asset_derivation,approval_decision,editorial_approval,creative_collaboration,organic_pilot",IMP-102;IMP-104;IMP-108;IMP-192;IMP-194;IMP-195,CAP-016;CAP-017;CAP-023,Schema/migração/rights/linhagem consistentemente aplicados
+Distribuição,"publication,distribution_job,editorial_approval,creative_collaboration,organic_pilot",IMP-106;IMP-107;IMP-109;IMP-192;IMP-194;IMP-195,CAP-017;CAP-023,Schema/migração/rights/linhagem consistentemente aplicados
+Campanhas,"campaign,spend_policy,ad_placement,editorial_approval,creative_collaboration,organic_pilot",IMP-110;IMP-111;IMP-112;IMP-192;IMP-194;IMP-195,CAP-018;CAP-023,Schema/migração/rights/linhagem consistentemente aplicados
+Conversão,"conversion_event,attribution_run",IMP-115;IMP-116;IMP-148,CAP-019,Schema/migração/rights/linhagem consistentemente aplicados
+Aprendizado,"feedback_event,recommendation_policy",IMP-119;IMP-124;IMP-159,CAP-020;CAP-021,Schema/migração/rights/linhagem consistentemente aplicados
+Evidência e operação,"evidence_link,run_event,quality_assessment,design_lineage,preview_export_proof",IMP-039;IMP-086;IMP-140;IMP-139;IMP-198;IMP-201;IMP-204,CAP-022;CAP-023,Schema/migração/rights/linhagem consistentemente aplicados
