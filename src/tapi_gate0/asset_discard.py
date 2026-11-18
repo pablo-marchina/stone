@@ -15,7 +15,8 @@ from uuid import uuid4
 from sqlalchemy import select,insert
 from .asset_rights import AssetRightsDenied
 from .asset_lineage import RetainedAssetRef
-from .asset_lineage_index import _load
+from .asset_lineage_index import _load,AssetLineageIndex
+from .asset_rights_registry import AssetRightsRegistry
 from .asset_vault import VERSION,OVERHEAD,_binding_fields,AssetVault
 from .sa_store import domain_events,outbox
 from .storage import now_utc
@@ -63,8 +64,10 @@ def discard_invalidated(index,vault:AssetVault,tenant,object_id,*,all_vault_io_s
     """
     if all_vault_io_stopped is not True:
         _fail("STOPPED_IO_REQUIRED")
-    if not isinstance(vault,AssetVault):
+    if not isinstance(vault,AssetVault) or not isinstance(index,AssetLineageIndex):
         _fail("VAULT_REQUIRED")
+    if not isinstance(vault._registry,AssetRightsRegistry) or vault._registry.engine is not index.engine:
+        _fail("REGISTRY_MISMATCH")
     with index._transaction() as db:
         _,_,by_id=_load(db,tenant)
         if object_id not in by_id:
