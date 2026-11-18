@@ -107,3 +107,20 @@ def test_invalid_fixture_and_model_budget():
         w._run_model_fixture("",b"x"*480045,lambda:None)
     with pytest.raises(w.JobError,match="FIXTURE_BOUNDS"):
         w._run_model_fixture("",b"x",lambda:None,max_output=32769)
+
+
+def test_tts_child_environment_reduced(monkeypatch,tmp_path):
+    from types import SimpleNamespace
+    exe=tmp_path/"fake.exe";exe.write_bytes(b"x")
+    monkeypatch.setattr(a.shutil,"which",lambda name:str(exe))
+    monkeypatch.setenv("TAPI_DATABASE_URL","private")
+    monkeypatch.setenv("HF_TOKEN","private")
+    calls=[]
+    def run(args,**kw):
+        assert "TAPI_DATABASE_URL" not in kw["env"] and "HF_TOKEN" not in kw["env"]
+        assert set(kw["env"])<= {"SystemRoot","WINDIR","ESPEAK_DATA_PATH"}
+        assert kw["shell"] is False and kw["close_fds"] is True
+        calls.append(args)
+        return SimpleNamespace(stdout=b"\x01\x00"*16)
+    monkeypatch.setattr(a.subprocess,"run",run)
+    assert a._speech_pcm()==b"\x01\x00"*16 and len(calls)==2

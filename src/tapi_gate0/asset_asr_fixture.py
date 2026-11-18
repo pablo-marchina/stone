@@ -57,13 +57,14 @@ def _speech_pcm():
         raise ValueError("ASR_FIXTURE_SYNTH_TOOLS_REQUIRED")
     # Authored ASCII phrase, no caller-controlled text or input file. Only
     # synthetic output is generated outside the protected media job.
-    a=subprocess.run([espeak,"-v","pt-br","-b","1","-s","135","--stdout",REFERENCE],
-        stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=30,check=True)
+    env={k:os.environ[k] for k in ("SystemRoot","WINDIR","ESPEAK_DATA_PATH") if k in os.environ}
+    a=subprocess.run([str(Path(espeak).resolve(strict=True)),"-v","pt-br","-b","1","-s","135","--stdout",REFERENCE],
+        stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=30,check=True,env=env,shell=False,close_fds=True)
     if not 0<len(a.stdout)<=4_000_000:
         raise ValueError("ASR_FIXTURE_TTS_SIZE")
-    b=subprocess.run([ffmpeg,"-hide_banner","-loglevel","error","-nostdin","-protocol_whitelist","pipe",
+    b=subprocess.run([str(Path(ffmpeg).resolve(strict=True)),"-hide_banner","-loglevel","error","-nostdin","-protocol_whitelist","pipe",
         "-f","wav","-i","pipe:0","-ac","1","-ar",str(RATE),"-f","s16le","pipe:1"],
-        input=a.stdout,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=30,check=True)
+        input=a.stdout,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=30,check=True,env=env,shell=False,close_fds=True)
     raw=b.stdout
     if not raw or len(raw)%2 or len(raw)>MAX_PCM-6*RATE:
         raise ValueError("ASR_FIXTURE_PCM_SIZE")

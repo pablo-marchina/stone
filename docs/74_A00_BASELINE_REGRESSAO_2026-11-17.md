@@ -1589,3 +1589,14 @@ $env:TRANSFORMERS_OFFLINE = "1"
 e resumo. Não baixar modelos, não executar mídia externa, não
 relaxar limites ou qualidade se falha. Sem migração. Próximo VLM,
 reconciliação, EvidenceBundle e smoke; nenhum gate liberado.
+
+### Endurecimento adicional antes de validar ASR
+Subprocessos da síntese autoral agora também recebem ambiente reduzido
+(SystemRoot/WINDIR/ESPEAK_DATA_PATH somente), binários resolvidos em
+paths absolutos, shell=false/close_fds. Geração permanece fora do Job
+Object, com frase fixa e timeout; não é sandbox OS. Teste negativo
+adicional comprova não encaminhamento de TAPI_DATABASE_URL/HF_TOKEN.
+22/22 testes ASR locais + 14 portáveis supervisor PASS; sete nativos
+skipped no Linux. Corrige a limitação de env completo registrada acima.
+**Contagem focal atualizada: 263**, não 262, sem skips com ambos opt-ins.
+Nenhuma inferência Medium/Silero executada pelo assistente.
