@@ -13,6 +13,7 @@ from .asset_indexed_vault import IndexedAssetVault
 from .asset_lineage_index import _grant
 from .asset_rights import AssetRightsDenied, Permission
 from .asset_candidate_fusion import evaluate_candidate_bundle
+from . import asset_shared_av_fixture as shared
 
 VERSION="fixture-pipeline.v1"
 
@@ -53,7 +54,13 @@ class FixturePipeline:
         self.paths=tuple(Path(p) if p is not None else None for p in
             (tessdata_dir,asr_model_dir,vlm_model_dir,vlm_server_exe))
         t,a,v,s=self.paths
-        if mode=="header" and case=="header":
+        self._shared=None
+        if mode=="shared_av" and case in shared.CASES and all(x is not None for x in self.paths):
+            self._shared=shared.prepare(case)
+            data,mime=self._shared.data,"video/mp4"
+            entries=[(p,shared.METHOD,shared.plan(self._shared,p,self.paths)[0].configuration(p))
+                     for p in shared.PROCESSORS]
+        elif mode=="header" and case=="header":
             data,mime=supervisor.FIXTURE,"video/mp4"
             entries=[(p,typed.METHOD,typed.configuration_sha256(p)) for p in typed.PROCESSORS]
         elif mode=="temporal" and case in temporal.FIXTURES:
@@ -104,6 +111,8 @@ class FixturePipeline:
         q,vault,store=self.queue,self.vault,self.store
         t,a,v,s=self.paths
         mode,case=self.plan.mode,self.plan.case
+        if mode=="shared_av":
+            return shared.run(q,vault,store,lease,fixture=self._shared,paths=self.paths)
         if mode=="header":
             return typed.run_typed_fixture_windows(q,vault,store,lease)
         if mode=="temporal":
