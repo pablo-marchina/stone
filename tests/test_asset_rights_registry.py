@@ -496,3 +496,25 @@ def test_indexed_vault_expiry_during_io_withholds_bytes(discard_fixture,monkeypa
     monkeypatch.setattr(q.vault,"_read",expire)
     with pytest.raises(AssetRightsDenied,match="INACTIVE_OBJECT"):
         q.vault.read_indexed(q.f.anchor,TENANT,q.ref.object_id,purpose="research_analysis")
+
+
+def test_indexed_vault_reservation_survives_failed_publish(discard_fixture,monkeypatch):
+    q=discard_fixture
+    q.path.unlink()
+    data=b"\x00\x00\x00\x0cftypisom"
+    def fail(*args,**kwargs):
+        raise OSError("fixture publish failure")
+    with monkeypatch.context() as m:
+        m.setattr("tapi_gate0.asset_vault.os.link",fail)
+        with pytest.raises(OSError,match="fixture publish failure"):
+            q.vault.retain_indexed(q.f.anchor,q.ref,purpose="research_analysis",data=data)
+    assert not list(q.path.parent.iterdir())
+    with q.f.engine.connect() as db:
+        row=db.execute(select(nodes).where(nodes.c.tenant_id==TENANT,nodes.c.node_id==q.ref.object_id)).mappings().one()
+        assert row["state"]=="active"
+        assert db.scalar(select(func.count()).select_from(domain_events).where(
+            domain_events.c.tenant_id==TENANT,domain_events.c.aggregate_type=="asset_lineage",
+            domain_events.c.aggregate_id==q.ref.object_id))==1
+    with pytest.raises(AssetRightsDenied,match="OBJECT_UNAVAILABLE"):
+        q.vault.read_indexed(q.f.anchor,TENANT,q.ref.object_id,purpose="research_analysis")
+    assert q.vault.retain_indexed(q.f.anchor,q.ref,purpose="research_analysis",data=data)["status"]=="retained"
