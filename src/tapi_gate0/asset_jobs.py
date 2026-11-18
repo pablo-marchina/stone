@@ -17,7 +17,7 @@ from sqlalchemy import (Table,Column,String,Text,Integer,BigInteger,ForeignKeyCo
 from pydantic import Field
 from .sa_store import metadata,domain_events,outbox
 from .asset_rights import RightsModel,Id,Digest,Permission,AssetRightsDenied
-from .asset_lineage import RetainedAssetRef
+from .asset_lineage import RetainedAssetRef,DerivedArtifactRef,invalidation_plan
 from .asset_lineage_index import AssetLineageIndex,_load,_ancestors,_grant
 from .storage import now_utc
 
@@ -151,6 +151,7 @@ def _check_rights(db,spec,resolve_anchor,now):
     for op,field in (("retain",ref.target.media_kind),("process",ref.target.media_kind),
                      ("derive",OUTPUT[spec.processor])):
         _grant(db,anchor,ref,now,Permission(operation=op,purpose=spec.purpose,field=field))
+    return ref
 
 
 class AssetJobQueue:
@@ -251,6 +252,14 @@ class AssetJobQueue:
             _fail("LEASE_EXPIRED")
         return row
 
+    def check_lease(self,lease:Lease):
+        """Trusted host preflight; no heartbeat, bytes or reusable permission."""
+        with self._transaction() as (db,now):
+            row=self._owned(db,lease,now)
+            spec=_spec(row)
+            ref=_check_rights(db,spec,self.resolve_anchor,now)
+            return spec,ref
+
     def heartbeat(self,lease:Lease):
         with self._transaction() as (db,now):
             row=self._owned(db,lease,now)
@@ -269,6 +278,41 @@ class AssetJobQueue:
             row=_transition(db,row,now,"receipt_recorded",receipt_sha256=receipt_sha256,
                 **_release("completed","receipt_only",_ms(now)))
             return _public(row)
+
+    def finish_reference(self,lease:Lease,*,payload:bytes):
+        """Atomically bind a bounded output digest, lineage ref and job receipt.
+
+        Trusted host staging contract only. The bytes are hashed, NOT stored,
+        semantically validated or published. No production worker uses this
+        method until encrypted derivative storage and validation are wired.
+        """
+        if type(payload) is not bytes or not 0<len(payload)<=1_000_000:
+            _fail("OUTPUT_SIZE_INVALID")
+        digest=sha256(payload).hexdigest()
+        with self._transaction() as (db,now):
+            row=self._owned(db,lease,now)
+            spec=_spec(row)
+            parent=_check_rights(db,spec,self.resolve_anchor,now)
+            assets,derived,by_id=_load(db,spec.tenant_id)
+            ident="artifact."+sha256((spec.job_id+":"+digest).encode()).hexdigest()
+            ref=DerivedArtifactRef(tenant_id=spec.tenant_id,artifact_id=ident,
+                kind=OUTPUT[spec.processor],payload_sha256=digest,parent_ids=(spec.object_id,),
+                run_id=spec.job_id,method_version=spec.method_version,
+                created_at=now,retain_until=parent.retain_until)
+            if ident in by_id:
+                _fail("OUTPUT_REFERENCE_CONFLICT")
+            invalidation_plan(spec.tenant_id,assets,derived+[ref],invalid_asset_ids=set(),
+                              invalid_artifact_ids=set(),now=now)
+            self.index._insert(db,spec.tenant_id,ident,"derived",ref,by_id,spec.purpose)
+            # Recheck immediately before committing both records. The lease
+            # and revocation mutations share the same SQLite transaction.
+            fresh=now_utc()
+            self._owned(db,lease,fresh)
+            _check_rights(db,spec,self.resolve_anchor,fresh)
+            row=_transition(db,row,fresh,"reference_recorded",receipt_sha256=digest,
+                **_release("completed","reference_only",_ms(fresh)))
+            return {**_public(row),"artifact_id":ident,"payload_persisted":False,
+                    "scientific_evidence":False,"media_enabled":False}
 
     def fail(self,lease:Lease,*,retryable:bool):
         if type(retryable) is not bool:
