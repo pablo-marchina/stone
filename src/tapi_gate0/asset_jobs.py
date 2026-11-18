@@ -209,7 +209,7 @@ class AssetJobQueue:
                 state,reason,available="queued","lease_expired",ms+1000*15*2**(row["attempt"]-1)
             _transition(db,dict(row),now,"lease_expired",**_release(state,reason,available))
 
-    def claim(self,tenant,worker):
+    def claim(self,tenant,worker,*,job_id=None):
         # Worker identity is supplied by a trusted local host, not authenticated
         # by this library. Only one concurrent lease globally, including cancel.
         if not isinstance(worker,str) or not 1<=len(worker)<=128 or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.:-" for c in worker):
@@ -224,8 +224,13 @@ class AssetJobQueue:
                 db.scalar(select(func.count()).select_from(attempts).where(day,attempts.c.tenant_id==tenant))>=MAX_DAILY_TENANT_ATTEMPTS):
                 return {"status":"quota","lease":None}
             ms=_ms(now)
-            candidates=db.execute(select(jobs).where(jobs.c.tenant_id==tenant,
-                jobs.c.state=="queued",jobs.c.available_ms<=ms).order_by(jobs.c.available_ms,jobs.c.job_id).limit(MAX_PENDING)).mappings().all()
+            query=select(jobs).where(jobs.c.tenant_id==tenant,
+                jobs.c.state=="queued",jobs.c.available_ms<=ms)
+            if job_id is not None:
+                if type(job_id) is not str or len(job_id)!=68 or not job_id.startswith("job.") or any(c not in "0123456789abcdef" for c in job_id[4:]):
+                    _fail("JOB_ID_INVALID")
+                query=query.where(jobs.c.job_id==job_id)
+            candidates=db.execute(query.order_by(jobs.c.available_ms,jobs.c.job_id).limit(MAX_PENDING)).mappings().all()
             denied=0
             for row in candidates:
                 spec=_spec(row)

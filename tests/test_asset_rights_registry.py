@@ -2129,3 +2129,111 @@ def test_candidate_fusion_final_expiry_and_revocation(queue_fixture,monkeypatch)
     f.queue.resolve_anchor=lambda ref:f.q.f.pin(rv)
     with pytest.raises(AssetRightsDenied,match="ASSET_RIGHTS_REVOKED"):
         _s1_decisions(f,store,ids)
+
+
+# A02.7 — explicit fixture orchestration.
+def _pipeline(f,**kwargs):
+    from tapi_gate0.asset_fixture_pipeline import FixturePipeline
+    return FixturePipeline(f.queue,f.q.vault,DerivedPayloadStore(f.queue,b"d"*32),
+        tenant=TENANT,object_id=f.q.ref.object_id,purpose=f.spec.purpose,**kwargs)
+
+
+@pytest.mark.parametrize("discard_fixture",[("retain","process","all_processors","bundle_rubric")],indirect=True)
+def test_fixture_pipeline_targeted_claim_and_resume(queue_fixture,monkeypatch):
+    from tapi_gate0.asset_fixture_pipeline import FixturePipeline
+    from tapi_gate0.asset_processor_results import ProcessorResult,Abstention,encode
+    f=queue_fixture
+    pipe=_pipeline(f,mode="header",case="header")
+    unrelated=f.spec.model_copy(update={"method_version":"unrelated"})
+    f.queue.enqueue(unrelated)
+    # Real queue/store/fusion, synthetic substitute for native adapter.
+    def fake_dispatch(self,lease,spec):
+        assert spec.job_id==lease.job_id
+        r=ProcessorResult(tenant_id=spec.tenant_id,job_id=spec.job_id,
+            object_id=spec.object_id,input_sha256=f.q.ref.target.sha256,attempt=lease.attempt,
+            purpose=spec.purpose,method_version=spec.method_version,
+            configuration_sha256=spec.configuration_sha256,origin="synthetic_fixture",
+            result=Abstention(processor=spec.processor,reason="fixture_header_only"))
+        return {**self.store.finish(lease,payload=encode(r)),"model_calls":0}
+    monkeypatch.setattr(FixturePipeline,"_dispatch",fake_dispatch)
+    assert pipe.step("worker")["status"]=="processed"
+    pipe=_pipeline(f,mode="header",case="header",expected_plan=pipe.plan.fingerprint)
+    with pytest.raises(AssetRightsDenied,match="PLAN_CHANGED"):
+        _pipeline(f,mode="header",case="header",expected_plan="0"*64)
+    for _ in range(3):
+        assert pipe.step("worker")["status"]=="processed"
+    result=pipe.step("worker")
+    assert result["status"]=="candidate_complete" and len(result["artifact_ids"])==4
+    assert sum(x.state=="abstained" for x in result["decisions"].fields)==4
+    assert sum(x.state=="not_assessed" for x in result["decisions"].fields)==16
+    assert pipe.step("worker")==result
+    assert f.queue.status(TENANT,unrelated.job_id)["attempt"]==0
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(attempts))==4
+
+
+@pytest.mark.parametrize("discard_fixture",[("retain","process","all_processors","bundle_rubric")],indirect=True)
+def test_fixture_pipeline_failure_and_cancel_hold_fence(queue_fixture,monkeypatch):
+    from tapi_gate0.asset_fixture_pipeline import FixturePipeline
+    f=queue_fixture
+    pipe=_pipeline(f,mode="header",case="header")
+    def failure(*_):
+        raise RuntimeError("fixture interruption")
+    monkeypatch.setattr(FixturePipeline,"_dispatch",failure)
+    with pytest.raises(RuntimeError,match="interruption"):
+        pipe.step("worker")
+    spec=pipe.plan.specs[0]
+    assert f.queue.status(TENANT,spec.job_id)["state"]=="running"
+    assert pipe.step("worker")["status"]=="busy"
+    f.queue.cancel(TENANT,spec.job_id)
+    assert pipe.step("worker")["status"]=="blocked"
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(payloads))==0
+
+
+@pytest.mark.parametrize("discard_fixture",[("retain","process","all_processors","bundle_rubric")],indirect=True)
+def test_fixture_pipeline_invalidated_after_plan(queue_fixture):
+    f=queue_fixture
+    pipe=_pipeline(f,mode="header",case="header")
+    f.q.index.invalidate(TENANT,object_ids=[f.q.ref.object_id])
+    with pytest.raises(AssetRightsDenied):
+        pipe.step("worker")
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(attempts))==0
+
+
+@pytest.mark.parametrize("discard_fixture",[("retain","process","all_processors")],indirect=True)
+def test_fixture_pipeline_requires_fusion_rights_before_enqueue(queue_fixture):
+    f=queue_fixture
+    with pytest.raises(AssetRightsDenied,match="SCOPE_MISMATCH"):
+        _pipeline(f,mode="header",case="header")
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(attempts))==0
+
+
+@_WINDOWS_JOB
+@pytest.mark.parametrize("discard_fixture",[("retain","process","all_processors","bundle_rubric")],indirect=True)
+def test_fixture_pipeline_native_four_header_processors(queue_fixture):
+    pipe=_pipeline(queue_fixture,mode="header",case="header")
+    for _ in range(4):
+        step=pipe.step("worker")
+        assert step["status"]=="processed" and step["model_calls"]==0
+    result=pipe.step("worker")
+    assert result["status"]=="candidate_complete" and len(result["artifact_ids"])==4
+    assert sum(x.state=="abstained" for x in result["decisions"].fields)==4
+
+
+@_WINDOWS_JOB
+@pytest.mark.parametrize("discard_fixture",[("retain","process","ocr_blank","bundle_visual","bundle_rubric")],indirect=True)
+def test_fixture_pipeline_native_blank_pair(queue_fixture):
+    import os
+    paths=[os.environ.get(k) for k in ("TAPI_OCR_TEST_TESSDATA","TAPI_VLM_TEST_MODEL_DIR","TAPI_VLM_TEST_SERVER_EXE")]
+    if not all(paths):
+        pytest.skip("explicit OCR/VLM opt-ins required")
+    pipe=_pipeline(queue_fixture,mode="image_pair",case="blank",
+        tessdata_dir=paths[0],vlm_model_dir=paths[1],vlm_server_exe=paths[2])
+    assert pipe.step("worker")["model_calls"]==1
+    assert pipe.step("worker")["model_calls"]==0
+    result=pipe.step("worker")
+    assert result["status"]=="candidate_complete" and len(result["artifact_ids"])==2
+    assert sum(x.state=="abstained" for x in result["decisions"].fields)==4
