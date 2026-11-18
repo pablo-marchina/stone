@@ -207,3 +207,81 @@ def test_model_budget_fixed_and_legacy_limits_unchanged():
         with pytest.raises(w.JobError,match="MODEL_FIXTURE_LIMIT_INVALID"):
             replace(a.LIMITS,memory_mib=memory)
     assert w.C.sizeof(w.MemoryStatus)==64
+
+
+# A02.7.3: diagnostics must not loosen the existing WER gate or select a
+# profile based on the oracle. Native inference is an explicit separate run.
+def test_recovery_wer_failure_has_sanitized_metrics(monkeypatch):
+    from tapi_gate0.asset_asr_recovery import _score
+    _,meta,r=positive(monkeypatch)
+    r["segments"][0]["text"]="palavra errada"
+    with pytest.raises(a.ASRFixtureQualityError,match="ASR_FIXTURE_WER_GATE") as exc:
+        a.result_from_output(meta,emit(r))
+    assert exc.value.quality["wer"]>0.50
+    assert exc.value.quality["reference_words"]==8
+    assert exc.value.quality["hypothesis_words"]==2
+    assert "palavra errada" not in str(exc.value)
+    score=_score("inventory",meta,emit(r))
+    assert score["quality_passed"] is False and score["values"] is None
+    assert score["semantic_exact_match"] is False
+
+
+def test_recovery_context_profile_pin_and_no_reference_prompt(monkeypatch):
+    monkeypatch.setattr(a,"_runtime",lambda p:{"checkpoint":"a"})
+    data,meta=a.fixture("silence")
+    base,code=a._plan(data,meta,"C:/trusted/medium")
+    candidate,child=a._plan(data,meta,"C:/trusted/medium",profile="context_500ms")
+    assert base["configuration_sha256"]!=candidate["configuration_sha256"]
+    assert base["input_sha256"]==candidate["input_sha256"]
+    assert "profile='context_500ms'" in child and "profile=" not in code
+    assert a.REFERENCE not in child
+    with pytest.raises(ValueError,match="RECOVERY_PROFILE"):
+        a._plan(data,meta,"C:/trusted/medium",profile="arbitrary")
+
+
+def test_recovery_context_decodes_padding_and_preserves_vad(monkeypatch):
+    from tapi_gate0 import multimodal_asr as decoder
+    raw=b"\x01\x00"*64000
+    calls=[]
+    def infer(model,chunk):
+        calls.append(chunk)
+        return {"pcm_sha256":sha256(chunk).hexdigest(),
+                "segments":[{"start_s":0.4,"end_s":1.6,"text":"Salve este conteúdo."}]}
+    monkeypatch.setattr(decoder,"_transcribe",infer)
+    result=a._transcribe_context(None,raw,[{"start":16000,"end":32000}])
+    assert len(calls[0])==64000
+    assert result["segments"]==[{"start_s":1.0,"end_s":2.0,"text":"Salve este conteúdo.",
+                                  "region_start_sample":16000,"region_end_sample":32000}]
+    assert result["asr_calls"]==1 and result["pcm_sha256"]==sha256(raw).hexdigest()
+    def outside(model,chunk):
+        return {"pcm_sha256":sha256(chunk).hexdigest(),
+                "segments":[{"start_s":0.0,"end_s":1.6,"text":"irrelevante"}]}
+    monkeypatch.setattr(decoder,"_transcribe",outside)
+    with pytest.raises(ValueError,match="CONTEXT_TIMESTAMP"):
+        a._transcribe_context(None,raw,[{"start":16000,"end":32000}])
+
+
+def test_recovery_tts_utf8_transport_only_fixed_cta(monkeypatch,tmp_path):
+    from types import SimpleNamespace
+    exe=tmp_path/"fake.exe";exe.write_bytes(b"x")
+    monkeypatch.setattr(a.shutil,"which",lambda name:str(exe))
+    calls=[]
+    def run(args,**kw):
+        calls.append((args,kw))
+        return SimpleNamespace(stdout=b"\x01\x00"*16)
+    monkeypatch.setattr(a.subprocess,"run",run)
+    a._authored_fixture("cta",transport="utf8_stdin")
+    assert calls[0][0][-1]=="--stdin"
+    assert calls[0][1]["input"]==a.SHARED_SPEECH["cta"].encode("utf-8")
+    assert a.SHARED_SPEECH["cta"] not in calls[0][0]
+    with pytest.raises(ValueError,match="TTS_TRANSPORT"):
+        a._authored_fixture("inventory",transport="utf8_stdin")
+    with pytest.raises(ValueError,match="SPEECH_NOT_AUTHORED"):
+        a._speech_pcm("arbitrary",transport="utf8_stdin")
+
+
+def test_recovery_semantic_diagnostic_does_not_join_fragments():
+    from tapi_gate0.asset_asr_recovery import _semantic
+    assert _semantic(["Salve","este conteúdo."])["tipo_cta"] is None
+    assert _semantic(["Salve este conteúdo."])["tipo_cta"]=="salvar"
+    assert _semantic(["Confira o estoque."])["tema_principal"]=="gestão"

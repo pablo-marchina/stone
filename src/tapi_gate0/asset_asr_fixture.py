@@ -58,17 +58,21 @@ def _hash(path,limit):
     return h.hexdigest()
 
 
-def _speech_pcm(reference=REFERENCE):
+def _speech_pcm(reference=REFERENCE,*,transport="argv"):
+    if transport not in ("argv","utf8_stdin"):
+        raise ValueError("ASR_FIXTURE_TTS_TRANSPORT")
     if reference not in (REFERENCE,*SHARED_SPEECH.values()):
         raise ValueError("ASR_FIXTURE_SPEECH_NOT_AUTHORED")
     espeak,ffmpeg=shutil.which("espeak-ng"),shutil.which("ffmpeg")
     if not espeak or not ffmpeg:
         raise ValueError("ASR_FIXTURE_SYNTH_TOOLS_REQUIRED")
-    # Authored ASCII phrase, no caller-controlled text or input file. Only
+    # Fixed authored phrase, no caller-controlled text or input file. Only
     # synthetic output is generated outside the protected media job.
     env={k:os.environ[k] for k in ("SystemRoot","WINDIR","ESPEAK_DATA_PATH") if k in os.environ}
-    a=subprocess.run([str(Path(espeak).resolve(strict=True)),"-v","pt-br","-b","1","-s","135","--stdout",reference],
-        stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=30,check=True,env=env,shell=False,close_fds=True)
+    args=[str(Path(espeak).resolve(strict=True)),"-v","pt-br","-b","1","-s","135","--stdout"]
+    transport_args={"stdin":subprocess.DEVNULL} if transport=="argv" else {"input":reference.encode("utf-8")}
+    args.extend([reference] if transport=="argv" else ["--stdin"])
+    a=subprocess.run(args,**transport_args,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=30,check=True,env=env,shell=False,close_fds=True)
     if not 0<len(a.stdout)<=4_000_000:
         raise ValueError("ASR_FIXTURE_TTS_SIZE")
     b=subprocess.run([str(Path(ffmpeg).resolve(strict=True)),"-hide_banner","-loglevel","error","-nostdin","-protocol_whitelist","pipe",
@@ -89,13 +93,15 @@ def fixture(case):
     return _authored_fixture(case)
 
 
-def _authored_fixture(case):
+def _authored_fixture(case,*,transport="argv"):
+    if transport not in ("argv","utf8_stdin") or (transport!="argv" and case!="cta"):
+        raise ValueError("ASR_FIXTURE_TTS_TRANSPORT")
     if case not in (*CASES,*SHARED_SPEECH):
         raise ValueError("ASR_FIXTURE_UNKNOWN")
     expected=[]
     reference=REFERENCE if case=="inventory" else SHARED_SPEECH.get(case,"")
     if reference:
-        speech=_speech_pcm() if case=="inventory" else _speech_pcm(reference)
+        speech=(_speech_pcm() if case=="inventory" else _speech_pcm(reference)) if transport=="argv" else _speech_pcm(reference,transport=transport)
         expected=[{"start":2*RATE,"end":2*RATE+len(speech)//2}]
         raw=bytes(4*RATE)+speech+bytes(2*RATE)
     elif case=="silence":
