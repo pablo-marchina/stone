@@ -214,6 +214,8 @@ class AssetJobQueue:
         # by this library. Only one concurrent lease globally, including cancel.
         if not isinstance(worker,str) or not 1<=len(worker)<=128 or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.:-" for c in worker):
             _fail("WORKER_INVALID")
+        if job_id is not None and (type(job_id) is not str or len(job_id)!=68 or not job_id.startswith("job.") or any(c not in "0123456789abcdef" for c in job_id[4:])):
+            _fail("JOB_ID_INVALID")
         with self._transaction() as (db,now):
             self._expire(db,now)
             if db.scalar(select(func.count()).select_from(jobs).where(jobs.c.state.in_(ACTIVE)))>=MAX_CONCURRENT:
@@ -227,8 +229,6 @@ class AssetJobQueue:
             query=select(jobs).where(jobs.c.tenant_id==tenant,
                 jobs.c.state=="queued",jobs.c.available_ms<=ms)
             if job_id is not None:
-                if type(job_id) is not str or len(job_id)!=68 or not job_id.startswith("job.") or any(c not in "0123456789abcdef" for c in job_id[4:]):
-                    _fail("JOB_ID_INVALID")
                 query=query.where(jobs.c.job_id==job_id)
             candidates=db.execute(query.order_by(jobs.c.available_ms,jobs.c.job_id).limit(MAX_PENDING)).mappings().all()
             denied=0

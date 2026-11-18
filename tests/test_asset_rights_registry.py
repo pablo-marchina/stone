@@ -2237,3 +2237,36 @@ def test_fixture_pipeline_native_blank_pair(queue_fixture):
     result=pipe.step("worker")
     assert result["status"]=="candidate_complete" and len(result["artifact_ids"])==2
     assert sum(x.state=="abstained" for x in result["decisions"].fields)==4
+
+
+@_WINDOWS_JOB
+@pytest.mark.parametrize("discard_fixture,mode,case",[
+    (("retain","process","temporal_one","bundle_rubric"),"temporal","one"),
+    (("retain","process","asr_inventory","bundle_rubric"),"asr","inventory"),
+    (("retain","process","ocr_sales","bundle_rubric"),"ocr","sales"),
+    (("retain","process","vlm_geometry","bundle_rubric"),"vlm","geometry"),
+],indirect=["discard_fixture"])
+def test_fixture_pipeline_native_single_adapter(queue_fixture,mode,case):
+    import os
+    opts={"temporal":(),"asr":(("asr_model_dir","TAPI_ASR_TEST_MODEL_DIR"),),
+          "ocr":(("tessdata_dir","TAPI_OCR_TEST_TESSDATA"),),
+          "vlm":(("vlm_model_dir","TAPI_VLM_TEST_MODEL_DIR"),
+                 ("vlm_server_exe","TAPI_VLM_TEST_SERVER_EXE"))}
+    paths={k:os.environ.get(env) for k,env in opts[mode]}
+    if not all(paths.values()):
+        pytest.skip("explicit native adapter opt-ins required")
+    pipe=_pipeline(queue_fixture,mode=mode,case=case,**paths)
+    step=pipe.step("worker")
+    assert step["status"]=="processed"
+    assert step["model_calls"]=={"temporal":0,"asr":2,"ocr":1,"vlm":1}[mode]
+    result=pipe.step("worker")
+    assert result["status"]=="candidate_complete"
+    assert result["artifact_ids"]==(step["artifact_id"],)
+    assert result["decisions"].canonical_rubric is False
+    assert result["decisions"].scientific_evidence is False
+    fields={x.field_id:x for x in result["decisions"].fields}
+    if mode=="ocr":
+        assert fields["tema_principal"].value=="vendas"
+        assert fields["texto_na_tela"].value is True
+    if mode in ("temporal","vlm"):
+        assert all(x.value is None for x in fields.values())
