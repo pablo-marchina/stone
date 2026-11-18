@@ -5,7 +5,9 @@ accepted. Uses a direct Python child, no shell/credentials/temporary plaintext.
 The child is fixed code with no descendants; not an OS sandbox or production
 process-tree supervisor. Never pass external media to this probe.
 """
+import json
 import os
+from dataclasses import asdict
 import subprocess
 import sys
 import time
@@ -14,6 +16,7 @@ from hashlib import sha256
 from .asset_rights import AssetRightsDenied
 from .asset_jobs import AssetJobQueue,Lease
 from .asset_indexed_vault import IndexedAssetVault
+from . import asset_windows_job as windows
 
 FIXTURE=b"\x00\x00\x00\x0cftypisom"
 METHOD="synthetic-supervisor-v1"
@@ -72,20 +75,15 @@ def _run_child(data,check):
         process.wait(timeout=5)
 
 
-def run_fixture_probe(queue:AssetJobQueue,vault:IndexedAssetVault,lease:Lease):
-    """Run a bounded synthetic probe through the real queue and indexed vault.
-
-    Completion is a receipt only, never a visual feature or scientific label.
-    On denial/error the caller must reconcile/cancel the lease or let it expire.
-    No automatic retry, heartbeat renewal, scheduler or external media.
-    """
+def _fixture_input(queue,vault,lease,method,config):
+    """Shared trusted-host rights/fence checks, exact fixture and method binding."""
     if not isinstance(queue,AssetJobQueue) or not isinstance(vault,IndexedAssetVault):
         _deny("HOST_REQUIRED")
     if queue.index.engine is not vault._index.engine:
         _deny("ENGINE_MISMATCH")
     spec,ref=queue.check_lease(lease)
-    if (spec.processor!="temporal" or spec.method_version!=METHOD
-        or spec.configuration_sha256!=configuration_sha256()
+    if (spec.processor!="temporal" or spec.method_version!=method
+        or spec.configuration_sha256!=config
         or ref.target.sha256!=sha256(FIXTURE).hexdigest() or ref.byte_count!=len(FIXTURE)
         or ref.mime!="video/mp4"):
         _deny("FIXTURE_ONLY")
@@ -97,8 +95,46 @@ def run_fixture_probe(queue:AssetJobQueue,vault:IndexedAssetVault,lease:Lease):
     data=vault.read_indexed(anchor,spec.tenant_id,spec.object_id,purpose=spec.purpose)
     if data!=FIXTURE:
         _deny("FIXTURE_ONLY")
+    return data,check
+
+
+def run_fixture_probe(queue:AssetJobQueue,vault:IndexedAssetVault,lease:Lease):
+    """Legacy synthetic direct-child probe; never production processing."""
+    data,check=_fixture_input(queue,vault,lease,METHOD,configuration_sha256())
     output=_run_child(data,check)
     check()
     receipt=queue.finish(lease,sha256(output).hexdigest())
     return {**receipt,"synthetic_probe":True,"model_calls":0,
+        "scientific_evidence":False,"payload_persisted":False,"media_enabled":False}
+
+
+# Distinct method/config identity: never silently promote a v1 receipt.
+WINDOWS_METHOD="synthetic-windows-job-v2"
+WINDOWS_LIMITS=windows.JobLimits()
+
+
+def windows_configuration_sha256():
+    config={"method":WINDOWS_METHOD,"child":_CHILD,"limits":asdict(WINDOWS_LIMITS),
+        "job_flags":windows.FLAGS,"job_name":windows.JOB_NAME}
+    return sha256(json.dumps(config,sort_keys=True,separators=(",",":")).encode()).hexdigest()
+
+
+def run_fixture_probe_windows(queue:AssetJobQueue,vault:IndexedAssetVault,lease:Lease):
+    """Windows x64 synthetic probe; no production adapter or external asset.
+
+    Kernel job assignment and limit readback are required; unsupported hosts
+    fail closed, never fall back to the v1 direct-child probe. Job cleanup
+    completes before the final fence/rights recheck and receipt. No heartbeat
+    renewal, retry, or automatic cancellation acknowledgement.
+    """
+    try:
+        windows._native_api()
+        data,check=_fixture_input(queue,vault,lease,WINDOWS_METHOD,windows_configuration_sha256())
+        output=windows._run_trusted_fixture(_CHILD,data,EXPECTED,check,limits=WINDOWS_LIMITS)
+    except windows.JobError as exc:
+        _deny("WINDOWS_"+str(exc))
+    check()
+    receipt=queue.finish(lease,sha256(output).hexdigest())
+    return {**receipt,"synthetic_probe":True,"supervisor":"windows_job_v2",
+        "kernel_job_limits_verified":True,"tree_empty_verified":True,"model_calls":0,
         "scientific_evidence":False,"payload_persisted":False,"media_enabled":False}

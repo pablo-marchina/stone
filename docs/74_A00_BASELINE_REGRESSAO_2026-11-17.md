@@ -1212,3 +1212,90 @@ Após revisão do resultado, o procedimento de upgrade aceita explicitamente
 Próximos incrementos: supervisor de árvore, orçamento real CPU/RAM,
 contratos de processor/payload, adapters sintéticos e smoke UI. Sem grants,
 chaves reais, modelo, mídia externa, merge, liberação de gate ou gasto.
+
+
+## A02.5/6 — 0016 operacional e supervisor Windows v2 (18/11)
+Operador, HEAD f6189c22ace68e29f32383cf2eaa6bcf783d0a76:
+138/138 focal PASS, 82,699s, zero skips/falhas/erros; JUnit SHA256
+ba93974475c48d15e2a4dcd61b24c993e2cae5e1ed493136f621a9fec5b003e7.
+Espelho 32/32, Gate0 e zero-spend PASS. Preflight
+a02-payloads-20261118-102133 SHA256
+fb8dbcbb1e1117d10090b596a2adbe3b47255d47f2d8dcd7fd9cc18e128e555b.
+Backup pós-0015 e novo backup pré-0016
+a02-pre0016-20261118-103827.sqlite3 SHA256
+382bd6c4d66c0cd4acf2c41f4be40e43ad797aca0bfd082e436142f0dd02f0f4;
+restore e rehearsal PASS, 45 tabelas preservadas, uma nova vazia.
+A02_OPERATIONAL_MIGRATION_VERIFIED 0015→0016, schema, conteúdo, FK e
+integridade OK; 1065 registros/1065 únicos/21 perfis/0 duplicatas;
+zero grants, mídia false. Evidência reportada pelo operador.
+Ambiente tapi-asr original incompleto; tapi-asr-recovery Python 3.11.18,
+36 versões recuperadas, pip check/imports PASS, FFmpeg/FFprobe 8.1,
+Tesseract 5.4/eSpeak 1.52; pip-freeze/conda-explicit/environment.yml
+privados salvos. Aviso Conda sobre pacotes pip não equivale a falha.
+Identidade byte a byte não garantida; full regression após recuperação.
+
+### Novo incremento: kernel Job Object para fixtures, IMP-040/044/045/123/137
+Base integral validada localmente, 190 hashes/204 IMP/543 dependências.
+`asset_windows_job.py`: Windows x64 CPython; job nomeado por sessão
+Local\\TAPI.Stone.A02.Synthetic.v2, criação exclusiva falha se ocupado;
+handle não herdável, sem breakaway flags, KILL_ON_JOB_CLOSE. Usa handle
+do filho Popen (não PID para atribuir/matar); confirma limites por
+QueryInformationJobObject. Limites iniciais apenas de fixture: 128 MiB
+de memória virtual comprometida agregada, 4 s CPU user-mode agregado,
+2 processos ativos, deadline monotônico 15 s com polling 250 ms.
+Não é cap de percentual de CPU nem RSS/GPU; CPU user-mode não inclui
+kernel. Ação de término por tempo de job explícita. Inicialização
+confiável -I -S espera stdin; atribuição e check antes de qualquer byte.
+O bootstrap antes da atribuição não é limitado pelo job; não executa
+trabalho, cria descendentes ou lê assets; EOF inválido encerra.
+A execução verifica direitos/fence antes do envio, polling, após saída
+e após limpeza. Término de árvore e contagem zero antes do recibo,
+nega resultado se descendentes remanescentes; close mata associados
+também se limpeza falha ou host encerra. Exclusividade de sessão não
+é trava de todas as sessões/máquinas; nenhum controle contra host
+malicioso. Não é sandbox de rede/FS/token, sem worker real ou modelos.
+Communicate somente para código fixo confiável com saída curta;
+não há limite geral de stdout de adapter, deadline pode atrasar por
+I/O/SQL/OS bloqueante. Não registrar PID nem matar por PID.
+`asset_supervisor.py` mantém método v1 sintético, compartilha checagem
+de binding/fixture/rights; novo método synthetic-windows-job-v2, hash
+inclui código/limites/flags/nome, sem fallback v1 em host incompatível.
+Recibo hash apenas, sem payload, ciência ou mídia. Cancel/expiry/revoke
+continuam fenced; sem renovação/retry/ack automático nem scheduler.
+Docs API Microsoft:
+https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects
+https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-jobobject_extended_limit_information
+https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-jobobject_end_of_job_time_information
+
+14 testes de contrato executados localmente no Linux, 14 PASS;
+7 testes nativos Windows explicitamente skipped, não PASS.
+3 novos testes de integração Windows com fila/cofre/rights não
+executados pelo assistente. 162 focal esperados (138+21+3) no Windows,
+zero skips, execução sequencial. Sem alteração de schema/DB/produção.
+Supervisor precisa validação nativa; não habilitar mídia nem adapters
+arbitrários. Próximo: teste nativo, backup pós-0016, full e smoke;
+contratos de processor, integração sintética, isolamento e quotas
+por adapter, reconciliador seguro antes de piloto autorizado.
+
+### Operador — validação supervisor Windows e backup pós-0016
+Com todos os writers parados:
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+conda activate tapi-asr-recovery
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+& $py docs/base_atemporal/ferramentas/validar_espelho.py
+& $py -m pytest -q tests/test_a02_operational_upgrade.py tests/test_asset_lineage.py tests/test_asset_vault.py tests/test_asset_rights.py tests/test_asset_rights_registry.py tests/test_discovery_backup.py tests/test_a02_payloads_preflight.py tests/test_asset_windows_job.py
+& $py scripts/verify_zero_spend.py
+```
+Após 162 PASS sem skips:
+```powershell
+$env:TAPI_TENANT_ID = "local-research"
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$report = & $py scripts/a6_backup_restore_drill.py --output-name "a02-post0016-$stamp.sqlite3" --confirm-all-writers-stopped | ConvertFrom-Json
+if ($LASTEXITCODE -ne 0 -or $report.status -ne "BACKUP_RESTORE_VERIFIED") { throw "Backup falhou" }
+$report | ConvertTo-Json -Depth 8
+```
+Enviar somente resumo agregado, não DB ou credenciais. Sem migrar
+novamente, não executar mídia, não criar grants, não mesclar PR.

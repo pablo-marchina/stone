@@ -3,6 +3,8 @@ from datetime import timedelta
 from hashlib import sha256
 from pathlib import Path
 from types import SimpleNamespace
+import sys
+import struct
 
 import pytest
 from sqlalchemy import select, update, func
@@ -1063,3 +1065,70 @@ def test_payload_nonempty_downgrade_refused_even_after_purge(queue_fixture,monke
         command.downgrade(cfg,"0015_asset_jobs")
     with f.q.f.engine.connect() as db:
         assert db.scalar(select(func.count()).select_from(payloads))==1
+
+
+_WINDOWS_JOB = pytest.mark.skipif(sys.platform!="win32" or struct.calcsize("P")!=8,
+    reason="requires native Windows x64 Job Objects")
+
+
+def _windows_probe_job(f):
+    from tapi_gate0 import asset_supervisor as s
+    spec=f.spec.model_copy(update={"method_version":s.WINDOWS_METHOD,
+        "configuration_sha256":s.windows_configuration_sha256()})
+    f.queue.enqueue(spec)
+    return spec,f.queue.claim(TENANT,"worker")["lease"]
+
+
+@_WINDOWS_JOB
+def test_windows_supervisor_fenced_receipt(queue_fixture):
+    from tapi_gate0 import asset_supervisor as s
+    f=queue_fixture
+    spec,lease=_windows_probe_job(f)
+    result=s.run_fixture_probe_windows(f.queue,f.q.vault,lease)
+    assert result["state"]=="completed" and result["supervisor"]=="windows_job_v2"
+    assert result["kernel_job_limits_verified"] and result["tree_empty_verified"]
+    assert result["receipt_sha256"]==sha256(s.EXPECTED).hexdigest()
+    assert not result["payload_persisted"] and not result["scientific_evidence"]
+    assert not result["media_enabled"] and result["model_calls"]==0
+
+
+@_WINDOWS_JOB
+def test_windows_supervisor_cancel_before_input(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_supervisor as s
+    f=queue_fixture
+    spec,lease=_windows_probe_job(f)
+    original=s.windows.subprocess.Popen
+    seen=[]
+    def spawn(*a,**k):
+        p=original(*a,**k);seen.append(p)
+        f.queue.cancel(TENANT,spec.job_id)
+        return p
+    monkeypatch.setattr(s.windows.subprocess,"Popen",spawn)
+    with pytest.raises(AssetRightsDenied,match="STALE_LEASE"):
+        s.run_fixture_probe_windows(f.queue,f.q.vault,lease)
+    assert len(seen)==1 and seen[0].poll() is not None
+    assert f.queue.status(TENANT,spec.job_id)["receipt_sha256"] is None
+    assert f.queue.acknowledge_cancel(lease)["state"]=="canceled"
+
+
+@_WINDOWS_JOB
+def test_windows_supervisor_revocation_before_input(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_supervisor as s
+    f=queue_fixture
+    spec,lease=_windows_probe_job(f)
+    rv=f.q.f.state(2,revoked_asset_ids=(f.q.ref.target.asset_id,))
+    original=s.windows.subprocess.Popen
+    seen=[]
+    def spawn(*a,**k):
+        p=original(*a,**k);seen.append(p)
+        f.q.f.svc.advance(f.q.f.anchor,TENANT,"instagram",rv)
+        f.queue.resolve_anchor=lambda ref:f.q.f.pin(rv)
+        return p
+    monkeypatch.setattr(s.windows.subprocess,"Popen",spawn)
+    with pytest.raises(AssetRightsDenied,match="ASSET_RIGHTS_REVOKED"):
+        s.run_fixture_probe_windows(f.queue,f.q.vault,lease)
+    assert len(seen)==1 and seen[0].poll() is not None
+    assert f.queue.status(TENANT,spec.job_id)["receipt_sha256"] is None
+    f.q.index.reconcile_signed_revocations(f.q.f.pin(rv),TENANT,"instagram")
+    assert f.queue.reconcile_invalidated(TENANT)["changed"]==[spec.job_id]
+    assert f.queue.acknowledge_cancel(lease)["state"]=="canceled"
