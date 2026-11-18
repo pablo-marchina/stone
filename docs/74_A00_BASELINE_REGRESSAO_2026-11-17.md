@@ -2194,3 +2194,138 @@ Esperar 13 grupos, fixture_pipeline 12/12, zero falhas/erros,
 Lab opt-in continua skip no runner isolado; executar Lab
 separadamente caso necessário, sem herdar DB operacional.
 Não operar o pipeline diretamente sobre corpus real.
+
+
+## A02.7 — regressão do orquestrador PASS (18/11/2026)
+
+Operador HEAD 5f00e611799aa7f897a83cf729e58e4d701caa29,
+árvore 259bfd971be716fe8ce0641ad8c789e2a1bcf956.
+12/12 focal em 117,28s (121 deselected), runner 21/21 em 1,02s,
+zero-spend PASS. Full strict a02-pipeline-20261118-153112,
+Python 3.11.18, tapi-asr-recovery, OCR/ASR/VLM opt-ins true,
+1284 coletados / 1283 PASS / 0 FAIL / 0 ERROR / 1 SKIP Lab opt-in,
+pytest 711,588s, Node/espelho/Gate0 estrutural/zero-spend exit 0,
+checkout inalterado. 13/13 grupos e 80 casos obrigatórios, incluindo
+fixture_pipeline 12/12. 116 módulos Python, 103 arquivos de testes,
+16 migrações. SHA256 do JUnit:
+1a805f02221d6723c2b9400f519cfee3e74f1aa960a42fba1465b1ca857aaac1.
+pytest.log 6644ec6f7eb8de2579aa105231ac36bba96173634a524edea34205115760809b.
+node.log 9b979e77497c15174c79450e7adc899b81fcf2092b7e8ab637ab78cd06078167.
+Demais logs iguais aos reportados no full 298426d.
+Relato de operador, não inspeção direta do JUnit/DB. Não benchmark
+standalone, sandbox de rede, mídia real, aprovação produção ou gates.
+Lab opt-in PASS separado no SHA 9bd1b6a; não somar contagens.
+
+## A02.7.2 — fixture audiovisual compartilhada, incremento de engenharia
+
+Base atemporal integral validada pelo assistente no pacote local
+(PASS_INTEGRIDADE_E_RASTREABILIDADE; 204 IMP, 543 arestas, 23 CAP,
+18 DEC, 28 CT, 7 gates). Espelho PASS reportado no full acima.
+IMP-054/063/064/136/137/145/178 parciais, CAP-003/009/016/022/023,
+DEC-017/018, G0/G1/G3/G4 relevantes. Sem alteração de DAG, matrizes,
+contrato público rubric.v1, status de IMP, autorização ou aceite.
+
+Commits:
+- 11c1ebe: SharedAVSource, SharedAVBinding e método distinto
+  synthetic-shared-av-v1; revalidação de escopos process audio/image
+  no _check_rights, bundle exige fonte idêntica; VLM refatorado em
+  helpers privados de imagem sem alterar wrapper original.
+- efc4f59: asset_shared_av_fixture.py e modo shared_av do
+  FixturePipeline, quatro jobs sobre a mesma raiz retida.
+- 51a4061: rejeição de recipe/decoder adulterado, testes nativos,
+  revogação pós-decode, testes do contrato e serialização legada.
+- 790e408: métricas nativas do decoder, ASR e VLM e qualidade ASR
+  devolvidas no step; não persistidas nem estimativa econômica.
+- 6a03a3b: direitos individuais ausentes e assertions/prints métricos,
+  strict inclui shared_av_contract (4), shared_av (7).
+
+Dois casos fixos: inventory, reutiliza fala e WAV autorais do ASR
+inventory, PNG sales do OCR, primeira imagem uniforme oposta e
+transição em 1000ms; silence, WAV silencioso e PNG blank. Mux local
+H.264 RGB lossless (libx264rgb qp0) + ALAC, MP4 faststart, 4fps,
+960x540 RGB grayscale, mono 16kHz, ceil de amostras/4000, até
+60 frames e 4MB contêiner. Requer os codecs locais; sem download.
+A geração e regeneração exclusivamente autorais usam TemporaryDirectory,
+sem entradas arbitrárias ou mídia de terceiros; limpeza normal não é
+prova de secure erase. Mesmo runtime deve reproduzir bytes exatos;
+mudança de binário/codec/TTS pode exigir nova fixture e novo pin, não
+substituição silenciosa do plano. Host conserva fingerprint.
+
+Cada job reconstitui a receita fixa, compara estrutura integral,
+revalida job e vault. Decoder FFmpeg recebe somente bytes exatos
+do vault via pipe; verifica contêiner, stream RGB inteiro, PCM,
+frame gray selecionado (índice 4, 1000ms) e hashes das amostras
+temporais. Saída esperada byte a byte, até ~1,13MB; Job Object
+512MiB/10s CPU/30s wall/2 processos; sem alterar limites genéricos.
+Amostras gray64 por point sampling, primeiros 8s no máximo, 4fps,
+não PTS originais nem mesmo hash do frame 960x540. Frame selecionado
+igual aos pixels do PNG pinado; adaptadores recebem o PNG canônico
+verificado ou WAV remontado do PCM decodificado. ASR mantém WER<=0,5,
+IoU>=0,60 e erro fronteira<=0,75s; OCR mantém palavras exatas;
+VLM deve classificar o PNG sales (não idêntico ao antigo VLM sales)
+como text_card, blank usa guard sem inferência. Não flexibilizar
+se falhar. VLM benchmark anterior FAIL continua. Lease renovado
+uma vez após decode, sem aumentar deadline da tentativa.
+
+SharedAVSource contém hashes do contêiner, decoder, RGB, PCM,
+frame/pixels, PNG, amostras 64x64, dimensões e tempo; SharedAVBinding
+vincula configuração do decoder/adaptador e orçamento ao JobSpec.
+Resultado tipado inclui binding somente nesse método, serializer
+omite campo ausente para preservar bytes/hash e fingerprint legado.
+Fusão não aceita misturar shared/legado ou manifestos divergentes;
+revalida direitos e todos os resultados persistidos. Proveniência
+prova correspondência estrutural e integridade no host confiável,
+não execução independente, verdade semântica, PTS real ou gold.
+Process video, process audio e process image exigidos na mesma raiz
+durante todos os checks do método, também retain/process de derivados
+e derive rubric_evidence. Sem direitos de export/display/publicação,
+media_enabled=false, sem mídia externa, acesso Meta, schema DB,
+migração, treinamento, CAP/gate novo ou rubrica canônica.
+
+Métricas do decoder e jobs ASR/VLM (peak commit, CPU user/kernel,
+wall), chamadas e qualidade ASR são devolvidas em memória e impressas
+pelos testes. Não há métricas de OCR separado nem custo total de
+geração/planejamento/hash ou benchmark comparativo; medir depois.
+Decodificação repete por job para provar a mesma origem; não há cache
+durável de pixels/PCM, nenhum derivado audiovisual claro persistido.
+Não medir latência total apenas pelos tempos de subprocessos.
+
+Assistente: experimento independente Linux com FFmpeg local
+(libx264rgb + ALAC), frames RGB gerados e PCM sintético, dois muxes
+idênticos e decode exato: 132796 bytes, 27 frames, 106001 samples,
+SHA256 49aadb13a2970020fd8370298417563eb3b182d1ff10771015ca5ca4244c1d3e.
+Outro teste local 3s/12 frames também lossless. Não é execução da
+fixture do repositório, ambiente Windows, Tesseract, Whisper ou Qwen.
+Smoke independente Pydantic 2.13.5 de serializer nested passou,
+não teste do contrato integral. Sem execução pytest pelo assistente.
+
+11 testes novos esperados: 4 contrato (bytes legados, binding,
+amostras, fontes misturadas); 7 registry (nenhum/um escopo ausente,
+2 pipelines nativos, recipe adulterado, revogação depois do decode).
+Strict passa de 13/80 para 15 grupos/91 casos mínimos. Expectativa
+de 1295 coletados no full, não resultado. Sem novo skip permitido
+nos grupos. Lab continua opt-in separado.
+
+### Operador — A02.7.2
+Parar servidor/writers; reusar os quatro paths explícitos anteriores,
+FFmpeg/espeak local, sem baixar modelos nem repetir benchmarks.
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+conda activate tapi-asr-recovery
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+& $py docs/base_atemporal/ferramentas/validar_espelho.py
+& $py -m pytest -q --tb=short tests/test_asset_processor_results.py
+& $py -m pytest -q --capture=tee-sys --tb=short tests/test_asset_rights_registry.py -k test_shared_av_
+& $py -m pytest -q --tb=short tests/test_a00_baseline.py
+& $py scripts/verify_zero_spend.py
+```
+Esperado: 4 novos contratos no arquivo de resultados; 7/7 shared
+registry sem skips; 21 runner PASS. Registrar SHARED_AV_METRICS e
+SHARED_AV_SOURCE (somente hashes/contagens). Se falhar, não trocar
+codec, abaixar critério ou promover silenciosamente; preservar logs
+e diagnosticar. Se PASS, full strict no HEAD limpo, mesmos paths
+e report-name novo, grupos shared_av_contract 4/4 e shared_av 7/7.
+Próximo incremento: reconciliar execução, robustez/ablação
+compartilhada, orçamento e preflight de direitos operacionais.
