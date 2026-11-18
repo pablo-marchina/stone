@@ -2093,3 +2093,104 @@ coleta ou modelo. Registrar HEAD e resultado de cada superfície,
 não confundir smoke manual com E2E automatizado. Se falha, preservar
 log e corrigir antes de avançar. Próximo incremento A02.7: orquestração
 integrada somente em fixtures autorizadas, sem grants reais ou gate.
+
+
+## A00 — Evidence Lab opt-in e smoke parcial PASS (18/11/2026)
+
+Operador HEAD 9bd1b6a62c55cc6ffa0f38e387f6dcc5db491e78:
+espelho 32/32, Lab Python 5/5 PASS sem skip em 6,22s,
+um StarletteDeprecationWarning (httpx), Node Lab 7/7 PASS em
+206,6648ms, zero-spend PASS. Relato de console, sem JUnit novo.
+Teste opt-in confirmou os sete casos e todos os campos via API
+autenticada e banco descartável. Servidor operacional loopback
+iniciou; auth, overview, SSE, inventário limit=25/offset=0,
+Studio biblioteca, Lab summary e caption_only HTTP 200.
+Operador copiou UI com 20 campos, 12/28/16/84 total,
+15 braços, composição PASS/VLM FAIL; 9/10 caption+audio+OCR
+e all. Não confirmou ranking, detalhes/paginação, outros
+seis casos no browser, editor ou logout manual. Node e API
+automatizados não substituem browser QA. Não alegar DB sem
+mutações de identidade ou nova admissão. A00 strict permanece
+PASS apenas no SHA 298426d (1271/1272, skip Lab); opt-in
+aprovado separadamente no 9bd1b6a. Não somar contagens de suítes.
+
+Decisão operacional: avançar A02.7 isolado em fixtures porque
+smoke inicial e teste opt-in passaram; manter itens browser
+pendentes, sem reclassificar gates. Não é dispensa de CT/aceite.
+
+## A02.7 — orquestração fixture-only, primeiro incremento (18/11)
+
+Base documental integral validada localmente (PASS estrutural,
+204 IMP, 543 arestas, 23 CAP, 18 DEC, 28 CT, 7 gates), espelho
+reportado pelo operador. IMP-054/063/064/136/137/145/178 parciais;
+CAP-003/009/016/022/023; DEC-017/018; CT-04/09/11/18 e CT-STUDIO-07
+relacionados, não cumpridos. Não altera DAG/matrizes.
+
+Commits de código:
+- f1bc9e9: asset_fixture_pipeline.py, claim opcional por job_id
+  exato, testes de retomada, isolamento, falha e permissão.
+- bebc69d: casos nativos individuais FFmpeg, ASR/VAD, OCR e VLM;
+  runner strict inclui grupo fixture_pipeline.
+- 9c19604: lease expirado não prova saída física do worker;
+  bloquear retry sem reconciliação e retry_stopped=True explícito
+  do host confiável, testes de expiração e revogação assinada.
+
+FixturePlan frozen com fingerprint dos JobSpec determinísticos
+e modo/caso. Host preserva fingerprint fora do DB e informa
+expected_plan ao retomar após restart; sem índice persistente
+de plano, não garante retomada se host omitir pin. Seis modos
+fixos (header, temporal, asr, ocr, vlm, image_pair blank).
+Não aceita callback de modelo, mídia arbitrária, upload ou
+scheduler. Entradas exatas por SHA256, tamanho, MIME, método
+e configuração. Preflight direitos de retain/process/derive
+e retain/process de cada output, derive rubric_evidence;
+rechecagem a cada step, adaptadores e fusão. Um job por tick,
+completos reutilizados apenas com recibo encrypted_payload;
+fusão reautentica todos os artefatos ao final, sem parcial,
+rubrica canônica, admissão, nova persistência ou saída pública.
+A fila preserva orçamento, exclusão lógica global e manutenção
+existentes, inclusive expiração de leases; não é sandbox nem
+garantia de isolamento físico. Host deve garantir worker parado
+antes de manutenção/retry. Sem fallback automático; falha do
+adapter propaga e não libera lease por conta própria. Sem
+chaves/grants reais ou novas aprovações institucionais.
+O header de MP4 não é vídeo decodificável: quatro abstenções.
+Par nativo somente PNG blank idêntico de OCR/VLM, sem chamada
+Qwen no guard. Cada adapter real pode rodar separadamente em
+fixture nativa; não há ainda vídeo comum com áudio/frames
+processado nas quatro modalidades. Próximo incremento após
+testes: fixture audiovisual compartilhada, timeline/frames
+co-referenciados e derivação protegida, sem ampliar direitos.
+Nenhuma migração, operação Meta, gasto ou acesso a DB real.
+
+12 novos testes (6 nativos Windows, 6 SQLite sem dependência
+de modelo): retomada/dedup, claim alvo, falha/cancelamento,
+invalidação, escopo, quatro headers, par blank, quatro adapters
+nativos individuais, recuperação de lease expirado e recibo
+opaco/revogação assinada. Contagem é expectativa. Não executados
+pelo assistente; revisão de código/diff, não checkout integral.
+Strict exige 13 grupos e 80 casos mínimos (68+12). Não afirmar
+benchmark ou full PASS no novo HEAD até execução.
+
+### Operador — validação incremental
+Parar servidor local Ctrl+C e writers. Reutilizar os opt-ins
+locais anteriores, nenhum download ou benchmark standalone.
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+conda activate tapi-asr-recovery
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+& $py docs/base_atemporal/ferramentas/validar_espelho.py
+& $py -m pytest -q --tb=short tests/test_asset_rights_registry.py -k test_fixture_pipeline_
+& $py -m pytest -q --tb=short tests/test_a00_baseline.py
+& $py scripts/verify_zero_spend.py
+```
+Esperados 12 PASS sem skip do pipeline, 21 runner PASS,
+espelho e zero-spend PASS; não são resultados realizados.
+Se PASS, executar full strict no HEAD limpo, mesmos quatro
+paths explícitos de tessdata/ASR/VLM/server, report name novo.
+Esperar 13 grupos, fixture_pipeline 12/12, zero falhas/erros,
+Lab opt-in continua skip no runner isolado; executar Lab
+separadamente caso necessário, sem herdar DB operacional.
+Não operar o pipeline diretamente sobre corpus real.
