@@ -1,4 +1,4 @@
-"""Rehearse 0013 on a disposable copy of the pinned private 0012 backup.
+"""Rehearse one reviewed additive migration on a pinned private backup.
 
 No access to the live database URL, no restore over original, no real
 authorities or grants. Report only aggregate checks.
@@ -29,7 +29,8 @@ def schema(db):
     return db.execute("SELECT type,name,tbl_name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type,name").fetchall()
 
 
-def rehearsal(root,name,digest,tenant):
+def rehearsal(root,name,digest,tenant,*,lineage=False):
+    old,new,tables=(NEW,"0014_asset_lineage",{"asset_lineage_nodes"}) if lineage else (OLD,NEW,TABLES)
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,100}\.sqlite3",name) or not re.fullmatch(r"[a-f0-9]{64}",digest):
         raise ValueError("A02_MIGRATION_PIN_INVALID")
     private=root/"artifacts"/"private"
@@ -43,33 +44,33 @@ def rehearsal(root,name,digest,tenant):
             _integrity(original)
             before=_inventory(original,tenant)
             before_schema=schema(original)
-            if before["migration_versions"]!=[OLD]:
+            if before["migration_versions"]!=[old]:
                 raise ValueError("A02_MIGRATION_BASE_REQUIRED")
             with closing(sqlite3.connect(target)) as copy:
                 _copy(original,copy)
         env=child_environment(root,os.environ)
         env["TAPI_DATABASE_URL"]=URL.create("sqlite",database=str(target)).render_as_string(hide_password=False)
         command=[sys.executable,"-m","alembic","-c",str(root/"alembic.ini")]
-        result=subprocess.run(command+["upgrade",NEW],cwd=root,env=env,
+        result=subprocess.run(command+["upgrade",new],cwd=root,env=env,
             stdin=subprocess.DEVNULL,capture_output=True,timeout=120,check=False)
         if result.returncode:
             raise ValueError("A02_MIGRATION_UPGRADE_FAILED")
         with closing(_readonly(target)) as db:
             _integrity(db)
             after=_inventory(db,tenant)
-            if after["migration_versions"]!=[NEW]:
+            if after["migration_versions"]!=[new]:
                 raise ValueError("A02_MIGRATION_VERSION_MISMATCH")
-            if set(after["table_counts"])!=set(before["table_counts"])|TABLES:
+            if set(after["table_counts"])!=set(before["table_counts"])|tables:
                 raise ValueError("A02_MIGRATION_TABLE_MISMATCH")
             for table,d in before["table_content_sha256"].items():
                 if table!="alembic_version" and after["table_content_sha256"][table]!=d:
                     raise ValueError("A02_MIGRATION_CONTENT_CHANGED")
-            if [r for r in schema(db) if r[2] not in TABLES]!=before_schema:
+            if [r for r in schema(db) if r[2] not in tables]!=before_schema:
                 raise ValueError("A02_MIGRATION_LEGACY_SCHEMA_CHANGED")
-            if any(after["table_counts"][t]!=0 for t in TABLES):
+            if any(after["table_counts"][t]!=0 for t in tables):
                 raise ValueError("A02_MIGRATION_REGISTRY_NOT_EMPTY")
         # Empty-only downgrade must restore original logical state.
-        result=subprocess.run(command+["downgrade",OLD],cwd=root,env=env,
+        result=subprocess.run(command+["downgrade",old],cwd=root,env=env,
             stdin=subprocess.DEVNULL,capture_output=True,timeout=120,check=False)
         if result.returncode:
             raise ValueError("A02_MIGRATION_DOWNGRADE_FAILED")
@@ -80,9 +81,9 @@ def rehearsal(root,name,digest,tenant):
         if _sha256(path)!=digest:
             raise ValueError("A02_MIGRATION_BACKUP_CHANGED")
     return {"status":"A02_MIGRATION_REHEARSAL_VERIFIED","backup_name":name,
-        "backup_sha256":digest,"from_revision":OLD,"to_revision":NEW,
+        "backup_sha256":digest,"from_revision":old,"to_revision":new,
         "existing_tables_preserved":len(before["table_counts"])-1,
-        "new_empty_tables":sorted(TABLES),"legacy_schema_unchanged":True,
+        "new_empty_tables":sorted(tables),"legacy_schema_unchanged":True,
         "upgrade_integrity_verified":True,"empty_downgrade_verified":True,
         "backup_unchanged":True,"operational_database_accessed":False,
         "operational_database_mutated":False,"real_grants_created":0,"media_enabled":False}
@@ -93,9 +94,10 @@ def main(argv=None):
     p.add_argument("--backup-name",required=True)
     p.add_argument("--backup-sha256",required=True)
     p.add_argument("--tenant",required=True)
+    p.add_argument("--lineage",action="store_true",help="Rehearse 0013 to 0014 instead of 0012 to 0013")
     a=p.parse_args(argv)
     try:
-        result=rehearsal(ROOT,a.backup_name,a.backup_sha256,a.tenant)
+        result=rehearsal(ROOT,a.backup_name,a.backup_sha256,a.tenant,lineage=a.lineage)
         print(json.dumps(result))
         return 0
     except (ValueError,OSError,sqlite3.Error,subprocess.SubprocessError) as exc:
