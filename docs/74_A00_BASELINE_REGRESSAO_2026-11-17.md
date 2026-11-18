@@ -948,3 +948,81 @@ Próximo incremento A02.5/6: fila durável, leases fencing, retries,
 cancelamento, dedup/quotas, integração com reconciliação de revogação,
 PEPs de inferência/commit/derivados. Não executar nova migração, purge
 real, coleta ou merge. Nenhum gate global liberado.
+
+## A02.4 — cofre indexado validado; A02.5/6 — fila durável local
+Operador HEAD c4a0aeacfae75cc4fbaa0f3a5e25a2f6fe9ee815,
+árvore 2cc17ceae004642a173068d1715422add23191e8: focal 91/91 PASS
+(30,96s); zero-spend PASS. Full a02-full-20261117-212954,
+1007 coletados / 1006 PASS / 0 FAIL / 0 ERROR / 1 SKIP opt-in
+Evidence Lab real, pytest 240,031s, Node/Gate0/zero-spend exit 0,
+checkout inalterado. pytest.log SHA256
+9f19238a68d3d90d317c93f92bccc660dcec12ef55930e020ca278068e152632,
+JUnit SHA256 0a59410a8f503ae10e12f4ee61604144de138197880e85fbad6b17fd48cab370,
+Node SHA256 a4d45e945af14b78cac2152fb8bedc18bc7f11093d1b7a6394d3db6be6d209fa.
+102 módulos, 96 Python test files, 5 Node, 14 migrations.
+Backup pós-0014 a02-post0014-20261117-213407.sqlite3,
+SHA256 6308ce588545eac9ea975872e059ac504d6d42ae520ea027c1b8d00e6a120a62,
+10076160 bytes, backup 218ms/restore 188ms, schema/FK/integridade e
+hashes lógicos preservados, 1065 conteúdos/21 perfis/1169 snapshots/
+1065 assessments/2455 eventos, 5 Studio docs, quatro novas tabelas
+rights/lineage vazias, zero admissão, 0014. A00.2/3 atualizados para
+esta captura, não RPO/RTO produção. Smoke UI pós-0014 não reportado.
+
+A02.5/6 parcial: asset_jobs.py, migração 0015_asset_jobs (duas tabelas
+vazias asset_processing_jobs e asset_processing_attempts). Biblioteca
+SQLite trusted-host, sem rota/worker, sem bytes/payload/modelo.
+Spec imutável por tenant/object_id/finalidade/processor/method_version/
+configuration_sha256; hash ID determinístico, dedup inclusive terminal.
+OCR/ASR-VAD/VLM/temporal com modalidade e campo de derivação explícitos.
+Enqueue, claim, heartbeat, finish verificam root ativo, retain+process+
+derive exatos, fonte/grant/pin vigentes, na transação BEGIN IMMEDIATE.
+Leases com fence aleatório e tentativa persistida; receipt de hash
+somente, não artefato verificado nem publicação. Estado queued/running/
+cancel_requested/completed/failed/canceled; tentativa até 3, backoff
+15s/30s para retry, lease inicial 120s, heartbeat limitado a deadline
+900s da tentativa; worker obsoleto/expirado não pode renovar/concluir.
+Cancelamento queued imediato; running mantém slot até ack ou expiração,
+nega finish. Ack é declaração de worker confiável, não kill. Clock
+regressivo detectado por updated_ms; relógio confiável necessário.
+Limites iniciais de engenharia: 100 pendentes por tenant, histórico
+20k/tenant e 50k global, 1 lease ativo global, 50 tentativas/tenant/dia
+UTC e 100 globais/dia UTC. Reserva por tentativa, inclusive falha/timeout,
+sem reembolso; ledger durável, eventos/outbox transacionais.
+Limites de reservas/leases NÃO garantem CPU/RAM/tempo de subprocesso,
+concorrência física ou kill de processos órfãos. Fencing protege recibos;
+worker supervisor ainda precisa confirmar cessação de execução antiga,
+controlar recursos e revalidar direitos durante inferência e commit.
+Reconcile_invalidated explícito cancela queued e solicita cancel running
+com tombstone/expiry; deny atual independe de reconciliação. Sem consumer
+automático, não confundir chamada de biblioteca com job em execução.
+Status read-only sem fence; claim entrega fence somente ao worker host.
+A configuração hash não comprova bytes de modelo; PEP de execução e
+validação de configuração/artefato pendentes. Sem chaves/autoridade reais,
+sem derivação, persistência de payload ou processamento. Não alterar
+corpus/ranking; nenhum gate. 10 novos testes de fila + 1 parametrização
+rehearsal; 102 focal esperados. Não executados pelo assistente.
+Backup reconhece 0015, valida presença de ambas tabelas; downgrade vazio
+apenas; ensaio --jobs 0014→0015 em cópia descartável do backup fixado.
+Não aplicar 0015 operacional até focal e rehearsal PASS; código de
+upgrade protegido ainda não aceita 0015. Próximo: supervisor/PEP de
+execução, finalização de derivados sob fence e direitos, quotas reais,
+consumer/reconciliação e smoke operacional, depois LangGraph.
+
+### Operador — focal e ensaio 0015
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+conda activate tapi-asr
+python -m pytest -q tests/test_a02_operational_upgrade.py tests/test_asset_lineage.py tests/test_asset_vault.py tests/test_asset_rights.py tests/test_asset_rights_registry.py tests/test_discovery_backup.py
+python scripts/verify_zero_spend.py
+```
+Esperado 102 focal sem skips. Se PASS:
+```powershell
+python -m scripts.a02_migration_rehearsal --backup-name "a02-post0014-20261117-213407.sqlite3" --backup-sha256 "6308ce588545eac9ea975872e059ac504d6d42ae520ea027c1b8d00e6a120a62" --tenant "local-research" --jobs
+```
+Esperado 43 tabelas antigas preservadas, 2 novas vazias, schema/hashes
+legados intactos, downgrade vazio verificado, backup inalterado,
+operational_database_mutated=false, media_enabled=false.
+Não repetir full anterior sem necessidade, não executar upgrade live,
+não iniciar coleta ou mídia e não gerar grants fictícios. Sem merge.
