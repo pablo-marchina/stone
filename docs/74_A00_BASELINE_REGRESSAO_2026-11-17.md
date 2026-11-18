@@ -1436,3 +1436,72 @@ $py = Join-Path $env:CONDA_PREFIX "python.exe"
 207 PASS esperados, sem skip. Se falhar, preservar output redigido;
 não aumentar limites ou relaxar oracle para obter PASS. Sem migração,
 sem mídia real, sem merge. Full anterior pinado permanece histórico.
+
+
+## A02.6 — temporal aprovado; adapter OCR real (18/11)
+Operador HEAD 9483932b91377ed38c4d0e29d7fae0ec34719f8a:
+207/207 focal PASS em 112,14s; zero falhas/erros/skips.
+Espelho 32/32 e zero-spend PASS. 3 decodificações FFmpeg e seis
+integrações Windows aprovadas. Evidência de console reportada,
+não JUnit adicional. Sem nova migração ou dado operacional.
+
+Novo asset_ocr_fixture.py: três PNG autorais grayscale 960x540,
+Pillow default font, bytes e SHA256 pinados. Duas frases:
+Organize suas vendas / Salve para revisar depois; controle vazio.
+Tesseract real por stdin/stdout, TSV, por+eng, OEM1/PSM11, OMP_THREAD_LIMIT=1.
+Diretório tessdata local explícito por trusted host, SHA256 de por/eng
+e executável no pin de configuração, verifica antes/depois; não é
+aprovação externa de supply chain/DLLs. Nenhum download, arquivo de
+mídia temporário, texto de origem externa ou chamadas pagas.
+Novo método synthetic-ocr-tesseract-v5. Validação do TSV: cabeçalho
+completo, página única/dimensões, registros completos, IDs de palavras
+não duplicados, parser bd-ocr-fixture.v1 (caixas/confiança finita),
+oráculo palavras em ordem exata. Confiança bruta não calibrada; não
+exige hash do TSV variável entre versões. Blank exige página válida
+e nenhuma palavra, retorna abstenção no_observable_signal, nunca
+negação de rubrica. Frame hash é hash do PNG de entrada, timeline
+image t=0. Envelope adapter_candidate vincula spec/ref/lease e
+persistência AEAD. Rights derive/retain/process separados, engine/tenant
+e fence rechecados. Nenhuma EvidenceBundle ou rubrica admitida.
+
+Supervisor: helper privado de resultado variável para fixtures
+confiáveis, _run_bounded_fixture. Limites gerais desta rota restrita
+input<=128KiB, output<=128KiB; OCR child lê no máximo 16KiB+1 do
+stdout Tesseract e só encaminha se tamanho/exit code válidos.
+Pai confirma limite, cleanup e árvore vazia antes da validação semântica
+e recibo. Não é executor de comandos arbitrários nem cap streaming
+para child hostil; pipe bloqueante é contido pelo deadline/kernel.
+Wrapper exact-output anterior mantém oracle e bounds.
+Budget OCR de fixture 512MiB commit, 10s CPU user-mode, 2 processos,
+30s wall; decisão inicial de engenharia, não medição produtiva.
+Sem sandbox rede/FS/token/GPU, sem grants reais.
+
+Testes locais em cópia isolada Linux: 22/22 novos OCR PASS (3 chamadas
+Tesseract reais, parser/negativos/binding/bounds); 14/14 portáveis do
+supervisor PASS, 7 Windows nativos skipped. Funções parser/verify_tessdata
+e hash reproduzidas da fonte inspecionada, não checkout integral.
+Tesseract local reconheceu sete palavras em dois casos, zero no branco;
+sem estimativa de precisão generalizável, sem gold independente.
+6 novos testes integração Windows não executados pelo assistente:
+3 casos AEAD, retain faltante, config incorreta, cancel tardio.
+235 focal esperados (207+22+6) em Windows x64 com tessdata opt-in.
+IMP-040/044/045/054/063/064/123/136/137; sem schema ou gate.
+
+### Operador — validar OCR
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+conda activate tapi-asr-recovery
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+$env:TAPI_OCR_TEST_TESSDATA = "C:\Models\tapi\tessdata-fast-4.1.0"
+& $py docs/base_atemporal/ferramentas/validar_espelho.py
+& $py -m pytest -q tests/test_a02_operational_upgrade.py tests/test_asset_lineage.py tests/test_asset_vault.py tests/test_asset_rights.py tests/test_asset_rights_registry.py tests/test_discovery_backup.py tests/test_a02_payloads_preflight.py tests/test_asset_windows_job.py tests/test_asset_processor_results.py tests/test_asset_temporal_fixture.py tests/test_asset_ocr_fixture.py
+& $py scripts/verify_zero_spend.py
+```
+235 PASS esperados sem skips. Sem tessdata explícito, casos reais
+são skipped e não aprovação. Não relaxar oracle nem substituir resultado
+em falha. Full A00 com --tessdata-dir já encaminha esse opt-in.
+Sem nova migração, mídia real, merge ou release. Próximo: Whisper/VAD
+com fixtures PCM autorais, modelos locais e recursos medidos, depois VLM,
+reconciliador e EvidenceBundle; smoke antes de piloto.

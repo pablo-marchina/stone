@@ -370,21 +370,32 @@ def discard_fixture(registry,tmp_path,request):
         from tapi_gate0.asset_temporal_fixture import fixture
         assert len(temporal_cases)==1
         data,_=fixture(temporal_cases[0])
-    target=f.target.model_copy(update={"sha256":sha256(data).hexdigest()})
-    retention=Permission(operation="retain",purpose="research_analysis",field="video")
+    ocr_cases=[x.removeprefix("ocr_") for x in requested if x.startswith("ocr_")]
+    media_kind="video"
+    mime="video/mp4"
+    output_field="visual_features"
+    if ocr_cases:
+        from tapi_gate0.asset_ocr_fixture import fixture
+        assert len(ocr_cases)==1 and not temporal_cases
+        data,_=fixture(ocr_cases[0])
+        media_kind,mime,output_field="image","image/png","ocr"
+    target=f.target.model_copy(update={"sha256":sha256(data).hexdigest(),"media_kind":media_kind})
+    retention=Permission(operation="retain",purpose="research_analysis",field=media_kind)
+    processing=Permission(operation="process",purpose="research_analysis",field=media_kind)
     f.svc.provision(f.anchor,TENANT,"instagram",f.rv)
-    extra=tuple(Permission(operation=op,purpose="research_analysis",field="visual_features")
-        for op in requested if op!="all_processors" and not op.startswith("temporal_"))
+    extra=tuple(Permission(operation=op,purpose="research_analysis",field=output_field)
+        for op in requested if op!="all_processors" and not op.startswith(("temporal_","ocr_")))
     if "all_processors" in requested:
+        assert not ocr_cases
         extra+=tuple(Permission(operation=op,purpose="research_analysis",field=field)
             for field in ("transcript","ocr") for op in ("derive","retain","process"))
-    f.svc.register_grant(f.anchor,f.grant(target=target,permissions=(retention,PERMISSION,Permission(operation="derive",purpose="research_analysis",field="visual_features"),*extra)),
+    f.svc.register_grant(f.anchor,f.grant(target=target,permissions=(retention,processing,Permission(operation="derive",purpose="research_analysis",field=output_field),*extra)),
         verified_approval_digest="b"*64)
     root=tmp_path/"discard-vault";root.mkdir(mode=0o700)
     now=now_utc()
     ref=RetainedAssetRef(target=target,issuer_id=f.anchor.issuer_id,
         issuer_key_sha256=sha256(f.anchor.public_key).hexdigest(),grant_id="grant.fixture",
-        mime="video/mp4",object_id=expected_object_id(f.anchor,"grant.fixture",target,"video/mp4"),
+        mime=mime,object_id=expected_object_id(f.anchor,"grant.fixture",target,mime),
         byte_count=len(data),retained_at=now,retain_until=now+timedelta(minutes=20))
     index=AssetLineageIndex(f.engine)
     vault=IndexedAssetVault(root,b"v"*32,f.svc,index)
@@ -1299,6 +1310,98 @@ def test_real_temporal_fixture_late_cancel_no_receipt(queue_fixture,monkeypatch)
     monkeypatch.setattr(a.windows,"_run_exact_fixture",late)
     with pytest.raises(AssetRightsDenied,match="STALE_LEASE"):
         a.run_temporal_fixture_windows(f.queue,f.q.vault,DerivedPayloadStore(f.queue,b"d"*32),lease)
+    assert f.queue.status(TENANT,spec.job_id)["receipt_sha256"] is None
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(payloads))==0
+    assert f.queue.acknowledge_cancel(lease)["state"]=="canceled"
+
+
+def _ocr_job(f,case):
+    import os
+    from tapi_gate0 import asset_ocr_fixture as a
+    directory=os.environ.get("TAPI_OCR_TEST_TESSDATA")
+    if not directory:
+        pytest.skip("explicit TAPI_OCR_TEST_TESSDATA required")
+    directory=Path(directory)
+    config,_=a.plan(case,directory)
+    spec=f.spec.model_copy(update={"processor":"ocr","method_version":a.METHOD,
+        "configuration_sha256":config["configuration_sha256"]})
+    f.queue.enqueue(spec)
+    return spec,f.queue.claim(TENANT,"worker")["lease"],directory
+
+
+@_WINDOWS_JOB
+@pytest.mark.parametrize("discard_fixture,case,words",[
+    (("retain","process","ocr_sales"),"sales",("Organize","suas","vendas")),
+    (("retain","process","ocr_cta"),"cta",("Salve","para","revisar","depois")),
+    (("retain","process","ocr_blank"),"blank",()),
+],indirect=["discard_fixture"])
+def test_real_ocr_fixture_encrypted_result(queue_fixture,case,words):
+    from tapi_gate0 import asset_ocr_fixture as a
+    from tapi_gate0.asset_processor_results import decode,validate_binding
+    f=queue_fixture
+    spec,lease,directory=_ocr_job(f,case)
+    store=DerivedPayloadStore(f.queue,b"d"*32)
+    receipt=a.run_ocr_fixture_windows(f.queue,f.q.vault,store,lease,tessdata_dir=directory)
+    assert receipt["state"]=="completed" and receipt["payload_persisted"]
+    assert receipt["fixture_case"]==case and receipt["model_calls"]==1
+    assert receipt["kernel_job_limits_verified"] and receipt["tree_empty_verified"]
+    assert not receipt["media_enabled"] and not receipt["scientific_evidence"]
+    assert not receipt["canonical_rubric"]
+    payload=store.read_for_processing(TENANT,receipt["artifact_id"],purpose=spec.purpose)
+    result=decode(payload)
+    assert validate_binding(result,spec=spec,ref=f.q.ref,lease=lease)==result
+    assert result.origin=="adapter_candidate"
+    if words:
+        assert result.result.state=="observed"
+        assert tuple(w.text for w in result.result.words)==words
+        assert result.result.frame.frame_sha256==f.q.ref.target.sha256
+    else:
+        assert result.result.state=="abstained" and result.result.reason=="no_observable_signal"
+    assert receipt["receipt_sha256"]==sha256(payload).hexdigest()
+    with f.q.f.engine.connect() as db:
+        envelope=db.scalar(select(payloads.c.envelope))
+        assert len(envelope)==len(payload)+28 and payload not in envelope
+
+
+@_WINDOWS_JOB
+@pytest.mark.parametrize("discard_fixture",[("ocr_sales",)],indirect=True)
+def test_real_ocr_fixture_requires_derived_retention(queue_fixture):
+    from tapi_gate0 import asset_ocr_fixture as a
+    f=queue_fixture
+    spec,lease,directory=_ocr_job(f,"sales")
+    with pytest.raises(AssetRightsDenied,match="SCOPE_MISMATCH"):
+        a.run_ocr_fixture_windows(f.queue,f.q.vault,DerivedPayloadStore(f.queue,b"d"*32),lease,tessdata_dir=directory)
+    assert f.queue.status(TENANT,spec.job_id)["receipt_sha256"] is None
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(payloads))==0
+
+
+@_WINDOWS_JOB
+@pytest.mark.parametrize("discard_fixture",[("retain","process","ocr_sales")],indirect=True)
+def test_real_ocr_fixture_config_mismatch_before_spawn(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_ocr_fixture as a
+    f=queue_fixture
+    spec,lease,directory=_ocr_job(f,"cta")
+    monkeypatch.setattr(a.windows,"_run_bounded_fixture",lambda *x,**y:pytest.fail("must not spawn"))
+    with pytest.raises(AssetRightsDenied,match="OCR_FIXTURE_CONFIG"):
+        a.run_ocr_fixture_windows(f.queue,f.q.vault,DerivedPayloadStore(f.queue,b"d"*32),lease,tessdata_dir=directory)
+
+
+@_WINDOWS_JOB
+@pytest.mark.parametrize("discard_fixture",[("retain","process","ocr_cta")],indirect=True)
+def test_real_ocr_fixture_late_cancel_no_payload(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_ocr_fixture as a
+    f=queue_fixture
+    spec,lease,directory=_ocr_job(f,"cta")
+    original=a.windows._run_bounded_fixture
+    def late(*args,**kwargs):
+        output=original(*args,**kwargs)
+        f.queue.cancel(TENANT,spec.job_id)
+        return output
+    monkeypatch.setattr(a.windows,"_run_bounded_fixture",late)
+    with pytest.raises(AssetRightsDenied,match="STALE_LEASE"):
+        a.run_ocr_fixture_windows(f.queue,f.q.vault,DerivedPayloadStore(f.queue,b"d"*32),lease,tessdata_dir=directory)
     assert f.queue.status(TENANT,spec.job_id)["receipt_sha256"] is None
     with f.q.f.engine.connect() as db:
         assert db.scalar(select(func.count()).select_from(payloads))==0

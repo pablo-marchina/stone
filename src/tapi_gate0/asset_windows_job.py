@@ -194,6 +194,26 @@ def _run_exact_fixture(code, data, expected, check, *, limits):
     if (type(data) is not bytes or not 1 <= len(data) <= 131072
             or type(expected) is not bytes or len(expected) > 131072):
         raise JobError("FIXTURE_BOUNDS")
+    return _run_fixture_output(code, data, check, limits=limits,
+                               max_output=131072, expected=expected)
+
+
+def _run_bounded_fixture(code, data, check, *, limits, max_output):
+    """Private variable-output fixture path. Only trusted fixed child code.
+
+    Child must independently bound stdout (before emitting to the parent).
+    Parent verifies size after communicate; not a generic hostile-child cap.
+    The caller must validate output against its authored fixture oracle.
+    """
+    if type(max_output) is not int or not 1 <= max_output <= 131072:
+        raise JobError("FIXTURE_BOUNDS")
+    return _run_fixture_output(code, data, check, limits=limits,
+                               max_output=max_output, expected=None)
+
+
+def _run_fixture_output(code, data, check, *, limits, max_output, expected):
+    if type(data) is not bytes or not 1 <= len(data) <= 131072:
+        raise JobError("FIXTURE_BOUNDS")
     check()
     deadline = time.monotonic() + limits.wall_seconds
     job = WindowsJob(limits)
@@ -220,7 +240,8 @@ def _run_exact_fixture(code, data, expected, check, *, limits):
         check()
         if time.monotonic() > deadline:
             raise JobError("TIMEOUT")
-        if process.returncode != 0 or output != expected:
+        if (process.returncode != 0 or type(output) is not bytes
+                or len(output) > max_output or (expected is not None and output != expected)):
             raise JobError("PROBE_OUTPUT_INVALID")
         if job.active():
             raise JobError("DESCENDANTS_REMAIN")
