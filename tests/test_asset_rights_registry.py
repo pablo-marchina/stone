@@ -346,3 +346,101 @@ def test_nonempty_lineage_downgrade_refused(tmp_path,monkeypatch):
         assert "asset_lineage_nodes" in inspect(engine).get_table_names()
     finally:
         engine.dispose()
+
+
+@pytest.fixture
+def discard_fixture(registry,tmp_path):
+    from tapi_gate0.asset_vault import AssetVault
+    from tapi_gate0.asset_discard import discard_invalidated
+    f=registry
+    data=b"\x00\x00\x00\x0cftypisom"
+    target=f.target.model_copy(update={"sha256":sha256(data).hexdigest()})
+    retention=Permission(operation="retain",purpose="research_analysis",field="video")
+    f.svc.provision(f.anchor,TENANT,"instagram",f.rv)
+    f.svc.register_grant(f.anchor,f.grant(target=target,permissions=(retention,PERMISSION)),
+        verified_approval_digest="b"*64)
+    root=tmp_path/"discard-vault";root.mkdir(mode=0o700)
+    vault=AssetVault(root,b"v"*32,f.svc)
+    vault.retain(f.anchor,"grant.fixture",target,mime="video/mp4",purpose="research_analysis",data=data)
+    now=now_utc()
+    ref=RetainedAssetRef(target=target,issuer_id=f.anchor.issuer_id,
+        issuer_key_sha256=sha256(f.anchor.public_key).hexdigest(),grant_id="grant.fixture",
+        mime="video/mp4",object_id=expected_object_id(f.anchor,"grant.fixture",target,"video/mp4"),
+        byte_count=len(data),retained_at=now,retain_until=now+timedelta(minutes=20))
+    index=AssetLineageIndex(f.engine)
+    index.register_retained(f.anchor,ref)
+    def discard(tenant=TENANT,stopped=True):
+        return discard_invalidated(index,vault,tenant,ref.object_id,all_vault_io_stopped=stopped)
+    return SimpleNamespace(f=f,index=index,ref=ref,path=root/(ref.object_id+".enc"),discard=discard,vault=vault)
+
+
+def test_discard_requires_tombstone_exact_tenant_and_stopped_io(discard_fixture):
+    q=discard_fixture
+    for tenant,stopped,code in [(TENANT,False,"STOPPED_IO_REQUIRED"),
+                                ("other",True,"UNKNOWN_OBJECT"),(TENANT,True,"TOMBSTONE_REQUIRED")]:
+        with pytest.raises(AssetRightsDenied,match=code):
+            q.discard(tenant,stopped)
+    assert q.path.exists()
+
+
+def test_discard_revoked_object_idempotent_receipt_and_no_reactivation(discard_fixture):
+    q=discard_fixture
+    rv=q.f.state(2,revoked_asset_ids=(q.ref.target.asset_id,))
+    q.f.svc.advance(q.f.anchor,TENANT,"instagram",rv)
+    q.index.reconcile_signed_revocations(q.f.pin(rv),TENANT,"instagram")
+    envelope=q.path.read_bytes()
+    result=q.discard()
+    assert result["directory_entry_removed"] and result["object_absent"]
+    assert not result["secure_erasure_verified"] and not q.path.exists()
+    assert q.discard()["status"]=="ALREADY_RECORDED"
+    with q.f.engine.connect() as db:
+        row=db.execute(select(nodes).where(nodes.c.node_id==q.ref.object_id)).mappings().one()
+        assert row["state"]=="invalidated"
+        seqs=db.scalars(select(domain_events.c.seq).where(domain_events.c.aggregate_type=="asset_lineage")).all()
+        assert len(seqs)==3
+        assert db.scalar(select(func.count()).select_from(outbox).where(outbox.c.seq.in_(seqs)))==3
+    q.path.write_bytes(envelope)
+    with pytest.raises(AssetRightsDenied,match="OBJECT_REAPPEARED"):
+        q.discard()
+    assert q.path.exists()
+
+
+def test_discard_rejects_corrupt_envelope_and_hardlink(discard_fixture):
+    import os
+    q=discard_fixture
+    q.index.invalidate(TENANT,object_ids=[q.ref.object_id])
+    envelope=q.path.read_bytes()
+    q.path.write_bytes(b"X"*len(envelope))
+    with pytest.raises(AssetRightsDenied,match="ENVELOPE_HEADER"):
+        q.discard()
+    q.path.write_bytes(envelope)
+    link=q.path.parent/"other.enc"
+    os.link(q.path,link)
+    with pytest.raises(AssetRightsDenied,match="UNSAFE_OBJECT"):
+        q.discard()
+    assert q.path.exists() and link.exists()
+    link.unlink()
+    assert q.discard()["directory_entry_removed"]
+
+
+def test_discard_retry_after_file_removed_before_receipt(discard_fixture,monkeypatch):
+    from tapi_gate0 import asset_discard
+    q=discard_fixture
+    q.index.invalidate(TENANT,object_ids=[q.ref.object_id])
+    real=asset_discard.insert
+    def fail(table):
+        if table is domain_events:
+            raise RuntimeError("fixture crash before receipt")
+        return real(table)
+    with monkeypatch.context() as m:
+        m.setattr(asset_discard,"insert",fail)
+        with pytest.raises(RuntimeError,match="fixture crash"):
+            q.discard()
+    assert not q.path.exists()
+    result=q.discard()
+    assert result["status"]=="DISCARD_RECORDED" and not result["directory_entry_removed"]
+    with q.f.engine.connect() as db:
+        import json
+        payload=db.scalar(select(domain_events.c.payload).where(domain_events.c.aggregate_type=="asset_lineage",
+            domain_events.c.aggregate_id==q.ref.object_id,domain_events.c.aggregate_version==3))
+        assert json.loads(payload)["outcome"]=="already_absent"
