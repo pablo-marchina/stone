@@ -2270,3 +2270,52 @@ def test_fixture_pipeline_native_single_adapter(queue_fixture,mode,case):
         assert fields["texto_na_tela"].value is True
     if mode in ("temporal","vlm"):
         assert all(x.value is None for x in fields.values())
+
+
+@pytest.mark.parametrize("discard_fixture",[("retain","process","all_processors","bundle_rubric")],indirect=True)
+def test_fixture_pipeline_expired_lease_requires_explicit_recovery(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_jobs as module
+    from tapi_gate0.asset_fixture_pipeline import FixturePipeline
+    f=queue_fixture
+    clock=[now_utc()]
+    monkeypatch.setattr(module,"now_utc",lambda:clock[0])
+    pipe=_pipeline(f,mode="header",case="header")
+    spec=pipe.plan.specs[0]
+    f.queue.enqueue(spec)
+    lease=f.queue.claim(TENANT,"worker",job_id=spec.job_id)["lease"]
+    clock[0]+=timedelta(seconds=121)
+    assert pipe.step("worker")["status"]=="recovery_required"
+    assert f.queue.status(TENANT,spec.job_id)["state"]=="running"
+    # In this fixture no child was launched. The trusted host explicitly
+    # reconciles the expired lease and later confirms stopped execution.
+    f.queue.reconcile_invalidated(TENANT)
+    clock[0]+=timedelta(seconds=16)
+    assert pipe.step("worker")["status"]=="recovery_required"
+    with pytest.raises(AssetRightsDenied,match="STALE_LEASE"):
+        f.queue.finish(lease,"b"*64)
+    def fail(*_):
+        raise RuntimeError("retry dispatched")
+    monkeypatch.setattr(FixturePipeline,"_dispatch",fail)
+    with pytest.raises(RuntimeError,match="retry dispatched"):
+        pipe.step("worker",retry_stopped=True)
+    assert f.queue.status(TENANT,spec.job_id)["attempt"]==2
+
+
+@pytest.mark.parametrize("discard_fixture",[("retain","process","all_processors","bundle_rubric")],indirect=True)
+def test_fixture_pipeline_signed_revocation_and_receipt_only(queue_fixture):
+    f=queue_fixture
+    pipe=_pipeline(f,mode="header",case="header")
+    spec=pipe.plan.specs[0]
+    f.queue.enqueue(spec)
+    lease=f.queue.claim(TENANT,"worker",job_id=spec.job_id)["lease"]
+    f.queue.finish(lease,"b"*64)
+    with pytest.raises(AssetRightsDenied,match="RECEIPT_ONLY"):
+        pipe.step("worker")
+    rv=f.q.f.state(2,revoked_asset_ids=(f.q.ref.target.asset_id,))
+    f.q.f.svc.advance(f.q.f.anchor,TENANT,"instagram",rv)
+    f.queue.resolve_anchor=lambda ref:f.q.f.pin(rv)
+    with pytest.raises(AssetRightsDenied,match="ASSET_RIGHTS_REVOKED"):
+        pipe.step("worker")
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(attempts))==1
+        assert db.scalar(select(func.count()).select_from(payloads))==0

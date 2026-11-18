@@ -116,7 +116,12 @@ class FixturePipeline:
             return vlm.run_vlm_fixture_windows(q,vault,store,lease,case=case,model_dir=v,server_exe=s)
         _deny("DISPATCH")
 
-    def step(self,worker):
+    def step(self,worker,*,retry_stopped=False):
+        # An expired logical lease is not evidence of physical worker exit.
+        # Only a trusted host that has verified stop may request a retry,
+        # after existing maintenance has reconciled the expired lease.
+        if type(retry_stopped) is not bool:
+            _deny("RETRY_FLAG")
         self._preflight()
         artifacts=[]
         for spec in self.plan.specs:
@@ -129,6 +134,11 @@ class FixturePipeline:
                 continue
             if state in ("failed","canceled","cancel_requested"):
                 return self._status("blocked",spec,state)
+            if state=="running":
+                current=self.queue.status(spec.tenant_id,spec.job_id)
+                return self._status("recovery_required" if current["lease_expired"] else "busy",spec,state)
+            if state=="queued" and row["attempt"]>0 and not retry_stopped:
+                return self._status("recovery_required",spec,state)
             claim=self.queue.claim(spec.tenant_id,worker,job_id=spec.job_id)
             if claim["status"]!="claimed":
                 return self._status(claim["status"],spec,state)

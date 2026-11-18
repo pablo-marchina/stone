@@ -68,7 +68,7 @@ MULTIMODAL_GROUPS=(
     ("bundle","tests.test_asset_rights_registry","test_candidate_bundle_real_blank_",1),
     ("maintenance","tests.test_asset_rights_registry","test_maintenance_",9),
     ("fusion","tests.test_asset_rights_registry","test_candidate_fusion_",11),
-    ("fixture_pipeline","tests.test_asset_rights_registry","test_fixture_pipeline_",10),
+    ("fixture_pipeline","tests.test_asset_rights_registry","test_fixture_pipeline_",12),
 )
 
 
