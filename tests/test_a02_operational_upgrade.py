@@ -14,8 +14,8 @@ from scripts import a02_operational_upgrade as op
 TENANT = "upgrade-fixture"
 
 
-@pytest.fixture
-def target(tmp_path,monkeypatch):
+@pytest.fixture(params=[False,True],ids=["0013","0014"])
+def target(tmp_path,monkeypatch,request):
     root=Path(__file__).resolve().parents[1]
     shutil.copytree(root/"migrations",tmp_path/"migrations")
     shutil.copy2(root/"alembic.ini",tmp_path/"alembic.ini")
@@ -24,13 +24,13 @@ def target(tmp_path,monkeypatch):
     monkeypatch.setenv("TAPI_DATABASE_URL",url)
     cfg=Config(str(tmp_path/"alembic.ini"))
     cfg.set_main_option("script_location",str(tmp_path/"migrations"))
-    command.upgrade(cfg,op.OLD)
+    command.upgrade(cfg,op.NEW if request.param else op.OLD)
     engine=engine_for(url)
     try:
         SqlDomainStore(engine).create_tenant(TENANT,"Fixture")
     finally:
         engine.dispose()
-    return tmp_path,db,url
+    return tmp_path,db,url,request.param
 
 
 def inventory(db):
@@ -39,28 +39,28 @@ def inventory(db):
 
 
 def run(target,**kwargs):
-    root,db,url=target
-    return op.upgrade(root,url,TENANT,"pre-0013.sqlite3",stopped=True,**kwargs)
+    root,db,url,lineage=target
+    return op.upgrade(root,url,TENANT,"pre-0013.sqlite3",stopped=True,lineage=lineage,**kwargs)
 
 
 def test_operational_upgrade_preserves_every_legacy_table(target):
-    root,db,url=target
+    root,db,url,lineage=target
     before=inventory(db)
     result=run(target)
     after=inventory(db)
     assert result["status"]=="A02_OPERATIONAL_MIGRATION_VERIFIED"
     assert result["backup_restore_verified"] and result["legacy_logical_contents_match"]
     assert result["real_grants_created"]==0 and not result["media_enabled"]
-    assert after["migration_versions"]==[op.NEW]
+    assert after["migration_versions"]==["0014_asset_lineage" if lineage else op.NEW]
     assert all(after["table_content_sha256"][t]==h for t,h in before["table_content_sha256"].items() if t!="alembic_version")
     backup=root/"artifacts"/"private"/result["backup_name"]
     assert inventory(backup)==before and _sha256(backup)==result["backup_sha256"]
     with pytest.raises(ValueError,match="BASE_REVISION_REQUIRED"):
-        op.upgrade(root,url,TENANT,"another.sqlite3",stopped=True)
+        op.upgrade(root,url,TENANT,"another.sqlite3",stopped=True,lineage=lineage)
 
 
 def test_precommit_failure_rolls_back_actual_alembic_ddl(target,monkeypatch):
-    root,db,url=target
+    root,db,url,lineage=target
     before=inventory(db)
     def fail(*args):
         raise ValueError("A02_UPGRADE_FIXTURE_POSTCHECK")
@@ -72,7 +72,7 @@ def test_precommit_failure_rolls_back_actual_alembic_ddl(target,monkeypatch):
 
 
 def test_changes_after_backup_are_detected_before_upgrade(target,monkeypatch):
-    root,db,url=target
+    root,db,url,lineage=target
     real=op.backup_and_restore_drill
     def change(*args,**kwargs):
         report=real(*args,**kwargs)
@@ -83,16 +83,16 @@ def test_changes_after_backup_are_detected_before_upgrade(target,monkeypatch):
     monkeypatch.setattr(op,"backup_and_restore_drill",change)
     with pytest.raises(ValueError,match="LIVE_CHANGED_AFTER_BACKUP"):
         run(target)
-    assert inventory(db)["migration_versions"]==[op.OLD]
+    assert inventory(db)["migration_versions"]==[op.NEW if lineage else op.OLD]
 
 
 def test_requires_stopped_writers_and_refuses_nonexistent_database(target):
-    root,db,url=target
+    root,db,url,lineage=target
     before=inventory(db)
     with pytest.raises(ValueError,match="ALL_WRITERS_MUST_STOP"):
-        op.upgrade(root,url,TENANT,"pre.sqlite3",stopped=False)
+        op.upgrade(root,url,TENANT,"pre.sqlite3",stopped=False,lineage=lineage)
     missing=root/"absent.sqlite3"
     with pytest.raises(ValueError,match="DATABASE_MUST_EXIST"):
-        op.upgrade(root,"sqlite:///"+str(missing),TENANT,"pre.sqlite3",stopped=True)
+        op.upgrade(root,"sqlite:///"+str(missing),TENANT,"pre.sqlite3",stopped=True,lineage=lineage)
     assert not missing.exists() and inventory(db)==before
     assert not (root/"artifacts").exists()
