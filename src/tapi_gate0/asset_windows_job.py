@@ -225,6 +225,50 @@ def _run_bounded_fixture(code, data, check, *, limits, max_output):
                                max_output=max_output, expected=None)
 
 
+# Only the trusted ASR fixture uses this framed diagnostic protocol. Never
+# expose child stderr, arbitrary stdout, exception messages, paths or PCM.
+_MODEL_STAGES=(b"bootstrap",b"imports",b"vad",b"model_load",b"transcribe",b"serialize")
+_MODEL_ERRORS=(b"MemoryError",b"ImportError",b"OSError",b"RuntimeError",b"ValueError",b"Other")
+_MODEL_REASONS=(b"memory",b"dll",b"file",b"other")
+
+
+def _model_trace(output):
+    """Parse only bounded allowlisted markers, then opaque result bytes."""
+    stage="unknown"; error="unknown"; reason="unknown"; last=-1
+    if type(output) is not bytes:
+        return stage,error,reason,None
+    rest=output[:32768]
+    for _ in range(len(_MODEL_STAGES)+1):
+        line,sep,tail=rest.partition(b"\n")
+        if not sep:
+            break
+        if line.startswith(b"TAPI_ASR_STAGE:"):
+            name=line.removeprefix(b"TAPI_ASR_STAGE:")
+            if name not in _MODEL_STAGES or _MODEL_STAGES.index(name)<=last:
+                break
+            if last==-1 and name!=b"bootstrap":
+                break
+            last=_MODEL_STAGES.index(name);stage=name.decode("ascii");rest=tail
+        elif line.startswith(b"TAPI_ASR_ERROR:"):
+            parts=line.removeprefix(b"TAPI_ASR_ERROR:").split(b":")
+            if len(parts)==2 and parts[0] in _MODEL_ERRORS and parts[1] in _MODEL_REASONS:
+                error,reason=(x.decode("ascii") for x in parts)
+            break
+        elif line==b"TAPI_ASR_RESULT" and stage=="serialize" and len(output)<=32768:
+            return stage,error,reason,tail if tail else None
+        else:
+            break
+    return stage,error,reason,None
+
+
+def _model_failure(output,returncode,metrics):
+    stage,error,reason,_=_model_trace(output)
+    code=f"0x{returncode & 0xffffffff:08x}" if type(returncode) is int else "unknown"
+    peak=metrics.get("peak_job_commit_bytes")
+    peak=peak if type(peak) is int and peak>=0 else "unknown"
+    return JobError(f"PROBE_OUTPUT_INVALID;stage={stage};exception={error};reason={reason};exit={code};peak_commit_bytes={peak}")
+
+
 def _run_model_fixture(code,data,check,*,limits=ModelFixtureLimits(),max_output=32768):
     """Trusted fixed local ASR fixture only; larger WAV input and kernel metrics."""
     if type(limits) is not ModelFixtureLimits or type(max_output) is not int or not 1<=max_output<=32768:
@@ -232,7 +276,10 @@ def _run_model_fixture(code,data,check,*,limits=ModelFixtureLimits(),max_output=
     metrics={}
     output=_run_fixture_output(code,data,check,limits=limits,max_output=max_output,
         expected=None,max_input=480044,metrics=metrics)
-    return output,metrics
+    _,_,_,payload=_model_trace(output)
+    if payload is None:
+        raise _model_failure(output,0,metrics)
+    return payload,metrics
 
 
 def _run_fixture_output(code, data, check, *, limits, max_output, expected,
@@ -265,18 +312,26 @@ def _run_fixture_output(code, data, check, *, limits, max_output, expected,
         check()
         if time.monotonic() > deadline:
             raise JobError("TIMEOUT")
-        if (process.returncode != 0 or type(output) is not bytes
-                or len(output) > max_output or (expected is not None and output != expected)):
+        invalid=(process.returncode != 0 or type(output) is not bytes
+                 or len(output) > max_output or (expected is not None and output != expected))
+        if metrics is not None:
+            try:
+                accounting=job._query(ACCOUNTING,Accounting)
+                extended=job._query(EXTENDED,ExtendedLimits)
+                metrics.update(peak_job_commit_bytes=int(extended.PeakJobMemoryUsed),
+                    cpu_user_ms=accounting.TotalUserTime/10000,
+                    cpu_kernel_ms=accounting.TotalKernelTime/10000,
+                    wall_ms=round((time.monotonic()-(deadline-limits.wall_seconds))*1000,3))
+            except JobError:
+                if not invalid:
+                    raise
+                # Diagnostic readback failure must not hide the original exit.
+            if invalid:
+                raise _model_failure(output,process.returncode,metrics)
+        if invalid:
             raise JobError("PROBE_OUTPUT_INVALID")
         if job.active():
             raise JobError("DESCENDANTS_REMAIN")
-        if metrics is not None:
-            accounting=job._query(ACCOUNTING,Accounting)
-            extended=job._query(EXTENDED,ExtendedLimits)
-            metrics.update(peak_job_commit_bytes=int(extended.PeakJobMemoryUsed),
-                cpu_user_ms=accounting.TotalUserTime/10000,
-                cpu_kernel_ms=accounting.TotalKernelTime/10000,
-                wall_ms=round((time.monotonic()-(deadline-limits.wall_seconds))*1000,3))
     finally:
         try:
             if process is not None:

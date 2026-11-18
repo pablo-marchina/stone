@@ -124,3 +124,53 @@ def test_tts_child_environment_reduced(monkeypatch,tmp_path):
         return SimpleNamespace(stdout=b"\x01\x00"*16)
     monkeypatch.setattr(a.subprocess,"run",run)
     assert a._speech_pcm()==b"\x01\x00"*16 and len(calls)==2
+
+
+@pytest.mark.parametrize("body,expected_stage,expected_error,expected_reason,exit_code",[
+    ('stage("vad"); stage("model_load"); raise RuntimeError("out of memory SECRET_PATH")',"model_load","RuntimeError","memory",4),
+    ('stage("vad"); stage("model_load"); import os; os._exit(42)',"model_load","unknown","unknown",42),
+    ('stage("vad"); stage("model_load"); stage("transcribe"); raise ImportError("DLL load failed SECRET_PATH")',"transcribe","ImportError","dll",4),
+])
+def test_child_diagnostic_no_raw_exception(monkeypatch,tmp_path,body,expected_stage,expected_error,expected_reason,exit_code):
+    import os
+    import subprocess
+    import sys
+    package=tmp_path/"tapi_gate0";package.mkdir()
+    (package/"__init__.py").write_text("")
+    module=package/"asset_asr_fixture.py"
+    module.write_text("def _infer(data,model_dir,*,stage):\n    "+body+"\n")
+    monkeypatch.setattr(a,"__file__",str(module))
+    data,_=a.fixture("silence")
+    result=subprocess.run([sys.executable,"-I","-S","-c",a._child(data,"SECRET_PATH")],input=data,
+        stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=10,
+        env={k:os.environ[k] for k in ("SystemRoot","WINDIR") if k in os.environ})
+    assert result.returncode==exit_code
+    assert w._model_trace(result.stdout)==(expected_stage,expected_error,expected_reason,None)
+    message=str(w._model_failure(result.stdout,result.returncode,{"peak_job_commit_bytes":123}))
+    assert f"stage={expected_stage}" in message and f"exit=0x{exit_code:08x}" in message
+    assert "peak_commit_bytes=123" in message and "SECRET_PATH" not in message
+    assert b"SECRET_PATH" not in result.stdout
+
+
+def test_child_success_framing(monkeypatch,tmp_path):
+    import os
+    import subprocess
+    import sys
+    package=tmp_path/"tapi_gate0";package.mkdir()
+    (package/"__init__.py").write_text("")
+    module=package/"asset_asr_fixture.py"
+    module.write_text('def _infer(data,model_dir,*,stage):\n    return {"ok": True}\n')
+    monkeypatch.setattr(a,"__file__",str(module))
+    data,_=a.fixture("silence")
+    result=subprocess.run([sys.executable,"-I","-S","-c",a._child(data,"unused")],input=data,
+        stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=10,check=True,
+        env={k:os.environ[k] for k in ("SystemRoot","WINDIR") if k in os.environ})
+    assert w._model_trace(result.stdout)==("serialize","unknown","unknown",b'{"ok":true}')
+
+
+def test_model_trace_fail_closed_and_no_untrusted_text():
+    assert w._model_trace(b'TAPI_ASR_STAGE:bootstrap\nTAPI_ASR_STAGE:SECRET\nTAPI_ASR_RESULT\n{}')==("bootstrap","unknown","unknown",None)
+    assert w._model_trace(b'TAPI_ASR_STAGE:bootstrap\nTAPI_ASR_ERROR:RuntimeError:SECRET\n')==("bootstrap","unknown","unknown",None)
+    assert w._model_trace(b'TAPI_ASR_STAGE:serialize\nTAPI_ASR_RESULT\n{}')[3] is None
+    assert w._model_trace(b'TAPI_ASR_STAGE:bootstrap\nTAPI_ASR_STAGE:serialize\nTAPI_ASR_RESULT\n'+b'x'*32768)[3] is None
+    assert "exit=0xc0000005" in str(w._model_failure(b'',-1073741819,{}))

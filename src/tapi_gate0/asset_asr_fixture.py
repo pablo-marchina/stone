@@ -24,7 +24,7 @@ import wave
 from . import asset_windows_job as windows
 from .asset_processor_results import ASR, Speech, Interval, Abstention, ProcessorResult, encode, decode, validate_binding
 
-METHOD="synthetic-asr-vad-whisper-medium-v6"
+METHOD="synthetic-asr-vad-whisper-medium-v7"
 LIMITS=windows.ModelFixtureLimits()
 MAX_OUTPUT=32768
 RATE=16000
@@ -134,22 +134,35 @@ def _child(data,model_dir):
 x=sys.stdin.buffer.read({len(data)+1})
 if len(x)!={len(data)} or hashlib.sha256(x).hexdigest()!={_digest(data)!r}:
     sys.exit(2)
-import os, contextlib, io, json
-os.environ.update(HF_HUB_OFFLINE="1",TRANSFORMERS_OFFLINE="1",HF_HUB_DISABLE_TELEMETRY="1",OMP_NUM_THREADS="4",OMP_THREAD_LIMIT="4")
-sys.path.extend({paths!r})
-_dll=[]
-if os.name=="nt":
-    for p in (sys.prefix,os.path.join(sys.prefix,"Library","bin"),os.path.join(sys.prefix,"DLLs")):
-        if os.path.isdir(p):
-            _dll.append(os.add_dll_directory(p))
-from tapi_gate0.asset_asr_fixture import _infer
-# Keep Python diagnostic output off the result pipe.
-with contextlib.redirect_stdout(sys.stderr):
-    result=_infer(x,{str(model_dir)!r})
-out=json.dumps(result,ensure_ascii=False,allow_nan=False,separators=(",",":")).encode("utf-8")
-if not 0<len(out)<={MAX_OUTPUT}:
-    sys.exit(3)
-sys.stdout.buffer.write(out)
+pipe=sys.stdout.buffer
+def mark(stage):
+    pipe.write(("TAPI_ASR_STAGE:"+stage+"\\n").encode("ascii"));pipe.flush()
+mark("bootstrap")
+try:
+    import os, contextlib, io, json
+    os.environ.update(HF_HUB_OFFLINE="1",TRANSFORMERS_OFFLINE="1",HF_HUB_DISABLE_TELEMETRY="1",OMP_NUM_THREADS="4",OMP_THREAD_LIMIT="4")
+    sys.path.extend({paths!r})
+    _dll=[]
+    if os.name=="nt":
+        for p in (sys.prefix,os.path.join(sys.prefix,"Library","bin"),os.path.join(sys.prefix,"DLLs")):
+            if os.path.isdir(p):
+                _dll.append(os.add_dll_directory(p))
+    mark("imports")
+    with contextlib.redirect_stdout(sys.stderr):
+        from tapi_gate0.asset_asr_fixture import _infer
+        result=_infer(x,{str(model_dir)!r},stage=mark)
+    mark("serialize")
+    out=json.dumps(result,ensure_ascii=False,allow_nan=False,separators=(",",":")).encode("utf-8")
+    if not 0<len(out)<={MAX_OUTPUT-1024}:
+        raise ValueError("OUTPUT_SIZE")
+    pipe.write(b"TAPI_ASR_RESULT\\n"+out);pipe.flush()
+except Exception as exc:
+    # Only fixed categories escape the child. No raw exception text/paths.
+    kind=next((cls.__name__ for cls in (MemoryError,ImportError,OSError,RuntimeError,ValueError) if isinstance(exc,cls)),"Other")
+    message=str(exc).lower()
+    reason="memory" if kind=="MemoryError" or any(t in message for t in ("out of memory","not enough memory","bad allocation","bad_alloc","paging file","allocate memory")) else "dll" if "dll" in message else "file" if any(t in message for t in ("no such file","file not found","cannot open file","unable to open file")) else "other"
+    pipe.write(("TAPI_ASR_ERROR:"+kind+":"+reason+"\\n").encode("ascii"));pipe.flush()
+    sys.exit(4)
 '''
 
 
@@ -169,7 +182,7 @@ def _plan(data,meta,model_dir):
     return {**config,"configuration_sha256":pin},code
 
 
-def _infer(data,model_dir):
+def _infer(data,model_dir,*,stage=lambda _:None):
     """Child only, caller pinned exact authored bytes; no external entrypoint."""
     from . import multimodal_vad_asr as joint
     from . import multimodal_asr as asr
@@ -180,6 +193,7 @@ def _infer(data,model_dir):
     intervals=[]
     vad_calls=int(any(raw))
     if vad_calls:
+        stage("vad")
         get_vad_model.cache_clear()
         try:
             opts=VadOptions(**OPTIONS)
@@ -189,10 +203,12 @@ def _infer(data,model_dir):
             get_vad_model.cache_clear();gc.collect()
     segments=[]
     if intervals:
+        stage("model_load")
         from faster_whisper import WhisperModel
         model=WhisperModel(str(model_dir),device="cpu",compute_type="int8",cpu_threads=4,num_workers=1,local_files_only=True)
         if not model.model.is_multilingual or model.feature_extractor.sampling_rate!=RATE:
             raise ValueError("ASR_FIXTURE_MODEL_FORMAT")
+        stage("transcribe")
         result=joint.transcribe_regions(model,raw,intervals)
         if result["pcm_sha256"]!=_digest(raw) or result["asr_calls"]!=len(intervals):
             raise ValueError("ASR_FIXTURE_CHILD_BINDING")

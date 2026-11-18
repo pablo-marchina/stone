@@ -1600,3 +1600,54 @@ adicional comprova não encaminhamento de TAPI_DATABASE_URL/HF_TOKEN.
 skipped no Linux. Corrige a limitação de env completo registrada acima.
 **Contagem focal atualizada: 263**, não 262, sem skips com ambos opt-ins.
 Nenhuma inferência Medium/Silero executada pelo assistente.
+
+
+## A02.6 — ASR: falha no positivo e diagnóstico (18/11)
+Operador HEAD 5aaaf465a7e76f07a0a94a6336179db578ee6396:
+262 PASS / 1 FAIL em 124,62s, zero skips; espelho 32/32 e zero-spend
+PASS. Falha test_real_asr_fixture_encrypted_result inventory:
+ASR_FIXTURE_WINDOWS_PROBE_OUTPUT_INVALID, antes de result_from_output.
+Sem confirmação de WER/IoU, etapa de falha, código nativo ou pico
+de memória. Silêncio: zero VAD/ASR, pico commit 149749760 bytes,
+CPU user/kernel 265,625/281,25ms, wall 656ms. Tom: 1 VAD/0 ASR,
+pico commit 168308736 bytes, CPU user/kernel 390,625/343,75ms,
+wall 688ms. Dois negativos PASS, não aprovação do adapter.
+Evidência de console do operador, não inspeção de DB ou JUnit.
+
+Causa ainda desconhecida; não alterar limites, WER, IoU, checkpoint
+ou fixtures sem diagnóstico. Novo método synthetic-asr-vad-whisper-medium-v7
+mantém todas as políticas, acrescenta protocolo de marcadores fixos
+no stdout (bootstrap/imports/vad/model_load/transcribe/serialize),
+flush a cada etapa, envelope final separado. Exceções Python geram
+classe/razão allowlisted; classificação por texto local é heurística,
+não diagnóstico definitivo. Nunca retornar stderr, mensagem bruta,
+paths, PCM, transcript parcial ou texto arbitrário no erro.
+O supervisor retém código de saída hexadecimal e pico commit quando
+readback disponível mesmo em saída inválida; falha de readback não
+mascara erro original. Falha nativa pode fornecer apenas último marcador,
+código e pico. Timeout/cancelamento ainda têm diagnóstico próprio
+sem esse relatório. Cap de 32768 bytes total preservado, reserva de
+1024 bytes para framing; payload de resultado continua tipado e
+validado com mesmos gates. Método/hash novo evita reaproveitar
+recibo/config de v6. Nenhuma inferência adicional real aqui.
+41 PASS / 7 skip Windows em cópia isolada Linux (27 ASR + 14 supervisor);
+5 novos casos: falha Python memória/DLL, término abrupto simulado,
+framing positivo, rejeição marcador inválido/oversize. TTS smoke
+Linux via eSpeak legado, não valida runtime Windows/modelo real.
+Base integral estrutural PASS; espelho 32 blobs preservado.
+268 focais esperados após solucionar falha, não declarar PASS antecipado.
+
+### Operador — diagnóstico focal imediato
+Com HEAD atualizado, mesmo ambiente, model dir e tessdata:
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+& $py -m pytest -q --capture=tee-sys --tb=short tests/test_asset_rights_registry.py -k "test_real_asr_fixture_encrypted_result"
+```
+Se falhar, enviar código sanitizado ASR_FIXTURE_WINDOWS_PROBE_OUTPUT_INVALID
+com stage/exception/reason/exit/peak_commit_bytes, mais métricas negativas.
+Não repetir automaticamente nem ampliar budget. Se 3 PASS, rodar
+suite focal anterior (268 esperados) e espelho/zero-spend. Nenhuma
+migração, mídia externa, grant real, merge ou gate.
