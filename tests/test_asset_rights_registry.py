@@ -2352,7 +2352,7 @@ def test_shared_av_requires_both_modality_scopes(queue_fixture):
 def test_shared_av_native_pipeline(queue_fixture,case):
     import os
     from tapi_gate0.asset_candidate_evidence import assemble_candidate_bundle
-    from tapi_gate0.asset_candidate_fusion import evaluate_shared_av_ablation
+    from tapi_gate0.asset_candidate_fusion import evaluate_shared_av_ablation,evaluate_shared_av_coverage_guard
     from tapi_gate0.asset_shared_av_fixture import RECIPES
     f=queue_fixture
     paths={k:os.environ.get(v) for k,v in (
@@ -2460,6 +2460,16 @@ def test_shared_av_native_pipeline(queue_fixture,case):
         "full_missed_candidates":sum(expected[k] is not None and full[k] is None for k in assessed),
         "full_exact_match":full==expected,"reference_kind":"authored_fixture_not_independent_gold"},
         ensure_ascii=False,sort_keys=True))
+    guard=evaluate_shared_av_coverage_guard(pipe.store,TENANT,f.q.ref.object_id,artifacts,purpose=f.spec.purpose)
+    assert guard["baseline"]==result["decisions"] and not guard["policy_promoted"]
+    guarded={f.field_id:f.value for f in guard["guarded"].fields if f.field_id in assessed}
+    assert all(guarded[k] in (None,full[k]) for k in assessed)
+    print("SHARED_AV_COVERAGE_GUARD "+json.dumps({"case":case,"expected":expected,
+        "baseline":full,"guarded":guarded,"coverage":guard["coverage_details"],
+        "suppressed_fields":guard["suppressed_fields"],
+        "guarded_wrong_nonabstained":sum(guarded[k] is not None and guarded[k]!=expected[k] for k in assessed),
+        "guarded_missed_candidates":sum(expected[k] is not None and guarded[k] is None for k in assessed),
+        "guarded_exact_match":guarded==expected,"policy_promoted":False},ensure_ascii=False,sort_keys=True))
     assert pipe.step("worker")==result
     with f.q.f.engine.connect() as db:
         assert db.scalar(select(func.count()).select_from(attempts))==4
@@ -2583,6 +2593,9 @@ def test_shared_av_ablation_policy_and_rights(queue_fixture,case,spoken,screen,e
     guarded=evaluate_shared_av_coverage_guard(store,TENANT,f.q.ref.object_id,ids,purpose=f.spec.purpose)
     assert guarded["baseline"]==replay["arms"]["asr_vad+ocr+temporal+vlm"]
     assert guarded["policy_promoted"] is False and not guarded["inference_reexecuted"]
+    assert guarded["coverage_details"]["asr_vad"]==({"state":"abstained",
+        "reason":"no_observable_signal" if case=="audio_no_signal" else "insufficient_evidence"}
+        if spoken is None else {"state":"observed","reason":None})
     g={x.field_id:x for x in guarded["guarded"].fields}
     if case in ("complementary","unrecognized_audio","audio_insufficient"):
         assert g["tema_principal"].value is None and "tema_principal" in guarded["suppressed_fields"]

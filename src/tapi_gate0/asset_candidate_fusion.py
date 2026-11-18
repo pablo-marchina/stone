@@ -264,6 +264,8 @@ def _coverage_guard(bundle):
     baseline=_evaluate(bundle)
     by={e.observation.result.processor:e.observation.result for e in bundle.entries}
     coverage=bundle.coverage()
+    coverage_details={k:{"state":state,"reason":by[k].reason if k in by and
+                      by[k].state=="abstained" else None} for k,state in coverage.items()}
     # A no-observable-signal observation is a bounded negative guard on
     # the fixture, not proof of absence in real content.
     usable={k for k,r in by.items() if r.state=="observed" or
@@ -289,7 +291,7 @@ def _coverage_guard(bundle):
             guarded.append(d)
     decision=CandidateDecisions.model_validate({**baseline.model_dump(mode="python"),"fields":tuple(guarded)})
     return {"schema_version":"shared-av-coverage-guard.v1",
-            "source_fingerprint":bundle.fingerprint(),"coverage":coverage,
+            "source_fingerprint":bundle.fingerprint(),"coverage":coverage,"coverage_details":coverage_details,
             "baseline":baseline,"guarded":decision,"suppressed_fields":tuple(suppressed),
             "inference_reexecuted":False,"canonical_rubric":False,"scientific_evidence":False,
             "policy_promoted":False}
