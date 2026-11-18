@@ -285,3 +285,16 @@ def test_recovery_semantic_diagnostic_does_not_join_fragments():
     assert _semantic(["Salve","este conteúdo."])["tipo_cta"] is None
     assert _semantic(["Salve este conteúdo."])["tipo_cta"]=="salvar"
     assert _semantic(["Confira o estoque."])["tema_principal"]=="gestão"
+
+
+def test_recovery_context_rejection_is_never_a_processor_observation():
+    from tapi_gate0.asset_asr_recovery import _score
+    _,meta=a.fixture("silence")
+    data=emit({"pcm_sha256":meta["pcm_sha256"],"diagnostic_error":"ASR_RECOVERY_CONTEXT_TIMESTAMP"})
+    score=_score("silence",meta,data,profile="context_500ms")
+    assert score["quality_passed"] is False and score["values"] is None
+    assert score["error_code"]=="ASR_RECOVERY_CONTEXT_TIMESTAMP"
+    with pytest.raises(ValueError,match="OUTPUT_BINDING"):
+        a.result_from_output(meta,data)
+    with pytest.raises(ValueError,match="OUTPUT_BINDING"):
+        _score("silence",meta,data,profile="baseline")

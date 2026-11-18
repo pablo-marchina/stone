@@ -32,7 +32,13 @@ def _semantic(texts):
             "tipo_cta":directed.directed_decision(preds,hybrid=False)}
 
 
-def _score(case,meta,output):
+def _score(case,meta,output,*,profile="baseline"):
+    parsed=json.loads(output)
+    if (profile=="context_500ms" and type(parsed) is dict and set(parsed)=={"pcm_sha256","diagnostic_error"}
+            and parsed["pcm_sha256"]==meta["pcm_sha256"] and parsed["diagnostic_error"] in
+            ("ASR_RECOVERY_CONTEXT_TIMESTAMP","ASR_RECOVERY_CONTEXT_NO_OVERLAP")):
+        return {"quality_passed":False,"semantic_exact_match":False,"values":None,
+                "error_code":parsed["diagnostic_error"]}
     # Structural/negative failures propagate and do not become observations.
     try:
         obs,quality=asr.result_from_output(meta,output)
@@ -45,10 +51,14 @@ def _score(case,meta,output):
         # Never persist or use this rejected transcript for semantic fusion.
         texts=[r["text"] for r in json.loads(output)["segments"]]
     diagnostic_anchors=_semantic(texts)
+    hypothesis_words=set(asr._words(" ".join(texts)))
+    anchor_words={"inventory":("estoque",),"agreement":("vendas",),"conflict":("custos","fixos"),
+                  "cta":("salve","este","conteúdo")}.get(case,())
     values=diagnostic_anchors if passed else None
     expected=dict(zip(("tema_principal","tipo_cta"),EXPECTED[case]))
     return {"quality_passed":passed,"quality":quality,"values":values,"expected":expected,
             "diagnostic_anchors_not_admitted":diagnostic_anchors,
+            "expected_anchor_word_presence":{w:w in hypothesis_words for w in anchor_words},
             "semantic_exact_match":passed and values==expected,
             "hypothesis_sha256":asr._digest(" ".join(texts).encode("utf-8")),
             "hypothesis_word_count":len(asr._words(" ".join(texts))),
@@ -73,13 +83,10 @@ def run(model_dir):
             # runtime check before and after each protected child.
             row={"case":case,"transport":transport,"profile":profile,"pcm_sha256":meta["pcm_sha256"],
                 "configuration_sha256":config["configuration_sha256"]}
-            try:
-                output,metrics=windows._run_model_fixture(code,data,check,limits=asr.LIMITS,max_output=asr.MAX_OUTPUT)
-                row.update(resources=metrics,**_score(case,meta,output))
-            except windows.JobError as exc:
-                # A native failure remains a failure; allow the other fixed
-                # arms to run. Do not expose exception text or promote it.
-                row.update(quality_passed=False,semantic_exact_match=False,error_code="ASR_RECOVERY_NATIVE_FAILURE")
+            # Native errors (including failure to verify cleanup) must abort;
+            # no next child may start until the operator reconciles them.
+            output,metrics=windows._run_model_fixture(code,data,check,limits=asr.LIMITS,max_output=asr.MAX_OUTPUT)
+            row.update(resources=metrics,**_score(case,meta,output,profile=profile))
             if asr._runtime(model_dir)!=runtime:
                 raise ValueError("ASR_RECOVERY_RUNTIME_CHANGED")
             rows.append(row)

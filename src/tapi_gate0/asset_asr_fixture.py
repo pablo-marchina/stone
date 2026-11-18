@@ -240,13 +240,23 @@ def _infer(data,model_dir,*,stage=lambda _:None,profile="baseline"):
         if not model.model.is_multilingual or model.feature_extractor.sampling_rate!=RATE:
             raise ValueError("ASR_FIXTURE_MODEL_FORMAT")
         stage("transcribe")
-        result=(joint.transcribe_regions(model,raw,intervals) if profile=="baseline"
-                else _transcribe_context(model,raw,intervals))
+        try:
+            result=(joint.transcribe_regions(model,raw,intervals) if profile=="baseline"
+                    else _transcribe_context(model,raw,intervals))
+        except ASRContextRejected as exc:
+            if profile!="context_500ms":
+                raise
+            # Diagnostic-only rejection, never a valid processor result.
+            return {"pcm_sha256":_digest(raw),"diagnostic_error":str(exc)}
         if result["pcm_sha256"]!=_digest(raw) or result["asr_calls"]!=len(intervals):
             raise ValueError("ASR_FIXTURE_CHILD_BINDING")
         segments=[{k:s[k] for k in ("start_s","end_s","text","region_start_sample","region_end_sample")} for s in result["segments"]]
     return {"pcm_sha256":_digest(raw),"intervals":intervals,"segments":segments,
             "vad_calls":vad_calls,"asr_calls":len(intervals)}
+
+
+class ASRContextRejected(ValueError):
+    """A known context-boundary rejection, not a native worker failure."""
 
 
 def _transcribe_context(model,raw,intervals):
@@ -275,10 +285,10 @@ def _transcribe_context(model,raw,intervals):
         for row in result["segments"]:
             x,y=row["start_s"]+start/RATE,row["end_s"]+start/RATE
             if x<a/RATE-0.25 or y>b/RATE+0.25:
-                raise ValueError("ASR_RECOVERY_CONTEXT_TIMESTAMP")
+                raise ASRContextRejected("ASR_RECOVERY_CONTEXT_TIMESTAMP")
             x,y=max(x,a/RATE),min(y,b/RATE)
             if not x<y:
-                raise ValueError("ASR_RECOVERY_CONTEXT_NO_OVERLAP")
+                raise ASRContextRejected("ASR_RECOVERY_CONTEXT_NO_OVERLAP")
             segments.append({"start_s":x,"end_s":y,"text":row["text"],
                 "region_start_sample":a,"region_end_sample":b})
     return {"pcm_sha256":_digest(raw),"asr_calls":len(intervals),"segments":segments}
