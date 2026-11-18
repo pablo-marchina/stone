@@ -1,4 +1,4 @@
-"""Guarded local SQLite additive 0013 or 0014 upgrade. Explicit operator action only.
+"""Guarded local SQLite additive 0013, 0014 or 0015 upgrade. Explicit operator action only.
 
 Fresh verified backup first; then BEGIN IMMEDIATE and compare the current
 logical snapshot to that backup. Alembic runs on the very same connection.
@@ -47,8 +47,11 @@ def _verify(db, before, before_schema, tenant, new, tables):
     return after
 
 
-def upgrade(root, raw_url, tenant, backup_name, *, stopped, lineage=False):
+def upgrade(root, raw_url, tenant, backup_name, *, stopped, lineage=False, jobs=False):
+    _require(not (lineage and jobs), "TRANSITION_INVALID")
     old,new,tables=(NEW,"0014_asset_lineage",{"asset_lineage_nodes"}) if lineage else (OLD,NEW,TABLES)
+    if jobs:
+        old,new,tables="0014_asset_lineage","0015_asset_jobs",{"asset_processing_jobs","asset_processing_attempts"}
     _require(stopped, "ALL_WRITERS_MUST_STOP")
     _require(bool(tenant), "TENANT_REQUIRED")
     _require(bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,100}\.sqlite3",backup_name)),
@@ -113,12 +116,13 @@ def main(argv=None):
     apply=p.add_mutually_exclusive_group(required=True)
     apply.add_argument("--apply-0013",action="store_true")
     apply.add_argument("--apply-0014",action="store_true")
+    apply.add_argument("--apply-0015",action="store_true")
     a=p.parse_args(argv)
     try:
-        _require(a.apply_0013 or a.apply_0014,"EXPLICIT_APPLY_REQUIRED")
+        _require(a.apply_0013 or a.apply_0014 or a.apply_0015,"EXPLICIT_APPLY_REQUIRED")
         check_checkout(ROOT,a.expected_head)
         result=upgrade(ROOT,os.environ.get("TAPI_DATABASE_URL",""),os.environ.get("TAPI_TENANT_ID",""),
-            a.backup_name,stopped=a.confirm_all_writers_stopped,lineage=a.apply_0014)
+            a.backup_name,stopped=a.confirm_all_writers_stopped,lineage=a.apply_0014,jobs=a.apply_0015)
         print(json.dumps(result))
         return 0
     except Exception as exc:
