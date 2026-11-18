@@ -374,6 +374,54 @@ def _run_vlm_fixture(code,data,check,*,limits=VlmFixtureLimits(),max_output=3276
     return payload,metrics
 
 
+# Accounting may retain an exited process until its last reference closes.
+# Only a root-only job may wait briefly for the accounting count to settle.
+ROOT_ACCOUNTING_GRACE_SECONDS = 1.0
+
+
+def _release_exited_root(process):
+    """Release the owned CPython Windows Popen handle exactly once.
+
+    communicate()/wait() have reaped the process; do not reopen by PID or
+    close a raw integer behind Popen's back. No caller may reuse this Popen
+    for process operations after this function succeeds.
+    """
+    if type(process.returncode) is not int:
+        raise JobError("ROOT_EXIT_UNVERIFIED")
+    handle = getattr(process, "_handle", None)
+    close = getattr(handle, "Close", None)
+    if not callable(close) or getattr(handle, "closed", True):
+        raise JobError("ROOT_HANDLE_INVALID")
+    try:
+        close()
+    except OSError as exc:
+        raise JobError("ROOT_HANDLE_CLOSE_FAILED") from exc
+    if not handle.closed:
+        raise JobError("ROOT_HANDLE_CLOSE_FAILED")
+
+
+def _verify_success_empty(job, check, deadline):
+    """Never accept a live tree or a result after forced cleanup.
+
+    A terminated sole root may still be represented in accounting. Poll
+    only that case, within the original wall deadline. Any other process
+    history with a nonzero active count remains a hard failure.
+    """
+    until=min(deadline,time.monotonic()+ROOT_ACCOUNTING_GRACE_SECONDS)
+    while True:
+        check()
+        now=time.monotonic()
+        if now>=deadline:
+            raise JobError("TIMEOUT")
+        accounting=job._query(ACCOUNTING,Accounting)
+        if not accounting.ActiveProcesses:
+            return
+        if (accounting.TotalProcesses!=1 or accounting.ActiveProcesses!=1
+                or now>=until):
+            raise JobError("DESCENDANTS_REMAIN")
+        time.sleep(min(0.025,until-now))
+
+
 def _run_fixture_output(code, data, check, *, limits, max_output, expected,
                         max_input=131072,metrics=None,failure=_model_failure):
     if type(data) is not bytes or not 1 <= len(data) <= max_input:
@@ -422,20 +470,27 @@ def _run_fixture_output(code, data, check, *, limits, max_output, expected,
                 raise failure(output,process.returncode,metrics)
         if invalid:
             raise JobError("PROBE_OUTPUT_INVALID")
-        if job.active():
-            raise JobError("DESCENDANTS_REMAIN")
+        # communicate has finished and waited for the root. Release our
+        # reference before interpreting ActiveProcesses; a dead root is
+        # not a descendant. Keep the Job Object open throughout.
+        _release_exited_root(process)
+        process = None
+        _verify_success_empty(job,check,deadline)
     finally:
         try:
+            # Even after root handle release, the job owns any descendants.
+            # Forced cleanup must never turn a failed probe into success.
+            if assigned and job.active():
+                job.terminate()
             if process is not None:
-                if assigned:
-                    # Terminate all descendants on *any* return/error before
-                    # releasing the kernel singleton. No receipt if cleanup fails.
-                    if job.active():
-                        job.terminate()
-                elif process.poll() is None:
+                if not assigned and process.poll() is None:
                     process.kill()
                 process.communicate(timeout=5)
                 process.wait(timeout=5)
+                # If close() raised after marking the handle closed, do not
+                # attempt to close it twice; the original failure propagates.
+                if not getattr(getattr(process,"_handle",None),"closed",False):
+                    _release_exited_root(process)
             job.wait_empty()
         finally:
             # Also kills associated children if a previous cleanup call failed.

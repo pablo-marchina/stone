@@ -56,7 +56,7 @@ PACKAGES=("pytest","fastapi","starlette","pydantic","sqlalchemy","alembic","http
 # Minimum collected parameterizations, pinned to the approved native suite.
 # Missing/duplicate/skipped required cases cannot be called a full multimodal pass.
 MULTIMODAL_GROUPS=(
-    ("kernel","tests.test_asset_windows_job","test_native_",7),
+    ("kernel","tests.test_asset_windows_job","test_native_",8),
     ("supervisor","tests.test_asset_rights_registry","test_windows_supervisor_",3),
     ("typed","tests.test_asset_rights_registry","test_typed_fixture_",7),
     ("temporal_decode","tests.test_asset_temporal_fixture","test_real_ffmpeg_",3),

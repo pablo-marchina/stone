@@ -44,9 +44,19 @@ def test_bounds_before_check_or_spawn(data, expected):
         w._run_trusted_fixture(OK, data, expected, lambda: pytest.fail("check called"))
 
 
+class FakeHandle:
+    def __init__(self,events):
+        self.events,self.closed=events,False
+    def Close(self):
+        assert not self.closed
+        self.closed=True
+        self.events.append("root_close")
+
+
 class FakeProcess:
     def __init__(self, events):
         self.events, self.returncode = events, None
+        self._handle=FakeHandle(events)
     def communicate(self, input=None, timeout=None):
         self.events.append(("communicate", input))
         self.returncode = 0
@@ -58,6 +68,7 @@ class FakeProcess:
         self.returncode = 1
     def wait(self, timeout):
         self.events.append("wait")
+        return self.returncode
 
 
 class FakeJob:
@@ -69,6 +80,13 @@ class FakeJob:
             raise w.JobError("ASSIGN_FAILED")
     def active(self):
         return int(self.remain)
+    def _query(self,cls,typ):
+        assert cls==w.ACCOUNTING and typ is w.Accounting
+        value=typ()
+        value.ActiveProcesses=self.active()
+        value.TotalProcesses=2 if self.remain else 1
+        self.events.append("accounting")
+        return value
     def terminate(self):
         self.events.append("terminate_tree")
         self.remain = False
@@ -97,6 +115,7 @@ def test_assignment_precedes_data_and_cleanup_precedes_success(monkeypatch):
     events = fake_run(monkeypatch)
     assert w._run_trusted_fixture(OK, b'x', b'ok', lambda: events.append("check")) == b'ok'
     assert events.index("assign") < events.index(("communicate", b'x'))
+    assert events.index("root_close") < events.index("accounting")
     assert events[-3:] == ["empty", "close", "check"]
 
 
@@ -123,6 +142,7 @@ def test_descendants_prevent_success_and_are_cleaned(monkeypatch):
     events = fake_run(monkeypatch, remain=True)
     with pytest.raises(w.JobError, match="DESCENDANTS_REMAIN"):
         w._run_trusted_fixture(OK, b'x', b'ok', lambda: None)
+    assert events.index("root_close") < events.index("terminate_tree")
     assert "terminate_tree" in events and events[-2:] == ["empty", "close"]
 
 
@@ -269,3 +289,65 @@ def test_vlm_fixture_checks_before_spawn(monkeypatch):
     monkeypatch.setattr(w,"_run_fixture_output",run)
     assert w._run_vlm_fixture("",b"x",lambda:events.append("check"))==(b"{}",{"peak_job_commit_bytes":123})
     assert events==["check","admit","run"]
+
+
+def test_root_accounting_settles_only_after_handle_release(monkeypatch):
+    events=[]
+    proc=FakeProcess(events)
+    class RootJob(FakeJob):
+        def active(self):
+            return int(not proc._handle.closed)
+        def wait_empty(self):
+            assert self.active()==0
+            self.events.append("empty")
+    job=RootJob(events)
+    monkeypatch.setattr(w,"WindowsJob",lambda limits:job)
+    monkeypatch.setattr(w.subprocess,"Popen",lambda *a,**kw:proc)
+    assert w._run_trusted_fixture(OK,b"x",b"ok",lambda:None)==b"ok"
+    assert events.index("root_close")<events.index("accounting")
+    assert "terminate_tree" not in events
+
+
+def test_root_only_accounting_grace_is_bounded_and_rechecks_rights(monkeypatch):
+    clock=[0.]
+    monkeypatch.setattr(w.time,"monotonic",lambda:clock[0])
+    monkeypatch.setattr(w.time,"sleep",lambda seconds:clock.__setitem__(0,clock[0]+seconds))
+    class AccountingJob:
+        def __init__(self,counts):
+            self.counts=iter(counts)
+        def _query(self,cls,typ):
+            active,total=next(self.counts)
+            value=typ()
+            value.ActiveProcesses=active
+            value.TotalProcesses=total
+            return value
+    checks=[]
+    w._verify_success_empty(AccountingJob([(1,1),(1,1),(0,1)]),lambda:checks.append(clock[0]),10)
+    assert len(checks)==3 and clock[0]==pytest.approx(.05)
+    with pytest.raises(w.JobError,match="DESCENDANTS_REMAIN"):
+        w._verify_success_empty(AccountingJob([(1,2)]),lambda:None,10)
+    from itertools import repeat
+    with pytest.raises(w.JobError,match="DESCENDANTS_REMAIN"):
+        w._verify_success_empty(AccountingJob(repeat((1,1))),lambda:None,10)
+    def revoked():
+        raise ValueError("revoked")
+    with pytest.raises(ValueError,match="revoked"):
+        w._verify_success_empty(AccountingJob([(0,1)]),revoked,10)
+    with pytest.raises(w.JobError,match="TIMEOUT"):
+        w._verify_success_empty(AccountingJob([(0,1)]),lambda:None,clock[0])
+
+
+def test_root_handle_rejects_unverified_exit():
+    proc=FakeProcess([])
+    with pytest.raises(w.JobError,match="ROOT_EXIT_UNVERIFIED"):
+        w._release_exited_root(proc)
+    assert not proc._handle.closed
+
+
+@NATIVE
+def test_native_repeated_single_root_exit_and_reacquire():
+    # Reproduce the rapid sequence of successful single-process probes,
+    # without loading a model or accessing a vault.
+    for _ in range(24):
+        assert w._run_trusted_fixture(OK,b"x",b"ok",lambda:None,
+            limits=w.JobLimits(active_processes=1))==b"ok"
