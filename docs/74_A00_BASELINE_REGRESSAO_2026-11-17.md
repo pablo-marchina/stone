@@ -2470,3 +2470,111 @@ Analisar erros/misses mesmo se pytest PASS, comparar arms e
 custos por caso antes de decidir roteamento/cache. A02.7.4:
 reconciliar qualidade e custo, then benchmark de estratégia
 seletiva e preflight operacional; não liberar mídia externa.
+
+
+## A02.7.3 — execução focal parcial FAIL e recuperação ASR (18/11/2026)
+
+Operador reportou comandos do incremento 9647102 (sem novo HEAD
+impresso no trecho): ASR/contratos/runner 82/82 PASS em 3,99s,
+policy surrogates 6/6 PASS em 10,36s, native/shared restante
+11 PASS / 2 FAIL em 686,40s, 139 deselected, zero-spend PASS.
+Sem full strict novo. Não inferir SHA testado do log sem confirmação.
+Último full strict PASS continua 20aea11, 1294/1295 e 15/15 grupos.
+SHA256 do arquivo de console recebido
+5b9a998a39e4cb805bc0cef8917ae5084b3f3c68a0c75248e124c603d44eab33.
+Não é JUnit nem relatório de execução independente.
+
+Falhas complementary e audio_only: ASR_FIXTURE_WER_GATE, mesma
+frase CTA autoral; VAD/decoder/OCR precedentes executados, não
+completou ASR persistido, VLM ou ablation nesses dois casos.
+WER exato e hipótese não presentes no console. Não tratar
+como sucesso, não baixar threshold 0,50, nem trocar receita.
+Seis de oito clipes completos, cinco full_exact_match, um
+erro de tema (inventory, venda em vez de abstention).
+Ablation parcial 90 arms, 360 células, não 480 completas.
+Sobre 24 células full (6 candidatos esperados):
+ASR sozinho 1 correto/1 errado/5 missed/18 exatas;
+OCR 6 corretos/2 errados/0 missed/22 exatas;
+ASR+OCR e full 6 corretos/1 errado/0 missed/23 exatas.
+Sem ganho semântico do VLM/temporal nesses seis clipes, não
+justifica retirada: VLM pode vetar conflito visual, temporal
+tem medições; missingness dos dois CTA impede comparação final.
+Inventory ASR WER .375 e sem âncora gestão; OCR vendas promove
+tema. Agreement WER 0 e vendas em ambas; conflict WER .222222
+e finanças vs vendas, abstention correta. Não alterar fusão
+com regra específica do oráculo, nem assumir falta de conflito
+quando a modalidade não recupera âncoras. A transcrição real
+de inventory/CTA não foi fornecida, causa acústica/decodificação/
+TTS ainda hipótese.
+
+Commits de recuperação:
+- 5350fd7: perfil ASR context_500ms, diagnóstico WER, módulo
+  asset_asr_recovery.py e CLI scripts/a02_asr_recovery.py.
+- aac8667: controle separado de transporte UTF-8 stdin para
+  CTA, métricas, testes.
+- c2da6a6: rejeições temporais diagnósticas distintas de falhas
+  nativas; abortar em falha de kernel/cleanup, não continuar
+  automaticamente, teste de não promoção.
+
+Experimento separado de áudio autoral, sem DB/vault, sem inputs
+de terceiros, sem download. Seis casos originais (inventory,
+agreement, conflict, cta, silence, tone) em dois perfis, mais
+CTA utf8_stdin em ambos (14 avaliações). Perfis comparados
+somente no mesmo PCM argv original. Transportes têm hashes
+separados e não contam como recuperação do input anterior.
+UTF-8 é hipótese de codificação argv Windows, não causa provada.
+Mantém a receita original por default, nenhuma troca de texto,
+referência ou gate. Código pinado por configuração; novos
+hashes de fonte/configuração são esperados e não reusam recibos
+do commit anterior. VAD permanece OPTIONS original; candidato
+decodifica até 500ms extra dos dois lados da região sem passar
+região vizinha/limites PCM. Rejeitar timestamps fora de VAD
+por mais de 250ms ou sem overlap; clip apenas a interseção.
+Não usa referência ou prompt para inferência, mesma configuração
+Whisper Medium CPU int8 e supervisor 6144MiB/240s CPU/90s wall.
+Guarda silêncio e tom preservada. WER acima de 0,50 continua
+lançando ASRFixtureQualityError (subclasse ValueError, código
+inalterado); diagnóstico numérico e hash, não payload aprovado.
+Rejeições de contexto retornam envelope experimental que não
+passa result_from_output. Falha nativa/estrutural aborta a CLI.
+Os resultados rejeitados não viram observação persistida.
+A CLI imprime apenas métricas/hashes/âncoras permitidas e
+presença das palavras autorais esperadas, não transcript bruto.
+Cada perfil só passa gate experimental se todos os seis casos
+originais satisfizerem qualidade e âncoras esperadas (inventory
+gestão; agreement vendas; conflict finanças; cta salvar;
+negativos sem candidatos). Sem seleção automática, sem
+alteração do perfil baseline no pipeline, sem novo gate global.
+Seis testes unitários novos esperados, não executados pelo
+assistente. Novo código é candidato, não correção comprovada
+das falhas de integração. A02.7.4 seletivo suspenso até
+reconciliar qualidade; não repetir full antes da correção.
+Sem alteração de schema DB, matrizes, gates, grants, mídia
+externa, merge ou gasto; IMP-063/064/136/137 parciais.
+
+### Operador — recuperação focal
+Parar writers/servidor; usar o ambiente e modelo local anteriores.
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+& $py docs/base_atemporal/ferramentas/validar_espelho.py
+& $py -m pytest -q --tb=short tests/test_asset_asr_fixture.py tests/test_asset_processor_results.py tests/test_a00_baseline.py
+& $py scripts/verify_zero_spend.py
+```
+Esperado 88/88 (82+6), não resultado. Se PASS, executar somente
+o experimento focal, sem novos modelos:
+```powershell
+if ([string]::IsNullOrWhiteSpace($env:TAPI_ASR_TEST_MODEL_DIR)) {
+    throw "Reutilize o caminho local do Whisper Medium já pinado"
+}
+& $py scripts/a02_asr_recovery.py --model-dir "$env:TAPI_ASR_TEST_MODEL_DIR"
+```
+Enviar JSON integral (profiles/rows, hashes, métricas) e HEAD.
+Se falha nativa/estrutural, preservar erro e parar; não liberar
+lease ou baixar modelos. Se perfil candidato passa, revisar
+resultados e comparar PCM antes de qualquer promoção; se
+nenhum passa, investigar outro candidato sem reduzir critérios.
+Depois de correção comprovada, repetir testes shared nativos,
+ablação e full strict. Não executar full neste passo.
