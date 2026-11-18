@@ -6,7 +6,7 @@ model invocation, arbitrary caption, API, write, ranking or publication.
 from typing import Literal
 from itertools import combinations
 from pydantic import Field, model_validator
-from .asset_processor_results import Contract, Digest, Id
+from .asset_processor_results import Contract, Digest, Id, PARTIAL_QUALITY
 from .asset_candidate_evidence import (_validate_selection, _assemble_in_transaction,
     _recheck_bundle)
 from .asset_lineage import RetainedAssetRef
@@ -228,6 +228,9 @@ def _evaluate_authorized(store,tenant,object_id,artifact_ids,*,purpose,ablation,
         permission=Permission(operation="derive",purpose=purpose,field="rubric_evidence")
         _grant(db,q.resolve_anchor(root),root,now,permission)
         bundle,by_id,bindings=_assemble_in_transaction(store,db,now,tenant,object_id,artifact_ids,purpose=purpose,by_id=by_id)
+        if not coverage_guard and any(e.observation.shared_av is not None and
+                e.observation.shared_av.quality_policy==PARTIAL_QUALITY for e in bundle.entries):
+            raise AssetRightsDenied("ASSET_S1_PARTIAL_REQUIRES_COVERAGE_GUARD")
         try:
             result=(_ablation(bundle) if ablation else
                     _coverage_guard(bundle) if coverage_guard else _evaluate(bundle))
@@ -264,6 +267,8 @@ def _coverage_guard(bundle):
     baseline=_evaluate(bundle)
     by={e.observation.result.processor:e.observation.result for e in bundle.entries}
     coverage=bundle.coverage()
+    quality_rejections={e.observation.result.processor:e.observation.shared_av_quality_rejection.model_dump(mode="json")
+        for e in bundle.entries if e.observation.shared_av_quality_rejection is not None}
     coverage_details={k:{"state":state,"reason":by[k].reason if k in by and
                       by[k].state=="abstained" else None} for k,state in coverage.items()}
     # A no-observable-signal observation is a bounded negative guard on
@@ -292,6 +297,7 @@ def _coverage_guard(bundle):
     decision=CandidateDecisions.model_validate({**baseline.model_dump(mode="python"),"fields":tuple(guarded)})
     return {"schema_version":"shared-av-coverage-guard.v1",
             "source_fingerprint":bundle.fingerprint(),"coverage":coverage,"coverage_details":coverage_details,
+            "quality_rejections":quality_rejections,
             "baseline":baseline,"guarded":decision,"suppressed_fields":tuple(suppressed),
             "inference_reexecuted":False,"canonical_rubric":False,"scientific_evidence":False,
             "policy_promoted":False}

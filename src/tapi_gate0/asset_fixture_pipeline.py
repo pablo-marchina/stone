@@ -13,7 +13,7 @@ from .asset_derived_payloads import DerivedPayloadStore, _extra, _artifact_id
 from .asset_indexed_vault import IndexedAssetVault
 from .asset_lineage_index import _grant
 from .asset_rights import AssetRightsDenied, Permission
-from .asset_candidate_fusion import evaluate_candidate_bundle
+from .asset_candidate_fusion import evaluate_candidate_bundle, evaluate_shared_av_coverage_guard
 from . import asset_shared_av_fixture as shared
 
 VERSION="fixture-pipeline.v1"
@@ -56,10 +56,10 @@ class FixturePipeline:
             (tessdata_dir,asr_model_dir,vlm_model_dir,vlm_server_exe))
         t,a,v,s=self.paths
         self._shared=None
-        if mode=="shared_av" and case in shared.CASES and all(x is not None for x in self.paths):
+        if mode in ("shared_av","shared_av_partial") and case in shared.CASES and all(x is not None for x in self.paths):
             self._shared=shared.prepare(case)
             data,mime=self._shared.data,"video/mp4"
-            entries=[(p,shared.METHOD,shared.plan(self._shared,p,self.paths)[0].configuration(p))
+            entries=[(p,shared.METHOD,shared.plan(self._shared,p,self.paths,quality_policy=_shared_quality_policy(mode))[0].configuration(p))
                      for p in shared.PROCESSORS]
         elif mode=="header" and case=="header":
             data,mime=supervisor.FIXTURE,"video/mp4"
@@ -112,8 +112,9 @@ class FixturePipeline:
         q,vault,store=self.queue,self.vault,self.store
         t,a,v,s=self.paths
         mode,case=self.plan.mode,self.plan.case
-        if mode=="shared_av":
-            return shared.run(q,vault,store,lease,fixture=self._shared,paths=self.paths)
+        if mode in ("shared_av","shared_av_partial"):
+            return shared.run(q,vault,store,lease,fixture=self._shared,paths=self.paths,
+                              quality_policy=_shared_quality_policy(mode))
         if mode=="header":
             return typed.run_typed_fixture_windows(q,vault,store,lease)
         if mode=="temporal":
@@ -162,21 +163,39 @@ class FixturePipeline:
                 _deny("RECEIPT_MISMATCH")
             result={**self._status("processed",spec,"completed"),
                     "artifact_id":receipt["artifact_id"],"model_calls":receipt["model_calls"]}
-            if self.plan.mode=="shared_av":
+            if self.plan.mode in ("shared_av","shared_av_partial"):
                 result.update({key:receipt[key] for key in ("decode_resources","model_resources","ocr_resources","quality")})
-            if self.plan.mode=="shared_av":
+            if self.plan.mode in ("shared_av","shared_av_partial"):
                 result["step_wall_ms"]=round((perf_counter()-started)*1000,3)
             return result
         first=self.plan.specs[0]
         # Reauthenticate exact persisted typed results under the fusion
         # transaction; never emit a partial final decision.
-        decisions=evaluate_candidate_bundle(self.store,first.tenant_id,first.object_id,
-            artifacts,purpose=first.purpose)
-        return {"status":"candidate_complete","plan_sha256":self.plan.fingerprint,
+        report=None
+        if self.plan.mode=="shared_av_partial":
+            report=evaluate_shared_av_coverage_guard(self.store,first.tenant_id,first.object_id,
+                artifacts,purpose=first.purpose)
+            decisions=report["guarded"]
+        else:
+            decisions=evaluate_candidate_bundle(self.store,first.tenant_id,first.object_id,
+                artifacts,purpose=first.purpose)
+        result={"status":"candidate_complete","plan_sha256":self.plan.fingerprint,
                 "artifact_ids":tuple(artifacts),"decisions":decisions,
                 "synthetic_fixture":True,"scientific_evidence":False,"canonical_rubric":False}
+        if report is not None:
+            rejected=report["quality_rejections"]
+            result.update(status="candidate_partial" if rejected else "candidate_complete_guarded",
+                asr_fixture_quality_gate_passed=not rejected,quality_rejections=rejected,
+                coverage_details=report["coverage_details"],coverage_policy_experimental=True,
+                semantic_quality_validated=False)
+        return result
 
     def _status(self,status,spec,state):
         return {"status":status,"plan_sha256":self.plan.fingerprint,"job_id":spec.job_id,
                 "processor":spec.processor,"job_state":state,"synthetic_fixture":True,
                 "scientific_evidence":False,"canonical_rubric":False}
+
+
+def _shared_quality_policy(mode):
+    from .asset_processor_results import STRICT_QUALITY, PARTIAL_QUALITY
+    return PARTIAL_QUALITY if mode=="shared_av_partial" else STRICT_QUALITY

@@ -20,7 +20,8 @@ from . import asset_vlm_fixture as vlm, asset_temporal_fixture as temporal
 from . import asset_windows_job as windows
 from . import multimodal_temporal as reducer
 from .asset_processor_results import (SHARED_AV_METHOD, SharedAVSource, SharedAVBinding,
-    Frame, Temporal, Transition, ProcessorResult, encode, decode, validate_binding)
+    Frame, Temporal, Transition, ProcessorResult, Abstention, SharedAVQualityRejection,
+    STRICT_QUALITY, PARTIAL_QUALITY, encode, decode, validate_binding)
 from .asset_rights import AssetRightsDenied
 
 METHOD=SHARED_AV_METHOD
@@ -195,14 +196,17 @@ def _adapter_plan(fixture,processor,paths):
     _deny("PROCESSOR_CONFIG")
 
 
-def plan(fixture,processor,paths):
+def plan(fixture,processor,paths,*,quality_policy=STRICT_QUALITY):
+    if quality_policy not in (STRICT_QUALITY,PARTIAL_QUALITY):
+        _deny("QUALITY_POLICY")
     config,code=_adapter_plan(fixture,processor,paths)
     # Bind the exact decoder program, kernel budget and adapter identity.
     raw=json.dumps({"adapter":config["configuration_sha256"],
         "decoder_code":_digest(fixture.decoder_code.encode()),"decoder_limits":asdict(LIMITS),
         "max_input":MAX_CONTAINER,"max_output":MAX_DECODE_OUTPUT,"job_flags":windows.FLAGS,
         "job_name":windows.JOB_NAME},sort_keys=True,separators=(",",":")).encode()
-    binding=SharedAVBinding(source=fixture.source,adapter_configuration_sha256=_digest(raw))
+    binding=SharedAVBinding(source=fixture.source,adapter_configuration_sha256=_digest(raw),
+                            quality_policy=quality_policy)
     return binding,config,code
 
 
@@ -228,7 +232,24 @@ def _temporal_result(raw):
             normalized_difference=x["normalized_difference"]) for x in measured["transition_candidates"]))
 
 
-def run(queue,vault,store,lease,*,fixture,paths):
+def _asr_result(meta,output,quality_policy):
+    """Only a structurally validated WER failure may become a typed abstention."""
+    if quality_policy not in (STRICT_QUALITY,PARTIAL_QUALITY):
+        _deny("QUALITY_POLICY")
+    try:
+        observation,quality=asr.result_from_output(meta,output)
+        return observation,quality,None
+    except asr.ASRFixtureQualityError as exc:
+        if quality_policy!=PARTIAL_QUALITY:
+            raise
+        names=("wer","vad_iou","vad_boundary_error_s","reference_words",
+               "hypothesis_words","vad_calls","asr_calls")
+        rejection=SharedAVQualityRejection(**{k:exc.quality[k] for k in names})
+        return (Abstention(processor="asr_vad",reason="fixture_quality_rejected"),
+                rejection.model_dump(mode="json"),rejection)
+
+
+def run(queue,vault,store,lease,*,fixture,paths,quality_policy=STRICT_QUALITY):
     """Called only from the fixed fixture pipeline. A trusted host is not a sandbox."""
     from .asset_jobs import AssetJobQueue
     from .asset_indexed_vault import IndexedAssetVault
@@ -244,7 +265,7 @@ def run(queue,vault,store,lease,*,fixture,paths):
         # Regenerate the fixed recipe on this runtime, then compare everything.
         if fixture!=prepare(fixture.case):
             _deny("FIXTURE_RECIPE_CHANGED")
-        binding,config,code=plan(fixture,spec.processor,paths)
+        binding,config,code=plan(fixture,spec.processor,paths,quality_policy=quality_policy)
         if (spec.method_version!=METHOD or spec.configuration_sha256!=binding.configuration(spec.processor)
                 or ref.target.sha256!=fixture.source.container_sha256 or ref.byte_count!=len(fixture.data)
                 or ref.mime!="video/mp4" or _digest(fixture.data)!=fixture.source.container_sha256):
@@ -271,6 +292,7 @@ def run(queue,vault,store,lease,*,fixture,paths):
         model_resources=None
         ocr_resources=None
         quality=None
+        rejection=None
         if spec.processor=="temporal":
             observation=_temporal_result(samples)
             expected=[1000] if fixture.screen_case=="sales" else []
@@ -288,7 +310,7 @@ def run(queue,vault,store,lease,*,fixture,paths):
             calls=1
         elif spec.processor=="asr_vad":
             output,model_resources=windows._run_model_fixture(code,_wav(pcm),check,limits=asr.LIMITS,max_output=asr.MAX_OUTPUT)
-            observation,quality=asr.result_from_output(json.loads(fixture.asr_meta_json),output)
+            observation,quality,rejection=_asr_result(json.loads(fixture.asr_meta_json),output,quality_policy)
             calls=quality["vad_calls"]+quality["asr_calls"]
         elif spec.processor=="vlm":
             output,model_resources=windows._run_vlm_fixture(code,fixture.png,check,
@@ -298,12 +320,13 @@ def run(queue,vault,store,lease,*,fixture,paths):
             observation=observation.model_copy(update={"frame":frame})
         else:
             _deny("PROCESSOR")
-        if temporal._runtime()!=(binary,binary_hash) or plan(fixture,spec.processor,paths)!=(binding,config,code):
+        if temporal._runtime()!=(binary,binary_hash) or plan(fixture,spec.processor,paths,quality_policy=quality_policy)!=(binding,config,code):
             _deny("RUNTIME_CHANGED")
         result=ProcessorResult(tenant_id=spec.tenant_id,job_id=spec.job_id,object_id=spec.object_id,
             input_sha256=ref.target.sha256,attempt=lease.attempt,purpose=spec.purpose,
             method_version=spec.method_version,configuration_sha256=spec.configuration_sha256,
-            origin="adapter_candidate",result=observation,shared_av=binding)
+            origin="adapter_candidate",result=observation,shared_av=binding,
+            shared_av_quality_rejection=rejection)
         payload=encode(result)
         validate_binding(decode(payload),spec=spec,ref=ref,lease=lease)
         check()

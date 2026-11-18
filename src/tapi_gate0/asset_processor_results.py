@@ -138,11 +138,14 @@ class VLM(Contract):
 class Abstention(Contract):
     processor: Processor
     state: Literal["abstained"] = "abstained"
-    reason: Literal["fixture_header_only","no_observable_signal","unsupported_modality","insufficient_evidence"]
+    reason: Literal["fixture_header_only","no_observable_signal","unsupported_modality","insufficient_evidence","fixture_quality_rejected"]
 
 
 # Distinct identity; existing v1 payloads omit the optional source binding.
 SHARED_AV_METHOD = "synthetic-shared-av-v1"
+STRICT_QUALITY = "strict"
+PARTIAL_QUALITY = "allow_wer_abstention"
+SharedAVQualityPolicy = Literal["strict", "allow_wer_abstention"]
 
 
 class SharedAVSource(Contract):
@@ -174,13 +177,43 @@ class SharedAVSource(Contract):
 class SharedAVBinding(Contract):
     source: SharedAVSource
     adapter_configuration_sha256: Digest
+    quality_policy: SharedAVQualityPolicy = STRICT_QUALITY
+
+    @model_serializer(mode="wrap")
+    def preserve_strict_encoding(self,handler):
+        result=handler(self)
+        if self.quality_policy==STRICT_QUALITY:
+            result.pop("quality_policy",None)
+        return result
 
     def configuration(self,processor):
-        raw=json.dumps({"method":SHARED_AV_METHOD,"processor":processor,
+        config={"method":SHARED_AV_METHOD,"processor":processor,
             "source":self.source.model_dump(mode="json"),
-            "adapter_configuration_sha256":self.adapter_configuration_sha256},
-            sort_keys=True,separators=(",",":")).encode()
+            "adapter_configuration_sha256":self.adapter_configuration_sha256}
+        if self.quality_policy!=STRICT_QUALITY:
+            config["quality_policy"]=self.quality_policy
+        raw=json.dumps(config,sort_keys=True,separators=(",",":")).encode()
         return sha256(raw).hexdigest()
+
+
+class SharedAVQualityRejection(Contract):
+    """Authored-fixture WER rejection; no hypothesis, tokens, or text digest."""
+    reason: Literal["ASR_FIXTURE_WER_GATE"] = "ASR_FIXTURE_WER_GATE"
+    wer: float = Field(gt=0.50,allow_inf_nan=False)
+    vad_iou: float = Field(ge=0.60,le=1,allow_inf_nan=False)
+    vad_boundary_error_s: float = Field(ge=0,le=0.75,allow_inf_nan=False)
+    reference_words: int = Field(gt=0,le=20000)
+    hypothesis_words: int = Field(ge=0,le=256000)
+    vad_calls: Literal[1]
+    asr_calls: int = Field(ge=1,le=64)
+
+    @model_validator(mode="after")
+    def failed_gate(self):
+        edits=self.wer*self.reference_words
+        if (abs(edits-round(edits))>1e-7 or
+                not abs(self.reference_words-self.hypothesis_words)<=round(edits)<=max(self.reference_words,self.hypothesis_words)):
+            raise ValueError("SHARED_AV_QUALITY_WER_INCONSISTENT")
+        return self
 
 
 class ProcessorResult(Contract):
@@ -196,6 +229,7 @@ class ProcessorResult(Contract):
     origin: Literal["synthetic_fixture","adapter_candidate"]
     result: ASR | OCR | Temporal | VLM | Abstention
     shared_av: SharedAVBinding | None = None
+    shared_av_quality_rejection: SharedAVQualityRejection | None = None
     scientific_evidence: Literal[False] = False
     canonical_rubric: Literal[False] = False
     calibrated_probability: None = None
@@ -205,11 +239,19 @@ class ProcessorResult(Contract):
         result=handler(self)
         if self.shared_av is None:
             result.pop("shared_av",None)
+        if self.shared_av_quality_rejection is None:
+            result.pop("shared_av_quality_rejection",None)
         return result
 
     @model_validator(mode="after")
     def origin_consistent(self):
         binding=self.shared_av
+        rejected=isinstance(self.result,Abstention) and self.result.reason=="fixture_quality_rejected"
+        if rejected!=(self.shared_av_quality_rejection is not None):
+            raise ValueError("SHARED_AV_QUALITY_REJECTION_BINDING")
+        if rejected and (binding is None or binding.quality_policy!=PARTIAL_QUALITY
+                or self.result.processor!="asr_vad" or self.origin!="adapter_candidate"):
+            raise ValueError("SHARED_AV_QUALITY_POLICY")
         if (binding is not None)!=(self.method_version==SHARED_AV_METHOD):
             raise ValueError("SHARED_AV_METHOD")
         if binding is not None:

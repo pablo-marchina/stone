@@ -65,6 +65,8 @@ class CandidateEvidenceBundle(Contract):
         present = [x.source for x in shared if x is not None]
         if present and (self.media_kind!="video" or len(present)!=len(shared) or any(x!=present[0] for x in present)):
             raise ValueError("EVIDENCE_SHARED_AV_SOURCE_MISMATCH")
+        if present and len({x.quality_policy for x in shared if x is not None})!=1:
+            raise ValueError("EVIDENCE_SHARED_AV_QUALITY_POLICY_MISMATCH")
         for entry in self.entries:
             r = entry.observation
             processor = r.result.processor
