@@ -39,6 +39,7 @@ SHARED_SPEECH={
 }
 VAD_PIN="4cbf549b8326f60f80f2536d9eefeb450a9abe83365a098031c89719f1be17d2"
 OPTIONS={"threshold":0.5,"min_speech_duration_ms":250,"min_silence_duration_ms":300,"speech_pad_ms":150}
+RECOVERY_PROFILES=("baseline","context_500ms")
 RUNTIME_PACKAGES=("faster-whisper","ctranslate2","onnxruntime","numpy","tokenizers","huggingface-hub","av")
 
 
@@ -141,7 +142,10 @@ def _runtime(model_dir):
     return {"checkpoint":checkpoint,"versions":versions,"vad_sha256":VAD_PIN,"source_sha256":sources}
 
 
-def _child(data,model_dir):
+def _child(data,model_dir,*,profile="baseline"):
+    if profile not in RECOVERY_PROFILES:
+        raise ValueError("ASR_RECOVERY_PROFILE")
+    profile_kw="" if profile=="baseline" else ",profile="+repr(profile)
     # No site startup or model imports before the exact fixture is received.
     # Use only trusted local environment and repo directories; no .pth hooks.
     paths=list(dict.fromkeys([str(Path(__file__).resolve().parents[1]),sysconfig.get_path("purelib"),sysconfig.get_path("platlib")]))
@@ -165,7 +169,7 @@ try:
     mark("imports")
     with contextlib.redirect_stdout(sys.stderr):
         from tapi_gate0.asset_asr_fixture import _infer
-        result=_infer(x,{str(model_dir)!r},stage=mark)
+        result=_infer(x,{str(model_dir)!r},stage=mark{profile_kw})
     mark("serialize")
     out=json.dumps(result,ensure_ascii=False,allow_nan=False,separators=(",",":")).encode("utf-8")
     if not 0<len(out)<={MAX_OUTPUT-1024}:
@@ -186,20 +190,24 @@ def plan(case,model_dir):
     return _plan(data,meta,model_dir)
 
 
-def _plan(data,meta,model_dir):
+def _plan(data,meta,model_dir,*,profile="baseline"):
     runtime=_runtime(model_dir)
-    code=_child(data,model_dir)
+    code=_child(data,model_dir,profile=profile)
     config={"method":METHOD,"case":meta["case"],"input_sha256":_digest(data),"fixture":meta,
             "runtime":runtime,"code_sha256":_digest(code.encode()),"limits":asdict(LIMITS),
             "job_name":windows.JOB_NAME,"job_flags":windows.FLAGS,"max_output":MAX_OUTPUT,
             "host_min_physical_mib":windows.MODEL_MIN_PHYSICAL_MIB,
             "host_commit_reserve_mib":windows.MODEL_COMMIT_RESERVE_MIB,
             "vad_options":OPTIONS,"device":"cpu","compute_type":"int8","cpu_threads":4}
+    if profile!="baseline":
+        config["recovery_profile"]=profile
     pin=_digest(json.dumps(config,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode())
     return {**config,"configuration_sha256":pin},code
 
 
-def _infer(data,model_dir,*,stage=lambda _:None):
+def _infer(data,model_dir,*,stage=lambda _:None,profile="baseline"):
+    if profile not in RECOVERY_PROFILES:
+        raise ValueError("ASR_RECOVERY_PROFILE")
     """Child only, caller pinned exact authored bytes; no external entrypoint."""
     from . import multimodal_vad_asr as joint
     from . import multimodal_asr as asr
@@ -226,12 +234,55 @@ def _infer(data,model_dir,*,stage=lambda _:None):
         if not model.model.is_multilingual or model.feature_extractor.sampling_rate!=RATE:
             raise ValueError("ASR_FIXTURE_MODEL_FORMAT")
         stage("transcribe")
-        result=joint.transcribe_regions(model,raw,intervals)
+        result=(joint.transcribe_regions(model,raw,intervals) if profile=="baseline"
+                else _transcribe_context(model,raw,intervals))
         if result["pcm_sha256"]!=_digest(raw) or result["asr_calls"]!=len(intervals):
             raise ValueError("ASR_FIXTURE_CHILD_BINDING")
         segments=[{k:s[k] for k in ("start_s","end_s","text","region_start_sample","region_end_sample")} for s in result["segments"]]
     return {"pcm_sha256":_digest(raw),"intervals":intervals,"segments":segments,
             "vad_calls":vad_calls,"asr_calls":len(intervals)}
+
+
+def _transcribe_context(model,raw,intervals):
+    """Experimental context arm; no reference, prompt, or new VAD threshold.
+
+    Decode 500 ms more on either side of each detected speech region (bounded
+    by neighboring regions and PCM). Preserve the original VAD interval in the
+    output. Reject segments outside it by >250 ms; otherwise clip timestamps
+    to the overlap, never synthesize words or merge unrelated segments.
+    """
+    from . import multimodal_asr as decoder
+    from . import multimodal_vad as vad
+    n=vad._validate_pcm(raw)
+    intervals=vad.validate_intervals(intervals,n)
+    segments=[]
+    for i,region in enumerate(intervals):
+        a,b=region["start"],region["end"]
+        left=intervals[i-1]["end"] if i else 0
+        right=intervals[i+1]["start"] if i+1<len(intervals) else n
+        start=max(left,a-RATE//2)
+        end=min(right,b+RATE//2)
+        chunk=raw[2*start:2*end]
+        result=decoder._transcribe(model,chunk)
+        if result["pcm_sha256"]!=_digest(chunk):
+            raise ValueError("ASR_RECOVERY_CHUNK_BINDING")
+        for row in result["segments"]:
+            x,y=row["start_s"]+start/RATE,row["end_s"]+start/RATE
+            if x<a/RATE-0.25 or y>b/RATE+0.25:
+                raise ValueError("ASR_RECOVERY_CONTEXT_TIMESTAMP")
+            x,y=max(x,a/RATE),min(y,b/RATE)
+            if not x<y:
+                raise ValueError("ASR_RECOVERY_CONTEXT_NO_OVERLAP")
+            segments.append({"start_s":x,"end_s":y,"text":row["text"],
+                "region_start_sample":a,"region_end_sample":b})
+    return {"pcm_sha256":_digest(raw),"asr_calls":len(intervals),"segments":segments}
+
+
+class ASRFixtureQualityError(ValueError):
+    """Fixed code and numeric diagnostics; never include raw text in message."""
+    def __init__(self,quality):
+        super().__init__("ASR_FIXTURE_WER_GATE")
+        self.quality=quality
 
 
 def _words(text):
@@ -301,9 +352,13 @@ def result_from_output(meta,raw):
             raise ValueError("ASR_FIXTURE_SEGMENT_ORDER")
         typed.append(Speech(start_ms=start,end_ms=end,text=s["text"]))
         last_end=end
-    wer=_wer(meta["reference"]," ".join(s.text for s in typed))
+    hypothesis=" ".join(s.text for s in typed)
+    wer=_wer(meta["reference"],hypothesis)
     if not typed or wer is None or wer>0.50:
-        raise ValueError("ASR_FIXTURE_WER_GATE")
+        raise ASRFixtureQualityError({"wer":wer,"vad_iou":iou,"vad_boundary_error_s":boundary,
+            "reference_words":len(_words(meta["reference"])),"hypothesis_words":len(_words(hypothesis)),
+            "hypothesis_sha256":_digest(hypothesis.encode("utf-8")),
+            "vad_calls":r["vad_calls"],"asr_calls":r["asr_calls"]})
     observation=ASR(duration_ms=math.ceil(n*1000/RATE),segments=tuple(typed),
         vad=tuple(Interval(start_ms=a["start"]*1000//RATE,end_ms=math.ceil(a["end"]*1000/RATE)) for a in intervals))
     return observation,{"vad_calls":r["vad_calls"],"asr_calls":r["asr_calls"],"wer":wer,"vad_iou":iou,"vad_boundary_error_s":boundary}
