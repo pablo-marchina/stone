@@ -421,6 +421,10 @@ def test_discard_rejects_corrupt_envelope_and_hardlink(discard_fixture):
     assert q.path.exists() and link.exists()
     link.unlink()
     assert q.discard()["directory_entry_removed"]
+    # Administrative invalidation is permanent even when the grant itself
+    # is still active; an index registration cannot revive the tombstone.
+    with pytest.raises(AssetRightsDenied,match="TOMBSTONE"):
+        q.index.register_retained(q.f.anchor,q.ref)
 
 
 def test_discard_retry_after_file_removed_before_receipt(discard_fixture,monkeypatch):
