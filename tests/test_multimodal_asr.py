@@ -255,3 +255,18 @@ def test_cli_report_storage_preflight(tmp_path,monkeypatch,capsys):
     result=json.loads(capsys.readouterr().out)
     assert result["code"]=="TEMPORAL_REPORT_STORAGE_INSUFFICIENT"
     assert result["stage"]=="report_storage_preflight"
+
+
+def test_experimental_decoder_options_and_word_alignment():
+    raw=asr._negative_pcm("silence")
+    class Fake:
+        def transcribe(self,pcm,**opts):
+            assert opts["beam_size"]==10 and opts["word_timestamps"] is True
+            assert opts["initial_prompt"] is None and opts["temperature"]==0
+            return [SimpleNamespace(start=0.0,end=1.0,text="Salve este",
+                words=[SimpleNamespace(start=0.2,end=0.5,word=" Salve"),
+                       SimpleNamespace(start=0.5,end=0.9,word=" este")])],SimpleNamespace(language="pt",duration=3.)
+    r=asr._transcribe(Fake(),raw,beam_size=10,word_timestamps=True)
+    assert r["segments"][0]["words"][0]=={"start_s":0.2,"end_s":0.5,"text":" Salve"}
+    with pytest.raises(asr.ASRError,match="DECODING_PROFILE_INVALID"):
+        asr._transcribe(Fake(),raw,beam_size=100)

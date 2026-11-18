@@ -78,3 +78,15 @@ def test_exact_silence_guard_before_vad():
     assert r["guard_reason"]=="EXACT_DIGITAL_SILENCE"
     r=joint.detect_regions(asr._negative_pcm("tone"),lambda _:[])
     assert r["vad_inference_attempted"] and r["guard_reason"] is None
+
+
+def test_experimental_beam_profile_preserves_pcm_regions(monkeypatch):
+    raw=bytes(16000*2*3)
+    def infer(model,pcm,*,beam_size):
+        assert beam_size==10 and len(pcm)==32000
+        return {"pcm_sha256":hashlib.sha256(pcm).hexdigest(),"transcript":"teste",
+                "segments":[{"start_s":0.1,"end_s":0.9,"text":"teste"}]}
+    monkeypatch.setattr(asr,"_transcribe",infer)
+    r=joint.transcribe_regions(None,raw,[{"start":16000,"end":32000}],beam_size=10)
+    assert r["segments"][0]["start_s"]==1.1 and r["segments"][0]["end_s"]==1.9
+    assert r["asr_calls"]==1 and r["pcm_sha256"]==hashlib.sha256(raw).hexdigest()

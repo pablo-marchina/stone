@@ -298,3 +298,49 @@ def test_recovery_context_rejection_is_never_a_processor_observation():
         a.result_from_output(meta,data)
     with pytest.raises(ValueError,match="OUTPUT_BINDING"):
         _score("silence",meta,data,profile="baseline")
+
+
+def test_recovery_word_context_preserves_words_and_original_vad(monkeypatch):
+    from tapi_gate0 import multimodal_asr as decoder
+    raw=b"\x01\x00"*64000
+    def infer(model,chunk,**options):
+        assert options=={"word_timestamps":True}
+        assert len(chunk)==64000
+        return {"pcm_sha256":sha256(chunk).hexdigest(),"segments":[{
+            "start_s":0.0,"end_s":2.0,"text":"Salve este conteúdo.",
+            "words":[{"start_s":0.45,"end_s":0.7,"text":" Salve"},
+                     {"start_s":0.7,"end_s":0.9,"text":" este"},
+                     {"start_s":0.9,"end_s":1.45,"text":" conteúdo."}]}]}
+    monkeypatch.setattr(decoder,"_transcribe",infer)
+    result=a._transcribe_word_context(None,raw,[{"start":16000,"end":32000}])
+    assert result["segments"]==[{"start_s":1.0,"end_s":1.95,"text":"Salve este conteúdo.",
+        "region_start_sample":16000,"region_end_sample":32000}]
+    assert result["pcm_sha256"]==sha256(raw).hexdigest()
+
+
+@pytest.mark.parametrize("words,code",[
+    ([{"start_s":0.1,"end_s":0.2,"text":" Salve"},{"start_s":0.7,"end_s":1.4,"text":" este"}],
+     "WORD_TIMESTAMP"),
+    ([{"start_s":0.6,"end_s":1.4,"text":" este"}],"WORD_TEXT_MISMATCH"),
+])
+def test_recovery_word_context_rejects_unsupported_or_missing_words(monkeypatch,words,code):
+    from tapi_gate0 import multimodal_asr as decoder
+    raw=b"\x01\x00"*64000
+    monkeypatch.setattr(decoder,"_transcribe",lambda m,p,**kw:{
+        "pcm_sha256":sha256(p).hexdigest(),"segments":[{"text":"Salve este","words":words}]})
+    with pytest.raises(a.ASRContextRejected,match=code):
+        a._transcribe_word_context(None,raw,[{"start":16000,"end":32000}])
+
+
+def test_recovery_round_summary_no_vacuous_pass():
+    from tapi_gate0.asset_asr_recovery import _summaries,CASES,ROUNDS
+    profiles=ROUNDS["v2"]
+    rows=[{"case":case,"profile":profiles[0],"transport":"argv","quality_passed":True,
+        "semantic_exact_match":True,"matches_v1_pcm":True} for case in CASES]
+    summary=_summaries(rows,profiles)
+    assert set(summary)==set(profiles)
+    assert summary[profiles[0]]["engineering_gate_passed"]
+    assert not summary[profiles[1]]["engineering_gate_passed"]
+    rows[0]["matches_v1_pcm"]=False
+    assert not _summaries(rows,profiles)[profiles[0]]["engineering_gate_passed"]
+    assert not _summaries(rows[1:],profiles)[profiles[0]]["complete"]
