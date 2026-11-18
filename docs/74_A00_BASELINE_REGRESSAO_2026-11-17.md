@@ -1299,3 +1299,64 @@ $report | ConvertTo-Json -Depth 8
 ```
 Enviar somente resumo agregado, não DB ou credenciais. Sem migrar
 novamente, não executar mídia, não criar grants, não mesclar PR.
+
+
+## A02.6 — supervisor Windows validado e contrato tipado (18/11)
+Operador HEAD 020b23587e99f40cdf6706dc87a97e2b36e181d9: 162/162 focal
+PASS em 85,03s, zero skips/falhas; espelho 32/32 e zero-spend PASS.
+Inclui 7 casos kernel nativos e 3 integrações fila/cofre/rights.
+Backup pós-0016 a02-post0016-20261118-104730.sqlite3 SHA256
+81163709870e1712241b99a668cfa6aa30b002f8b8eb66e2d648ab67a2692d43,
+10.117.120 bytes, backup/restore 219/140ms, integridade/FK/schema e
+conteúdo lógico iguais, revisão 0016. 46 tabelas de domínio + alembic; 1065 únicos/21 perfis, 0 duplicatas, 1169 snapshots,
+5 documentos Studio; 7 tabelas de rights/lineage/jobs/payload vazias.
+Evidência do operador, não inspeção direta do backup. Sem novo gate.
+
+Novo asset_processor_results.py: envelope candidato estrito versionado,
+binding tenant/job/object/digest/attempt/purpose/method/config/processor,
+sem ciência/rubrica canônica/probabilidade calibrada. ASR/VAD intervalos
+em ms com timeline PCM, ordem/duração/overlap; OCR palavras/bbox/frame
+digest/time e confiança bruta opcional; temporal diferença normalizada
+e transições amostradas (não cortes semânticos); VLM categorias candidatas
+text_present/scene em frame, rejeita contradição e exige abstenção quando
+tudo incerto. Abstenção sem campos de observação. JSON com limite 1MB,
+duplicatas rejeitadas, tipos estritos, números finitos e revalidação
+após model_copy/construct. Estrutura não valida verdade, não substitui
+contratos canônicos de EvidenceBundle ou Rubrica. Não admite evidência.
+asset_processor_fixture.py: quatro rotas por spec (ASR/VAD, OCR, temporal,
+VLM), método synthetic-typed-windows-v3 e hash de configuração distinto
+por processor. Somente fixture header de 12 bytes, child fixo com saída
+curta explícita abstained/fixture_header_only. Não decodifica vídeo nem
+invoca modelo. Host vincula envelope ao lease e ref, revalida após
+cleanup do Job Object, e usa DerivedPayloadStore.finish atomicamente.
+Retenção derivada deve estar autorizada; sem ela não persiste. Leitura
+trusted-host continua exigir retain+process, integridade AEAD e lineage.
+API opaca anterior permanece, contrato tipado obrigatório apenas na nova
+rota sintética. Não cria grants reais, endpoint, modelo, EvidenceBundle
+ou nova migração. Não é adapter real de ASR/OCR/VLM/FFmpeg.
+
+23 testes de contrato em cópia isolada byte-idêntica PASS em Linux
+(Pydantic 2.13.5); 7 integrações Windows adicionadas não rodadas aqui:
+4 processors, retenção faltante, configuração errada, cancel tardio.
+192 focais esperados (162+23+7), todos sem skip em Windows x64.
+IMP-040/044/045/054/063/064/136/137; CT candidatos preservados.
+Custo zero e DEC018, nenhum gate. Próximo: validação focal, full
+pós-recuperação e smoke, adapters de mídia sintética válida com
+proveniência/checkpoints e budgets medidos, sem promover header probe
+a inferência nem habilitar caminhos de mídia externos.
+
+### Operador — contrato tipado
+Com ambiente tapi-asr-recovery e checkout limpo:
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+& $py docs/base_atemporal/ferramentas/validar_espelho.py
+& $py -m pytest -q tests/test_a02_operational_upgrade.py tests/test_asset_lineage.py tests/test_asset_vault.py tests/test_asset_rights.py tests/test_asset_rights_registry.py tests/test_discovery_backup.py tests/test_a02_payloads_preflight.py tests/test_asset_windows_job.py tests/test_asset_processor_results.py
+& $py scripts/verify_zero_spend.py
+```
+192 esperados sem skips. Sem nova migração ou grants; backup pós-0016
+já verificado. Regressão full após PASS, com env reduzido via A00 runner,
+tessdata pinado local conforme histórico; manter smoke operacional
+separado. Não executar mídia externa, merge ou release.

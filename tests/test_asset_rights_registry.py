@@ -367,8 +367,12 @@ def discard_fixture(registry,tmp_path,request):
     target=f.target.model_copy(update={"sha256":sha256(data).hexdigest()})
     retention=Permission(operation="retain",purpose="research_analysis",field="video")
     f.svc.provision(f.anchor,TENANT,"instagram",f.rv)
+    requested=getattr(request,"param",())
     extra=tuple(Permission(operation=op,purpose="research_analysis",field="visual_features")
-        for op in getattr(request,"param",()))
+        for op in requested if op!="all_processors")
+    if "all_processors" in requested:
+        extra+=tuple(Permission(operation=op,purpose="research_analysis",field=field)
+            for field in ("transcript","ocr") for op in ("derive","retain","process"))
     f.svc.register_grant(f.anchor,f.grant(target=target,permissions=(retention,PERMISSION,Permission(operation="derive",purpose="research_analysis",field="visual_features"),*extra)),
         verified_approval_digest="b"*64)
     root=tmp_path/"discard-vault";root.mkdir(mode=0o700)
@@ -1131,4 +1135,85 @@ def test_windows_supervisor_revocation_before_input(queue_fixture,monkeypatch):
     assert f.queue.status(TENANT,spec.job_id)["receipt_sha256"] is None
     f.q.index.reconcile_signed_revocations(f.q.f.pin(rv),TENANT,"instagram")
     assert f.queue.reconcile_invalidated(TENANT)["changed"]==[spec.job_id]
+    assert f.queue.acknowledge_cancel(lease)["state"]=="canceled"
+
+
+@_WINDOWS_JOB
+@pytest.mark.parametrize("discard_fixture",[("retain","process","all_processors")],indirect=True)
+@pytest.mark.parametrize("processor",["asr_vad","ocr","temporal","vlm"])
+def test_typed_fixture_windows_encrypted_abstention(queue_fixture,processor):
+    from tapi_gate0 import asset_processor_fixture as a
+    from tapi_gate0.asset_processor_results import decode,validate_binding
+    f=queue_fixture
+    spec=f.spec.model_copy(update={"processor":processor,"method_version":a.METHOD,
+        "configuration_sha256":a.configuration_sha256(processor)})
+    f.queue.enqueue(spec)
+    lease=f.queue.claim(TENANT,"worker")["lease"]
+    store=DerivedPayloadStore(f.queue,b"d"*32)
+    receipt=a.run_typed_fixture_windows(f.queue,f.q.vault,store,lease)
+    assert receipt["state"]=="completed" and receipt["payload_persisted"]
+    assert receipt["result_state"]=="abstained" and receipt["model_calls"]==0
+    assert not receipt["scientific_evidence"] and not receipt["canonical_rubric"]
+    assert not receipt["media_enabled"]
+    payload=store.read_for_processing(TENANT,receipt["artifact_id"],purpose=spec.purpose)
+    result=decode(payload)
+    assert validate_binding(result,spec=spec,ref=f.q.ref,lease=lease)==result
+    assert result.result.processor==processor and result.result.reason=="fixture_header_only"
+    with f.q.f.engine.connect() as db:
+        envelope=db.scalar(select(payloads.c.envelope))
+        assert payload not in envelope and len(envelope)==len(payload)+28
+    with pytest.raises(AssetRightsDenied,match="STALE_LEASE"):
+        a.run_typed_fixture_windows(f.queue,f.q.vault,store,lease)
+
+
+@_WINDOWS_JOB
+def test_typed_fixture_missing_derived_retain_withholds_payload(queue_fixture):
+    from tapi_gate0 import asset_processor_fixture as a
+    f=queue_fixture
+    spec=f.spec.model_copy(update={"method_version":a.METHOD,
+        "configuration_sha256":a.configuration_sha256("temporal")})
+    f.queue.enqueue(spec)
+    lease=f.queue.claim(TENANT,"worker")["lease"]
+    with pytest.raises(AssetRightsDenied,match="SCOPE_MISMATCH"):
+        a.run_typed_fixture_windows(f.queue,f.q.vault,DerivedPayloadStore(f.queue,b"d"*32),lease)
+    assert f.queue.status(TENANT,spec.job_id)["receipt_sha256"] is None
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(payloads))==0
+
+
+@_WINDOWS_JOB
+def test_typed_fixture_rejects_configuration_before_spawn(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_processor_fixture as a
+    f=queue_fixture
+    spec=f.spec.model_copy(update={"method_version":a.METHOD,
+        "configuration_sha256":a.configuration_sha256("ocr")})
+    f.queue.enqueue(spec)
+    lease=f.queue.claim(TENANT,"worker")["lease"]
+    def unexpected(*args,**kwargs):
+        pytest.fail("must not spawn for mismatched config")
+    monkeypatch.setattr(a.windows,"_run_trusted_fixture",unexpected)
+    with pytest.raises(AssetRightsDenied,match="FIXTURE_ONLY"):
+        a.run_typed_fixture_windows(f.queue,f.q.vault,DerivedPayloadStore(f.queue,b"d"*32),lease)
+
+
+@_WINDOWS_JOB
+@pytest.mark.parametrize("discard_fixture",[("retain","process")],indirect=True)
+def test_typed_fixture_late_cancel_withholds_payload(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_processor_fixture as a
+    f=queue_fixture
+    spec=f.spec.model_copy(update={"method_version":a.METHOD,
+        "configuration_sha256":a.configuration_sha256("temporal")})
+    f.queue.enqueue(spec)
+    lease=f.queue.claim(TENANT,"worker")["lease"]
+    original=a.windows._run_trusted_fixture
+    def late(*args,**kwargs):
+        result=original(*args,**kwargs)
+        f.queue.cancel(TENANT,spec.job_id)
+        return result
+    monkeypatch.setattr(a.windows,"_run_trusted_fixture",late)
+    with pytest.raises(AssetRightsDenied,match="STALE_LEASE"):
+        a.run_typed_fixture_windows(f.queue,f.q.vault,DerivedPayloadStore(f.queue,b"d"*32),lease)
+    assert f.queue.status(TENANT,spec.job_id)["receipt_sha256"] is None
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(payloads))==0
     assert f.queue.acknowledge_cancel(lease)["state"]=="canceled"

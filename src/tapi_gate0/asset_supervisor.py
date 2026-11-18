@@ -75,14 +75,14 @@ def _run_child(data,check):
         process.wait(timeout=5)
 
 
-def _fixture_input(queue,vault,lease,method,config):
+def _fixture_input(queue,vault,lease,method,config,*,processor="temporal"):
     """Shared trusted-host rights/fence checks, exact fixture and method binding."""
     if not isinstance(queue,AssetJobQueue) or not isinstance(vault,IndexedAssetVault):
         _deny("HOST_REQUIRED")
     if queue.index.engine is not vault._index.engine:
         _deny("ENGINE_MISMATCH")
     spec,ref=queue.check_lease(lease)
-    if (spec.processor!="temporal" or spec.method_version!=method
+    if (spec.processor!=processor or spec.method_version!=method
         or spec.configuration_sha256!=config
         or ref.target.sha256!=sha256(FIXTURE).hexdigest() or ref.byte_count!=len(FIXTURE)
         or ref.mime!="video/mp4"):
