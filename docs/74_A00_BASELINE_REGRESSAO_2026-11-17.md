@@ -1932,3 +1932,42 @@ $py = Join-Path $env:CONDA_PREFIX "python.exe"
 `pytest -q --tb=short tests/test_asset_rights_registry.py -k test_candidate_bundle_real_blank`
 (1 PASS; não carrega Qwen). Depois focal completo 332 com todos os
 opt-ins. Sem uso no banco real ou novos modelos.
+
+
+## A02.6 — bundle aprovado; fusão candidata S1 (18/11)
+Operador HEAD dd2880c5e25d2a587862e9628da022fbd92bc6fb:
+15/15 SQLite PASS em 12,75s, 95 deselected; 1/1 Windows blank
+OCR real + guard VLM PASS em 10,98s, 109 deselected. Espelho 32/32
+e zero-spend PASS. Evidência de console, não JUnit novo.
+332 focal ainda não executado no mesmo SHA.
+
+asset_candidate_fusion.py: asset-s1-candidate-fusion.v1, rota local
+determinística, não GLiNER/Qwen novo, não canonical RubricAssessment.
+Reusa grounded theme e directed CTA v2, sem concatenação entre
+segmentos ASR ou modalidades. OCR sem IDs de linha: só usa semântica
+quando todas caixas ordenadas na mesma faixa vertical, sem overlap
+horizontal ou gaps >2 alturas, texto <=10000; heurística de engenharia
+não calibrada. OCR parcial ainda candidato positivo de texto na tela.
+VLM isolado nunca promove texto; voto no negativo de frame idêntico
+(inclui hash, timeline, t) bloqueia os 4 campos avaliados, mesmo com
+ASR presente, por conservadorismo; outros frames não vetam.
+Até 128 fragmentos sem truncamento, erro fechado acima do limite.
+4 campos candidatos/abstenções: tema_principal, tipo_cta, tem_cta,
+texto_na_tela; outros 16 not_assessed. Sem negativa inferida, score de
+cortes, hook, face, claims de prova social, probabilidade, treino.
+Support vincula artifact/payload hash, índice de segmento, timeline,
+timestamp, frame hash, índices de palavra e digest textual quando
+semântico. Sem texto bruto no relatório, não prova execução.
+Fingerprint do bundle, contrato frozen/strict, 20 campos ordenados.
+Derive rubric_evidence explícito antes do decrypt e depois de fusão,
+revalida direitos de todos os resultados em mesma transação SQLite.
+Refatora montagem em helpers privados, API anterior preservada.
+Nenhuma persistência, retain/display/export grant, endpoint ou
+autorização reutilizável. Não integrar ainda ao ranking/agent.
+11 novos casos SQLite (positivo, conflito, 4 CTA não elegíveis,
+VLM isolado, ASR/temporal, conflito entre modalidades, permissão,
+expiração/revogação). Não é novo benchmark independente.
+343 focal esperados (332+11) com opt-ins. Testes do novo commit
+ainda não executados; validar primeiro test_candidate_fusion_,
+depois regressão focal e full runner opt-ins. Sem schema/DB real,
+gate ou merge. IMP-054/063/064/136/137 parcial.

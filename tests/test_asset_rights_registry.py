@@ -402,7 +402,9 @@ def discard_fixture(registry,tmp_path,request):
     processing=Permission(operation="process",purpose="research_analysis",field=media_kind)
     f.svc.provision(f.anchor,TENANT,"instagram",f.rv)
     extra=tuple(Permission(operation=op,purpose="research_analysis",field=output_field)
-        for op in requested if op not in ("all_processors","bundle_visual") and not op.startswith(("temporal_","ocr_","asr_","vlm_")))
+        for op in requested if op not in ("all_processors","bundle_visual","bundle_rubric") and not op.startswith(("temporal_","ocr_","asr_","vlm_")))
+    if "bundle_rubric" in requested:
+        extra+=(Permission(operation="derive",purpose="research_analysis",field="rubric_evidence"),)
     if "bundle_visual" in requested:
         assert ocr_cases
         extra+=tuple(Permission(operation=op,purpose="research_analysis",field="visual_features")
@@ -1993,3 +1995,137 @@ def test_candidate_bundle_real_blank_ocr_and_vlm(queue_fixture):
     assert bundle.entries[1].observation.result.scene=="blank"
     assert bundle.entries[1].observation.result.frame.frame_sha256==bundle.input_sha256
     assert not bundle.canonical_rubric and not bundle.scientific_evidence
+
+
+def _s1_decisions(f,store,ids,**kwargs):
+    from tapi_gate0.asset_candidate_fusion import evaluate_candidate_bundle
+    result=evaluate_candidate_bundle(store,kwargs.get("tenant",TENANT),f.q.ref.object_id,ids,purpose=f.spec.purpose)
+    return result,{d.field_id:d for d in result.fields}
+
+
+def _s1_image(f,store,words,*,visual=None,boxes=None):
+    from tapi_gate0.asset_processor_results import Frame, OCR, Word, VLM
+    frame=Frame(time_ms=0,frame_sha256=f.q.ref.target.sha256,timeline="image")
+    boxes=boxes or [(10+i*110,20,100,30) for i in range(len(words))]
+    ident=_bundle_finish(f,store,OCR(frame=frame,width=960,height=540,
+        words=tuple(Word(text=w,box_px=b) for w,b in zip(words,boxes))))
+    ids=[ident]
+    if visual:
+        ids.append(_bundle_finish(f,store,VLM(frame=frame,scene=visual,
+            text_present="yes" if visual=="text_card" else "no")))
+    return ids
+
+
+@pytest.mark.parametrize("discard_fixture", [("retain","process","ocr_sales","bundle_visual","bundle_rubric")],indirect=True)
+def test_candidate_fusion_topic_cta_and_provenance(queue_fixture):
+    f=queue_fixture;store=DerivedPayloadStore(f.queue,b"d"*32)
+    ids=_s1_image(f,store,("Salve","este","post.","Organize","suas","vendas."),visual="text_card")
+    with f.q.f.engine.connect() as db:
+        count=db.scalar(select(func.count()).select_from(domain_events))
+    result,d=_s1_decisions(f,store,ids)
+    assert d["tema_principal"].value=="vendas" and d["tipo_cta"].value=="salvar"
+    assert d["tem_cta"].value is True and d["texto_na_tela"].value is True
+    assert sum(x.state=="candidate" for x in d.values())==4
+    assert sum(x.state=="not_assessed" for x in d.values())==16
+    assert all(not x.value is False for x in d.values())
+    assert d["tipo_cta"].supports[0].artifact_id==ids[0]
+    assert d["tipo_cta"].supports[0].word_indices==tuple(range(6))
+    assert d["tipo_cta"].supports[0].text_sha256==sha256("Salve este post. Organize suas vendas.".encode()).hexdigest()
+    assert result.evidence_fingerprint==_bundle_read(f,store,ids).fingerprint()
+    assert result==_s1_decisions(f,store,list(reversed(ids)))[0]
+    assert not result.scientific_evidence and not result.canonical_rubric and result.calibrated_probability is None
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(domain_events))==count
+
+
+@pytest.mark.parametrize("discard_fixture", [("retain","process","ocr_sales","bundle_visual","bundle_rubric")],indirect=True)
+def test_candidate_fusion_same_frame_conflict(queue_fixture):
+    f=queue_fixture;store=DerivedPayloadStore(f.queue,b"d"*32)
+    ids=_s1_image(f,store,("Organize","suas","vendas"),visual="geometry")
+    _,d=_s1_decisions(f,store,ids)
+    for k in ("tema_principal","tipo_cta","tem_cta","texto_na_tela"):
+        assert d[k].state=="abstained" and d[k].value is None
+        assert {s.artifact_id for s in d[k].vetoes}==set(ids)
+
+
+@pytest.mark.parametrize("discard_fixture", [("retain","process","ocr_sales","bundle_rubric")],indirect=True)
+@pytest.mark.parametrize("words,boxes",[
+    (("Salve","este","post"),[(10,10,80,20),(10,60,80,20),(100,60,80,20)]),
+    (("Salve","este","post"),[(10,10,80,20),(400,10,80,20),(490,10,80,20)]),
+    (("Salve","para","revisar"),None),
+    (("Não","salve","este","post"),None),
+])
+def test_candidate_fusion_no_unsupported_cta(queue_fixture,words,boxes):
+    f=queue_fixture;store=DerivedPayloadStore(f.queue,b"d"*32)
+    _,d=_s1_decisions(f,store,_s1_image(f,store,words,boxes=boxes))
+    assert d["tipo_cta"].value is None and d["tem_cta"].value is None
+    assert d["texto_na_tela"].value is True
+
+
+@pytest.mark.parametrize("discard_fixture", [("retain","process","ocr_sales","bundle_visual","bundle_rubric")],indirect=True)
+def test_candidate_fusion_vlm_only_never_promotes_text(queue_fixture):
+    from tapi_gate0.asset_processor_results import Frame,VLM
+    f=queue_fixture;store=DerivedPayloadStore(f.queue,b"d"*32)
+    ident=_bundle_finish(f,store,VLM(frame=Frame(time_ms=0,frame_sha256=f.q.ref.target.sha256,timeline="image"),
+        scene="text_card",text_present="yes"))
+    _,d=_s1_decisions(f,store,[ident])
+    assert d["texto_na_tela"].state=="abstained" and all(x.value is None for x in d.values())
+
+
+@pytest.mark.parametrize("discard_fixture", [("retain","process","all_processors","bundle_rubric")],indirect=True)
+def test_candidate_fusion_audio_separate_segments_and_temporal_not_score(queue_fixture):
+    from tapi_gate0.asset_processor_results import ASR,Speech,Interval,Temporal
+    f=queue_fixture;store=DerivedPayloadStore(f.queue,b"d"*32)
+    a=_bundle_finish(f,store,ASR(duration_ms=3000,segments=(
+        Speech(start_ms=0,end_ms=1000,text="Clique no link"),
+        Speech(start_ms=1000,end_ms=2000,text="na bio"),
+        Speech(start_ms=2000,end_ms=3000,text="Controle o estoque.")),
+        vad=(Interval(start_ms=0,end_ms=3000),)))
+    t=_bundle_finish(f,store,Temporal(samples=12,threshold=0.5,candidates=()))
+    _,d=_s1_decisions(f,store,[a,t])
+    assert d["tema_principal"].value=="gestão"
+    assert d["tema_principal"].supports[0].segment_index==2
+    assert d["tipo_cta"].value is None and d["ritmo_cortes_0a10"].state=="not_assessed"
+    assert d["hook_primeiros_3s"].state=="not_assessed"
+
+
+@pytest.mark.parametrize("discard_fixture", [("retain","process","all_processors","bundle_rubric")],indirect=True)
+def test_candidate_fusion_cross_modality_cta_conflict(queue_fixture):
+    from tapi_gate0.asset_processor_results import ASR,Speech,Interval,OCR,Frame,Word
+    f=queue_fixture;store=DerivedPayloadStore(f.queue,b"d"*32)
+    a=_bundle_finish(f,store,ASR(duration_ms=2000,
+        segments=(Speech(start_ms=0,end_ms=2000,text="Comente sua dúvida."),),
+        vad=(Interval(start_ms=0,end_ms=2000),)))
+    o=_bundle_finish(f,store,OCR(frame=Frame(time_ms=1000,frame_sha256="a"*64,timeline="resampled_uniform"),
+        width=960,height=540,words=tuple(Word(text=w,box_px=(10+i*110,10,100,30))
+        for i,w in enumerate(("Salve","este","post.")))))
+    _,d=_s1_decisions(f,store,[a,o])
+    assert d["tipo_cta"].state=="abstained" and d["tem_cta"].value is None
+    assert {x.artifact_id for x in d["tipo_cta"].vetoes}=={a,o}
+    assert d["texto_na_tela"].value is True
+
+
+@pytest.mark.parametrize("discard_fixture", [("retain","process","ocr_sales")],indirect=True)
+def test_candidate_fusion_requires_rubric_permission_before_decrypt(queue_fixture,monkeypatch):
+    f=queue_fixture;store=DerivedPayloadStore(f.queue,b"d"*32)
+    ids=_s1_image(f,store,("Organize","suas","vendas"))
+    monkeypatch.setattr(store,"_read_in_transaction",lambda *a,**k:pytest.fail("must deny before decrypt"))
+    with pytest.raises(AssetRightsDenied,match="SCOPE_MISMATCH"):
+        _s1_decisions(f,store,ids)
+
+
+@pytest.mark.parametrize("discard_fixture", [("retain","process","ocr_sales","bundle_rubric")],indirect=True)
+def test_candidate_fusion_final_expiry_and_revocation(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_candidate_evidence as b
+    f=queue_fixture;store=DerivedPayloadStore(f.queue,b"d"*32)
+    ids=_s1_image(f,store,("Organize","suas","vendas"))
+    assert _s1_decisions(f,store,ids)[1]["tema_principal"].value=="vendas"
+    with monkeypatch.context() as m:
+        m.setattr(b,"now_utc",lambda:f.q.ref.retain_until+timedelta(seconds=1))
+        with pytest.raises(AssetRightsDenied,match="INACTIVE_ANCESTOR"):
+            _s1_decisions(f,store,ids)
+    rv=f.q.f.state(2,revoked_asset_ids=(f.q.ref.target.asset_id,))
+    f.q.f.svc.advance(f.q.f.anchor,TENANT,"instagram",rv)
+    f.queue.resolve_anchor=lambda ref:f.q.f.pin(rv)
+    with pytest.raises(AssetRightsDenied,match="ASSET_RIGHTS_REVOKED"):
+        _s1_decisions(f,store,ids)
