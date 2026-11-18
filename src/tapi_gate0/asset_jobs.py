@@ -307,6 +307,8 @@ class AssetJobQueue:
             # Recheck immediately before committing both records. The lease
             # and revocation mutations share the same SQLite transaction.
             fresh=now_utc()
+            if fresh<now:
+                _fail("CLOCK_REGRESSION")
             self._owned(db,lease,fresh)
             _check_rights(db,spec,self.resolve_anchor,fresh)
             row=_transition(db,row,fresh,"reference_recorded",receipt_sha256=digest,
