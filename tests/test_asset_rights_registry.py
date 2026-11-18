@@ -722,3 +722,144 @@ def test_nonempty_job_migration_downgrade_refused(tmp_path,monkeypatch):
         assert {"asset_processing_jobs","asset_processing_attempts"}<=set(inspect(engine).get_table_names())
     finally:
         engine.dispose()
+
+
+def test_jobs_fenced_reference_atomic_commit(queue_fixture):
+    f=queue_fixture
+    f.queue.enqueue(f.spec)
+    lease=f.queue.claim(TENANT,"worker")["lease"]
+    data=b"synthetic metadata output"
+    result=f.queue.finish_reference(lease,payload=data)
+    assert result["state"]=="completed" and result["reason"]=="reference_only"
+    assert not result["payload_persisted"] and not result["scientific_evidence"]
+    with f.q.f.engine.connect() as db:
+        ref=DerivedArtifactRef.model_validate_json(db.scalar(select(nodes.c.payload).where(
+            nodes.c.tenant_id==TENANT,nodes.c.node_id==result["artifact_id"])))
+        assert ref.payload_sha256==sha256(data).hexdigest()==result["receipt_sha256"]
+        assert ref.parent_ids==(f.spec.object_id,) and ref.run_id==f.spec.job_id
+        assert ref.kind=="visual_features" and ref.method_version==f.spec.method_version
+        assert ref.retain_until==f.q.ref.retain_until
+    with pytest.raises(AssetRightsDenied,match="STALE_LEASE"):
+        f.queue.finish_reference(lease,payload=data)
+    f.q.index.invalidate(TENANT,object_ids=[f.spec.object_id])
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(nodes.c.state).where(nodes.c.tenant_id==TENANT,
+            nodes.c.node_id==ref.artifact_id))=="invalidated"
+
+
+def test_jobs_reference_rolls_back_on_late_rights_denial(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_jobs as module
+    f=queue_fixture
+    f.queue.enqueue(f.spec)
+    lease=f.queue.claim(TENANT,"worker")["lease"]
+    original=module._check_rights
+    calls=[]
+    def fail_second(*args):
+        calls.append(1)
+        if len(calls)==2:
+            raise AssetRightsDenied("fixture late denial")
+        return original(*args)
+    monkeypatch.setattr(module,"_check_rights",fail_second)
+    with pytest.raises(AssetRightsDenied,match="late denial"):
+        f.queue.finish_reference(lease,payload=b"fixture")
+    assert f.queue.status(TENANT,f.spec.job_id)["state"]=="running"
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(nodes).where(nodes.c.kind=="derived"))==0
+        assert db.scalar(select(func.count()).select_from(domain_events).where(
+            domain_events.c.aggregate_type=="asset_lineage"))==1
+
+
+def test_jobs_reference_denies_wrong_size_and_revoked_input(queue_fixture):
+    f=queue_fixture
+    f.queue.enqueue(f.spec)
+    lease=f.queue.claim(TENANT,"worker")["lease"]
+    with pytest.raises(AssetRightsDenied,match="OUTPUT_SIZE_INVALID"):
+        f.queue.finish_reference(lease,payload=b"")
+    rv=f.q.f.state(2,revoked_asset_ids=(f.q.ref.target.asset_id,))
+    f.q.f.svc.advance(f.q.f.anchor,TENANT,"instagram",rv)
+    f.queue.resolve_anchor=lambda ref:f.q.f.pin(rv)
+    with pytest.raises(AssetRightsDenied,match="ASSET_RIGHTS_REVOKED"):
+        f.queue.finish_reference(lease,payload=b"fixture")
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(nodes).where(nodes.c.kind=="derived"))==0
+
+
+def _probe_job(f):
+    from tapi_gate0 import asset_supervisor as supervisor
+    spec=f.spec.model_copy(update={"method_version":supervisor.METHOD,
+        "configuration_sha256":supervisor.configuration_sha256()})
+    f.queue.enqueue(spec)
+    return spec,f.queue.claim(TENANT,"worker")["lease"]
+
+
+def test_supervisor_real_synthetic_child_receipt(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_supervisor as supervisor
+    f=queue_fixture
+    monkeypatch.setenv("TAPI_SUPERVISOR_TEST_SECRET","fixture-not-forwarded")
+    original=supervisor.subprocess.Popen
+    seen=[]
+    def start(*args,**kwargs):
+        assert "TAPI_SUPERVISOR_TEST_SECRET" not in kwargs["env"]
+        assert "TAPI_DATABASE_URL" not in kwargs["env"]
+        assert kwargs["shell"] is False
+        process=original(*args,**kwargs)
+        seen.append(process)
+        return process
+    monkeypatch.setattr(supervisor.subprocess,"Popen",start)
+    spec,lease=_probe_job(f)
+    result=supervisor.run_fixture_probe(f.queue,f.q.vault,lease)
+    assert result["state"]=="completed" and result["synthetic_probe"]
+    assert result["receipt_sha256"]==sha256(supervisor.EXPECTED).hexdigest()
+    assert not result["scientific_evidence"] and not result["payload_persisted"]
+    assert len(seen)==1 and seen[0].poll()==0
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(nodes).where(nodes.c.kind=="derived"))==0
+
+
+def test_supervisor_rejects_nonprobe_before_read_or_spawn(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_supervisor as supervisor
+    f=queue_fixture
+    f.queue.enqueue(f.spec)
+    lease=f.queue.claim(TENANT,"worker")["lease"]
+    def unexpected(*args,**kwargs):
+        pytest.fail("must not read or spawn")
+    monkeypatch.setattr(f.q.vault,"read_indexed",unexpected)
+    monkeypatch.setattr(supervisor.subprocess,"Popen",unexpected)
+    with pytest.raises(AssetRightsDenied,match="FIXTURE_ONLY"):
+        supervisor.run_fixture_probe(f.queue,f.q.vault,lease)
+
+
+def test_supervisor_timeout_kills_child_and_withholds_receipt(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_supervisor as supervisor
+    f=queue_fixture
+    monkeypatch.setattr(supervisor,"_CHILD","import time; time.sleep(30)")
+    monkeypatch.setattr(supervisor,"TIMEOUT_SECONDS",0.5)
+    original=supervisor.subprocess.Popen
+    seen=[]
+    def start(*args,**kwargs):
+        process=original(*args,**kwargs);seen.append(process);return process
+    monkeypatch.setattr(supervisor.subprocess,"Popen",start)
+    spec,lease=_probe_job(f)
+    with pytest.raises(AssetRightsDenied,match="TIMEOUT"):
+        supervisor.run_fixture_probe(f.queue,f.q.vault,lease)
+    assert len(seen)==1 and seen[0].poll() is not None
+    assert f.queue.status(TENANT,spec.job_id)["receipt_sha256"] is None
+
+
+def test_supervisor_cancel_during_child_kills_and_fences(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_supervisor as supervisor
+    f=queue_fixture
+    monkeypatch.setattr(supervisor,"_CHILD","import time; time.sleep(30)")
+    original=supervisor.subprocess.Popen
+    seen=[]
+    spec,lease=_probe_job(f)
+    def start(*args,**kwargs):
+        process=original(*args,**kwargs);seen.append(process)
+        f.queue.cancel(TENANT,spec.job_id)
+        return process
+    monkeypatch.setattr(supervisor.subprocess,"Popen",start)
+    with pytest.raises(AssetRightsDenied,match="STALE_LEASE"):
+        supervisor.run_fixture_probe(f.queue,f.q.vault,lease)
+    assert len(seen)==1 and seen[0].poll() is not None
+    assert f.queue.status(TENANT,spec.job_id)["receipt_sha256"] is None
+    assert f.queue.acknowledge_cancel(lease)["state"]=="canceled"
