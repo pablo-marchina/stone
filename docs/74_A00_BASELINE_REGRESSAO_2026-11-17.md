@@ -1026,3 +1026,66 @@ legados intactos, downgrade vazio verificado, backup inalterado,
 operational_database_mutated=false, media_enabled=false.
 Não repetir full anterior sem necessidade, não executar upgrade live,
 não iniciar coleta ou mídia e não gerar grants fictícios. Sem merge.
+
+## A02.5 — fila e ensaio aprovados; supervisor sintético e finalização fenced
+Operador HEAD 28be6c0e9ce574438f03ce0d0d543069f0fe5e71:
+102/102 focal PASS em 46,08s, zero-spend PASS. Rehearsal 0014→0015
+sobre a02-post0014-20261117-213407.sqlite3 SHA256
+6308ce588545eac9ea975872e059ac504d6d42ae520ea027c1b8d00e6a120a62:
+43 tabelas preservadas, duas novas vazias, schema/hash/integridade,
+downgrade vazio e backup inalterado verificados. DB operacional 0014.
+
+Upgrade protegido aceita --apply-0015, transição explícita 0014→0015
+com backup recente e rollback; quatro novos casos parametrizados.
+AssetJobQueue.check_lease verifica fence, prazo, direitos vigentes e
+retorna spec/ref somente para host confiável. finish_reference recebe
+bytes limitados a 1 MB, deriva digest e ID determinístico, registra
+referência com pai exato, método, run e retenção limitada ao pai,
+confere novamente lease/direitos e relógio e finaliza na mesma transação
+SQLite. Falha tardia reverte referência, job e outbox. Status
+reference_only, payload_persisted=false, scientific_evidence=false.
+Não armazena, valida semanticamente ou disponibiliza o payload;
+nenhum worker real usa este método. Não é prova de resultado científico.
+
+asset_supervisor.py: probe somente sintético, exige processor temporal,
+method synthetic-supervisor-v1, hash do código fixo, identidade/hash/
+MIME/tamanho do fixture MP4 de 12 bytes; não aceita mídia externa.
+Lê fixture pelo cofre indexado, subprocesso Python direto -I -S,
+stdin/stdout pipe, shell=False, ambiente reduzido SystemRoot/WINDIR,
+sem arquivo plaintext, stdout esperado exato e digest do recibo.
+Checa lease/direitos antes do spawn, polling a cada 250ms quando I/O
+permite, depois da saída e antes de finish; timeout monotônico 15s,
+kill + wait do filho direto em erro. Sem heartbeat porque probe curto;
+sem retry automático, caller reconcilia/cancela ou aguarda expiração.
+Não há isolamento OS, limite efetivo CPU/RAM, garantia de deadline
+quando I/O/DB bloqueia, supervisão de árvore de processos nem recuperação
+segura de órfãos após crash do host. Filho fixo não cria descendentes;
+nenhum modelo ou mídia externa executado. Antes de produção exigir
+worker supervisor com controle de árvore/recursos, storage criptografado
+de derivados, validação de payload/model/config, trust host operacional
+e grants reais. 8 novos casos (3 referência/5 probe), mais 4 migration
+parametrizados; 114 focal esperados, não executados pelo assistente.
+
+### Operador — focal e upgrade 0015
+Com todos os writers parados:
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+conda activate tapi-asr
+python -m pytest -q tests/test_a02_operational_upgrade.py tests/test_asset_lineage.py tests/test_asset_vault.py tests/test_asset_rights.py tests/test_asset_rights_registry.py tests/test_discovery_backup.py
+python scripts/verify_zero_spend.py
+```
+Após 114 PASS sem skips, no banco existente local-research:
+```powershell
+$env:TAPI_TENANT_ID = "local-research"
+$baseline = (git rev-parse HEAD).Trim()
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+python -m scripts.a02_operational_upgrade --expected-head "$baseline" --backup-name "a02-pre0015-$stamp.sqlite3" --confirm-all-writers-stopped --apply-0015
+```
+Esperar A02_OPERATIONAL_MIGRATION_VERIFIED, 43 preservadas, 2 novas
+vazias, hashes/schema/FK ok, 1065 únicos/21 perfis, mídia false.
+Se BLOCKED, manter writers parados e inspecionar; não repetir às cegas.
+Sem novo full necessário neste incremento, último c4a0aea. Após upgrade,
+backup pós-0015, smoke real UI pendente e próximos PEPs. Não gerar grants,
+rodar mídia externa, coleta ou merge. Nenhum gate global liberado.
