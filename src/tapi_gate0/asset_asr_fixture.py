@@ -94,7 +94,7 @@ def _authored_fixture(case):
     expected=[]
     reference=REFERENCE if case=="inventory" else SHARED_SPEECH.get(case,"")
     if reference:
-        speech=_speech_pcm(reference)
+        speech=_speech_pcm() if case=="inventory" else _speech_pcm(reference)
         expected=[{"start":2*RATE,"end":2*RATE+len(speech)//2}]
         raw=bytes(4*RATE)+speech+bytes(2*RATE)
     elif case=="silence":

@@ -2346,10 +2346,14 @@ def test_shared_av_requires_both_modality_scopes(queue_fixture):
 @pytest.mark.parametrize("discard_fixture,case",[
     (("retain","process","all_processors","bundle_rubric","shared_modalities","shared_av_inventory"),"inventory"),
     (("retain","process","all_processors","bundle_rubric","shared_modalities","shared_av_silence"),"silence"),
+    *((("retain","process","all_processors","bundle_rubric","shared_modalities","shared_av_"+case),case)
+      for case in ("agreement","conflict","complementary","audio_only","screen_only","tone_negative")),
 ],indirect=["discard_fixture"])
 def test_shared_av_native_pipeline(queue_fixture,case):
     import os
     from tapi_gate0.asset_candidate_evidence import assemble_candidate_bundle
+    from tapi_gate0.asset_candidate_fusion import evaluate_shared_av_ablation
+    from tapi_gate0.asset_shared_av_fixture import RECIPES
     f=queue_fixture
     paths={k:os.environ.get(v) for k,v in (
         ("tessdata_dir","TAPI_OCR_TEST_TESSDATA"),("asr_model_dir","TAPI_ASR_TEST_MODEL_DIR"),
@@ -2358,14 +2362,17 @@ def test_shared_av_native_pipeline(queue_fixture,case):
         pytest.skip("explicit shared AV native opt-ins required")
     pipe=_pipeline(f,mode="shared_av",case=case,**paths)
     source=pipe._shared.source
+    speech,screen=RECIPES[case]
+    spoken=speech not in ("silence","tone")
+    visible=screen=="sales"
     assert source.container_sha256==f.q.ref.target.sha256
     assert source.container_sha256!=source.frame_sha256!=source.frame_png_sha256
     artifacts=[]
     for processor in ("temporal","ocr","asr_vad","vlm"):
         step=pipe.step("worker")
         assert step["status"]=="processed" and step["processor"]==processor
-        expected={"temporal":0,"ocr":1,"asr_vad":2 if case=="inventory" else 0,
-                  "vlm":1 if case=="inventory" else 0}
+        expected={"temporal":0,"ocr":1,"asr_vad":2 if spoken else int(speech=="tone"),
+                  "vlm":int(visible)}
         assert step["model_calls"]==expected[processor]
         metrics=step["decode_resources"]
         assert 0<metrics["peak_job_commit_bytes"]<=512*1024*1024
@@ -2375,7 +2382,7 @@ def test_shared_av_native_pipeline(queue_fixture,case):
         else:
             assert step["model_resources"] is None
         if processor=="asr_vad":
-            assert step["quality"]["asr_calls"]==int(case=="inventory")
+            assert step["quality"]["asr_calls"]==int(spoken)
         import json
         print("SHARED_AV_METRICS "+json.dumps({key:step[key] for key in
             ("processor","model_calls","decode_resources","model_resources","quality")},sort_keys=True))
@@ -2389,20 +2396,64 @@ def test_shared_av_native_pipeline(queue_fixture,case):
     assert all(r.shared_av.source==source and r.input_sha256==source.container_sha256 for r in by.values())
     assert all(r.object_id==f.q.ref.object_id and not r.canonical_rubric for r in by.values())
     assert by["temporal"].result.samples==len(source.temporal_sample_sha256)
-    assert [x.current.time_ms for x in by["temporal"].result.candidates]==([1000] if case=="inventory" else [])
+    assert [x.current.time_ms for x in by["temporal"].result.candidates]==([1000] if visible else [])
     assert by["vlm"].result.frame.time_ms==1000
     assert by["vlm"].result.frame.frame_sha256==source.frame_sha256
     assert by["vlm"].result.frame.timeline=="resampled_uniform"
     fields={x.field_id:x for x in result["decisions"].fields}
-    if case=="inventory":
-        assert by["asr_vad"].result.state==by["ocr"].result.state=="observed"
-        assert by["ocr"].result.frame==by["vlm"].result.frame
+    assert by["asr_vad"].result.state==("observed" if spoken else "abstained")
+    assert by["ocr"].result.state==("observed" if visible else "abstained")
+    if spoken:
         assert by["asr_vad"].result.duration_ms==(source.pcm_samples*1000+15999)//16000
+    if visible:
+        assert by["ocr"].result.frame==by["vlm"].result.frame
         assert fields["texto_na_tela"].value is True
         assert any(x.frame_sha256==source.frame_sha256 for x in fields["texto_na_tela"].supports)
     else:
-        assert by["asr_vad"].result.state==by["ocr"].result.state=="abstained"
+        assert fields["texto_na_tela"].value is None
+    if not spoken and not visible:
         assert all(x.value is None for x in fields.values())
+
+    # Independent from adapter integrity: report semantic matches/misses
+    # against frozen authored expectations, not the recognized transcript.
+    # Do not silently convert a semantic miss into an engineering PASS.
+    oracle={
+        "inventory":(None,None,None,True),
+        "silence":(None,None,None,None),
+        "agreement":("vendas",None,None,True),
+        "conflict":(None,None,None,True),
+        "complementary":("vendas","salvar",True,True),
+        "audio_only":(None,"salvar",True,None),
+        "screen_only":("vendas",None,None,True),
+        "tone_negative":(None,None,None,None),
+    }
+    assessed=("tema_principal","tipo_cta","tem_cta","texto_na_tela")
+    expected=dict(zip(assessed,oracle[case]))
+    replay=evaluate_shared_av_ablation(pipe.store,TENANT,f.q.ref.object_id,artifacts,purpose=f.spec.purpose)
+    assert len(replay["arms"])==15 and replay["source_fingerprint"]==bundle.fingerprint()
+    assert not replay["inference_reexecuted"] and not replay["scientific_evidence"]
+    assert replay["arms"]["asr_vad+ocr+temporal+vlm"]==result["decisions"]
+    assert replay==evaluate_shared_av_ablation(pipe.store,TENANT,f.q.ref.object_id,list(reversed(artifacts)),purpose=f.spec.purpose)
+    from itertools import combinations
+    processors=("asr_vad","ocr","temporal","vlm")
+    assert set(replay["arms"])=={"+".join(a) for n in range(1,5) for a in combinations(processors,n)}
+    values={}
+    for arm,decision in replay["arms"].items():
+        subset=set(arm.split("+"))
+        for field in decision.fields:
+            assert all(s.processor in subset for s in (*field.supports,*field.vetoes))
+        values[arm]={f.field_id:f.value for f in decision.fields if f.field_id in assessed}
+    # Temporal currently adds no semantic features; test that this does not
+    # falsely look like a gain. Its provenance/measurements remain useful.
+    for arm,row in values.items():
+        if "temporal" in arm and "+" in arm:
+            assert row==values["+".join(p for p in arm.split("+") if p!="temporal")]
+    full=values["asr_vad+ocr+temporal+vlm"]
+    print("SHARED_AV_ABLATION "+json.dumps({"case":case,"expected":expected,"arms":values,
+        "full_wrong_nonabstained":sum(full[k] is not None and full[k]!=expected[k] for k in assessed),
+        "full_missed_candidates":sum(expected[k] is not None and full[k] is None for k in assessed),
+        "full_exact_match":full==expected,"reference_kind":"authored_fixture_not_independent_gold"},
+        ensure_ascii=False,sort_keys=True))
     assert pipe.step("worker")==result
     with f.q.f.engine.connect() as db:
         assert db.scalar(select(func.count()).select_from(attempts))==4
@@ -2459,3 +2510,73 @@ def test_shared_av_rechecks_revocation_between_decode_and_finish(queue_fixture,m
     assert f.queue.status(TENANT,spec.job_id)["receipt_sha256"] is None
     with f.q.f.engine.connect() as db:
         assert db.scalar(select(func.count()).select_from(payloads))==0
+
+
+@pytest.mark.parametrize("discard_fixture",[
+    ("retain","process","all_processors","bundle_rubric","shared_modalities")
+],indirect=True)
+@pytest.mark.parametrize("case,spoken,screen,expected_topic,expected_cta",[
+    ("agreement","Organize suas vendas.","Organize suas vendas","vendas",None),
+    ("conflict","Calcule os custos fixos.","Organize suas vendas",None,None),
+    ("complementary","Salve este conteúdo.","Organize suas vendas","vendas","salvar"),
+    ("cta_conflict","Comente sua dúvida.","Salve este post",None,None),
+    ("context_veto","Não salve este post.","Salve este post",None,None),
+    ("split_request","Salve","este post",None,None),
+])
+def test_shared_av_ablation_policy_and_rights(queue_fixture,case,spoken,screen,expected_topic,expected_cta):
+    """Persist authored surrogate observations: contract/policy test, not native inference."""
+    from tapi_gate0.asset_processor_results import (SharedAVSource,SharedAVBinding,SHARED_AV_METHOD,
+        ProcessorResult,ASR,Speech,Interval,OCR,Word,VLM,Frame,Temporal,encode)
+    from tapi_gate0.asset_candidate_fusion import evaluate_shared_av_ablation
+    f=queue_fixture
+    store=DerivedPayloadStore(f.queue,b"d"*32)
+    src=SharedAVSource(container_sha256=f.q.ref.target.sha256,decoder_sha256="1"*64,
+        rgb_stream_sha256="2"*64,pcm_sha256="3"*64,frame_sha256="4"*64,frame_png_sha256="5"*64,
+        frame_count=12,pcm_samples=48000,temporal_sample_sha256=("6"*64,)*12)
+    frame=Frame(time_ms=1000,frame_sha256=src.frame_sha256,timeline="resampled_uniform")
+    observations=(
+        ASR(duration_ms=3000,segments=(Speech(start_ms=1000,end_ms=2000,text=spoken),),
+            vad=(Interval(start_ms=900,end_ms=2100),)),
+        OCR(frame=frame,width=960,height=540,words=tuple(Word(text=w,box_px=(10+i*110,20,100,30))
+            for i,w in enumerate(screen.split()))),
+        Temporal(samples=12,threshold=0.2,candidates=()),
+        VLM(frame=frame,scene="text_card",text_present="yes"),
+    )
+    ids=[]
+    for obs in observations:
+        binding=SharedAVBinding(source=src,adapter_configuration_sha256="7"*64)
+        spec=f.spec.model_copy(update={"processor":obs.processor,"method_version":SHARED_AV_METHOD,
+            "configuration_sha256":binding.configuration(obs.processor)})
+        f.queue.enqueue(spec)
+        lease=f.queue.claim(TENANT,"worker",job_id=spec.job_id)["lease"]
+        result=ProcessorResult(tenant_id=TENANT,job_id=spec.job_id,object_id=spec.object_id,
+            input_sha256=src.container_sha256,attempt=lease.attempt,purpose=spec.purpose,
+            method_version=spec.method_version,configuration_sha256=spec.configuration_sha256,
+            origin="adapter_candidate",result=obs,shared_av=binding)
+        ids.append(store.finish(lease,payload=encode(result))["artifact_id"])
+    with f.q.f.engine.connect() as db:
+        before=db.scalar(select(func.count()).select_from(domain_events))
+    replay=evaluate_shared_av_ablation(store,TENANT,f.q.ref.object_id,ids,purpose=f.spec.purpose)
+    fields={x.field_id:x for x in replay["arms"]["asr_vad+ocr+temporal+vlm"].fields}
+    assert fields["tema_principal"].value==expected_topic
+    assert fields["tipo_cta"].value==expected_cta
+    assert fields["tem_cta"].value is (True if expected_cta else None)
+    assert fields["texto_na_tela"].value is True
+    if case=="agreement":
+        assert {s.processor for s in fields["tema_principal"].supports}=={"asr_vad","ocr"}
+    if case=="conflict":
+        assert fields["tema_principal"].reason=="CONFLICTING_ANCHORS"
+    if case=="complementary":
+        assert fields["tipo_cta"].supports[0].processor=="asr_vad"
+        assert fields["tema_principal"].supports[0].processor=="ocr"
+    assert len(replay["arms"])==15
+    with pytest.raises(AssetRightsDenied,match="SHARED_AV_COMPLETE_REQUIRED"):
+        evaluate_shared_av_ablation(store,TENANT,f.q.ref.object_id,ids[:-1],purpose=f.spec.purpose)
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(domain_events))==before
+        assert db.scalar(select(func.count()).select_from(attempts))==4
+    rv=f.q.f.state(2,revoked_asset_ids=(f.q.ref.target.asset_id,))
+    f.q.f.svc.advance(f.q.f.anchor,TENANT,"instagram",rv)
+    f.queue.resolve_anchor=lambda ref:f.q.f.pin(rv)
+    with pytest.raises(AssetRightsDenied,match="ASSET_RIGHTS_REVOKED"):
+        evaluate_shared_av_ablation(store,TENANT,f.q.ref.object_id,ids,purpose=f.spec.purpose)
