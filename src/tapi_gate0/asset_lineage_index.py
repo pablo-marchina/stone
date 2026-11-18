@@ -25,10 +25,12 @@ nodes=Table(NAME,metadata,
     Column("node_id",String(128),primary_key=True),
     Column("kind",String(32),nullable=False),
     Column("payload",Text,nullable=False),
+    Column("purpose",String(32),nullable=False),
     Column("state",String(16),nullable=False),
     Column("invalidated_at",String(40)),
     ForeignKeyConstraint(["tenant_id"],["tenants.tenant_id"]),
     CheckConstraint("kind IN ('asset','derived')",name="ck_lineage_kind"),
+    CheckConstraint("purpose IN ('research_analysis','studio_creation')",name="ck_lineage_purpose"),
     CheckConstraint("(state='active' AND invalidated_at IS NULL) OR "
                     "(state='invalidated' AND invalidated_at IS NOT NULL)",name="ck_lineage_state"))
 
@@ -67,7 +69,7 @@ def _load(db,tenant):
             derived.append(ref)
         else:
             _fail("INVALID_KIND")
-        if ident!=row["node_id"] or row["state"] not in ("active","invalidated"):
+        if ident!=row["node_id"] or row["state"] not in ("active","invalidated") or row["purpose"] not in ("research_analysis","studio_creation"):
             _fail("INDEX_CORRUPT")
         by_id[ident]=(row,ref)
     # Reject malformed graph even when there is no requested invalidation.
@@ -101,7 +103,7 @@ def _grant(db,anchor,ref,now,permission):
         raise AssetRightsDenied(decision.code)
 
 
-def _ancestors(by_id,ident,now):
+def _ancestors(by_id,ident,now,purpose):
     todo=[ident]
     seen=set()
     roots=[]
@@ -113,6 +115,8 @@ def _ancestors(by_id,ident,now):
         if key not in by_id:
             _fail("UNKNOWN_NODE")
         row,ref=by_id[key]
+        if row["purpose"]!=purpose:
+            _fail("PURPOSE_MISMATCH")
         if row["state"]!="active" or ref.retain_until<=now:
             _fail("INACTIVE_ANCESTOR")
         if isinstance(ref,RetainedAssetRef):
@@ -143,10 +147,12 @@ class AssetLineageIndex:
                 db.rollback()
                 raise
 
-    def _insert(self,db,tenant,ident,kind,ref,by_id):
+    def _insert(self,db,tenant,ident,kind,ref,by_id,purpose):
+        if purpose not in ("research_analysis","studio_creation"):
+            _fail("PURPOSE_MISMATCH")
         if ident in by_id:
             row,old=by_id[ident]
-            if old!=ref or row["kind"]!=kind:
+            if old!=ref or row["kind"]!=kind or row["purpose"]!=purpose:
                 _fail("ID_CONFLICT")
             if row["state"]!="active":
                 _fail("TOMBSTONE")
@@ -154,7 +160,7 @@ class AssetLineageIndex:
         if len(by_id)>=20000:
             _fail("LOCAL_LIMIT")
         db.execute(insert(nodes).values(tenant_id=tenant,node_id=ident,kind=kind,
-            payload=ref.model_dump_json(),state="active"))
+            payload=ref.model_dump_json(),purpose=purpose,state="active"))
         _event(db,tenant,ident,"registered",kind)
         return True
 
@@ -167,7 +173,7 @@ class AssetLineageIndex:
                 _fail("INACTIVE_NODE")
             _grant(db,anchor,ref,now,Permission(operation="retain",purpose=purpose,field=ref.target.media_kind))
             _,_,by_id=_load(db,tenant)
-            return self._insert(db,tenant,ref.object_id,"asset",ref,by_id)
+            return self._insert(db,tenant,ref.object_id,"asset",ref,by_id,purpose)
 
     def register_derived(self,ref:DerivedArtifactRef,*,resolve_anchor,purpose="research_analysis"):
         """Metadata-only registration, all roots must authorize exact derivation.
@@ -192,12 +198,12 @@ class AssetLineageIndex:
             # permission; no claim of permission to expose their payloads.
             if field in ("ranking_reference","retrieval_index","analysis_run"):
                 field="rubric_evidence"
-            unique_roots={root.object_id:root for parent in ref.parent_ids for root in _ancestors(by_id,parent,now)}
+            unique_roots={root.object_id:root for parent in ref.parent_ids for root in _ancestors(by_id,parent,now,purpose)}
             for root in unique_roots.values():
                 anchor=resolve_anchor(root)
                 _grant(db,anchor,root,now,Permission(operation="retain",purpose=purpose,field=root.target.media_kind))
                 _grant(db,anchor,root,now,Permission(operation="derive",purpose=purpose,field=field))
-            return self._insert(db,ref.tenant_id,ref.artifact_id,"derived",ref,by_id)
+            return self._insert(db,ref.tenant_id,ref.artifact_id,"derived",ref,by_id,purpose)
 
     def _invalidate(self,db,tenant,assets,derived,by_id,*,object_ids=(),artifact_ids=(),now):
         roots={a.object_id for a in assets}
@@ -269,7 +275,15 @@ class AssetLineageIndex:
         with self._transaction() as db:
             now=now_utc()
             _,_,by_id=_load(db,tenant)
-            for root in _ancestors(by_id,ident,now):
+            if ident not in by_id:
+                _fail("UNKNOWN_NODE")
+            ref=by_id[ident][1]
+            field=ref.target.media_kind if isinstance(ref,RetainedAssetRef) else ref.kind
+            if field in ("ranking_reference","retrieval_index","analysis_run"):
+                field="rubric_evidence"
+            if permission.field!=field:
+                _fail("FIELD_MISMATCH")
+            for root in _ancestors(by_id,ident,now,permission.purpose):
                 anchor=resolve_anchor(root)
                 _grant(db,anchor,root,now,Permission(operation="retain",purpose=permission.purpose,
                     field=root.target.media_kind))
