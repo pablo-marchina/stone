@@ -1,5 +1,8 @@
 # TAPI Stone — Plataforma unificada (implementação incremental)
 
+> **Organização e fluxo GitHub:** [branches, PRs, issues e protocolo de sincronização](docs/REPOSITORY_WORKFLOW.md). Acompanhar HEADs atuais; estados históricos não representam a branch ativa.
+
+
 > **Base documental atemporal v6.1:** consulte [guia de adoção](docs/base_atemporal/INTEGRACAO.md), [índice obrigatório](docs/base_atemporal/00_Indice_e_Protocolo.md) e [Plano Único](planning/base_atemporal/). Os documentos e estados históricos abaixo não substituem essa base. Consulte HEAD/PR/evidência operacional atual antes de executar. Validação documental local: `python docs/base_atemporal/ferramentas/validar_espelho.py`.
 
 
