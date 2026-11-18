@@ -779,3 +779,63 @@ media_enabled=false. Se BLOCKED, não reiniciar nem repetir upgrade às cegas;
 inspecionar revisão e backup. Após sucesso, novo backup 0013 e smoke
 Dashboard/Ranking/Evidence real, sem nova coleta. Regressão full da
 baseline 76a9bc8 já aprovada; novo HEAD ainda focal pendente. Sem merge.
+
+## A02.2 — migração operacional confirmada; A02.4 — índice persistente
+Operador HEAD fff9bdf3fb982bb496755cfed74bdbf3335f67fb:
+73/73 focal PASS (15,38s), zero-spend PASS. Upgrade 0012→0013
+A02_OPERATIONAL_MIGRATION_VERIFIED, backup a02-pre0013-20261117-205535.sqlite3
+SHA256 da5fb2a122843d78580f0b2561cda1cde810c5709e81cbac35278f2c259aa67b,
+39 tabelas preservadas, 3 novas vazias, schema/hashes lógicos/FK ok,
+1065 posts únicos, 21 perfis, 0 duplicatas, 0 grants reais, mídia bloqueada.
+Backup novo idêntico em bytes ao anterior; 0013 operacional confirmado.
+
+A02.4: asset_lineage_index.py e migration 0014_asset_lineage.
+Uma tabela privada de metadados (não bytes/derivados brutos), PK
+(tenant,node_id), tipo asset/derived, finalidade research_analysis ou
+studio_creation, referência validada, tombstone monotônico. SQLite
+somente; BEGIN IMMEDIATE serializa mutações e preflight. Registro de
+raiz exige grant retain, vínculo de fonte/identidade/issuer/key, prazo
+contido no grant. Registro de derivado exige pais ativos da mesma
+finalidade, grafo válido, permissão derive exata de todos os ativos
+ancestrais, retenção limitada pelos pais. Idempotência sem sobrescrita;
+tombstone nunca reativado. Preflight exige finalidade e campo compatíveis,
+reconsulta retain e operação pedida para cada raiz; retorna somente status,
+não payload nem credencial. Metadados não comprovam presença de bytes
+ou autenticidade de derivados; host confiável e PEP completo pendentes.
+Invalidação administrativa por IDs exatos, expiração, propagação
+transitiva e eventos/outbox atômicos, versões 1/2. Reconciliação de
+revogação assinada por escopo tenant/plataforma/emissor/grant/asset/source,
+pin atual e janela válida. Separada do avanço do registry: erro no índice
+não pode reverter revogação. Preflight nega direitos revogados mesmo
+antes da reconciliação. Ainda sem consumer automático, purge físico,
+retention worker, jobs, integração de leitura/outputs ou chaves reais.
+Não invalida corpus legado de metadados/captions. Nenhum arquivo removido.
+0014 cria tabela vazia; downgrade não vazio proibido. Backup reconhece
+0014 com correspondência de schema. Rehearsal aceita --lineage para
+0013→0014 (somente cópia). 5 novos casos focais esperados (3 lifecycle,
+1 parametrização rehearsal, 1 downgrade); outros checks estendidos.
+Não executados pelo assistente. Operacional permanece 0013.
+
+### Operador — testes e backup pós-0013
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+conda activate tapi-asr
+python -m pytest -q tests/test_a02_operational_upgrade.py tests/test_asset_lineage.py tests/test_asset_vault.py tests/test_asset_rights.py tests/test_asset_rights_registry.py tests/test_discovery_backup.py
+python scripts/verify_zero_spend.py
+```
+Esperado 78 testes. Com todos os writers parados e PASS:
+```powershell
+$env:TAPI_TENANT_ID = "local-research"
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$name = "a02-post0013-$stamp.sqlite3"
+$report = python scripts/a6_backup_restore_drill.py --output-name "$name" --confirm-all-writers-stopped | ConvertFrom-Json
+if ($LASTEXITCODE -ne 0 -or $report.status -ne "BACKUP_RESTORE_VERIFIED") { throw "Backup falhou" }
+$report | ConvertTo-Json -Depth 8
+python -m scripts.a02_migration_rehearsal --backup-name "$name" --backup-sha256 "$($report.backup_sha256)" --tenant "local-research" --lineage
+```
+Esperado 42 tabelas anteriores preservadas, 1 nova vazia, rollback em
+cópia verificado; não aplicar 0014 operacional ainda. Próximo: fechar
+rehearsal, integração de purge/index e jobs, upgrade protegido 0014.
+Nenhuma execução real de mídia nem merge.
