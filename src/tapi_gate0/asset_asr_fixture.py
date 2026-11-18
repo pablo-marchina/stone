@@ -39,7 +39,7 @@ SHARED_SPEECH={
 }
 VAD_PIN="4cbf549b8326f60f80f2536d9eefeb450a9abe83365a098031c89719f1be17d2"
 OPTIONS={"threshold":0.5,"min_speech_duration_ms":250,"min_silence_duration_ms":300,"speech_pad_ms":150}
-RECOVERY_PROFILES=("baseline","context_500ms")
+RECOVERY_PROFILES=("baseline","context_500ms","beam10","word_context_500ms")
 RUNTIME_PACKAGES=("faster-whisper","ctranslate2","onnxruntime","numpy","tokenizers","huggingface-hub","av")
 
 
@@ -212,9 +212,9 @@ def _plan(data,meta,model_dir,*,profile="baseline"):
 
 
 def _infer(data,model_dir,*,stage=lambda _:None,profile="baseline"):
+    """Child only, caller pinned exact authored bytes; no external entrypoint."""
     if profile not in RECOVERY_PROFILES:
         raise ValueError("ASR_RECOVERY_PROFILE")
-    """Child only, caller pinned exact authored bytes; no external entrypoint."""
     from . import multimodal_vad_asr as joint
     from . import multimodal_asr as asr
     from faster_whisper.vad import VadOptions,get_speech_timestamps,get_vad_model
@@ -241,10 +241,16 @@ def _infer(data,model_dir,*,stage=lambda _:None,profile="baseline"):
             raise ValueError("ASR_FIXTURE_MODEL_FORMAT")
         stage("transcribe")
         try:
-            result=(joint.transcribe_regions(model,raw,intervals) if profile=="baseline"
-                    else _transcribe_context(model,raw,intervals))
+            if profile=="baseline":
+                result=joint.transcribe_regions(model,raw,intervals)
+            elif profile=="beam10":
+                result=joint.transcribe_regions(model,raw,intervals,beam_size=10)
+            elif profile=="word_context_500ms":
+                result=_transcribe_word_context(model,raw,intervals)
+            else:
+                result=_transcribe_context(model,raw,intervals)
         except ASRContextRejected as exc:
-            if profile!="context_500ms":
+            if profile not in ("context_500ms","word_context_500ms"):
                 raise
             # Diagnostic-only rejection, never a valid processor result.
             return {"pcm_sha256":_digest(raw),"diagnostic_error":str(exc)}
@@ -290,6 +296,51 @@ def _transcribe_context(model,raw,intervals):
             if not x<y:
                 raise ASRContextRejected("ASR_RECOVERY_CONTEXT_NO_OVERLAP")
             segments.append({"start_s":x,"end_s":y,"text":row["text"],
+                "region_start_sample":a,"region_end_sample":b})
+    return {"pcm_sha256":_digest(raw),"asr_calls":len(intervals),"segments":segments}
+
+
+def _transcribe_word_context(model,raw,intervals):
+    """Experimental word-level alignment on the exact original PCM.
+
+    Wider acoustic context is not permission to attribute additional speech.
+    Every lexical word must overlap its original VAD interval and stay within
+    the existing 250 ms boundary tolerance. Reject the entire arm rather than
+    discard words, change text or widen the interval.
+    """
+    from . import multimodal_asr as decoder
+    from . import multimodal_vad as vad
+    n=vad._validate_pcm(raw)
+    intervals=vad.validate_intervals(intervals,n)
+    segments=[]
+    for i,region in enumerate(intervals):
+        a,b=region["start"],region["end"]
+        left=intervals[i-1]["end"] if i else 0
+        right=intervals[i+1]["start"] if i+1<len(intervals) else n
+        start=max(left,a-RATE//2)
+        end=min(right,b+RATE//2)
+        chunk=raw[2*start:2*end]
+        result=decoder._transcribe(model,chunk,word_timestamps=True)
+        if result["pcm_sha256"]!=_digest(chunk):
+            raise ValueError("ASR_RECOVERY_CHUNK_BINDING")
+        for row in result["segments"]:
+            words=row["words"]
+            if not words or _words("".join(w["text"] for w in words))!=_words(row["text"]):
+                raise ASRContextRejected("ASR_RECOVERY_WORD_TEXT_MISMATCH")
+            spans=[]
+            for w in words:
+                if not _words(w["text"]):
+                    continue
+                x,y=w["start_s"]+start/RATE,w["end_s"]+start/RATE
+                if (x<a/RATE-0.25 or y>b/RATE+0.25 or
+                        not max(x,a/RATE)<min(y,b/RATE)):
+                    raise ASRContextRejected("ASR_RECOVERY_WORD_TIMESTAMP")
+                spans.append((max(x,a/RATE),min(y,b/RATE)))
+            if not spans:
+                raise ASRContextRejected("ASR_RECOVERY_WORD_TEXT_MISMATCH")
+            if len(segments)>=128:
+                raise ValueError("ASR_RECOVERY_SEGMENT_LIMIT")
+            segments.append({"start_s":spans[0][0],"end_s":spans[-1][1],"text":row["text"],
                 "region_start_sample":a,"region_end_sample":b})
     return {"pcm_sha256":_digest(raw),"asr_calls":len(intervals),"segments":segments}
 

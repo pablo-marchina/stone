@@ -171,15 +171,17 @@ def _speech_pcm(espeak,ffmpeg,temp,case_id,text,rate):
     return raw
 
 
-def _transcribe(model,raw):
+def _transcribe(model,raw,*,beam_size=5,word_timestamps=False):
+    if type(beam_size) is not int or beam_size not in (5,10) or type(word_timestamps) is not bool:
+        raise ASRError("ASR_DECODING_PROFILE_INVALID")
     if not raw or len(raw)%2 or len(raw)>MAX_BYTES:
         raise ASRError("ASR_PCM_INVALID")
     import numpy as np
     pcm=np.frombuffer(raw,dtype="<i2").astype(np.float32)/32768
     duration=len(pcm)/SAMPLE_RATE
-    segments,info=model.transcribe(pcm,language="pt",task="transcribe",beam_size=5,
+    segments,info=model.transcribe(pcm,language="pt",task="transcribe",beam_size=beam_size,
         temperature=0.0,condition_on_previous_text=False,vad_filter=False,
-        word_timestamps=False,initial_prompt=None,without_timestamps=False)
+        word_timestamps=word_timestamps,initial_prompt=None,without_timestamps=False)
     if info.language!="pt" or not math.isfinite(info.duration) or abs(info.duration-duration)>0.1:
         raise ASRError("ASR_TRANSCRIPTION_INFO_INVALID")
     observed=[]
@@ -191,8 +193,21 @@ def _transcribe(model,raw):
                 or len(text)>2000):
             raise ASRError("ASR_SEGMENT_INVALID")
         if text:
-            observed.append({"start_s":start,"end_s":end,"text":text,
-                             "text_sha256":sha256(text.encode("utf-8")).hexdigest()})
+            row={"start_s":start,"end_s":end,"text":text,
+                 "text_sha256":sha256(text.encode("utf-8")).hexdigest()}
+            if word_timestamps:
+                words=[]
+                previous=0.0
+                for w in segment.words or ():
+                    x,y,token=float(w.start),float(w.end),w.word
+                    if (len(words)>=256 or not math.isfinite(x) or not math.isfinite(y)
+                            or not 0<=x<=y<=duration+0.25 or x<previous-0.001
+                            or type(token) is not str or not 0<len(token)<=256):
+                        raise ASRError("ASR_WORD_ALIGNMENT_INVALID")
+                    words.append({"start_s":x,"end_s":y,"text":token})
+                    previous=y
+                row["words"]=words
+            observed.append(row)
         last_end=end
     return {"pcm_sha256":sha256(raw).hexdigest(),"duration_s":duration,"segments":observed,
             "transcript":" ".join(s["text"] for s in observed),

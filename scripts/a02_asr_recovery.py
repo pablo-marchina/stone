@@ -6,5 +6,6 @@ from tapi_gate0.asset_asr_recovery import run
 if __name__=="__main__":
     parser=argparse.ArgumentParser()
     parser.add_argument("--model-dir",required=True)
+    parser.add_argument("--round",choices=("v1","v2"),default="v2")
     args=parser.parse_args()
-    print(json.dumps(run(args.model_dir),ensure_ascii=False,sort_keys=True,allow_nan=False))
+    print(json.dumps(run(args.model_dir,round_id=args.round),ensure_ascii=False,sort_keys=True,allow_nan=False))

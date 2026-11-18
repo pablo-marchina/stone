@@ -13,7 +13,8 @@ from . import asset_windows_job as windows
 from . import multimodal_cta_directed as directed
 from .discovery_rubric_grounded import rule_evidence,UNKNOWN
 
-VERSION="authored-asr-recovery.v1"
+VERSION="authored-asr-recovery.v2"
+ROUNDS={"v1":("baseline","context_500ms"),"v2":("beam10","word_context_500ms")}
 CASES=("inventory","agreement","conflict","cta","silence","tone")
 EXPECTED={
     "inventory":("gestão",None),"agreement":("vendas",None),"conflict":("finanças",None),
@@ -34,9 +35,10 @@ def _semantic(texts):
 
 def _score(case,meta,output,*,profile="baseline"):
     parsed=json.loads(output)
-    if (profile=="context_500ms" and type(parsed) is dict and set(parsed)=={"pcm_sha256","diagnostic_error"}
+    if (profile in ("context_500ms","word_context_500ms") and type(parsed) is dict and set(parsed)=={"pcm_sha256","diagnostic_error"}
             and parsed["pcm_sha256"]==meta["pcm_sha256"] and parsed["diagnostic_error"] in
-            ("ASR_RECOVERY_CONTEXT_TIMESTAMP","ASR_RECOVERY_CONTEXT_NO_OVERLAP")):
+            ("ASR_RECOVERY_CONTEXT_TIMESTAMP","ASR_RECOVERY_CONTEXT_NO_OVERLAP",
+             "ASR_RECOVERY_WORD_TEXT_MISMATCH","ASR_RECOVERY_WORD_TIMESTAMP")):
         return {"quality_passed":False,"semantic_exact_match":False,"values":None,
                 "error_code":parsed["diagnostic_error"]}
     # Structural/negative failures propagate and do not become observations.
@@ -65,14 +67,17 @@ def _score(case,meta,output,*,profile="baseline"):
             "reference_word_count":len(asr._words(meta["reference"]))}
 
 
-def run(model_dir):
+def run(model_dir,*,round_id="v2"):
+    if round_id not in ROUNDS:
+        raise ValueError("ASR_RECOVERY_ROUND")
+    profiles=ROUNDS[round_id]
     windows._native_api()
     model_dir=Path(model_dir)
     rows=[]
     runtime=asr._runtime(model_dir)
     for case,transport in [*((c,"argv") for c in CASES),("cta","utf8_stdin")]:
         data,meta=asr._authored_fixture(case,transport=transport)
-        for profile in asr.RECOVERY_PROFILES:
+        for profile in profiles:
             config,code=asr._plan(data,meta,model_dir,profile=profile)
             if config["runtime"]!=runtime:
                 raise ValueError("ASR_RECOVERY_RUNTIME_CHANGED")
@@ -97,6 +102,6 @@ def run(model_dir):
             "quality_passed":sum(r["quality_passed"] for r in group),
             "semantic_exact_matches":sum(r["semantic_exact_match"] for r in group),
             "engineering_gate_passed":all(r["quality_passed"] and r["semantic_exact_match"] for r in group)}
-    return {"status":"ASR_RECOVERY_EXPERIMENT_COMPLETED","policy_version":VERSION,"rows":rows,
+    return {"status":"ASR_RECOVERY_EXPERIMENT_COMPLETED","policy_version":VERSION,"round_id":round_id,"rows":rows,
         "profiles":summaries,"tts_transport_exploratory":True,"synthetic_only":True,"independent_gold":False,
         "automatic_profile_selected":False,"canonical_rubric":False,"database_mutated":False}

@@ -19,7 +19,9 @@ from .multimodal_temporal import _run
 VERSION="bd-vad-asr-fixture.v1"
 
 
-def transcribe_regions(model,raw,intervals):
+def transcribe_regions(model,raw,intervals,*,beam_size=5):
+    if type(beam_size) is not int or beam_size not in (5,10):
+        raise asr.ASRError("ASR_DECODING_PROFILE_INVALID")
     n=vad._validate_pcm(raw)
     intervals=vad.validate_intervals(intervals,n)
     full_hash=sha256(raw).hexdigest()
@@ -28,7 +30,7 @@ def transcribe_regions(model,raw,intervals):
     for region in intervals:
         a,b=region["start"],region["end"]
         pcm=raw[a*2:b*2]
-        result=asr._transcribe(model,pcm)
+        result=asr._transcribe(model,pcm) if beam_size==5 else asr._transcribe(model,pcm,beam_size=beam_size)
         duration=(b-a)/asr.SAMPLE_RATE
         offset=a/asr.SAMPLE_RATE
         chunk_hash=sha256(pcm).hexdigest()
