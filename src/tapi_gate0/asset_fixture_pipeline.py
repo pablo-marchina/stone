@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 import json
 from pathlib import Path
+from time import perf_counter
 
 from . import asset_processor_fixture as typed, asset_supervisor as supervisor
 from . import asset_temporal_fixture as temporal, asset_ocr_fixture as ocr
@@ -131,6 +132,7 @@ class FixturePipeline:
         # after existing maintenance has reconciled the expired lease.
         if type(retry_stopped) is not bool:
             _deny("RETRY_FLAG")
+        started=perf_counter()
         self._preflight()
         artifacts=[]
         for spec in self.plan.specs:
@@ -161,7 +163,9 @@ class FixturePipeline:
             result={**self._status("processed",spec,"completed"),
                     "artifact_id":receipt["artifact_id"],"model_calls":receipt["model_calls"]}
             if self.plan.mode=="shared_av":
-                result.update({key:receipt[key] for key in ("decode_resources","model_resources","quality")})
+                result.update({key:receipt[key] for key in ("decode_resources","model_resources","ocr_resources","quality")})
+            if self.plan.mode=="shared_av":
+                result["step_wall_ms"]=round((perf_counter()-started)*1000,3)
             return result
         first=self.plan.specs[0]
         # Reauthenticate exact persisted typed results under the fusion

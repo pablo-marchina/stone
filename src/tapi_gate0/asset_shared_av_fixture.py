@@ -269,6 +269,7 @@ def run(queue,vault,store,lease,*,fixture,paths):
         frame=Frame(time_ms=1000,frame_sha256=_digest(gray),timeline="resampled_uniform")
         calls=0
         model_resources=None
+        ocr_resources=None
         quality=None
         if spec.processor=="temporal":
             observation=_temporal_result(samples)
@@ -278,7 +279,9 @@ def run(queue,vault,store,lease,*,fixture,paths):
         elif spec.processor=="ocr":
             # Exact pinned PNG is the canonical encoding of the verified
             # decoded pixels, not a different frame or unverified text.
-            output=windows._run_bounded_fixture(code,fixture.png,check,limits=ocr.LIMITS,max_output=ocr.MAX_TSV)
+            ocr_resources={}
+            output=windows._run_fixture_output(code,fixture.png,check,limits=ocr.LIMITS,
+                max_output=ocr.MAX_TSV,expected=None,metrics=ocr_resources)
             observation=ocr.result_from_tsv(fixture.screen_case,output)
             if observation.state=="observed":
                 observation=observation.model_copy(update={"frame":frame})
@@ -307,6 +310,7 @@ def run(queue,vault,store,lease,*,fixture,paths):
         receipt=store.finish(lease,payload=payload)
         return {**receipt,"model_calls":calls,"synthetic_fixture":True,"canonical_rubric":False,
                 "kernel_job_limits_verified":True,"tree_empty_verified":True,
-                "decode_resources":decode_resources,"model_resources":model_resources,"quality":quality}
+                "decode_resources":decode_resources,"model_resources":model_resources,
+                "ocr_resources":ocr_resources,"quality":quality}
     except windows.JobError as exc:
         raise AssetRightsDenied("SHARED_AV_WINDOWS_"+str(exc)) from exc

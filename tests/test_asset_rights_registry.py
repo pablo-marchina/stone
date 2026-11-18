@@ -2381,11 +2381,17 @@ def test_shared_av_native_pipeline(queue_fixture,case):
             assert step["model_resources"]["wall_ms"]>0
         else:
             assert step["model_resources"] is None
+        if processor=="ocr":
+            assert 0<step["ocr_resources"]["peak_job_commit_bytes"]<=512*1024*1024
+            assert step["ocr_resources"]["wall_ms"]>0
+        else:
+            assert step["ocr_resources"] is None
+        assert step["step_wall_ms"]>=metrics["wall_ms"]
         if processor=="asr_vad":
             assert step["quality"]["asr_calls"]==int(spoken)
         import json
         print("SHARED_AV_METRICS "+json.dumps({key:step[key] for key in
-            ("processor","model_calls","decode_resources","model_resources","quality")},sort_keys=True))
+            ("processor","model_calls","decode_resources","model_resources","ocr_resources","step_wall_ms","quality")},sort_keys=True))
         artifacts.append(step["artifact_id"])
     result=pipe.step("worker")
     assert result["status"]=="candidate_complete"
