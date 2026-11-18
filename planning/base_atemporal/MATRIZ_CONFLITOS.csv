@@ -1,0 +1,20 @@
+id,source,conflict,resolution
+C01,PDF/Aula 1,Kickoff 26/10 vs 28/10; entrega 25/11,"Preservar ambos com data de origem, não inferir realização; data de entrega histórica, sem prazo móvel."
+C02,PDF §4.1/§8,LangGraph obrigatório no núcleo vs liberdade de stack,"Preservar divergência; LangGraph baseline candidato prioritário, comparar contrato e equivalência, não alegar dispensa institucional."
+C03,"v2, v3, doc 33/35/37","50 revisões, gold humano, validação e promoção científica","DEC-018 dispensa declarada não cumprida, scientifically_validated=false, não fabricar ou promover pseudorrótulo."
+C04,v3 população e v1 source frames,Produtor MPE confundido com público MPE,DEC-016: conteúdo dirigido a MPEs por publicação; creator_type/business_size/follower_band independentes; coorte técnica não científica.
+C05,v5.1 e plano antigo,"22 CAP, 162 IMP, 416 arestas","v5.2 + DEC016–018: 23 CAP, 204 IMP, 543 arestas. IDs preservados. Plano antigo histórico."
+C06,v5.2 changelog,"Alterações de matrizes previstas, não executadas",ZIP v5.2 efetivamente contém as 204; PR #41 sincroniza os 4 CSVs; manter os arquivos remotos por hash e snapshot.
+C07,metodologia v2/v3 e architecture,G0–G7 e G0–G6 de avaliação confundidos com global,G0-PERMISSIONS…G6-ISO únicos gates globais; os demais nomes são camadas/tier ou checks. check_gate0 é bootstrap de 22 CAP.
+C08,PDF/Aula 1/pesquisa,Rotas scraping/downloader e quotas sugeridas,"Não executar rota contrária a termos, direito ou custo zero; validar dados por operação, não presumir download ou áudio."
+C09,DEC018 e docs anteriores,"Requerer novamente aprovação geral, IdentityScope, autorização de lote","DEC-018 reafirmada 12/11: não pedir novamente; credenciais, grants efetivos e restrições por ação continuam obrigatórios."
+C10,v5.1/v5.2 stack,"Postgres, React, SDK, workers alvo vs SQLite/HTML/stdio local","Alvo é candidato, as-is separado e atualizado por GitHub, sem declarar migração/benchmark não executados."
+C11,Stone C2/C3 vs externo C1,"Misturar views, CTR, ER e conversão ou join por título","Universos separados, IDs/janela/definição; sem CPA/CPL/leads; intenção proxy, sem causalidade."
+C12,v6 resumos de experimentos,"VLM FAIL, resultados sintéticos e rascunhos versus playbook final","Preservar resultados negativos, datasets, commits, limites; nenhum gold ou homologação; consultar snapshot e referências exatas."
+C13,v5.1/v5.2 metodologia,Metas preliminares confundidas com critérios oficiais,"Metas históricas candidatas preservadas, pré-registrar antes do holdout; não inventar qualidade ou SLO."
+C14,v6 matrices,Reconstrução sem igualdade byte a byte ao GitHub,"Manter baseline original + reconstrução exata verificada por Git blob, separar estados do snapshot e regras estáveis."
+C15,v6 documentos,Estado datado e próximo passo na base,"Mover para snapshots, separar sem apagar conteúdo; atualizar por evidência, não substituir a arquitetura."
+C16,v5.1/v5.2 contratos,Candidate schema ou endpoint interpretado como código,"Conservar original inteiro, verificar código/OpenAPI em SHA; contratos novos são propostas e exigem migração/teste."
+C17,v5.1 e v3,Revisão independente como condição de aceite final,DEC-018 muda critério interno; não equiparar avaliação de engenharia a validação independente; não liberar gates automaticamente.
+C18,v6 hipótese System One,Modelos/prioridades tratados como escolhas definitivas,"Candidatos condicionados a validação de licença, versão, hardware e benchmark; no R$0 não usar APIs faturáveis."
+C19,v6 cronograma e 1561h,Esforço histórico interpretado como restante,Reestimar a partir dos oráculos e progresso efetivo; não eliminar extensões silenciosamente.

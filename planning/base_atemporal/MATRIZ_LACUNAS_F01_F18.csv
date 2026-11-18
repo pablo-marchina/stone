@@ -1,0 +1,19 @@
+﻿finding_id,finding,corrective_tasks,closure_oracle,status
+F01,Contratos sem schema nominal,IMP-012;IMP-132;IMP-151,Contratos por capacidade definidos e validados em runtime,NAO_EXECUTADO
+F02,Testes CT com oráculo apenas textual,IMP-016;IMP-019;IMP-157,Suites com fixtures e registros de execução,NAO_EXECUTADO
+F03,Grant aprovado sem evidência legal,IMP-044;IMP-137;IMP-156,Permissão condicionada a autoridade/finalidade/grant real,NAO_EXECUTADO
+F04,Resposta de agente sem conteúdo válido,IMP-073;IMP-075;IMP-132,Validação semântica de response e groundedness,NAO_EXECUTADO
+F05,Linhagem ativa sem origem,IMP-010;IMP-139,"IDs, fonte, direitos e trilha verificados",NAO_EXECUTADO
+F06,20 campos sem observabilidade por atributo,IMP-011;IMP-136;IMP-065,Campo exige evidência ou abstenção,NAO_EXECUTADO
+F07,ISO apenas listada por dimensão,IMP-018;IMP-140;IMP-093,REQ×CAP×ISO com medição e prova executada,NAO_EXECUTADO
+F08,EDD sem software avaliado,IMP-060;IMP-069;IMP-133;IMP-157,"Gold, isolamento e runners com logs de avaliação",NAO_EXECUTADO
+F09,Interfaces REST/Python/MCP incompletas,IMP-012;IMP-013;IMP-132;IMP-151,"Request, response, error e auth verificados",NAO_EXECUTADO
+F10,Histórico residual no documento de arquitetura,IMP-001;IMP-154,Documento final e artefatos sem duplicatas históricas,NAO_EXECUTADO
+F11,Produção apenas pretendida,IMP-046;IMP-091;IMP-144;IMP-153;IMP-155,"Operação real autorizada, restore, carga e SLO medidos",NAO_EXECUTADO
+F12,Direitos e expansão sem aprovação externa,IMP-047;IMP-142;IMP-156,Grants aprovados ou aceite final bloqueado,NAO_EXECUTADO
+F13,Instagram atual sem paginação/cursor e sem filtro automático de 14 dias,IMP-164;IMP-165;IMP-166;IMP-168,Cursor/idade/refresh testados com dados permitidos e cobertura auditada,NAO_EXECUTADO
+F14,Corpus 30+ perfis e 2000–5000 posts não comprovado,IMP-167;IMP-169;IMP-170,Data card com números reais e déficit explícito; nenhum scraping irregular,NAO_EXECUTADO
+F15,CreativeSpec/DesignDocument/editor de camadas não implementados,IMP-174;IMP-175;IMP-177;IMP-181;IMP-182;IMP-183,Editor salva/reabre objetos e páginas sem raster-only,NAO_EXECUTADO
+F16,Preview/export de imagem/vídeo e governança de assets não comprovados,IMP-176;IMP-178;IMP-184;IMP-188;IMP-189;IMP-201,Golden preview/export e direitos/codec/retention aprovados,NAO_EXECUTADO
+F17,Edição orientada por IA sem patch/approval/tenant tests,IMP-185;IMP-192;IMP-197;IMP-198;IMP-199,"Patch validado, revisão e suites negativas sem vazamento/auto-publicação",NAO_EXECUTADO
+F18,"Playbook do lojista, embaixador, collab e piloto sem evidência operacional",IMP-193;IMP-194;IMP-195;IMP-196;IMP-202,Testes reais quando autorizados; ausência de parceiro bloqueia afirmação de resultado,NAO_EXECUTADO

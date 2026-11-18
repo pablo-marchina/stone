@@ -1,0 +1,138 @@
+{
+  "version": "6.1",
+  "source_package": "TAPI_Stone_Base_Atemporal_v6_1.zip",
+  "package_sha256": "74a77e52aa4914514adc43d68cf8a28722737179249db5fdad091e2a8354f928",
+  "source_main": "d2efe5f2ec2ec159801039420b579b50dbf0236d",
+  "source_a6": "c1edc85233808caae9951deaee3d5df20d19c38f",
+  "kind": "documentary_mirror_not_release",
+  "files": [
+    {
+      "path": "docs/base_atemporal/00_Indice_e_Protocolo.md",
+      "git_blob_sha1": "36e3ddbd39f560e1e432eb6ce218fb6fa793f21c"
+    },
+    {
+      "path": "docs/base_atemporal/01_Documento_Mestre_Atemporal.md",
+      "git_blob_sha1": "8674c1731f77c842a3dff35c5148c480a2253fc6"
+    },
+    {
+      "path": "docs/base_atemporal/02_Registro_Decisoes_Atemporal.md",
+      "git_blob_sha1": "a4e46545ab2c34239dcfc38725fff2fd2cdc5092"
+    },
+    {
+      "path": "docs/base_atemporal/03_Pesquisa_Tecnica_Atemporal.md",
+      "git_blob_sha1": "58e5673b6587a017c4606876494ba722218f462c"
+    },
+    {
+      "path": "docs/base_atemporal/04_Benchmark_Competitivo_Atemporal.md",
+      "git_blob_sha1": "44678b0f0cf88c6fcbabee4ec792b09c872b1b29"
+    },
+    {
+      "path": "docs/base_atemporal/05_Metodologia_Cientifica_Atemporal.md",
+      "git_blob_sha1": "9b7c1c9fbd7f446aa55d61f15d419fe607b0af9b"
+    },
+    {
+      "path": "docs/base_atemporal/06_SystemOne_StoneS1_Atemporal.md",
+      "git_blob_sha1": "f4054fb3516fb914feff0bb8ae95a2614e33b748"
+    },
+    {
+      "path": "docs/base_atemporal/07_Arquitetura_Unificada_Atemporal.md",
+      "git_blob_sha1": "c693a026ec41bf14fbfd568b12fc10b988de7303"
+    },
+    {
+      "path": "docs/base_atemporal/08_Contexto_Editorial_Stone.md",
+      "git_blob_sha1": "f3ee132944167f046f268f613a1e0879dd194681"
+    },
+    {
+      "path": "docs/base_atemporal/11_Plano_Unico_Atemporal.md",
+      "git_blob_sha1": "d955b350bf0c211fff7b2338ecc92a21e96a56ae"
+    },
+    {
+      "path": "docs/base_atemporal/PROCESSO_ATUALIZACAO.md",
+      "git_blob_sha1": "3383d24b6a1aaf839a7d6cb0ad275bf7e47564d8"
+    },
+    {
+      "path": "docs/base_atemporal/README.md",
+      "git_blob_sha1": "3d6db3766cbd6ef7981f89ccccc8fd57b4b804c8"
+    },
+    {
+      "path": "docs/base_atemporal/ferramentas/coletar_snapshot_local.py",
+      "git_blob_sha1": "fe7f1ae30c71d454eb30644caba521a8261ea0a1"
+    },
+    {
+      "path": "docs/base_atemporal/ferramentas/exportar_fontes_git_pinadas.py",
+      "git_blob_sha1": "15cc365068ec34cbb354fa366612c7b58a4cd8c2"
+    },
+    {
+      "path": "docs/base_atemporal/governanca/GITHUB_DOCUMENTOS_INVENTARIO_COMPLETO.json",
+      "git_blob_sha1": "9f381c88a942a583d1ab347d7a66d20f7f919b9b"
+    },
+    {
+      "path": "docs/base_atemporal/governanca/MAPA_INTEGRAL_ARQUIVOS.csv",
+      "git_blob_sha1": "b51407f6bb016b44ab320bc06d949ef105de6872"
+    },
+    {
+      "path": "docs/base_atemporal/governanca/MAPA_SECOES_INTEGRAIS.csv",
+      "git_blob_sha1": "8c2e5b5efba6f28b9eabe6710c20f767d32f22e4"
+    },
+    {
+      "path": "planning/base_atemporal/BACKLOG_UNICO_IMPORTAVEL.csv",
+      "git_blob_sha1": "7c58b2fda53ad33af505cc752f767050bc9f5ba5"
+    },
+    {
+      "path": "planning/base_atemporal/CATALOGO_CONTRATOS.csv",
+      "git_blob_sha1": "81a60d950a99d62958f92d76082fc59901e13cfc"
+    },
+    {
+      "path": "planning/base_atemporal/CATALOGO_TESTES_CT.csv",
+      "git_blob_sha1": "a35268d570193571d17f646d5e8fba400a020b2f"
+    },
+    {
+      "path": "planning/base_atemporal/DEPENDENCIAS.csv",
+      "git_blob_sha1": "c2b61ff0a50cecfd4fd7337ecb26c9a02923207c"
+    },
+    {
+      "path": "planning/base_atemporal/HIPOTESES_E_EXPERIMENTOS.csv",
+      "git_blob_sha1": "697ecdca513daeedb818d8ec152024a803aee455"
+    },
+    {
+      "path": "planning/base_atemporal/INVENTARIO_SCHEMAS_CANDIDATOS.csv",
+      "git_blob_sha1": "a0eb423b1a28d59fb9900dbbc99d6e9e72d4bed9"
+    },
+    {
+      "path": "planning/base_atemporal/MATRIZ_CAPACIDADES.csv",
+      "git_blob_sha1": "dadf115a41dca435288e0bfaeaa1ced6d6ac6ca6"
+    },
+    {
+      "path": "planning/base_atemporal/MATRIZ_CONFLITOS.csv",
+      "git_blob_sha1": "7ab670fad2b3df0408382aa92009a4fbe087d7d4"
+    },
+    {
+      "path": "planning/base_atemporal/MATRIZ_CRITERIO_CAPACIDADE.csv",
+      "git_blob_sha1": "87fdfbef267066db924de4f3acd7efd75ccf2476"
+    },
+    {
+      "path": "planning/base_atemporal/MATRIZ_DECISOES.csv",
+      "git_blob_sha1": "467980a3280ac49c749c654653522aab76439eac"
+    },
+    {
+      "path": "planning/base_atemporal/MATRIZ_DOMINIO.csv",
+      "git_blob_sha1": "7718be50f7749298329bfd35c77ea8223c360047"
+    },
+    {
+      "path": "planning/base_atemporal/MATRIZ_GATE_GLOBAL.csv",
+      "git_blob_sha1": "cc79c4770315f80a601b5d19834e306725de9bf9"
+    },
+    {
+      "path": "planning/base_atemporal/MATRIZ_ISO_23x9.csv",
+      "git_blob_sha1": "22f706a69c95cf053de0fd4c9f997b82cf37a047"
+    },
+    {
+      "path": "planning/base_atemporal/MATRIZ_LACUNAS_F01_F18.csv",
+      "git_blob_sha1": "3d3f287748fe46b48e6740a38bb91be994d4b0b8"
+    },
+    {
+      "path": "planning/base_atemporal/MATRIZ_REQUISITOS.csv",
+      "git_blob_sha1": "b48361beae848f7f83bca2a3446eff2ed5028dd9"
+    }
+  ]
+}
