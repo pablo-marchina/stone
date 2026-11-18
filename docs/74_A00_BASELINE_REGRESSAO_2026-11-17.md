@@ -1159,3 +1159,56 @@ upgrade 0016 protegido, supervisão de execução local com limites reais,
 contratos tipados de resultados e integração de adapters em fixtures.
 Não criar chave/grant real, mídia, coleta ou merge. Smoke UI pós-0014/
 0015 ainda não reportado; próxima full após consolidar A02. Sem gates.
+
+## A02.5/6 — preflight integrado e upgrade 0016 protegido (incremento de engenharia)
+
+Base documental v6.1 validada (espelho e pacote integral PASS local).
+HEAD de partida 8fcc554f5ea550796ada7b60d4bccf1877757d2d; nenhum novo
+resultado do operador após 114 focais/0015, 124 casos anteriores pendentes.
+IMP-040/044/045/054/126/137/145/178; relacionados CAP-001/009/016/021/022/023,
+DEC-018, G0/G1/G4/G5. Sem alterar backlog, critérios, direitos ou gates.
+
+- Novo `scripts/a02_payloads_preflight.py`: checkout limpo e SHA exato,
+  validador documental, Gate0 legado, zero-spend e suite focal com JUnit
+  (sem skips/erros/falhas; mínimo 128, total esperado 138 no HEAD deste
+  incremento). Child env reduzido sem credenciais nem DB operacional.
+  Somente após PASS, backup read-only do SQLite existente em 0015,
+  confirmação de writers parados, restore descartável, rehearsal 0016
+  e relatório privado exclusivo. Não aplica migração nem abre mídia.
+- `--apply-0016` exige preflight do mesmo HEAD e SHA256 do summary,
+  valida hashes de logs/JUnit/backup, reconta JUnit e checa a transição.
+  Relatório é evidência local, não assinatura/attestation externa.
+  Cria outro backup fresco e repete rehearsal nele antes de BEGIN IMMEDIATE;
+  preserva rollback, comparação integral de schema/conteúdo, integridade,
+  FKs, verificação pós-commit e proibição de restore sobre banco live.
+- Quatro casos de upgrade 0016 parametrizados + dois casos negativos
+  (rehearsal bloqueado e CLI sem preflight) + oito testes de report.
+  Oito testes novos de contrato do report executados em cópia isolada
+  byte-idêntica dos dois arquivos: 8 PASS. Não executada a suite focal
+  completa nem os testes de migração do checkout; DNS GitHub no container
+  indisponível, banco/backup operacional não disponíveis. Não transferir
+  resultados de outros SHAs. Nenhum avanço operacional declarado.
+
+### Operador: validar primeiro, sem aplicar
+Com todos os writers interrompidos (inclusive dashboard, workers, scheduler):
+
+```powershell
+git pull --ff-only
+git status --short
+conda activate tapi-asr
+$env:TAPI_TENANT_ID = "local-research"
+$head = (git rev-parse HEAD).Trim()
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+python -m scripts.a02_payloads_preflight --expected-head "$head" --report-name "a02-payloads-$stamp" --backup-name "a02-post0015-$stamp.sqlite3" --confirm-all-writers-stopped
+```
+
+Esperar A02_PAYLOADS_PREFLIGHT_VERIFIED, 138 focais esperados sem skips,
+45 tabelas preservadas, 1 nova vazia, downgrade vazio e backup inalterado.
+Enviar resumo agregado (sem DB/credenciais/logs privados), incluindo SHA e
+report_name/report_sha256. Se BLOCKED, não executar upgrade; inspecionar.
+Após revisão do resultado, o procedimento de upgrade aceita explicitamente
+`--apply-0016 --preflight-report <nome> --preflight-sha256 <sha256>` e novo
+`--backup-name`, com mesmos HEAD/writers parados; não executar agora.
+Próximos incrementos: supervisor de árvore, orçamento real CPU/RAM,
+contratos de processor/payload, adapters sintéticos e smoke UI. Sem grants,
+chaves reais, modelo, mídia externa, merge, liberação de gate ou gasto.
