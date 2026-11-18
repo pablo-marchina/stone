@@ -141,14 +141,23 @@ class AssetVault:
         The caller is responsible for lawful acquisition. A retention grant
         does not confer download rights. No content leaves the vault here.
         """
-        self._require(anchor,grant_id,target,"retain",purpose)
+        from .asset_rights_registry import AssetRightsRegistry
+        if isinstance(self._registry,AssetRightsRegistry):
+            _deny("ASSET_VAULT_INDEX_REQUIRED")
+        return self._retain_checked(anchor,grant_id,target,mime=mime,data=data,
+            check=lambda:self._require(anchor,grant_id,target,"retain",purpose))
+
+    def _retain_checked(self,anchor,grant_id,target,*,mime,data,check):
+        # Internal trusted-host primitive. Indexed adapter supplies checks
+        # on its own connection while holding the SQLite writer reservation.
+        check()
         _validate(data,target,mime)
         aad=_binding(anchor,grant_id,target,mime)
         path=self._path(aad)
         if path.exists() or path.is_symlink():
             if self._read(path,aad,target,mime)!=data:
                 _deny("ASSET_VAULT_OBJECT_CONFLICT")
-            self._require(anchor,grant_id,target,"retain",purpose)
+            check()
             return {"status":"already_retained","bytes":len(data),"sha256":target.sha256}
         nonce=os.urandom(12)
         envelope=VERSION+nonce+self._cipher.encrypt(nonce,data,aad)
@@ -161,12 +170,12 @@ class AssetVault:
                 stream.write(envelope)
                 stream.flush()
                 os.fsync(stream.fileno())
-            self._require(anchor,grant_id,target,"retain",purpose)
+            check()
             self._check_root()
             # Publish without overwriting; unsupported filesystems fail closed.
             os.link(temp,path)
             published=True
-            self._require(anchor,grant_id,target,"retain",purpose)
+            check()
             return {"status":"retained","bytes":len(data),"sha256":target.sha256}
         except Exception:
             if published:
@@ -182,10 +191,17 @@ class AssetVault:
         This is not the full processing PEP: must recheck before inference,
         before storing derivatives and at every output boundary.
         """
-        self._require(anchor,grant_id,target,"retain",purpose)
-        self._require(anchor,grant_id,target,"process",purpose)
+        from .asset_rights_registry import AssetRightsRegistry
+        if isinstance(self._registry,AssetRightsRegistry):
+            _deny("ASSET_VAULT_INDEX_REQUIRED")
+        def check():
+            self._require(anchor,grant_id,target,"retain",purpose)
+            self._require(anchor,grant_id,target,"process",purpose)
+        return self._read_checked(anchor,grant_id,target,mime=mime,check=check)
+
+    def _read_checked(self,anchor,grant_id,target,*,mime,check):
+        check()
         aad=_binding(anchor,grant_id,target,mime)
         data=self._read(self._path(aad),aad,target,mime)
-        self._require(anchor,grant_id,target,"retain",purpose)
-        self._require(anchor,grant_id,target,"process",purpose)
+        check()
         return data
