@@ -70,7 +70,7 @@ MULTIMODAL_GROUPS=(
     ("fusion","tests.test_asset_rights_registry","test_candidate_fusion_",11),
     ("fixture_pipeline","tests.test_asset_rights_registry","test_fixture_pipeline_",12),
     ("shared_av_contract","tests.test_asset_processor_results","test_shared_av_",4),
-    ("shared_av","tests.test_asset_rights_registry","test_shared_av_",5),
+    ("shared_av","tests.test_asset_rights_registry","test_shared_av_",7),
 )
 
 

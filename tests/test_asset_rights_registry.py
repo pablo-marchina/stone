@@ -408,10 +408,10 @@ def discard_fixture(registry,tmp_path,request):
     processing=Permission(operation="process",purpose="research_analysis",field=media_kind)
     f.svc.provision(f.anchor,TENANT,"instagram",f.rv)
     extra=tuple(Permission(operation=op,purpose="research_analysis",field=output_field)
-        for op in requested if op not in ("all_processors","bundle_visual","bundle_rubric","shared_modalities") and not op.startswith(("temporal_","ocr_","asr_","vlm_","shared_av_")))
-    if "shared_modalities" in requested:
-        extra+=tuple(Permission(operation="process",purpose="research_analysis",field=field)
-            for field in ("audio","image"))
+        for op in requested if op not in ("all_processors","bundle_visual","bundle_rubric","shared_modalities","shared_audio_only","shared_image_only") and not op.startswith(("temporal_","ocr_","asr_","vlm_","shared_av_")))
+    for field in ("audio","image"):
+        if "shared_modalities" in requested or "shared_"+field+"_only" in requested:
+            extra+=(Permission(operation="process",purpose="research_analysis",field=field),)
     if "bundle_rubric" in requested:
         extra+=(Permission(operation="derive",purpose="research_analysis",field="rubric_evidence"),)
     if "bundle_visual" in requested:
@@ -2331,6 +2331,7 @@ def test_fixture_pipeline_signed_revocation_and_receipt_only(queue_fixture):
 
 
 # A02.7.2 — shared lossless video/PCM with the same retained root.
+@pytest.mark.parametrize("discard_fixture",[(),("shared_audio_only",),("shared_image_only",)],indirect=True)
 def test_shared_av_requires_both_modality_scopes(queue_fixture):
     from tapi_gate0.asset_processor_results import SHARED_AV_METHOD
     f=queue_fixture
@@ -2366,6 +2367,18 @@ def test_shared_av_native_pipeline(queue_fixture,case):
         expected={"temporal":0,"ocr":1,"asr_vad":2 if case=="inventory" else 0,
                   "vlm":1 if case=="inventory" else 0}
         assert step["model_calls"]==expected[processor]
+        metrics=step["decode_resources"]
+        assert 0<metrics["peak_job_commit_bytes"]<=512*1024*1024
+        assert 0<=metrics["cpu_user_ms"]<=10000 and metrics["wall_ms"]>0
+        if processor in ("asr_vad","vlm"):
+            assert step["model_resources"]["wall_ms"]>0
+        else:
+            assert step["model_resources"] is None
+        if processor=="asr_vad":
+            assert step["quality"]["asr_calls"]==int(case=="inventory")
+        import json
+        print("SHARED_AV_METRICS "+json.dumps({key:step[key] for key in
+            ("processor","model_calls","decode_resources","model_resources","quality")},sort_keys=True))
         artifacts.append(step["artifact_id"])
     result=pipe.step("worker")
     assert result["status"]=="candidate_complete"
