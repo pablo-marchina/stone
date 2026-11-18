@@ -145,7 +145,8 @@ def test_registry_wrong_key_and_tenant_denied(registry):
         operation="display",purpose="research_analysis",field="video")).permitted
 
 
-def test_migration_rehearsal_preserves_disposable_0012_backup(tmp_path,monkeypatch):
+@pytest.mark.parametrize('lineage',[False,True])
+def test_migration_rehearsal_preserves_disposable_backup(tmp_path,monkeypatch,lineage):
     from scripts import a02_migration_rehearsal as drill
     from tapi_gate0.discovery_backup import _sha256
     root=Path(__file__).resolve().parents[1]
@@ -156,7 +157,7 @@ def test_migration_rehearsal_preserves_disposable_0012_backup(tmp_path,monkeypat
     monkeypatch.setenv("TAPI_DATABASE_URL","sqlite:///"+str(db))
     config=Config(str(root/"alembic.ini"))
     config.set_main_option("script_location",str(root/"migrations"))
-    command.upgrade(config,drill.OLD)
+    command.upgrade(config,drill.NEW if lineage else drill.OLD)
     engine=engine_for("sqlite:///"+str(db))
     SqlDomainStore(engine).create_tenant(TENANT,"Fixture")
     engine.dispose()
@@ -167,9 +168,12 @@ def test_migration_rehearsal_preserves_disposable_0012_backup(tmp_path,monkeypat
     shutil.copy2(root/"alembic.ini",tmp_path/"alembic.ini")
     shutil.copytree(root/"src",tmp_path/"src")
     digest=_sha256(db)
-    result=drill.rehearsal(tmp_path,db.name,digest,TENANT)
+    result=drill.rehearsal(tmp_path,db.name,digest,TENANT,lineage=lineage)
     assert result["status"]=="A02_MIGRATION_REHEARSAL_VERIFIED"
     assert result["backup_unchanged"] and result["empty_downgrade_verified"]
+    if lineage:
+        assert result["to_revision"]=="0014_asset_lineage"
+        assert result["new_empty_tables"]==["asset_lineage_nodes"]
     assert _sha256(db)==digest
     with pytest.raises(ValueError,match="BACKUP_MISMATCH"):
         drill.rehearsal(tmp_path,db.name,"0"*64,TENANT)
@@ -290,6 +294,10 @@ def test_lineage_index_rejects_unregistered_parent_wrong_scope_and_tombstone(reg
     with pytest.raises(AssetRightsDenied,match="RETENTION_OUTSIDE_GRANT"):
         index.register_retained(f.anchor,ref.model_copy(update={"retain_until":now_utc()+timedelta(days=2)}))
     index.register_derived(x,resolve_anchor=resolve)
+    with pytest.raises(AssetRightsDenied,match="FIELD_MISMATCH"):
+        index.preflight(TENANT,"x",resolve_anchor=resolve,permission=PERMISSION)
+    with pytest.raises(AssetRightsDenied,match="PURPOSE_MISMATCH"):
+        index.preflight(TENANT,"x",resolve_anchor=resolve,permission=derive.model_copy(update={"purpose":"studio_creation"}))
     with pytest.raises(AssetRightsDenied,match="UNKNOWN_NODE"):
         index.preflight("other","x",resolve_anchor=resolve,permission=derive)
     index.invalidate(TENANT,artifact_ids=["x"])
@@ -315,3 +323,26 @@ def test_lineage_index_expiry_and_source_denial(registry,monkeypatch):
     result=index.invalidate(TENANT)
     assert result["newly_invalidated"]==["x","y"]
     assert result["affected_objects"]==[]
+
+
+def test_nonempty_lineage_downgrade_refused(tmp_path,monkeypatch):
+    from sqlalchemy import insert, inspect
+    from tapi_gate0.sa_store import tenants
+    root=Path(__file__).resolve().parents[1]
+    url="sqlite:///"+str(tmp_path/"lineage.sqlite3")
+    monkeypatch.setenv("TAPI_DATABASE_URL",url)
+    cfg=Config(str(root/"alembic.ini"))
+    cfg.set_main_option("script_location",str(root/"migrations"))
+    command.upgrade(cfg,"0014_asset_lineage")
+    engine=engine_for(url)
+    try:
+        with engine.begin() as db:
+            db.execute(insert(tenants).values(tenant_id=TENANT,name="Fixture"))
+            db.execute(insert(nodes).values(tenant_id=TENANT,node_id="tombstone",
+                kind="derived",purpose="research_analysis",payload="{}",
+                state="invalidated",invalidated_at=now_utc().isoformat()))
+        with pytest.raises(RuntimeError,match="ASSET_LINEAGE_DOWNGRADE_NONEMPTY"):
+            command.downgrade(cfg,"0013_asset_rights_registry")
+        assert "asset_lineage_nodes" in inspect(engine).get_table_names()
+    finally:
+        engine.dispose()
