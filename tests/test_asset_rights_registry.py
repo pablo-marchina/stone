@@ -203,28 +203,25 @@ def test_nonempty_registry_downgrade_refused(tmp_path,monkeypatch):
         engine.dispose()
 
 
-def test_vault_with_real_signed_registry_and_revocation(registry,tmp_path):
+def test_vault_with_real_signed_registry_and_revocation(discard_fixture):
+    q=discard_fixture
+    f=q.f
     from tapi_gate0.asset_vault import AssetVault
-    f=registry
-    data=b"\x00\x00\x00\x0cftypisom"
-    target=f.target.model_copy(update={"sha256":sha256(data).hexdigest()})
-    retention=Permission(operation="retain",purpose="research_analysis",field="video")
-    f.svc.provision(f.anchor,TENANT,"instagram",f.rv)
-    f.svc.register_grant(f.anchor,f.grant(target=target,permissions=(retention,PERMISSION)),
-        verified_approval_digest="b"*64)
-    root=tmp_path/"vault"
-    root.mkdir(mode=0o700)
-    vault=AssetVault(root,b"v"*32,f.svc)
+    primitive=AssetVault(q.path.parent,b"v"*32,f.svc)
     kwargs={"mime":"video/mp4","purpose":"research_analysis"}
-    assert vault.retain(f.anchor,"grant.fixture",target,data=data,**kwargs)["status"]=="retained"
-    assert vault.read_for_processing(f.anchor,"grant.fixture",target,**kwargs)==data
-    revoked=f.state(2,revoked_asset_ids=(target.asset_id,))
+    data=b"\x00\x00\x00\x0cftypisom"
+    with pytest.raises(AssetRightsDenied,match="INDEX_REQUIRED"):
+        primitive.retain(f.anchor,"grant.fixture",q.ref.target,data=data,**kwargs)
+    with pytest.raises(AssetRightsDenied,match="INDEX_REQUIRED"):
+        primitive.read_for_processing(f.anchor,"grant.fixture",q.ref.target,**kwargs)
+    assert q.vault.read_indexed(f.anchor,TENANT,q.ref.object_id,purpose="research_analysis")==data
+    revoked=f.state(2,revoked_asset_ids=(q.ref.target.asset_id,))
     f.svc.advance(f.anchor,TENANT,"instagram",revoked)
     with pytest.raises(AssetRightsDenied,match="ROLLBACK"):
-        vault.read_for_processing(f.anchor,"grant.fixture",target,**kwargs)
+        q.vault.read_indexed(f.anchor,TENANT,q.ref.object_id,purpose="research_analysis")
     with pytest.raises(AssetRightsDenied,match="ASSET_RIGHTS_REVOKED"):
-        vault.read_for_processing(f.pin(revoked),"grant.fixture",target,**kwargs)
-    assert len(list(root.iterdir()))==1  # Physical purge remains separate.
+        q.vault.read_indexed(f.pin(revoked),TENANT,q.ref.object_id,purpose="research_analysis")
+    assert q.path.exists()
 
 
 def indexed(f):
@@ -350,7 +347,7 @@ def test_nonempty_lineage_downgrade_refused(tmp_path,monkeypatch):
 
 @pytest.fixture
 def discard_fixture(registry,tmp_path):
-    from tapi_gate0.asset_vault import AssetVault
+    from tapi_gate0.asset_indexed_vault import IndexedAssetVault
     from tapi_gate0.asset_discard import discard_invalidated
     f=registry
     data=b"\x00\x00\x00\x0cftypisom"
@@ -360,15 +357,14 @@ def discard_fixture(registry,tmp_path):
     f.svc.register_grant(f.anchor,f.grant(target=target,permissions=(retention,PERMISSION)),
         verified_approval_digest="b"*64)
     root=tmp_path/"discard-vault";root.mkdir(mode=0o700)
-    vault=AssetVault(root,b"v"*32,f.svc)
-    vault.retain(f.anchor,"grant.fixture",target,mime="video/mp4",purpose="research_analysis",data=data)
     now=now_utc()
     ref=RetainedAssetRef(target=target,issuer_id=f.anchor.issuer_id,
         issuer_key_sha256=sha256(f.anchor.public_key).hexdigest(),grant_id="grant.fixture",
         mime="video/mp4",object_id=expected_object_id(f.anchor,"grant.fixture",target,"video/mp4"),
         byte_count=len(data),retained_at=now,retain_until=now+timedelta(minutes=20))
     index=AssetLineageIndex(f.engine)
-    index.register_retained(f.anchor,ref)
+    vault=IndexedAssetVault(root,b"v"*32,f.svc,index)
+    assert vault.retain_indexed(f.anchor,ref,purpose="research_analysis",data=data)["status"]=="retained"
     def discard(tenant=TENANT,stopped=True):
         return discard_invalidated(index,vault,tenant,ref.object_id,all_vault_io_stopped=stopped)
     return SimpleNamespace(f=f,index=index,ref=ref,path=root/(ref.object_id+".enc"),discard=discard,vault=vault)
@@ -448,3 +444,55 @@ def test_discard_retry_after_file_removed_before_receipt(discard_fixture,monkeyp
         payload=db.scalar(select(domain_events.c.payload).where(domain_events.c.aggregate_type=="asset_lineage",
             domain_events.c.aggregate_id==q.ref.object_id,domain_events.c.aggregate_version==3))
         assert json.loads(payload)["outcome"]=="already_absent"
+
+
+def test_indexed_vault_admin_tombstone_denies_read_and_retain(discard_fixture):
+    q=discard_fixture
+    data=b"\x00\x00\x00\x0cftypisom"
+    q.index.invalidate(TENANT,object_ids=[q.ref.object_id])
+    with pytest.raises(AssetRightsDenied,match="INACTIVE_ANCESTOR"):
+        q.vault.read_indexed(q.f.anchor,TENANT,q.ref.object_id,purpose="research_analysis")
+    q.discard()
+    with pytest.raises(AssetRightsDenied,match="TOMBSTONE"):
+        q.vault.retain_indexed(q.f.anchor,q.ref,purpose="research_analysis",data=data)
+    assert not q.path.exists()
+
+
+def test_indexed_vault_exact_ref_purpose_and_tenant(discard_fixture):
+    q=discard_fixture
+    data=b"\x00\x00\x00\x0cftypisom"
+    assert q.vault.retain_indexed(q.f.anchor,q.ref,purpose="research_analysis",data=data)["status"]=="already_retained"
+    for tenant,ident,purpose,code in [
+        ("other",q.ref.object_id,"research_analysis","UNKNOWN_OBJECT"),
+        (TENANT,"absent","research_analysis","UNKNOWN_OBJECT"),
+        (TENANT,q.ref.object_id,"studio_creation","PURPOSE_MISMATCH")]:
+        with pytest.raises(AssetRightsDenied,match=code):
+            q.vault.read_indexed(q.f.anchor,tenant,ident,purpose=purpose)
+    with pytest.raises(AssetRightsDenied,match="BYTE_COUNT_MISMATCH"):
+        q.vault.retain_indexed(q.f.anchor,q.ref,purpose="research_analysis",data=data+b"x")
+
+
+def test_indexed_vault_missing_bytes_retry_and_metadata_binding(discard_fixture):
+    q=discard_fixture
+    data=b"\x00\x00\x00\x0cftypisom"
+    q.path.unlink()
+    with pytest.raises(AssetRightsDenied,match="OBJECT_UNAVAILABLE"):
+        q.vault.read_indexed(q.f.anchor,TENANT,q.ref.object_id,purpose="research_analysis")
+    assert q.vault.retain_indexed(q.f.anchor,q.ref,purpose="research_analysis",data=data)["status"]=="retained"
+    assert q.vault.read_indexed(q.f.anchor,TENANT,q.ref.object_id,purpose="research_analysis")==data
+    with pytest.raises(AssetRightsDenied,match="ID_CONFLICT"):
+        q.vault.retain_indexed(q.f.anchor,q.ref.model_copy(update={"retain_until":q.ref.retain_until-timedelta(seconds=1)}),
+            purpose="research_analysis",data=data)
+
+
+def test_indexed_vault_expiry_during_io_withholds_bytes(discard_fixture,monkeypatch):
+    from tapi_gate0 import asset_indexed_vault as module
+    q=discard_fixture
+    real=q.vault._read
+    def expire(*args):
+        result=real(*args)
+        monkeypatch.setattr(module,"now_utc",lambda:q.ref.retain_until)
+        return result
+    monkeypatch.setattr(q.vault,"_read",expire)
+    with pytest.raises(AssetRightsDenied,match="INACTIVE_OBJECT"):
+        q.vault.read_indexed(q.f.anchor,TENANT,q.ref.object_id,purpose="research_analysis")
