@@ -18,6 +18,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import struct
 import sys
 import xml.etree.ElementTree as ET
 
@@ -52,8 +53,80 @@ PACKAGES=("pytest","fastapi","starlette","pydantic","sqlalchemy","alembic","http
           "onnxruntime","torch","gliner2","transformers","safetensors","cryptography")
 
 
+# Minimum collected parameterizations, pinned to the approved native suite.
+# Missing/duplicate/skipped required cases cannot be called a full multimodal pass.
+MULTIMODAL_GROUPS=(
+    ("kernel","tests.test_asset_windows_job","test_native_",7),
+    ("supervisor","tests.test_asset_rights_registry","test_windows_supervisor_",3),
+    ("typed","tests.test_asset_rights_registry","test_typed_fixture_",7),
+    ("temporal_decode","tests.test_asset_temporal_fixture","test_real_ffmpeg_",3),
+    ("temporal","tests.test_asset_rights_registry","test_real_temporal_",6),
+    ("ocr_decode","tests.test_asset_ocr_fixture","test_real_tesseract_",3),
+    ("ocr","tests.test_asset_rights_registry","test_real_ocr_",6),
+    ("asr","tests.test_asset_rights_registry","test_real_asr_",6),
+    ("vlm","tests.test_asset_rights_registry","test_real_vlm_",6),
+    ("bundle","tests.test_asset_rights_registry","test_candidate_bundle_real_blank_",1),
+    ("maintenance","tests.test_asset_rights_registry","test_maintenance_",9),
+    ("fusion","tests.test_asset_rights_registry","test_candidate_fusion_",11),
+)
+
+
 class BaselineError(ValueError):
     pass
+
+
+def _local_path(value,*,directory,code):
+    p=Path(value)
+    if (not p.is_absolute() or p.is_symlink() or p.resolve()!=p.absolute()
+            or (not p.is_dir() if directory else not p.is_file())):
+        raise BaselineError(code)
+    return p
+
+
+def model_opt_ins(profile,*,tessdata=None,asr_model=None,vlm_model=None,vlm_server=None,
+                  require_multimodal=False):
+    """Explicit paths only; no ambient opt-ins, downloads, or model loads."""
+    values=(tessdata,asr_model,vlm_model,vlm_server)
+    if profile!="full" and (any(v is not None for v in values) or require_multimodal):
+        raise BaselineError("BASELINE_MODEL_FULL_PROFILE_REQUIRED")
+    if (vlm_model is None)!=(vlm_server is None):
+        raise BaselineError("BASELINE_VLM_PAIR_REQUIRED")
+    if require_multimodal:
+        if any(v is None for v in values):
+            raise BaselineError("BASELINE_MULTIMODAL_ALL_OPT_INS_REQUIRED")
+        if sys.platform!="win32" or struct.calcsize("P")!=8:
+            raise BaselineError("BASELINE_MULTIMODAL_WINDOWS_X64_REQUIRED")
+    env={}
+    def directory(value,files,code):
+        p=_local_path(value,directory=True,code=code+"_PATH_INVALID")
+        for f in files:
+            _local_path(p/f,directory=False,code=code+"_FILES_REQUIRED")
+        return p
+    if tessdata is not None:
+        env["TAPI_OCR_TEST_TESSDATA"]=str(directory(tessdata,("por.traineddata","eng.traineddata"),"BASELINE_TESSDATA"))
+    if asr_model is not None:
+        env["TAPI_ASR_TEST_MODEL_DIR"]=str(directory(asr_model,("config.json","model.bin","tokenizer.json","vocabulary.txt"),"BASELINE_ASR"))
+    if vlm_model is not None:
+        env["TAPI_VLM_TEST_MODEL_DIR"]=str(directory(vlm_model,("Qwen3VL-2B-Instruct-Q4_K_M.gguf","mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf"),"BASELINE_VLM"))
+        binary=_local_path(vlm_server,directory=False,code="BASELINE_VLM_SERVER_PATH_INVALID")
+        if binary.name.lower()!="llama-server.exe":
+            raise BaselineError("BASELINE_VLM_SERVER_NAME_INVALID")
+        env["TAPI_VLM_TEST_SERVER_EXE"]=str(binary)
+    return env
+
+
+def multimodal_coverage(xml):
+    """Verify minimum required case groups from JUnit, not process exit alone."""
+    cases=list(ET.parse(xml).getroot().iter("testcase")) if xml.is_file() else []
+    result={}
+    for group,cls,prefix,minimum in MULTIMODAL_GROUPS:
+        matched=[c for c in cases if c.get("classname")==cls and c.get("name","").startswith(prefix)]
+        names=[c.get("name") for c in matched]
+        passed=sum(all(c.find(k) is None for k in ("failure","error","skipped")) for c in matched)
+        result[group]={"minimum":minimum,"collected":len(matched),"passed":passed,
+            "passed_required":len(matched)>=minimum and passed==len(matched) and len(names)==len(set(names))}
+    return {"groups":result,"all_required_passed":all(g["passed_required"] for g in result.values())}
+
 
 
 def child_environment(root,source):
@@ -212,16 +285,13 @@ def run_step(root,target,name,command,env,timeout=1800):
             "seconds":round((datetime.now(timezone.utc)-start).total_seconds(),3)}
 
 
-def execute(root,expected,profile,name,tessdata=None):
+def execute(root,expected,profile,name,tessdata=None,*,asr_model=None,vlm_model=None,
+            vlm_server=None,require_multimodal=False):
     info=inventory(root,expected)
     env=child_environment(root,os.environ)
-    if tessdata is not None:
-        p=Path(tessdata)
-        if not p.is_absolute() or p.resolve()!=p.absolute() or not p.is_dir():
-            raise BaselineError("BASELINE_TESSDATA_PATH_INVALID")
-        if any(not (p/(lang+".traineddata")).is_file() or (p/(lang+".traineddata")).is_symlink() for lang in ("por","eng")):
-            raise BaselineError("BASELINE_TESSDATA_FILES_REQUIRED")
-        env["TAPI_OCR_TEST_TESSDATA"]=str(p)
+    opt_ins=model_opt_ins(profile,tessdata=tessdata,asr_model=asr_model,vlm_model=vlm_model,
+                          vlm_server=vlm_server,require_multimodal=require_multimodal)
+    pytest_env={**env,**opt_ins}
     if shutil.disk_usage(root).free<128*1024*1024:
         raise BaselineError("BASELINE_STORAGE_INSUFFICIENT")
     if profile=="full" and not info["node_test_files"]:
@@ -233,20 +303,25 @@ def execute(root,expected,profile,name,tessdata=None):
             packages[package]=version(package)
         except PackageNotFoundError:
             packages[package]=None
-    report={"status":"BASELINE_INVENTORY_COMPLETED" if profile=="inventory" else "BASELINE_REGRESSION_COMPLETED","policy_version":"a00-local-baseline.v1",
+    report={"status":"BASELINE_INVENTORY_COMPLETED" if profile=="inventory" else "BASELINE_REGRESSION_COMPLETED","policy_version":"a00-local-baseline.v2",
             "profile":profile,"inventory":info,"python":sys.version.split()[0],
             "conda_environment":os.environ.get("CONDA_DEFAULT_ENV"),"packages":packages,
             "tools":{k:bool(shutil.which(k)) for k in ("git","node","ffmpeg","ffprobe","tesseract","espeak-ng")},
-            "ocr_integration_opt_in":tessdata is not None,"steps":[],
+            "ocr_integration_opt_in":tessdata is not None,
+            "asr_integration_opt_in":asr_model is not None,"vlm_integration_opt_in":vlm_model is not None,
+            "multimodal_required":require_multimodal,"steps":[],
             "operational_database_url_forwarded":False,"external_credential_environment_forwarded":False,
             "network_sandbox":False,"global_gates_released":False,"production_approved":False}
     for step,file in (("legacy_gate0","scripts/check_gate0.py"),("zero_spend","scripts/verify_zero_spend.py")):
         report["steps"].append(run_step(root,target,step,[sys.executable,file],env,timeout=120))
+    if profile=="full":
+        report["steps"].append(run_step(root,target,"documentary_mirror",
+            [sys.executable,"docs/base_atemporal/ferramentas/validar_espelho.py"],env,timeout=120))
     if profile!="inventory":
         xml=target/"pytest.xml"
         tests=["tests"] if profile=="full" else list(SEMANTIC_TESTS)
         report["steps"].append(run_step(root,target,"pytest",
-            [sys.executable,"-m","pytest","-q",*tests,"--junitxml",str(xml)],env))
+            [sys.executable,"-m","pytest","-q","--capture=tee-sys",*tests,"--junitxml",str(xml)],pytest_env))
         try:
             report["pytest"]=junit_counts(xml)
             if xml.is_file():
@@ -255,6 +330,10 @@ def execute(root,expected,profile,name,tessdata=None):
             report["pytest"]=None
             report["pytest_junit_invalid"]=True
         if profile=="full":
+            try:
+                report["multimodal_coverage"]=multimodal_coverage(xml)
+            except ET.ParseError:
+                report["multimodal_coverage"]={"groups":{},"all_required_passed":False}
             node_files=info["node_test_files"]
             report["steps"].append(run_step(root,target,"node",["node","--test",*node_files],env))
     try:
@@ -266,6 +345,8 @@ def execute(root,expected,profile,name,tessdata=None):
     if profile!="inventory":
         report["checks_passed"]=bool(report["checks_passed"] and report["pytest"] and report["pytest"]["passed"]>0
             and report["pytest"]["failed"]==report["pytest"]["errors"]==0)
+    if require_multimodal:
+        report["checks_passed"]=bool(report["checks_passed"] and report["multimodal_coverage"]["all_required_passed"])
     report["full_regression_profile_executed"]=profile=="full"
     report["full_regression_without_skips"]=bool(profile=="full" and report["checks_passed"] and report["pytest"]["skipped"]==0)
     report["skips_are_not_passes"]=True
@@ -282,11 +363,15 @@ def main(argv=None):
     p.add_argument("--profile",required=True,choices=("inventory","full","semantic"))
     p.add_argument("--report-name",required=True)
     p.add_argument("--tessdata-dir",type=Path)
+    p.add_argument("--asr-model-dir",type=Path)
+    p.add_argument("--vlm-model-dir",type=Path)
+    p.add_argument("--vlm-server-exe",type=Path)
+    p.add_argument("--require-multimodal",action="store_true")
     a=p.parse_args(argv)
     try:
-        if a.tessdata_dir is not None and a.profile!="full":
-            raise BaselineError("BASELINE_OCR_FULL_PROFILE_REQUIRED")
-        result=execute(ROOT,a.expected_head,a.profile,a.report_name,a.tessdata_dir)
+        result=execute(ROOT,a.expected_head,a.profile,a.report_name,a.tessdata_dir,
+            asr_model=a.asr_model_dir,vlm_model=a.vlm_model_dir,vlm_server=a.vlm_server_exe,
+            require_multimodal=a.require_multimodal)
         print(json.dumps({k:v for k,v in result.items() if k!="inventory"}|{"commit":result["inventory"]["commit"],
             "tree":result["inventory"]["tree"],"inventory_counts":{k:len(result["inventory"][k]) for k in ("python_modules","python_test_files","node_test_files","migrations")},"matrix_counts":{k:v["rows"] for k,v in result["inventory"]["matrices"].items()},
             "phase_task_counts":result["inventory"]["phase_task_counts"],

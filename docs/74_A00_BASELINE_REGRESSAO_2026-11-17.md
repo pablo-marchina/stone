@@ -1971,3 +1971,32 @@ expiração/revogação). Não é novo benchmark independente.
 ainda não executados; validar primeiro test_candidate_fusion_,
 depois regressão focal e full runner opt-ins. Sem schema/DB real,
 gate ou merge. IMP-054/063/064/136/137 parcial.
+
+
+## A02.6 — fusão 11/11; runner A00 multimodal (18/11)
+Operador: 11 passed, 110 deselected em 17,41s no filtro
+test_candidate_fusion_; reportado após instruções a9cda63, trecho
+não inclui HEAD, não é confirmação independente do commit.
+343 focal ainda não executado conjuntamente. PR #44.
+
+a00-local-baseline.v2: --asr-model-dir, --vlm-model-dir,
+--vlm-server-exe e --require-multimodal, além de tessdata existente.
+Opt-ins explícitos, full-only; VLM exige ambos paths; caminhos locais
+absolutos não redirecionados, arquivos requeridos e nome do server.
+Preflight de existência, não validação de checkpoint; testes adapters
+já fazem pins de conteúdo e admissão de memória. Strict exige Windows
+64-bit e os quatro paths, sem download. Opt-ins apenas no pytest,
+não encaminha ambient TAPI_* ou credenciais aos outros steps.
+Full inclui mirror documental, Gate0, zero-spend, pytest JUnit e Node;
+tee-sys preserva ASR/VLM metrics no log privado. JUnit verifica 12
+grupos exigidos com mínimos fixos (kernel, supervisor, typed,
+temporal decode/integração, OCR decode/integração, ASR, VLM,
+bundle blank, manutenção e fusão). Cada grupo exige todos coletados
+PASS, mínimo atingido, nomes únicos; contagens não são inventário
+exato de nodeids, não atestam conteúdo do modelo por si. Strict falha
+mesmo que pytest exit=0 quando grupo está ausente/skipped. Skip
+opt-in Evidence Lab continua separado e não vira PASS; sem global
+gate ou production approval. Sem benchmark standalone, DB operacional,
+download ou OS sandbox. API execute preserva primeiro argumento
+tessdata posicional. 13 novos casos de runner; revisão por inspeção,
+execução integral pendente. Sem schema/merge.
