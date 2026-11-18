@@ -423,3 +423,31 @@ def test_recovery_small_plan_binds_candidate_without_changing_default(monkeypatc
     assert candidate["experimental_checkpoint_candidate"]=="small"
     assert baseline["input_sha256"]==candidate["input_sha256"]
     assert baseline["configuration_sha256"]!=candidate["configuration_sha256"]
+
+
+# Partial shared AV: quality rejection is not admission.
+def test_partial_shared_av_wer_rejection_is_typed_and_sanitized(monkeypatch):
+    from tapi_gate0.asset_shared_av_fixture import _asr_result
+    from tapi_gate0.asset_processor_results import STRICT_QUALITY, PARTIAL_QUALITY
+    _,meta,r=positive(monkeypatch)
+    r["segments"][0]["text"]="palavra errada"
+    output=emit(r)
+    with pytest.raises(a.ASRFixtureQualityError,match="ASR_FIXTURE_WER_GATE"):
+        _asr_result(meta,output,STRICT_QUALITY)
+    observation,quality,rejection=_asr_result(meta,output,PARTIAL_QUALITY)
+    assert observation.processor=="asr_vad" and observation.state=="abstained"
+    assert observation.reason=="fixture_quality_rejected"
+    assert quality==rejection.model_dump(mode="json") and quality["wer"]>0.50
+    assert "hypothesis_sha256" not in quality and "palavra errada" not in str(quality)
+    with pytest.raises(ValueError,match="OUTPUT_BINDING"):
+        _asr_result(meta,b"{}",PARTIAL_QUALITY)
+
+
+def test_partial_shared_av_does_not_convert_negative_insertions(monkeypatch):
+    from tapi_gate0.asset_shared_av_fixture import _asr_result
+    from tapi_gate0.asset_processor_results import PARTIAL_QUALITY
+    _,meta=a.fixture("tone")
+    output=emit({"pcm_sha256":meta["pcm_sha256"],"vad_calls":1,"asr_calls":1,
+        "intervals":[{"start":0,"end":16000}],"segments":[]})
+    with pytest.raises(ValueError,match="NEGATIVE_INSERTION"):
+        _asr_result(meta,output,PARTIAL_QUALITY)

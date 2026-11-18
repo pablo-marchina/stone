@@ -140,3 +140,40 @@ def test_shared_av_bundle_rejects_mixed_source_and_legacy():
         "result":Abstention(processor="ocr",reason="no_observable_signal")})
     with pytest.raises(ValueError,match="EVIDENCE_SHARED_AV_SOURCE_MISMATCH"):
         bundle(other)
+
+
+def test_partial_shared_av_contract_rejects_mixed_policy_and_missing_rejection():
+    from tapi_gate0.asset_processor_results import (Abstention,SharedAVQualityRejection,
+        PARTIAL_QUALITY,STRICT_QUALITY)
+    from tapi_gate0.asset_candidate_evidence import CandidateEvidence,CandidateEvidenceBundle
+    from hashlib import sha256
+    r=_shared_result()
+    binding=r.shared_av.model_copy(update={"quality_policy":PARTIAL_QUALITY})
+    quality=SharedAVQualityRejection(wer=4/7,vad_iou=.93,vad_boundary_error_s=.18,
+        reference_words=7,hypothesis_words=8,vad_calls=1,asr_calls=1)
+    rejected=r.model_copy(update={"job_id":"job.partial","shared_av":binding,
+        "configuration_sha256":binding.configuration("asr_vad"),
+        "result":Abstention(processor="asr_vad",reason="fixture_quality_rejected"),
+        "shared_av_quality_rejection":quality})
+    assert decode(encode(rejected))==rejected
+    assert "shared_av_quality_rejection" not in r.model_dump(mode="json")
+    assert "quality_policy" not in r.shared_av.model_dump(mode="json")
+    assert r.shared_av.quality_policy==STRICT_QUALITY
+    assert binding.configuration("vlm")!=r.shared_av.configuration("vlm")
+    with pytest.raises(ValueError,match="QUALITY_REJECTION_BINDING"):
+        encode(rejected.model_copy(update={"shared_av_quality_rejection":None}))
+    with pytest.raises(ValueError,match="QUALITY_POLICY"):
+        encode(rejected.model_copy(update={"shared_av":r.shared_av,
+            "configuration_sha256":r.shared_av.configuration("asr_vad")}))
+    with pytest.raises(ValueError):
+        SharedAVQualityRejection(**{**quality.model_dump(),"wer":.5})
+    with pytest.raises(ValueError,match="WER_INCONSISTENT"):
+        SharedAVQualityRejection(**{**quality.model_dump(),"wer":.6})
+    def entry(obs):
+        digest=sha256(encode(obs)).hexdigest()
+        ident="artifact."+sha256((obs.job_id+":"+digest).encode()).hexdigest()
+        return CandidateEvidence(artifact_id=ident,payload_sha256=digest,observation=obs)
+    with pytest.raises(ValueError,match="QUALITY_POLICY_MISMATCH"):
+        CandidateEvidenceBundle(tenant_id=r.tenant_id,content_id="content",object_id=r.object_id,
+            input_sha256=r.input_sha256,media_kind="video",purpose=r.purpose,
+            entries=(entry(rejected),entry(r)))

@@ -2874,3 +2874,66 @@ comparação local e desenvolver percurso protegido de
 evidência parcial/abstenção com qualidade explicitamente
 reprovada, preservando o benchmark original e o strict.
 Não repetir v1/v2 ou full neste passo.
+
+
+## A02.7.3 — Small FAIL e percurso experimental de evidência parcial (18/11/2026)
+
+Operador: focal 126/126 em 10,38s, policy 9/9 em 21,90s,
+zero-spend PASS, v3 7/7 avaliações concluídas, todos PCM iguais
+à v1. Small weights SHA256 3e305921506d8872816023e4c273e75d2419fb89b24da97b4fe7bce14170d671,
+revisão 536b0662742c02347bc0e980a01041f333bce120. Supporting files
+hash local, não verificados independentemente. Quality 4/6,
+semantic 3/6, gate FAIL. WER inventory .375 (estoque ausente),
+agreement 0, conflict .555556, CTA argv .571429, UTF8 1.142857
+(salve presente mas qualidade rejeitada). Negativos sem ASR.
+Wall quatro speech argv 6906/6531/6812/6469ms; peak commit
+~2,55 GiB. Comparação descritiva com beam10 Medium ~17,38s vs
+Small ~6,68s de média, não efeito isolado de tamanho de modelo.
+HEAD local não impresso. Último full strict aprovado 20aea11.
+35 avaliações de recuperação em 3 rodadas; nenhum perfil aprovado.
+Encerrar tuning desses checkpoints nessas frases. Medium baseline
+mantido, sem promoção. A02.7.3 quality FAIL e VLM quality FAIL.
+
+Conector GitHub restabelecido após timeout; HEAD remoto confirmado
+7a6a02c. Implementação revisada diretamente sobre arquivos remotos,
+não exige que operador aplique patch offline. Commit c0592a2:
+modo shared_av_partial explícito no FixturePipeline. Configuração
+parcial distinta em todos jobs; strict omite campo novo para
+preservar serialização/fingerprint antigos. Bundle rejeita mistura
+de políticas. Apenas ASRFixtureQualityError com WER > .50 e
+validações estruturais/VAD anteriores pode gerar abstenção
+fixture_quality_rejected com métricas numéricas tipadas, sem
+transcrição, palavras ou hash da hipótese. WER consistente com
+contagens de palavras e distância inteira de edição. Native,
+cleanup, VAD, negative insertion, rights, estrutura e binding
+continuam falhas. Não usar saída parcial em evaluate_candidate_bundle
+ou evaluate_shared_av_ablation; somente coverage guard protegido.
+O guard mantém diagnóstico baseline para comparação, sem promoção.
+OCR/VLM podem sustentar texto observado quando autorizados.
+Final parcial declara asr_fixture_quality_gate_passed=false,
+semantic_quality_validated=false. Sem schema DB, matrizes,
+mídia real, gasto ou merge. Não alterar critérios strict.
+
+5 testes novos: 2 ASR unitários, 1 contrato, 2 nativos; grupos
+strict adicionados (não retirados os dois casos WER reprovados).
+Novo código revisado no GitHub, não executado pelo assistente
+no Windows. Não executar full para alegar PASS parcial.
+
+### Operador — validar incremento publicado
+Parar writers/servidor; não aplicar patch local.
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+& $py docs/base_atemporal/ferramentas/validar_espelho.py
+& $py -m pytest -q --tb=short tests/test_asset_asr_fixture.py tests/test_asset_processor_results.py tests/test_a00_baseline.py tests/test_multimodal_asr.py tests/test_multimodal_vad_asr.py
+& $py -m pytest -q --tb=short tests/test_asset_rights_registry.py -k test_shared_av_ablation_policy_and_rights
+& $py scripts/verify_zero_spend.py
+```
+Esperados 129 focal, 9 policy; se PASS:
+```powershell
+& $py -m pytest -q --capture=tee-sys --tb=short tests/test_asset_rights_registry.py -k test_partial_shared_av_native_pipeline
+```
+Esperados dois nativos sem skip, enviar HEAD e SHARED_AV_PARTIAL.
+Nenhum PASS integral ou semântico pressuposto.
