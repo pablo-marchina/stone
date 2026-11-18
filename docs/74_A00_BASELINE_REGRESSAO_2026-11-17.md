@@ -1360,3 +1360,79 @@ $py = Join-Path $env:CONDA_PREFIX "python.exe"
 já verificado. Regressão full após PASS, com env reduzido via A00 runner,
 tessdata pinado local conforme histórico; manter smoke operacional
 separado. Não executar mídia externa, merge ou release.
+
+
+## A00/A02 — full pós-recuperação e temporal FFmpeg (18/11)
+Operador HEAD 36afc26ce5593bd8086d8bccddbd6c59459c99f5:
+192/192 focal PASS em 104,23s; full a02-full-20261118-110319,
+1108 coletados/1107 PASS/1 skip opt-in
+tests.test_evidence_lab.test_operator_actual_triplet_when_configured,
+0 falhas/erros, 357,238s. JUnit SHA256
+cadb703db4a6627a097d684838a50f3416d540ec34ca103af67fd9ca13e38aba.
+pytest.log SHA256
+7941a63d3126581eb118082d0576220ae9104334f7c5cb040a684a6ff3e165a9.
+Node (5 arquivos), Gate0, zero-spend e checkout PASS, OCR opt-in true,
+108 módulos/99 testes Python/16 migrations. Baseline de engenharia
+pós-recuperação; full sem skips=false. Sem banco operacional, sandbox
+OS ou benchmarks standalone de modelos. Evidência reportada pelo operador.
+
+### IMP-040/044/045/054/063/064/123/136/137 — primeiro adapter temporal real
+`asset_temporal_fixture.py`: três MP4 autorais pequenos (64x64, 4 fps,
+3s, MPEG4, faststart, sem áudio), bytes base64 e SHA256 pinados.
+static (black/black/black), one (white/white/black), two
+(black/white/black). FFmpeg real usa pipe, sem arquivos temporários,
+protocolo pipe apenas, demuxer MP4 fixo, frames 64x64 gray, 12 frames,
+1 thread de decoder/filtro/encoder solicitada. Não é leitura de PTS
+original ou detector de cortes semânticos; reducer existente
+bd-temporal-fixture.v1 sobre bytes realmente decodificados, exige
+igualdade exata ao oracle de cores; diferenças de implementação
+do FFmpeg falham fechadas. Temporal candidato registra 12 amostras e
+transições em 0/1/2 instantes esperados, com frame hashes. Nenhum hook,
+ritmo de cortes canônico ou inferência de conteúdo.
+Método synthetic-temporal-ffmpeg-v4, hash de configuração inclui caso,
+input, saída oracle, SHA256 do executável FFmpeg local, child, limites,
+flags e versão reducer. FFmpeg resolvido do PATH do host confiável;
+pin local antes/depois (não aprovação de supply chain nem hash de DLLs).
+Mídia exata selecionada por hash do ref, não caminho do caller. Rights,
+lease, tenant e engine rechecados; persiste envelope tipado via AEAD,
+origin adapter_candidate + synthetic_fixture no recibo. Direitos
+retain/process/derive específicos continuam necessários. Sem grants
+reais, mídia externa, rubrica ou EvidenceBundle. O header-only anterior
+permanece separado e abstém.
+
+`asset_windows_job.py`: wrapper antigo preserva limite 64 bytes.
+Primitiva privada de output exato permite até 128 KiB input/oracle
+para fixtures confiáveis; stdout limitado por construção no child
+FFmpeg fixo (não limite streaming genérico, não aceita decoder arbitrário).
+Novo budget exclusivo do fixture: 512 MiB commit agregado, 10s CPU
+user-mode agregado, 2 processos, 30s wall; parâmetros conservadores
+de engenharia, não medidos para produção. Bootstrap confiável antes
+de assign ainda não limitado, sem dados/descendentes. Sem sandbox
+rede/FS, ACL, GPU, ou defesa contra host malicioso.
+
+Testes locais isolados Linux: 9/9 novos (3 decodificações FFmpeg reais,
+3 corrupções, caso inválido, pin config, bounds); 14/14 contratos
+supervisor anteriores PASS, 7 nativos skipped. Reducer reproduzido
+em cópia mínima da função fonte inspecionada, não full checkout.
+6 novos casos integração Windows (3 fixtures, rejeição header,
+retenção faltante, cancelamento tardio) não executados aqui.
+207 focal esperados no Windows (192+9+6), zero skips. Espelho preservado.
+Sem schema, migração ou operação no banco real; custo zero.
+Próximo: validação focal e medição, OCR e ASR/VAD reais em fixtures
+autoria local; VLM com checkpoint e budget específicos, reconciliador
+e smoke antes de piloto. Nenhum gate liberado.
+
+### Operador — temporal FFmpeg
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+conda activate tapi-asr-recovery
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+& $py docs/base_atemporal/ferramentas/validar_espelho.py
+& $py -m pytest -q tests/test_a02_operational_upgrade.py tests/test_asset_lineage.py tests/test_asset_vault.py tests/test_asset_rights.py tests/test_asset_rights_registry.py tests/test_discovery_backup.py tests/test_a02_payloads_preflight.py tests/test_asset_windows_job.py tests/test_asset_processor_results.py tests/test_asset_temporal_fixture.py
+& $py scripts/verify_zero_spend.py
+```
+207 PASS esperados, sem skip. Se falhar, preservar output redigido;
+não aumentar limites ou relaxar oracle para obter PASS. Sem migração,
+sem mídia real, sem merge. Full anterior pinado permanece histórico.

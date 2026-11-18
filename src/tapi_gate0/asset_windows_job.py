@@ -181,6 +181,19 @@ def _run_trusted_fixture(code, data, expected, check, *, limits=JobLimits()):
     """
     if type(data) is not bytes or not 1 <= len(data) <= 64 or type(expected) is not bytes or len(expected) > 64:
         raise JobError("FIXTURE_BOUNDS")
+    return _run_exact_fixture(code, data, expected, check, limits=limits)
+
+
+def _run_exact_fixture(code, data, expected, check, *, limits):
+    """Private exact-output primitive for pinned, authored media fixtures only.
+
+    No arbitrary command/processor: caller must verify the fixture and pin
+    trusted child code/runtime. Bounds are for this fixture engineering path,
+    not generic streamed output limits or sandbox guarantees.
+    """
+    if (type(data) is not bytes or not 1 <= len(data) <= 131072
+            or type(expected) is not bytes or len(expected) > 131072):
+        raise JobError("FIXTURE_BOUNDS")
     check()
     deadline = time.monotonic() + limits.wall_seconds
     job = WindowsJob(limits)

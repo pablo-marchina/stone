@@ -364,12 +364,17 @@ def discard_fixture(registry,tmp_path,request):
     from tapi_gate0.asset_discard import discard_invalidated
     f=registry
     data=b"\x00\x00\x00\x0cftypisom"
+    requested=getattr(request,"param",())
+    temporal_cases=[x.removeprefix("temporal_") for x in requested if x.startswith("temporal_")]
+    if temporal_cases:
+        from tapi_gate0.asset_temporal_fixture import fixture
+        assert len(temporal_cases)==1
+        data,_=fixture(temporal_cases[0])
     target=f.target.model_copy(update={"sha256":sha256(data).hexdigest()})
     retention=Permission(operation="retain",purpose="research_analysis",field="video")
     f.svc.provision(f.anchor,TENANT,"instagram",f.rv)
-    requested=getattr(request,"param",())
     extra=tuple(Permission(operation=op,purpose="research_analysis",field="visual_features")
-        for op in requested if op!="all_processors")
+        for op in requested if op!="all_processors" and not op.startswith("temporal_"))
     if "all_processors" in requested:
         extra+=tuple(Permission(operation=op,purpose="research_analysis",field=field)
             for field in ("transcript","ocr") for op in ("derive","retain","process"))
@@ -1213,6 +1218,87 @@ def test_typed_fixture_late_cancel_withholds_payload(queue_fixture,monkeypatch):
     monkeypatch.setattr(a.windows,"_run_trusted_fixture",late)
     with pytest.raises(AssetRightsDenied,match="STALE_LEASE"):
         a.run_typed_fixture_windows(f.queue,f.q.vault,DerivedPayloadStore(f.queue,b"d"*32),lease)
+    assert f.queue.status(TENANT,spec.job_id)["receipt_sha256"] is None
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(payloads))==0
+    assert f.queue.acknowledge_cancel(lease)["state"]=="canceled"
+
+
+def _temporal_job(f,case):
+    from tapi_gate0 import asset_temporal_fixture as a
+    config,_=a.plan(case)
+    spec=f.spec.model_copy(update={"method_version":a.METHOD,
+        "configuration_sha256":config["configuration_sha256"]})
+    f.queue.enqueue(spec)
+    return spec,f.queue.claim(TENANT,"worker")["lease"]
+
+
+@_WINDOWS_JOB
+@pytest.mark.parametrize("discard_fixture,case,times",[
+    (("retain","process","temporal_static"),"static",[]),
+    (("retain","process","temporal_one"),"one",[2000]),
+    (("retain","process","temporal_two"),"two",[1000,2000]),
+],indirect=["discard_fixture"])
+def test_real_temporal_fixture_encrypted_measurement(queue_fixture,case,times):
+    from tapi_gate0 import asset_temporal_fixture as a
+    from tapi_gate0.asset_processor_results import decode,validate_binding
+    f=queue_fixture
+    spec,lease=_temporal_job(f,case)
+    store=DerivedPayloadStore(f.queue,b"d"*32)
+    receipt=a.run_temporal_fixture_windows(f.queue,f.q.vault,store,lease)
+    assert receipt["state"]=="completed" and receipt["payload_persisted"]
+    assert receipt["result_state"]=="observed" and receipt["fixture_case"]==case
+    assert receipt["kernel_job_limits_verified"] and receipt["tree_empty_verified"]
+    assert receipt["model_calls"]==0 and not receipt["media_enabled"]
+    assert not receipt["scientific_evidence"] and not receipt["canonical_rubric"]
+    payload=store.read_for_processing(TENANT,receipt["artifact_id"],purpose=spec.purpose)
+    result=decode(payload)
+    assert validate_binding(result,spec=spec,ref=f.q.ref,lease=lease)==result
+    assert result.origin=="adapter_candidate" and result.result.samples==12
+    assert [x.current.time_ms for x in result.result.candidates]==times
+    assert receipt["receipt_sha256"]==sha256(payload).hexdigest()
+    with f.q.f.engine.connect() as db:
+        envelope=db.scalar(select(payloads.c.envelope))
+        assert len(envelope)==len(payload)+28 and payload not in envelope
+
+
+@_WINDOWS_JOB
+def test_real_temporal_fixture_rejects_header_before_spawn(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_temporal_fixture as a
+    f=queue_fixture
+    spec,lease=_temporal_job(f,"static")
+    monkeypatch.setattr(a.windows,"_run_exact_fixture",lambda *x,**y:pytest.fail("must not spawn"))
+    with pytest.raises(AssetRightsDenied,match="TEMPORAL_FIXTURE_ONLY"):
+        a.run_temporal_fixture_windows(f.queue,f.q.vault,DerivedPayloadStore(f.queue,b"d"*32),lease)
+
+
+@_WINDOWS_JOB
+@pytest.mark.parametrize("discard_fixture",[("temporal_one",)],indirect=True)
+def test_real_temporal_fixture_requires_derived_retention(queue_fixture):
+    from tapi_gate0 import asset_temporal_fixture as a
+    f=queue_fixture
+    spec,lease=_temporal_job(f,"one")
+    with pytest.raises(AssetRightsDenied,match="SCOPE_MISMATCH"):
+        a.run_temporal_fixture_windows(f.queue,f.q.vault,DerivedPayloadStore(f.queue,b"d"*32),lease)
+    assert f.queue.status(TENANT,spec.job_id)["receipt_sha256"] is None
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(payloads))==0
+
+
+@_WINDOWS_JOB
+@pytest.mark.parametrize("discard_fixture",[("retain","process","temporal_two")],indirect=True)
+def test_real_temporal_fixture_late_cancel_no_receipt(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_temporal_fixture as a
+    f=queue_fixture
+    spec,lease=_temporal_job(f,"two")
+    original=a.windows._run_exact_fixture
+    def late(*args,**kwargs):
+        output=original(*args,**kwargs)
+        f.queue.cancel(TENANT,spec.job_id)
+        return output
+    monkeypatch.setattr(a.windows,"_run_exact_fixture",late)
+    with pytest.raises(AssetRightsDenied,match="STALE_LEASE"):
+        a.run_temporal_fixture_windows(f.queue,f.q.vault,DerivedPayloadStore(f.queue,b"d"*32),lease)
     assert f.queue.status(TENANT,spec.job_id)["receipt_sha256"] is None
     with f.q.f.engine.connect() as db:
         assert db.scalar(select(func.count()).select_from(payloads))==0
