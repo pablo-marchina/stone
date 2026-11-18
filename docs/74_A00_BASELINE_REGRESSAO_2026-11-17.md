@@ -839,3 +839,61 @@ Esperado 42 tabelas anteriores preservadas, 1 nova vazia, rollback em
 cópia verificado; não aplicar 0014 operacional ainda. Próximo: fechar
 rehearsal, integração de purge/index e jobs, upgrade protegido 0014.
 Nenhuma execução real de mídia nem merge.
+
+## A02.4 — linhagem testada; upgrade 0014 e descarte offline
+Operador HEAD a62bdcdb48b1dd8138ac276bcc5c71f0ab702037:
+78/78 testes focais PASS em 20,20s; zero-spend PASS. Backup pós-0013
+ a02-post0013-20261117-210509.sqlite3, 10067968 bytes,
+SHA256 166368b144a7a843924f12ded1b4d6316a18d4a796035f4962b36c640c0b1a89,
+backup/restore 250/172ms, integridade/FK/conteúdo lógico OK.
+1065 conteúdos/21 perfis/1169 snapshots/1065 avaliações/2455 eventos,
+5 documentos Studio; 3 tabelas de direitos vazias, 0 grants reais,
+0 admissões científicas. Rehearsal 0013→0014 PASS, 42 tabelas
+preservadas, 1 nova vazia, downgrade vazio verificado, backup intacto,
+sem acesso operacional. DB live permanece 0013.
+
+Novo incremento: a02_operational_upgrade aceita --apply-0014 (mutuamente
+exclusivo com --apply-0013), mesma proteção de backup recente e
+BEGIN IMMEDIATE/DDL/checks/rollback, transição fixa 0013→0014.
+4 casos adicionais por parametrização dos testes já existentes.
+asset_discard.py: função offline trusted-host para descarte de exatamente
+um envelope do vault, com índice e registry compartilhando engine,
+attestation de todas as leituras/escritas do vault paradas. Somente raiz
+com tombstone e cadeia de eventos registro/invalidação íntegra; verifica
+ID canônico, path derivado, arquivo regular sem links/reparse points,
+tamanho e cabeçalho v1; sem descriptografar bytes. Rejeita arquivo
+corrompido ou reintroduzido após recibo; revisão manual nesses casos.
+Remove entrada de diretório e registra evento versão 3 + outbox,
+preserva tombstone. Se crash após unlink antes do commit, retry registra
+already_absent sem alegar remoção por aquela execução. Sem atomicidade
+DB/FS, sem prova de erasure, sem garantia contra processo com mesmos
+privilégios; host deve fornecer o diretório correto. Não remove cópias,
+backups, staging órfão ou payloads derivados. 4 testes novos (fixtures).
+Sem CLI de purge real, consumer automático ou integração operacional.
+A API do vault primitivo ainda não aplica tombstones; não habilitar PEP
+real até integração obrigatória de índice/vault/jobs. Próximo: acesso
+indexado, jobs e reconciliação automática. 86 testes focais esperados,
+novos 8 casos ainda não executados pelo assistente.
+
+### Operador: testes e upgrade 0014
+Com todos os processos de escrita parados:
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+conda activate tapi-asr
+python -m pytest -q tests/test_a02_operational_upgrade.py tests/test_asset_lineage.py tests/test_asset_vault.py tests/test_asset_rights.py tests/test_asset_rights_registry.py tests/test_discovery_backup.py
+python scripts/verify_zero_spend.py
+```
+Somente após PASS, explicitamente no banco operacional correto:
+```powershell
+$env:TAPI_TENANT_ID = "local-research"
+$baseline = (git rev-parse HEAD).Trim()
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+python -m scripts.a02_operational_upgrade --expected-head "$baseline" --backup-name "a02-pre0014-$stamp.sqlite3" --confirm-all-writers-stopped --apply-0014
+```
+Esperar A02_OPERATIONAL_MIGRATION_VERIFIED, 42 tabelas antigas, 1 nova
+vazia, hashes e schema legado OK, mídia bloqueada. Se BLOCKED, manter
+writers parados e não repetir automaticamente. Nenhum purge real a
+executar. Não realizar merge ou nova coleta. Full anterior 76a9bc8;
+regressão integral e smoke pós-0014 ainda pendentes.
