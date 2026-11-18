@@ -115,14 +115,64 @@ def test_disabled_default(tmp_path):
         assert client.get("/v1/studio/evidence-lab",headers=login(client,"tenantA")).status_code==404
 
 
-def test_operator_actual_triplet_when_configured():
+def test_operator_actual_triplet_when_configured(tmp_path):
+    """Replay the pinned authored reports through the actual API on a disposable DB."""
     import os
+    from collections import Counter
+
     config=lab.config_from_env(os.environ)
     if config is None:
         pytest.skip("explicit local report triplet required")
     service=lab.EvidenceLab(config)
-    assert service.summary()["total_field_cells"]==140
-    assert len(service.summary()["cases"])==7
-    assert not service.summary()["canonical"]
-    for row in service.summary()["cases"]:
-        assert set(service.case(row["case_id"])["field_evidence"])==set(RUBRIC_FIELD_NAMES)
+    summary=service.summary()
+    assert summary["report_sha256"]==config.composed.digest
+    assert summary["source_report_sha256"]==config.shared.digest
+    assert summary["visual_report_sha256"]==config.visual.digest
+    assert summary["total_field_cells"]==140 and summary["field_count"]==20
+    assert len(summary["cases"])==7
+    assert len({row["case_id"] for row in summary["cases"]})==7
+    assert len(summary["ablation"])==15
+    assert summary["engineering_gate_passed"] is True
+    assert summary["upstream_vlm_gate_passed"] is False
+    assert summary["synthetic_only"] is True
+    for field in ("canonical","production_approved","independent_gold","media_player_available"):
+        assert summary[field] is False
+
+    # Never inherit the operational DB URL. The report is read-only;
+    # identity setup/login/logout below affects only this temporary database.
+    app=create_secure_app(f"sqlite:///{(tmp_path/'actual-lab.sqlite').as_posix()}",
+        initialize_schema=True,allow_http_local=True,evidence_lab=service)
+    identity=app.state.identity_store
+    identity.bootstrap(config.tenant_id,"Lab replay fixture","founder",PASSWORD)
+    path="/v1/studio/evidence-lab"
+    total=Counter()
+    with TestClient(app) as client:
+        assert client.get(path).status_code==401
+        auth=login(client,config.tenant_id)
+        response=client.get(path,headers=auth)
+        assert response.status_code==200
+        assert response.headers["cache-control"]=="private, no-store"
+        assert response.json()==summary
+        for row in summary["cases"]:
+            response=client.get(path+"/cases/"+row["case_id"],headers=auth)
+            assert response.status_code==200
+            assert response.headers["cache-control"]=="private, no-store"
+            case=response.json()
+            assert case==service.case(row["case_id"])
+            assert case["media_sha256"]==row["media_sha256"]
+            assert case["synthetic_only"] is True
+            assert case["canonical"] is False and case["media_player_available"] is False
+            fields=case["field_evidence"]
+            assert set(fields)==set(RUBRIC_FIELD_NAMES)
+            assert all(f["canonical"] is False for f in fields.values())
+            counts=Counter(f["state"] for f in fields.values())
+            assert dict(counts)==row["state_counts"]
+            total.update(counts)
+        assert total=={"candidate":12,"measurement_only":28,"abstained":16,"not_assessed":84}
+        assert client.get(path+"/cases/missing",headers=auth).status_code==404
+        assert client.post(path,headers=auth,json={}).status_code==405
+        assert client.post("/v1/auth/logout",headers=auth).status_code==204
+        assert client.get(path,headers=auth).status_code==401
+    with identity.engine.connect() as db:
+        assert all(db.scalar(select(func.count()).select_from(table))==0
+            for table in (rubric_assessments,content_items,domain_events))
