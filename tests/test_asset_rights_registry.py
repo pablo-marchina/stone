@@ -13,6 +13,7 @@ from tapi_gate0.asset_rights import (AssetIdentity, Permission, GrantClaims, Sig
     RevocationClaims, SignedRevocations, TrustedAuthority, AssetRightsDenied, signed_bytes)
 from tapi_gate0.asset_rights_registry import AssetRightsRegistry, authorities, revocations, grants
 from tapi_gate0.asset_lineage_index import AssetLineageIndex, nodes
+from tapi_gate0.asset_jobs import AssetJobQueue, JobSpec, jobs, attempts
 from tapi_gate0.asset_lineage import RetainedAssetRef, DerivedArtifactRef, expected_object_id
 from tapi_gate0.connectors import NormalizedItem, Platform
 from tapi_gate0.domain import MediaType
@@ -145,8 +146,10 @@ def test_registry_wrong_key_and_tenant_denied(registry):
         operation="display",purpose="research_analysis",field="video")).permitted
 
 
-@pytest.mark.parametrize('lineage',[False,True])
-def test_migration_rehearsal_preserves_disposable_backup(tmp_path,monkeypatch,lineage):
+@pytest.mark.parametrize('mode',[0,1,2],ids=['0013','0014','0015'])
+def test_migration_rehearsal_preserves_disposable_backup(tmp_path,monkeypatch,mode):
+    lineage=mode==1
+    jobs_mode=mode==2
     from scripts import a02_migration_rehearsal as drill
     from tapi_gate0.discovery_backup import _sha256
     root=Path(__file__).resolve().parents[1]
@@ -157,7 +160,7 @@ def test_migration_rehearsal_preserves_disposable_backup(tmp_path,monkeypatch,li
     monkeypatch.setenv("TAPI_DATABASE_URL","sqlite:///"+str(db))
     config=Config(str(root/"alembic.ini"))
     config.set_main_option("script_location",str(root/"migrations"))
-    command.upgrade(config,drill.NEW if lineage else drill.OLD)
+    command.upgrade(config,'0014_asset_lineage' if jobs_mode else drill.NEW if lineage else drill.OLD)
     engine=engine_for("sqlite:///"+str(db))
     SqlDomainStore(engine).create_tenant(TENANT,"Fixture")
     engine.dispose()
@@ -168,12 +171,15 @@ def test_migration_rehearsal_preserves_disposable_backup(tmp_path,monkeypatch,li
     shutil.copy2(root/"alembic.ini",tmp_path/"alembic.ini")
     shutil.copytree(root/"src",tmp_path/"src")
     digest=_sha256(db)
-    result=drill.rehearsal(tmp_path,db.name,digest,TENANT,lineage=lineage)
+    result=drill.rehearsal(tmp_path,db.name,digest,TENANT,lineage=lineage,jobs=jobs_mode)
     assert result["status"]=="A02_MIGRATION_REHEARSAL_VERIFIED"
     assert result["backup_unchanged"] and result["empty_downgrade_verified"]
     if lineage:
         assert result["to_revision"]=="0014_asset_lineage"
         assert result["new_empty_tables"]==["asset_lineage_nodes"]
+    if jobs_mode:
+        assert result["to_revision"]=="0015_asset_jobs"
+        assert result["new_empty_tables"]==["asset_processing_attempts","asset_processing_jobs"]
     assert _sha256(db)==digest
     with pytest.raises(ValueError,match="BACKUP_MISMATCH"):
         drill.rehearsal(tmp_path,db.name,"0"*64,TENANT)
@@ -354,7 +360,7 @@ def discard_fixture(registry,tmp_path):
     target=f.target.model_copy(update={"sha256":sha256(data).hexdigest()})
     retention=Permission(operation="retain",purpose="research_analysis",field="video")
     f.svc.provision(f.anchor,TENANT,"instagram",f.rv)
-    f.svc.register_grant(f.anchor,f.grant(target=target,permissions=(retention,PERMISSION)),
+    f.svc.register_grant(f.anchor,f.grant(target=target,permissions=(retention,PERMISSION,Permission(operation="derive",purpose="research_analysis",field="visual_features"))),
         verified_approval_digest="b"*64)
     root=tmp_path/"discard-vault";root.mkdir(mode=0o700)
     now=now_utc()
@@ -518,3 +524,143 @@ def test_indexed_vault_reservation_survives_failed_publish(discard_fixture,monke
     with pytest.raises(AssetRightsDenied,match="OBJECT_UNAVAILABLE"):
         q.vault.read_indexed(q.f.anchor,TENANT,q.ref.object_id,purpose="research_analysis")
     assert q.vault.retain_indexed(q.f.anchor,q.ref,purpose="research_analysis",data=data)["status"]=="retained"
+
+
+@pytest.fixture
+def queue_fixture(discard_fixture):
+    q=discard_fixture
+    queue=AssetJobQueue(q.index,resolve_anchor=lambda ref:q.f.anchor)
+    spec=JobSpec(tenant_id=TENANT,object_id=q.ref.object_id,purpose="research_analysis",
+        processor="temporal",method_version="fixture-v1",configuration_sha256="a"*64)
+    return SimpleNamespace(q=q,queue=queue,spec=spec)
+
+
+def test_jobs_dedup_receipt_and_audit(queue_fixture):
+    f=queue_fixture
+    r=f.queue.enqueue(f.spec)
+    assert r["state"]=="queued" and f.queue.enqueue(f.spec)==r
+    result=f.queue.claim(TENANT,"worker-a")
+    assert result["status"]=="claimed" and result["spec"]==f.spec
+    lease=result["lease"]
+    assert lease.attempt==1 and f.queue.claim(TENANT,"worker-b")["status"]=="busy"
+    assert "fence" not in f.queue.status(TENANT,f.spec.job_id)
+    finished=f.queue.finish(lease,"b"*64)
+    assert finished["state"]=="completed" and finished["reason"]=="receipt_only"
+    with pytest.raises(AssetRightsDenied,match="STALE_LEASE"):
+        f.queue.finish(lease,"b"*64)
+    assert f.queue.enqueue(f.spec)["state"]=="completed"
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(attempts))==1
+        seqs=db.scalars(select(domain_events.c.seq).where(domain_events.c.aggregate_type=="asset_processing_job")).all()
+        assert len(seqs)==3
+        assert db.scalar(select(func.count()).select_from(outbox).where(outbox.c.seq.in_(seqs)))==3
+
+
+def test_jobs_cancel_running_fences_completion_and_holds_slot(queue_fixture):
+    f=queue_fixture
+    f.queue.enqueue(f.spec)
+    other=f.spec.model_copy(update={"method_version":"other"})
+    f.queue.enqueue(other)
+    lease=f.queue.claim(TENANT,"worker")["lease"]
+    other_id=other.job_id if lease.job_id==f.spec.job_id else f.spec.job_id
+    assert f.queue.cancel(TENANT,lease.job_id)["state"]=="cancel_requested"
+    assert f.queue.claim(TENANT,"second")["status"]=="busy"
+    with pytest.raises(AssetRightsDenied,match="STALE_LEASE"):
+        f.queue.finish(lease,"b"*64)
+    assert f.queue.acknowledge_cancel(lease)["state"]=="canceled"
+    assert f.queue.cancel(TENANT,other_id)["state"]=="canceled"
+    assert f.queue.claim(TENANT,"second")["status"]=="empty"
+
+
+def test_jobs_expired_leases_retry_then_exhaust(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_jobs as module
+    f=queue_fixture
+    clock=[now_utc()]
+    monkeypatch.setattr(module,"now_utc",lambda:clock[0])
+    f.queue.enqueue(f.spec)
+    leases=[]
+    for attempt in range(1,4):
+        lease=f.queue.claim(TENANT,"worker")["lease"]
+        assert lease.attempt==attempt
+        if leases:
+            assert lease.fence!=leases[-1].fence
+            with pytest.raises(AssetRightsDenied,match="STALE_LEASE"):
+                f.queue.finish(leases[-1],"b"*64)
+        leases.append(lease)
+        clock[0]+=timedelta(seconds=121)
+        assert f.queue.status(TENANT,f.spec.job_id)["lease_expired"]
+        with pytest.raises(AssetRightsDenied,match="LEASE_EXPIRED"):
+            f.queue.heartbeat(lease)
+        assert f.queue.claim(TENANT,"worker")["status"]=="empty"
+        clock[0]+=timedelta(seconds=61)
+    assert f.queue.status(TENANT,f.spec.job_id)["state"]=="failed"
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(attempts))==3
+
+
+def test_jobs_heartbeat_bounded_and_explicit_retry(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_jobs as module
+    f=queue_fixture
+    clock=[now_utc()]
+    monkeypatch.setattr(module,"now_utc",lambda:clock[0])
+    monkeypatch.setattr(module,"ATTEMPT_SECONDS",150)
+    f.queue.enqueue(f.spec)
+    lease=f.queue.claim(TENANT,"worker")["lease"]
+    clock[0]+=timedelta(seconds=100)
+    renewed=f.queue.heartbeat(lease)
+    assert renewed.lease_ms==renewed.deadline_ms==lease.deadline_ms
+    assert f.queue.fail(renewed,retryable=True)["state"]=="queued"
+    assert f.queue.claim(TENANT,"worker")["status"]=="empty"
+    clock[0]+=timedelta(seconds=16)
+    fresh=f.queue.claim(TENANT,"worker")["lease"]
+    assert fresh.attempt==2
+    assert f.queue.fail(fresh,retryable=False)["state"]=="failed"
+
+
+def test_jobs_quota_counts_attempts_not_completed_results(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_jobs as module
+    f=queue_fixture
+    monkeypatch.setattr(module,"MAX_DAILY_TENANT_ATTEMPTS",1)
+    monkeypatch.setattr(module,"MAX_PENDING",1)
+    f.queue.enqueue(f.spec)
+    other=f.spec.model_copy(update={"method_version":"other"})
+    with pytest.raises(AssetRightsDenied,match="QUEUE_QUOTA"):
+        f.queue.enqueue(other)
+    lease=f.queue.claim(TENANT,"worker")["lease"]
+    f.queue.fail(lease,retryable=False)
+    f.queue.enqueue(other)
+    assert f.queue.claim(TENANT,"worker")["status"]=="quota"
+
+
+def test_jobs_current_rights_and_reconciliation(queue_fixture):
+    f=queue_fixture
+    bad=f.spec.model_copy(update={"processor":"ocr"})
+    with pytest.raises(AssetRightsDenied,match="SCOPE_MISMATCH"):
+        f.queue.enqueue(bad)
+    f.queue.enqueue(f.spec)
+    lease=f.queue.claim(TENANT,"worker")["lease"]
+    rv=f.q.f.state(2,revoked_asset_ids=(f.q.ref.target.asset_id,))
+    f.q.f.svc.advance(f.q.f.anchor,TENANT,"instagram",rv)
+    f.queue.resolve_anchor=lambda ref:f.q.f.pin(rv)
+    with pytest.raises(AssetRightsDenied,match="ASSET_RIGHTS_REVOKED"):
+        f.queue.finish(lease,"b"*64)
+    f.q.index.reconcile_signed_revocations(f.q.f.pin(rv),TENANT,"instagram")
+    assert f.queue.reconcile_invalidated(TENANT)["changed"]==[f.spec.job_id]
+    assert f.queue.status(TENANT,f.spec.job_id)["state"]=="cancel_requested"
+    assert f.queue.acknowledge_cancel(lease)["state"]=="canceled"
+    with pytest.raises(AssetRightsDenied,match="INACTIVE_ANCESTOR"):
+        f.queue.enqueue(f.spec)
+
+
+def test_jobs_wrong_tenant_and_clock_regression(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_jobs as module
+    f=queue_fixture
+    f.queue.enqueue(f.spec)
+    with pytest.raises(AssetRightsDenied,match="NOT_FOUND"):
+        f.queue.status("other",f.spec.job_id)
+    with pytest.raises(AssetRightsDenied,match="INPUT_NOT_FOUND"):
+        f.queue.enqueue(f.spec.model_copy(update={"tenant_id":"other"}))
+    earlier=now_utc()-timedelta(seconds=10)
+    monkeypatch.setattr(module,"now_utc",lambda:earlier)
+    with pytest.raises(AssetRightsDenied,match="CLOCK_REGRESSION"):
+        f.queue.claim(TENANT,"worker")
