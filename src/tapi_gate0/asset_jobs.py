@@ -192,9 +192,12 @@ class AssetJobQueue:
             _event(db,row,"enqueued",now)
             return _public(row)
 
-    def _expire(self,db,now):
+    def _expire(self,db,now,tenant=None):
         ms=_ms(now)
-        expired=db.execute(select(jobs).where(jobs.c.state.in_(ACTIVE),jobs.c.lease_ms<=ms)).mappings().all()
+        query=select(jobs).where(jobs.c.state.in_(ACTIVE),jobs.c.lease_ms<=ms)
+        if tenant is not None:
+            query=query.where(jobs.c.tenant_id==tenant)
+        expired=db.execute(query).mappings().all()
         for row in expired:
             _spec(row)
             if row["state"]=="cancel_requested":
@@ -281,7 +284,7 @@ class AssetJobQueue:
 
     def cancel(self,tenant,job_id):
         with self._transaction() as (db,now):
-            self._expire(db,now)
+            self._expire(db,now,tenant)
             row=_row(db,tenant,job_id)
             if row["state"] in TERMINAL or row["state"]=="cancel_requested":
                 return _public(row)
@@ -295,7 +298,32 @@ class AssetJobQueue:
             return _public(_transition(db,row,now,"cancel_acknowledged",
                 **_release("canceled","worker_acknowledged",_ms(now))))
 
-    def status(self,tenant,job_id):
+    def reconcile_invalidated(self,tenant):
+        """Explicit maintenance tick: cancel pending work on tombstones/expiry.
+
+        No deletion or cancellation on transient missing/stale authority.
+        Current rights are independently checked at claim/heartbeat/finish.
+        """
         with self._transaction() as (db,now):
-            self._expire(db,now)
-            return _public(_row(db,tenant,job_id))
+            self._expire(db,now,tenant)
+            _,_,by_id=_load(db,tenant)
+            rows=db.execute(select(jobs).where(jobs.c.tenant_id==tenant,
+                jobs.c.state.in_(("queued","running")))).mappings().all()
+            changed=[]
+            for row in rows:
+                spec=_spec(row)
+                if spec.object_id not in by_id:
+                    _fail("INPUT_NOT_FOUND")
+                node,ref=by_id[spec.object_id]
+                if node["state"]=="active" and ref.retain_until>now:
+                    continue
+                changes={"state":"cancel_requested","reason":"input_invalidated"} if row["state"]=="running" else _release("canceled","input_invalidated",_ms(now))
+                _transition(db,dict(row),now,"input_invalidated",**changes)
+                changed.append(row["job_id"])
+            return {"status":"reconciled","changed":sorted(changed),"media_enabled":False}
+
+    def status(self,tenant,job_id):
+        # Read only: expose expiration separately; scheduling tick advances it.
+        with self.index.engine.connect() as db:
+            row=_row(db,tenant,job_id)
+            return {**_public(row),"lease_expired":row["state"] in ACTIVE and _ms(now_utc())>=row["lease_ms"]}
