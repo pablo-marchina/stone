@@ -13,7 +13,7 @@ from . import asset_windows_job as windows
 from . import multimodal_cta_directed as directed
 from .discovery_rubric_grounded import rule_evidence,UNKNOWN
 
-VERSION="authored-asr-recovery.v2"
+VERSION="authored-asr-recovery.v3"
 ROUNDS={"v1":("baseline","context_500ms"),"v2":("beam10","word_context_500ms"),"v3":("small_baseline",)}
 CASES=("inventory","agreement","conflict","cta","silence","tone")
 # Operator round v1 PCM pins (18 Nov); v2 must compare exactly these inputs.
@@ -126,7 +126,8 @@ def run(model_dir,*,round_id="v2",progress=None,small_model_dir=None):
             notify("completed",row)
     summaries=_summaries(rows,profiles)
     return {"status":"ASR_RECOVERY_EXPERIMENT_COMPLETED","policy_version":VERSION,"round_id":round_id,"rows":rows,
-        "profiles":summaries,"checkpoint_candidate":candidate,"tts_transport_exploratory":True,"synthetic_only":True,"independent_gold":False,
+        "profiles":summaries,"checkpoint_candidate":candidate,"checkpoint":runtime["checkpoint"],
+        "tts_transport_exploratory":True,"synthetic_only":True,"independent_gold":False,
         "automatic_profile_selected":False,"canonical_rubric":False,"database_mutated":False}
 
 
