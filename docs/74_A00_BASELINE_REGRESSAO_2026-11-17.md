@@ -897,3 +897,54 @@ vazia, hashes e schema legado OK, mídia bloqueada. Se BLOCKED, manter
 writers parados e não repetir automaticamente. Nenhum purge real a
 executar. Não realizar merge ou nova coleta. Full anterior 76a9bc8;
 regressão integral e smoke pós-0014 ainda pendentes.
+
+## A02.4 — migração 0014 operacional; PEP de bytes indexados
+Operador HEAD d3c52d27370db9e9a7b793b41671cc465e85c02c:
+86/86 focal PASS (23,63s), zero-spend PASS. Upgrade operacional
+0013→0014 A02_OPERATIONAL_MIGRATION_VERIFIED, backup
+ a02-pre0014-20261117-212100.sqlite3 SHA256
+166368b144a7a843924f12ded1b4d6316a18d4a796035f4962b36c640c0b1a89,
+42 tabelas anteriores preservadas, 1 nova vazia, schema/hashes/FK
+integridade OK, 1065 únicos/21 perfis/0 duplicatas, 0 grants reais,
+mídia bloqueada. 0014 operacional. Descarte testado em fixtures.
+
+Novo asset_indexed_vault.py: IndexedAssetVault exige AssetRightsRegistry
+real e AssetLineageIndex com o mesmo engine SQLite. Retenção confere
+bytes/identidade/MIME/hash e registra reserva de metadados antes de
+publicar envelope, depois BEGIN IMMEDIATE, ref exata, finalidade,
+tombstone, tempo e grant retain antes/durante/depois da escrita.
+Leitura recebe tenant/object_id/finalidade, resolve ref persistida,
+verifica retain+process antes/depois da leitura e tamanho final;
+retorna bytes apenas a host confiável. Serializa contra atualização
+SQLite de revogação/index, não mantém lock após retorno. Métodos públicos
+primitivos retain/read_for_processing com AssetRightsRegistry real
+negam INDEX_REQUIRED. Primitivas privadas permanecem para adapter e
+fixtures; não é sandbox Python ou OS, não protege contra host malicioso.
+Tombstone administrativo impede leitura e nova retenção mesmo se grant
+continua ativo; metadados ativos sem bytes não equivalem a retenção
+completada, leitura nega, retry exige ref idêntica. Não há atomicidade
+DB/FS; reserva permite localizar envelope após crash, staging recovery
+continua pendente. Root correto/ACL/chave/autoridade são responsabilidade
+do host; nenhum host real configurado. Não é PEP de inferência, não
+conecta mídia, não entrega payload derivado, não cria grant.
+5 novos testes de integração real-registry em fixtures e testes existentes
+adaptados para usar o novo caminho (mantêm assert de revogação e descarte);
+91 focal esperados, pendentes execução. Sem alteração de schema.
+
+### Operador
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+conda activate tapi-asr
+python -m pytest -q tests/test_a02_operational_upgrade.py tests/test_asset_lineage.py tests/test_asset_vault.py tests/test_asset_rights.py tests/test_asset_rights_registry.py tests/test_discovery_backup.py
+python scripts/verify_zero_spend.py
+```
+Se PASS, rodar full baseline com Tesseract/eSpeak como anteriormente;
+1007 coletados esperados (1006 PASS, 1 opt-in Lab skip), não presumir PASS.
+Com writers parados, backup pós-0014 verificado antes de próximo schema.
+Depois smoke Dashboard/Ranking/Evidence com configuração anterior.
+Próximo incremento A02.5/6: fila durável, leases fencing, retries,
+cancelamento, dedup/quotas, integração com reconciliação de revogação,
+PEPs de inferência/commit/derivados. Não executar nova migração, purge
+real, coleta ou merge. Nenhum gate global liberado.
