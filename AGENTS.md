@@ -15,3 +15,7 @@ Esta orientação é transversal às CAPs e substitui instruções históricas q
 ## Base documental atemporal v6.1 — leitura obrigatória
 
 Antes de implementar qualquer IMP, consultar [guia de adoção](docs/base_atemporal/INTEGRACAO.md), [índice](docs/base_atemporal/00_Indice_e_Protocolo.md), [Plano Único](planning/base_atemporal/) e fonte integral correspondente. Executar `python docs/base_atemporal/ferramentas/validar_espelho.py`. Não substituir requisitos ou oráculos por resumo, nem criar backlog paralelo. O pacote integral externo identificado no guia é necessário para remissões a originais e referências completas; não publicar fontes privadas. Verificar HEAD/PR e evidências atuais, sem interpretar estados históricos como atuais. Registrar IMP/CAP/DEC/CT, SHA, testes, falhas, limites e próximos passos em cada incremento. Atualizar snapshots separadamente das decisões normativas; manter DEC-018 e custo zero. A adoção documental não libera gate, autorização técnica nem homologação.
+
+## Organização GitHub
+
+Consultar [fluxo de branches e PRs](docs/REPOSITORY_WORKFLOW.md) antes de criar branch, alterar base ou mesclar. Preservar a ordem das branches empilhadas, histórico e aceite por SHA. Não reativar propostas arquivadas como tarefas paralelas.

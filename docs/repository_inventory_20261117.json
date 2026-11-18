@@ -1,0 +1,361 @@
+{
+  "schema": "stone.repository_inventory.v1",
+  "cut": "2026-11-17 BRT",
+  "kind": "historical_inventory_not_live_state",
+  "main_at_inventory": "d02ee9fb3386d14f9d107e740f227aad7cb014d0",
+  "notes": "Refs pin the observed historical heads. PR_MERGED_HISTORICAL means GitHub recorded a merge, not proof of exact branch ancestry; no deletion or force push. Active heads change normally; consult GitHub.",
+  "branches": [
+    {
+      "branch": "docs/alinhamento-fontes-decisoes-20261105",
+      "sha_at_inventory": "65b28633e538cd95814a2e82c45cd3c14b1d6b01",
+      "pr": 41,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-11-06T11:34:27Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "docs/arquitetura-revisada-v5-2",
+      "sha_at_inventory": "a83b9c244c973216e845e0b0a78d03343cd51695",
+      "pr": 9,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-10-30T14:07:34Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "docs/base-atemporal-v6-1",
+      "sha_at_inventory": "ff2810776e9127ce3983299e7178d0a498c5cdc8",
+      "pr": 45,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-11-18T02:53:36Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "docs/creative-studio-editavel-stack-2026",
+      "sha_at_inventory": "9414de2d589c9716c30afde139ff23e1ef8d8694",
+      "pr": 7,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-10-30T13:56:12Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "docs/dec017-institutional-decision-gates-20261104",
+      "sha_at_inventory": "dd01129143a78a8d4c43264a4a4ce0b1a378be4f",
+      "pr": 32,
+      "classification": "ARCHIVE_NOT_MERGED",
+      "merged_at": null,
+      "delete_allowed": false
+    },
+    {
+      "branch": "docs/imp167-first-source-approval-pack-20261103",
+      "sha_at_inventory": "271ada66940e281545759570b2588a7f73272e0c",
+      "pr": 21,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-11-03T18:53:25Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "docs/ingestion-operational-readiness",
+      "sha_at_inventory": "c2405160732638fdabbfd5354b8349690c726793",
+      "pr": 5,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-10-23T14:46:32Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "docs/plano-unico-v5-2-integrado",
+      "sha_at_inventory": "c6acecd7210c4912385d3d4e47a845be3fc87abf",
+      "pr": 10,
+      "classification": "CLOSED_UNMERGED_HISTORICAL",
+      "merged_at": null,
+      "delete_allowed": false
+    },
+    {
+      "branch": "docs/tapi-conceptual-methodological-review-stone-evidence-20261103",
+      "sha_at_inventory": "3f571f5126ff39fafda95a5e77c936f378c8b304",
+      "pr": 22,
+      "classification": "ARCHIVE_NOT_MERGED",
+      "merged_at": null,
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/a3-business-discovery-technical-batch-20261104",
+      "sha_at_inventory": "57e3384eb4974c97b3dbfb37c37ff7b4d079b2bc",
+      "pr": 36,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-11-05T02:06:13Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/cap001-a4-curated-batch-20261106",
+      "sha_at_inventory": "d5131e2b8eda51ee25eda5694abeb89b0e2afbb8",
+      "pr": 42,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-11-12T13:56:14Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/cap001-a5-historical-continuous-20261112",
+      "sha_at_inventory": "0aa7d86e6d14531d394c6df06ed2174879b7e373",
+      "pr": 43,
+      "classification": "ACTIVE_DRAFT",
+      "merged_at": null,
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/cap001-a6-source-expansion-20261112",
+      "sha_at_inventory": "c85f6d6b7f0ea3774a150621d4553276fcb6a082",
+      "pr": 44,
+      "classification": "ACTIVE_DRAFT",
+      "merged_at": null,
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/cap023-e4-e5-version-export-storyboard-20261105",
+      "sha_at_inventory": "f018e3f18faac97233416cbb354e554ba7ce7a4f",
+      "pr": 38,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-11-05T17:55:25Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/cap023-e6-offline-render-rights-evidence-20261105",
+      "sha_at_inventory": "719d66ca0b2f424f17f677a781021baf2a57a0e8",
+      "pr": 39,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-11-05T17:56:19Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/cap023-e7-e8-advanced-audiovisual-20261105",
+      "sha_at_inventory": "e7f7a64e7472a7f7497b4ba451de160638feeda2",
+      "pr": 40,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-11-05T18:10:06Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/corpus-audit-v52-20261103",
+      "sha_at_inventory": "75b4bb243318d9d9d0bfb55bd27924aa65254c0d",
+      "pr": 12,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-11-03T12:40:03Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/dec016-scientific-eligibility-source-v2-20261103",
+      "sha_at_inventory": "1e6588d1b884eaa944512658734b35225914bd97",
+      "pr": 23,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-11-04T02:15:15Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/dec017-e1-system-one-offline-benchmark-20261103",
+      "sha_at_inventory": "d47c5db276d3919c25bdc838ff1c77c0f5a66f6f",
+      "pr": 24,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-11-04T12:57:53Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/dec017-e11-real-gliner-local-validation-20261104",
+      "sha_at_inventory": "ad983e39d5b7157da1b2f2574a07019b345c096a",
+      "pr": 25,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-11-04T14:14:05Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/dec017-e12-ptbr-goldset-benchmark-20261104",
+      "sha_at_inventory": "952298bd3a2ae4d1efcc790abf17712a4fd36420",
+      "pr": 26,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-11-04T14:36:43Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/dec017-e13-cta-diagnostic-ptbr-20261104",
+      "sha_at_inventory": "bdb6fa079a3fc1a67ff12ef94c553496625b1e83",
+      "pr": 27,
+      "classification": "ARCHIVE_NOT_MERGED",
+      "merged_at": null,
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/dec017-e13-cta-diagnostics-ptbr-20261104",
+      "sha_at_inventory": "37f3cc5fcc3c408a6971096886d60b9d041a1731",
+      "pr": 28,
+      "classification": "ARCHIVE_NOT_MERGED",
+      "merged_at": null,
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/dec017-e13-unified-cta-pr27-pr28-20261104",
+      "sha_at_inventory": "e044666a223fe3ba52a6f520ea2c0b0182a2f0a3",
+      "pr": 29,
+      "classification": "ARCHIVE_NOT_MERGED",
+      "merged_at": null,
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/dec017-e14-conservative-cta-policies-20261104",
+      "sha_at_inventory": "26592c588b94ad91070f4bf829dbdfd40a106061",
+      "pr": 30,
+      "classification": "ARCHIVE_NOT_MERGED",
+      "merged_at": null,
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/dec017-e15-independent-human-cta-validation-20261104",
+      "sha_at_inventory": "2c203724bf07cc23156e4c399c93d6b03421424d",
+      "pr": 31,
+      "classification": "ARCHIVE_NOT_MERGED",
+      "merged_at": null,
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/imp170-authorized-discovery-to-corpus-20261103",
+      "sha_at_inventory": "40aed5ac1a8348881fa99af93bf9208b08060518",
+      "pr": 20,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-11-04T02:41:02Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/imp182-183-studio-versioned-carousel-20261105",
+      "sha_at_inventory": "e237ce426bf59cf22979528172cbaf8cdfeaad33",
+      "pr": 37,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-11-05T17:54:27Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/ingestion-pagination-v52-20261030",
+      "sha_at_inventory": "2c5f05de5a6b534d364c3b7fdd07ec3d36d1f7c3",
+      "pr": 11,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-11-03T12:25:41Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/instagram-business-discovery-preflight-imp167-20261103",
+      "sha_at_inventory": "64b84ab0601b778c7784924e83af3a04fdffd40f",
+      "pr": 16,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-11-03T14:58:32Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/meta-first-read-preflight-v52-20261103",
+      "sha_at_inventory": "8d23316fa51d182d8e525a9268b661c722e3049d",
+      "pr": 13,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-11-03T13:42:44Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/mpe-source-frame-first-eligible-20261103",
+      "sha_at_inventory": "8a90c29311316d4e0c079993878ed39b59cfb7ca",
+      "pr": 18,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-11-03T18:09:57Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/official-metadata-ingestion",
+      "sha_at_inventory": "0304c1cd44dc011ea19e3627f2f221d8455959a3",
+      "pr": 3,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-10-23T14:41:33Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/p0-gate0b-technical-permission-preview-20261104",
+      "sha_at_inventory": "df3db38bb222cab245b52c2c405491770db19de7",
+      "pr": 33,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-11-05T02:04:05Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/p1-agent-evidence-first-recommendations-20261104",
+      "sha_at_inventory": "46caa6a87ecebcfaaa32cb4c1584c306dbea384a",
+      "pr": 34,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-11-05T12:55:47Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/p1-studio-design-contracts-20261104",
+      "sha_at_inventory": "ce1811172d479ad4378a5a09949f72fe7129fc7b",
+      "pr": 35,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-11-05T13:01:24Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "feat/secure-live-console",
+      "sha_at_inventory": "a6c1810675eafbb8cfe14c731a5c009acbed3ce8",
+      "pr": 2,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-10-23T14:09:45Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "feature/identity-db-events",
+      "sha_at_inventory": "bbb351e26fff45eeb067cf56517d3f415d1e5caa",
+      "pr": 1,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-10-23T13:25:57Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "fix/business-discovery-cursor-evidence-20261103",
+      "sha_at_inventory": "edaeb4955422b2f20a8665ba86e0068d033be1c4",
+      "pr": 17,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-11-03T17:46:28Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "fix/meta-direct-known-page-v52-20261103",
+      "sha_at_inventory": "f4850276f78c03bef6b99d85a089925f03dddafd",
+      "pr": 15,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-11-03T14:28:06Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "fix/meta-preflight-page-diagnostic-20261103",
+      "sha_at_inventory": "4d6d9ed5a7ad64ed460485ef1f8f85112e0c2c76",
+      "pr": 14,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-11-03T14:04:41Z",
+      "delete_allowed": false
+    },
+    {
+      "branch": "main",
+      "sha_at_inventory": "d02ee9fb3386d14f9d107e740f227aad7cb014d0",
+      "pr": null,
+      "classification": "CANONICAL",
+      "merged_at": null,
+      "delete_allowed": false
+    },
+    {
+      "branch": "rebase/imp170-discovery-v2-0006-20261103",
+      "sha_at_inventory": "3665037a024dcd17c3038dbafe454718f44609c1",
+      "pr": null,
+      "classification": "HISTORICAL_RETAIN_CHECK",
+      "merged_at": null,
+      "delete_allowed": false
+    },
+    {
+      "branch": "test/ingestion-full-http-contract",
+      "sha_at_inventory": "cdfdb1478d042d058eb789138ac5175c7bf81185",
+      "pr": 4,
+      "classification": "PR_MERGED_HISTORICAL",
+      "merged_at": "2026-10-23T14:44:12Z",
+      "delete_allowed": false
+    }
+  ]
+}
