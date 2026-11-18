@@ -1089,3 +1089,73 @@ Se BLOCKED, manter writers parados e inspecionar; não repetir às cegas.
 Sem novo full necessário neste incremento, último c4a0aea. Após upgrade,
 backup pós-0015, smoke real UI pendente e próximos PEPs. Não gerar grants,
 rodar mídia externa, coleta ou merge. Nenhum gate global liberado.
+
+## A02.5 — 0015 operacional; armazenamento criptografado de derivados
+Operador HEAD 5bcc0c8e78c6eb9eb877970c63a80209e7370962:
+114/114 focal PASS em 50,07s, zero-spend PASS. Upgrade operacional
+0014→0015 A02_OPERATIONAL_MIGRATION_VERIFIED, backup
+ a02-pre0015-20261117-215927.sqlite3 SHA256
+6308ce588545eac9ea975872e059ac504d6d42ae520ea027c1b8d00e6a120a62,
+43 tabelas antigas preservadas, 2 novas vazias, schema/hashes/FK/
+integridade OK, 1065 únicos/21 perfis/0 duplicatas, zero grants reais,
+mídia bloqueada. 0015 operacional, supervisor sintético e finalização
+reference_only testados. Full anterior c4a0aea.
+
+Novo asset_derived_payloads.py: biblioteca trusted-host SQLite, sem
+endpoint, worker ou modelo real. DerivedPayloadStore exige chave
+aleatória externa 32 bytes dedicada aos derivados, não persiste chave;
+key_id fingerprint com domínio separado. AES-256-GCM nonce aleatório,
+AAD liga ref completa, spec/config, tentativa, key_id e pai exato.
+Finish exige lease/fence e direitos retain/process do pai, derive do
+campo e retain explícito do campo derivado (não inferido do derive).
+Ciphertext, metadados de linhagem, recibo digest e outbox na mesma
+transação; recheck do lease, relógio, pai e direitos antes de concluir.
+Leitura interna exige purpose/campo, pai único, recibo completed com
+reason encrypted_payload, tentativa/spec/run/digest exatos, retain e
+process explícitos do derivado além dos direitos do pai; valida AEAD,
+comprimento/hash e recheck antes de retornar bytes. Referência sem
+payload não é legível. Bytes opacos não comprovam correção semântica.
+Nenhum conteúdo enviado à UI, exportado, publicado ou usado em ranking.
+Limites iniciais: 1 MB por payload; 100 MB ciphertext/tenant e 500 MB
+global; quota lógica do ciphertext vivo, não limite físico do DB/WAL/
+backup. Purge explícito apenas após tombstone, zera ciphertext na linha
+ativa e mantém recibo/metadados/evento; idempotente. Não é secure erasure
+nem descarte de backups, WAL, páginas antigas, cópias ou buffers em RAM.
+Sem rotação, provisionamento/gestão de chave operacional, integração
+automática de purge, validação de resultados de cada processor, proteção
+contra host malicioso ou garantia de revogação após entrega de bytes.
+Nova migração 0016_asset_derived_payloads (uma tabela vazia, FKs
+composite para lineage/jobs e unique por job), downgrade não vazio
+bloqueado inclusive registros purgados. Backup reconhece 0016 e BLOBs
+já suportados no fingerprint. Rehearsal --payloads 0015→0016.
+9 testes de storage + 1 parametrização rehearsal, 124 focais esperados,
+não executados pelo assistente. Fixtures sintéticas, sem real grants.
+Supervisor de árvore, limites reais CPU/RAM e isolamento de processo
+continuam pendentes. Operacional ainda 0015, sem ativar mídia externa.
+
+### Operador — focal, backup pós-0015 e ensaio 0016
+Com writers parados:
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+conda activate tapi-asr
+python -m pytest -q tests/test_a02_operational_upgrade.py tests/test_asset_lineage.py tests/test_asset_vault.py tests/test_asset_rights.py tests/test_asset_rights_registry.py tests/test_discovery_backup.py
+python scripts/verify_zero_spend.py
+```
+Após PASS sem skips:
+```powershell
+$env:TAPI_TENANT_ID = "local-research"
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$name = "a02-post0015-$stamp.sqlite3"
+$report = python scripts/a6_backup_restore_drill.py --output-name "$name" --confirm-all-writers-stopped | ConvertFrom-Json
+if ($LASTEXITCODE -ne 0 -or $report.status -ne "BACKUP_RESTORE_VERIFIED") { throw "Backup falhou" }
+$report | ConvertTo-Json -Depth 8
+python -m scripts.a02_migration_rehearsal --backup-name "$name" --backup-sha256 "$($report.backup_sha256)" --tenant "local-research" --payloads
+```
+Esperado 45 tabelas antigas preservadas, 1 nova vazia, downgrade vazio,
+backup inalterado; não executar 0016 live antes de revisão. Próximo:
+upgrade 0016 protegido, supervisão de execução local com limites reais,
+contratos tipados de resultados e integração de adapters em fixtures.
+Não criar chave/grant real, mídia, coleta ou merge. Smoke UI pós-0014/
+0015 ainda não reportado; próxima full após consolidar A02. Sem gates.
