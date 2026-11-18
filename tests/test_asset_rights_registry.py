@@ -379,12 +379,21 @@ def discard_fixture(registry,tmp_path,request):
         assert len(ocr_cases)==1 and not temporal_cases
         data,_=fixture(ocr_cases[0])
         media_kind,mime,output_field="image","image/png","ocr"
+    asr_cases=[x.removeprefix("asr_") for x in requested if x.startswith("asr_")]
+    if asr_cases:
+        import os
+        if not os.environ.get("TAPI_ASR_TEST_MODEL_DIR"):
+            pytest.skip("explicit TAPI_ASR_TEST_MODEL_DIR required")
+        from tapi_gate0.asset_asr_fixture import fixture
+        assert len(asr_cases)==1 and not temporal_cases and not ocr_cases
+        data,_=fixture(asr_cases[0])
+        media_kind,mime,output_field="audio","audio/wav","transcript"
     target=f.target.model_copy(update={"sha256":sha256(data).hexdigest(),"media_kind":media_kind})
     retention=Permission(operation="retain",purpose="research_analysis",field=media_kind)
     processing=Permission(operation="process",purpose="research_analysis",field=media_kind)
     f.svc.provision(f.anchor,TENANT,"instagram",f.rv)
     extra=tuple(Permission(operation=op,purpose="research_analysis",field=output_field)
-        for op in requested if op!="all_processors" and not op.startswith(("temporal_","ocr_")))
+        for op in requested if op!="all_processors" and not op.startswith(("temporal_","ocr_","asr_")))
     if "all_processors" in requested:
         assert not ocr_cases
         extra+=tuple(Permission(operation=op,purpose="research_analysis",field=field)
@@ -1402,6 +1411,102 @@ def test_real_ocr_fixture_late_cancel_no_payload(queue_fixture,monkeypatch):
     monkeypatch.setattr(a.windows,"_run_bounded_fixture",late)
     with pytest.raises(AssetRightsDenied,match="STALE_LEASE"):
         a.run_ocr_fixture_windows(f.queue,f.q.vault,DerivedPayloadStore(f.queue,b"d"*32),lease,tessdata_dir=directory)
+    assert f.queue.status(TENANT,spec.job_id)["receipt_sha256"] is None
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(payloads))==0
+    assert f.queue.acknowledge_cancel(lease)["state"]=="canceled"
+
+
+def _asr_job(f,case):
+    import os
+    from tapi_gate0 import asset_asr_fixture as a
+    directory=os.environ.get("TAPI_ASR_TEST_MODEL_DIR")
+    if not directory:
+        pytest.skip("explicit TAPI_ASR_TEST_MODEL_DIR required")
+    directory=Path(directory)
+    config,_=a.plan(case,directory)
+    spec=f.spec.model_copy(update={"processor":"asr_vad","method_version":a.METHOD,
+        "configuration_sha256":config["configuration_sha256"]})
+    f.queue.enqueue(spec)
+    return spec,f.queue.claim(TENANT,"worker")["lease"],directory
+
+
+@_WINDOWS_JOB
+@pytest.mark.parametrize("discard_fixture,case",[
+    (("retain","process","asr_inventory"),"inventory"),
+    (("retain","process","asr_silence"),"silence"),
+    (("retain","process","asr_tone"),"tone"),
+],indirect=["discard_fixture"])
+def test_real_asr_fixture_encrypted_result(queue_fixture,case):
+    import json
+    from tapi_gate0 import asset_asr_fixture as a
+    from tapi_gate0.asset_processor_results import decode,validate_binding
+    f=queue_fixture
+    spec,lease,directory=_asr_job(f,case)
+    store=DerivedPayloadStore(f.queue,b"d"*32)
+    receipt=a.run_asr_fixture_windows(f.queue,f.q.vault,store,lease,case=case,model_dir=directory)
+    assert receipt["state"]=="completed" and receipt["payload_persisted"]
+    assert receipt["fixture_case"]==case and receipt["kernel_job_limits_verified"] and receipt["tree_empty_verified"]
+    assert not receipt["media_enabled"] and not receipt["scientific_evidence"] and not receipt["canonical_rubric"]
+    payload=store.read_for_processing(TENANT,receipt["artifact_id"],purpose=spec.purpose)
+    result=decode(payload)
+    assert validate_binding(result,spec=spec,ref=f.q.ref,lease=lease)==result
+    assert result.origin=="adapter_candidate"
+    quality=receipt["quality"]
+    if case=="inventory":
+        assert result.result.state=="observed" and quality["asr_calls"]==1 and quality["vad_calls"]==1
+        assert quality["wer"]<=0.50 and quality["vad_iou"]>=0.60
+    else:
+        assert result.result.state=="abstained" and quality["asr_calls"]==0
+        assert quality["vad_calls"]==int(case=="tone")
+    resources=receipt["resources"]
+    assert 0<resources["peak_job_commit_bytes"]<=4096*1024*1024
+    assert 0<=resources["cpu_user_ms"]<=240000 and resources["wall_ms"]>0
+    assert receipt["receipt_sha256"]==sha256(payload).hexdigest()
+    with f.q.f.engine.connect() as db:
+        envelope=db.scalar(select(payloads.c.envelope))
+        assert len(envelope)==len(payload)+28 and payload not in envelope
+    print("ASR_FIXTURE_METRICS "+json.dumps({"case":case,"quality":quality,"resources":resources},sort_keys=True))
+
+
+@_WINDOWS_JOB
+@pytest.mark.parametrize("discard_fixture",[("asr_silence",)],indirect=True)
+def test_real_asr_fixture_requires_derived_retention(queue_fixture):
+    from tapi_gate0 import asset_asr_fixture as a
+    f=queue_fixture
+    spec,lease,directory=_asr_job(f,"silence")
+    with pytest.raises(AssetRightsDenied,match="SCOPE_MISMATCH"):
+        a.run_asr_fixture_windows(f.queue,f.q.vault,DerivedPayloadStore(f.queue,b"d"*32),lease,case="silence",model_dir=directory)
+    assert f.queue.status(TENANT,spec.job_id)["receipt_sha256"] is None
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(payloads))==0
+
+
+@_WINDOWS_JOB
+@pytest.mark.parametrize("discard_fixture",[("retain","process","asr_silence")],indirect=True)
+def test_real_asr_fixture_config_mismatch_before_spawn(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_asr_fixture as a
+    f=queue_fixture
+    spec,lease,directory=_asr_job(f,"tone")
+    monkeypatch.setattr(a.windows,"_run_model_fixture",lambda *x,**y:pytest.fail("must not spawn"))
+    with pytest.raises(AssetRightsDenied,match="ASR_FIXTURE_ONLY"):
+        a.run_asr_fixture_windows(f.queue,f.q.vault,DerivedPayloadStore(f.queue,b"d"*32),lease,case="tone",model_dir=directory)
+
+
+@_WINDOWS_JOB
+@pytest.mark.parametrize("discard_fixture",[("retain","process","asr_silence")],indirect=True)
+def test_real_asr_fixture_late_cancel_no_payload(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_asr_fixture as a
+    f=queue_fixture
+    spec,lease,directory=_asr_job(f,"silence")
+    original=a.windows._run_model_fixture
+    def late(*args,**kwargs):
+        output=original(*args,**kwargs)
+        f.queue.cancel(TENANT,spec.job_id)
+        return output
+    monkeypatch.setattr(a.windows,"_run_model_fixture",late)
+    with pytest.raises(AssetRightsDenied,match="STALE_LEASE"):
+        a.run_asr_fixture_windows(f.queue,f.q.vault,DerivedPayloadStore(f.queue,b"d"*32),lease,case="silence",model_dir=directory)
     assert f.queue.status(TENANT,spec.job_id)["receipt_sha256"] is None
     with f.q.f.engine.connect() as db:
         assert db.scalar(select(func.count()).select_from(payloads))==0

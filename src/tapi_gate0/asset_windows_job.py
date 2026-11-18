@@ -78,6 +78,20 @@ class JobLimits:
                 raise JobError("LIMIT_INVALID")
 
 
+@dataclass(frozen=True)
+class ModelFixtureLimits(JobLimits):
+    """One fixed Whisper Medium CPU fixture budget, not general model limits."""
+    memory_mib: int = 4096
+    cpu_user_seconds: int = 240
+    active_processes: int = 1
+    wall_seconds: int = 90
+
+    def __post_init__(self):
+        values=(self.memory_mib,self.cpu_user_seconds,self.active_processes,self.wall_seconds)
+        if any(type(v) is not int for v in values) or values!=(4096,240,1,90):
+            raise JobError("MODEL_FIXTURE_LIMIT_INVALID")
+
+
 def _native_api():
     if sys.platform != "win32" or C.sizeof(HANDLE) != 8:
         raise JobError("WINDOWS_X64_REQUIRED")
@@ -211,8 +225,19 @@ def _run_bounded_fixture(code, data, check, *, limits, max_output):
                                max_output=max_output, expected=None)
 
 
-def _run_fixture_output(code, data, check, *, limits, max_output, expected):
-    if type(data) is not bytes or not 1 <= len(data) <= 131072:
+def _run_model_fixture(code,data,check,*,limits=ModelFixtureLimits(),max_output=32768):
+    """Trusted fixed local ASR fixture only; larger WAV input and kernel metrics."""
+    if type(limits) is not ModelFixtureLimits or type(max_output) is not int or not 1<=max_output<=32768:
+        raise JobError("FIXTURE_BOUNDS")
+    metrics={}
+    output=_run_fixture_output(code,data,check,limits=limits,max_output=max_output,
+        expected=None,max_input=480044,metrics=metrics)
+    return output,metrics
+
+
+def _run_fixture_output(code, data, check, *, limits, max_output, expected,
+                        max_input=131072,metrics=None):
+    if type(data) is not bytes or not 1 <= len(data) <= max_input:
         raise JobError("FIXTURE_BOUNDS")
     check()
     deadline = time.monotonic() + limits.wall_seconds
@@ -245,6 +270,13 @@ def _run_fixture_output(code, data, check, *, limits, max_output, expected):
             raise JobError("PROBE_OUTPUT_INVALID")
         if job.active():
             raise JobError("DESCENDANTS_REMAIN")
+        if metrics is not None:
+            accounting=job._query(ACCOUNTING,Accounting)
+            extended=job._query(EXTENDED,ExtendedLimits)
+            metrics.update(peak_job_commit_bytes=int(extended.PeakJobMemoryUsed),
+                cpu_user_ms=accounting.TotalUserTime/10000,
+                cpu_kernel_ms=accounting.TotalKernelTime/10000,
+                wall_ms=round((time.monotonic()-(deadline-limits.wall_seconds))*1000,3))
     finally:
         try:
             if process is not None:

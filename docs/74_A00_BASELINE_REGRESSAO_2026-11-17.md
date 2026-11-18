@@ -1505,3 +1505,87 @@ em falha. Full A00 com --tessdata-dir já encaminha esse opt-in.
 Sem nova migração, mídia real, merge ou release. Próximo: Whisper/VAD
 com fixtures PCM autorais, modelos locais e recursos medidos, depois VLM,
 reconciliador e EvidenceBundle; smoke antes de piloto.
+
+
+## A02.6 — OCR aprovado; adapter ASR/VAD protegido (18/11)
+Operador HEAD 3ad7a688d5893f0b7d895282ac9d098b5dc048da:
+235/235 focal PASS em 114,41s, zero falhas/erros/skips.
+Espelho 32/32 e zero-spend PASS. Evidência reportada pelo operador,
+não JUnit novo. Três OCR reais e seis integrações Windows aprovadas.
+Sem schema, banco operacional, grant real ou gate.
+
+Novo asset_asr_fixture.py: synthetic-asr-vad-whisper-medium-v6.
+Fixtures autorais WAV PCM s16le mono 16kHz; inventory "Confira o
+estoque antes de aceitar novos pedidos." e 2s/1s de padding, silêncio
+digital e tom 440Hz. TTS eSpeak NG/FFmpeg local por pipe, receita
+fixa baseada no benchmark anterior (agora stdout sem arquivo);
+sintetizado no host confiável antes do job, sem mídia externa,
+não pin prévio cross-runtime de eSpeak. SHA256 do WAV e PCM da
+execução na configuração; regeneração deve coincidir com ref/bytes.
+O subprocesso TTS/FFmpeg de geração autoral ainda não usa Job Object
+nem env reduzido, não recebe mídia ou texto arbitrário. Nenhum arquivo
+de mídia temporário. Fixture tamanho <=480044 bytes, <=15s.
+Modelo já instalado Medium CPU INT8 4 threads, weights SHA256 do
+verificador anterior; demais arquivos hashados e verificados antes/depois,
+Silero v6 hash 4cbf549b8326f60f80f2536d9eefeb450a9abe83365a098031c89719f1be17d2
+observado anteriormente, não atestado independentemente.
+Pin de config contém versões, source hashes, model files, opções,
+código filho, digest e referência; não certificação supply chain.
+Filho aguarda WAV exato antes de importar libs/modelo; -I -S,
+sys.path local explícito, DLL paths Conda locais, HF offline,
+local_files_only; sem site .pth, sem forwarding de credenciais
+no subprocesso de inferência. Não sandbox rede/FS/token/GPU.
+Reusa detect_regions e transcribe_regions de bd-vad-asr-fixture.v1.
+Silêncio digital: zero VAD/ASR; tom: VAD real e zero ASR exigido;
+fala: VAD primeiro, cache limpo antes de Whisper, uma região
+esperada. Timestamps PCM sem concatenar pausas; não PTS original.
+Gate individual pré-definido WER<=50%, IoU>=60%, erro fronteira
+<=0,75s, nenhuma inserção nos negativos, sem ajuste retroativo.
+Parser JSON estrito, hash PCM, tipos, limites, segmentos dentro
+de região e ordem, arredondamento para dentro dos ms. Resultado
+tipado ASR ou abstenção, nunca negativa canônica. AEAD e fence
+mantidos; derive/retain/process separados.
+
+Supervisor: ModelFixtureLimits separado (4096MiB commit agregado,
+240s CPU user, 1 processo, 90s wall); cap inicial de engenharia,
+não medição produtiva, lease 120s inalterado, sem renovação
+automática. Child Python importa bibliotecas só após input.
+Output JSON <=32KiB, medição kernel peak commit, CPU user/kernel
+e wall no sucesso, sem medir GPU/RSS e sem diagnóstico de pico
+em falha. Limites anteriores preservados. A coleta não prova RAM
+física livre ou desempenho em produção. Não executar em paralelo.
+Se limite/timeout/quality falhar, preservar evidência sem ampliar
+automaticamente cap ou relaxar gate.
+
+21/21 testes ASR locais isolados PASS (Python 3.13/Pydantic 2.13.5,
+fixtures, parsing, gates, pin, limites; TTS real com eSpeak legado
+1.48 exposto como espeak-ng no Linux para smoke, não a versão
+Windows); 14/14 testes portáveis do supervisor PASS, sete nativos
+skipped. Não há checkpoint Medium/Silero/faster-whisper no container,
+nenhuma inferência VAD/ASR real realizada pelo assistente.
+Seis integrações Windows com modelos locais pendentes; 262 focal
+esperados (235+21+6), zero skips com ambos opt-ins.
+A00 full runner ainda não encaminha opt-in ASR; testes de modelo
+podem ficar explicitamente skipped nesse perfil, não contá-los
+como PASS. Focal com opt-in obrigatório antes de declarar adapter.
+IMP-040/044/045/054/063/064/123/136/137, DEC018 intacta.
+
+### Operador — ASR/VAD
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+conda activate tapi-asr-recovery
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+$env:TAPI_OCR_TEST_TESSDATA = "C:\Models\tapi\tessdata-fast-4.1.0"
+$env:TAPI_ASR_TEST_MODEL_DIR = "C:\Models\tapi\faster-whisper-medium"
+$env:HF_HUB_OFFLINE = "1"
+$env:TRANSFORMERS_OFFLINE = "1"
+& $py docs/base_atemporal/ferramentas/validar_espelho.py
+& $py -m pytest -q --capture=tee-sys tests/test_a02_operational_upgrade.py tests/test_asset_lineage.py tests/test_asset_vault.py tests/test_asset_rights.py tests/test_asset_rights_registry.py tests/test_discovery_backup.py tests/test_a02_payloads_preflight.py tests/test_asset_windows_job.py tests/test_asset_processor_results.py tests/test_asset_temporal_fixture.py tests/test_asset_ocr_fixture.py tests/test_asset_asr_fixture.py
+& $py scripts/verify_zero_spend.py
+```
+262 PASS esperados, sem skips. Enviar linhas ASR_FIXTURE_METRICS
+e resumo. Não baixar modelos, não executar mídia externa, não
+relaxar limites ou qualidade se falha. Sem migração. Próximo VLM,
+reconciliação, EvidenceBundle e smoke; nenhum gate liberado.
