@@ -124,50 +124,60 @@ class DerivedPayloadStore:
 
     def read_for_processing(self,tenant,artifact_id,*,purpose):
         """Trusted in-process read only; requires retain + process of output."""
-        q=self.queue
-        with q._transaction() as (db,now):
-            _,_,by_id=_load(db,tenant)
-            if artifact_id not in by_id or not isinstance(by_id[artifact_id][1],DerivedArtifactRef):
-                _deny("UNKNOWN_ARTIFACT")
-            ref=by_id[artifact_id][1]
-            roots=_ancestors(by_id,artifact_id,now,purpose)
-            if len(roots)!=1 or ref.parent_ids!=(roots[0].object_id,):
-                _deny("LINEAGE_MISMATCH")
-            item=db.execute(select(payloads).where(payloads.c.tenant_id==tenant,
-                payloads.c.artifact_id==artifact_id)).mappings().one_or_none()
-            if item is None or item["envelope"] is None:
-                _deny("UNAVAILABLE")
-            row=_row(db,tenant,item["job_id"])
-            spec=_spec(row)
-            if (row["state"]!="completed" or row["reason"]!="encrypted_payload" or
-                row["receipt_sha256"]!=ref.payload_sha256 or row["attempt"]!=item["attempt"] or
-                spec.purpose!=purpose or ref.run_id!=spec.job_id or ref.method_version!=spec.method_version or
-                ref.kind!=OUTPUT[spec.processor] or ref.parent_ids!=(spec.object_id,) or
-                artifact_id!=_artifact_id(spec,ref.payload_sha256)):
-                _deny("RECEIPT_MISMATCH")
-            parent=_check_rights(db,spec,q.resolve_anchor,now)
-            _extra(db,q,spec,parent,now,read=True)
-            if item["key_id"]!=self.key_id:
-                _deny("KEY_MISMATCH")
-            envelope=item["envelope"]
-            if not 0<item["byte_count"]<=MAX_OUTPUT or len(envelope)!=item["byte_count"]+OVERHEAD:
-                _deny("ENVELOPE_INVALID")
-            try:
-                data=self._cipher.decrypt(envelope[:12],envelope[12:],
-                    _aad(ref,spec,item["attempt"],self.key_id,parent))
-            except (self._invalid_tag,ValueError):
-                _deny("AUTHENTICATION_FAILED")
-            if len(data)!=item["byte_count"] or sha256(data).hexdigest()!=ref.payload_sha256:
-                _deny("DIGEST_MISMATCH")
-            fresh=now_utc()
-            if fresh<now:
-                _deny("CLOCK_REGRESSION")
-            _ancestors(by_id,artifact_id,fresh,purpose)
-            current=_check_rights(db,spec,q.resolve_anchor,fresh)
-            if current!=parent:
-                _deny("PARENT_CHANGED")
-            _extra(db,q,spec,current,fresh,read=True)
+        with self.queue._transaction() as (db,now):
+            data,_,_,_,_=self._read_in_transaction(db,now,tenant,artifact_id,purpose=purpose)
             return data
+
+    def _read_in_transaction(self,db,now,tenant,artifact_id,*,purpose,by_id=None):
+        """Private read inside a caller-held queue transaction; never public.
+        
+        The supplied graph, if any, must be from this exact transaction.
+        Return authenticated bytes and bindings, not a reusable permission.
+        """
+        q=self.queue
+        if by_id is None:
+            _,_,by_id=_load(db,tenant)
+        if artifact_id not in by_id or not isinstance(by_id[artifact_id][1],DerivedArtifactRef):
+            _deny("UNKNOWN_ARTIFACT")
+        ref=by_id[artifact_id][1]
+        roots=_ancestors(by_id,artifact_id,now,purpose)
+        if len(roots)!=1 or ref.parent_ids!=(roots[0].object_id,):
+            _deny("LINEAGE_MISMATCH")
+        item=db.execute(select(payloads).where(payloads.c.tenant_id==tenant,
+            payloads.c.artifact_id==artifact_id)).mappings().one_or_none()
+        if item is None or item["envelope"] is None:
+            _deny("UNAVAILABLE")
+        row=_row(db,tenant,item["job_id"])
+        spec=_spec(row)
+        if (row["state"]!="completed" or row["reason"]!="encrypted_payload" or
+            row["receipt_sha256"]!=ref.payload_sha256 or row["attempt"]!=item["attempt"] or
+            spec.purpose!=purpose or ref.run_id!=spec.job_id or ref.method_version!=spec.method_version or
+            ref.kind!=OUTPUT[spec.processor] or ref.parent_ids!=(spec.object_id,) or
+            artifact_id!=_artifact_id(spec,ref.payload_sha256)):
+            _deny("RECEIPT_MISMATCH")
+        parent=_check_rights(db,spec,q.resolve_anchor,now)
+        _extra(db,q,spec,parent,now,read=True)
+        if item["key_id"]!=self.key_id:
+            _deny("KEY_MISMATCH")
+        envelope=item["envelope"]
+        if not 0<item["byte_count"]<=MAX_OUTPUT or len(envelope)!=item["byte_count"]+OVERHEAD:
+            _deny("ENVELOPE_INVALID")
+        try:
+            data=self._cipher.decrypt(envelope[:12],envelope[12:],
+                _aad(ref,spec,item["attempt"],self.key_id,parent))
+        except (self._invalid_tag,ValueError):
+            _deny("AUTHENTICATION_FAILED")
+        if len(data)!=item["byte_count"] or sha256(data).hexdigest()!=ref.payload_sha256:
+            _deny("DIGEST_MISMATCH")
+        fresh=now_utc()
+        if fresh<now:
+            _deny("CLOCK_REGRESSION")
+        _ancestors(by_id,artifact_id,fresh,purpose)
+        current=_check_rights(db,spec,q.resolve_anchor,fresh)
+        if current!=parent:
+            _deny("PARENT_CHANGED")
+        _extra(db,q,spec,current,fresh,read=True)
+        return data,ref,spec,parent,item["attempt"]
 
     def purge_invalidated(self,tenant,artifact_id):
         """Trusted cleanup of one tombstoned payload; keep metadata and audit."""

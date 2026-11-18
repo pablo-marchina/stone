@@ -191,12 +191,19 @@ def decode(data: bytes) -> ProcessorResult:
     return ProcessorResult.model_validate_json(data)
 
 
-def validate_binding(result, *, spec, ref, lease):
-    if (result.tenant_id,result.job_id,result.object_id,result.input_sha256,result.attempt,
+def validate_persisted_binding(result, *, spec, ref, attempt):
+    """Bind a candidate to an authenticated completed attempt, not a live lease."""
+    if type(attempt) is not int or (result.tenant_id,result.job_id,result.object_id,result.input_sha256,result.attempt,
         result.purpose,result.method_version,result.configuration_sha256,result.result.processor) != (
-        spec.tenant_id,spec.job_id,spec.object_id,ref.target.sha256,lease.attempt,
+        spec.tenant_id,spec.job_id,spec.object_id,ref.target.sha256,attempt,
         spec.purpose,spec.method_version,spec.configuration_sha256,spec.processor):
         raise ValueError("PROCESSOR_RESULT_BINDING")
-    if (lease.tenant_id,lease.job_id,ref.target.tenant_id,ref.object_id)!=(spec.tenant_id,spec.job_id,spec.tenant_id,spec.object_id):
+    if (ref.target.tenant_id,ref.object_id)!=(spec.tenant_id,spec.object_id):
         raise ValueError("PROCESSOR_RESULT_BINDING")
     return result
+
+
+def validate_binding(result, *, spec, ref, lease):
+    if (lease.tenant_id,lease.job_id)!=(spec.tenant_id,spec.job_id):
+        raise ValueError("PROCESSOR_RESULT_BINDING")
+    return validate_persisted_binding(result,spec=spec,ref=ref,attempt=lease.attempt)

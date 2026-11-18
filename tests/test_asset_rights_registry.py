@@ -402,7 +402,11 @@ def discard_fixture(registry,tmp_path,request):
     processing=Permission(operation="process",purpose="research_analysis",field=media_kind)
     f.svc.provision(f.anchor,TENANT,"instagram",f.rv)
     extra=tuple(Permission(operation=op,purpose="research_analysis",field=output_field)
-        for op in requested if op!="all_processors" and not op.startswith(("temporal_","ocr_","asr_","vlm_")))
+        for op in requested if op not in ("all_processors","bundle_visual") and not op.startswith(("temporal_","ocr_","asr_","vlm_")))
+    if "bundle_visual" in requested:
+        assert ocr_cases
+        extra+=tuple(Permission(operation=op,purpose="research_analysis",field="visual_features")
+            for op in ("derive","retain","process"))
     if "all_processors" in requested:
         assert not ocr_cases
         extra+=tuple(Permission(operation=op,purpose="research_analysis",field=field)
@@ -1787,3 +1791,205 @@ def test_maintenance_cleanup_requires_attestation_and_exact_host(queue_fixture):
     with pytest.raises(AssetRightsDenied,match="TENANT_UNKNOWN"):
         reconcile_tenant(f.queue,"other")
     assert f.q.path.exists()
+
+
+def _bundle_finish(f, store, result, *, method="bundle-test-v1", mutate=None, noncanonical=False):
+    from tapi_gate0.asset_processor_results import ProcessorResult, encode
+    spec = f.spec.model_copy(update={"processor":result.processor,"method_version":method})
+    f.queue.enqueue(spec)
+    lease = f.queue.claim(TENANT,"worker")['lease']
+    assert lease.job_id == spec.job_id
+    envelope = ProcessorResult(tenant_id=spec.tenant_id,job_id=spec.job_id,
+        object_id=spec.object_id,input_sha256=f.q.ref.target.sha256,attempt=lease.attempt,
+        purpose=spec.purpose,method_version=spec.method_version,
+        configuration_sha256=spec.configuration_sha256,
+        origin="synthetic_fixture" if getattr(result,"reason",None)=="fixture_header_only" else "adapter_candidate",
+        result=result)
+    if mutate is not None:
+        envelope = envelope.model_copy(update=mutate)
+    data = encode(envelope)
+    if noncanonical:
+        data = b" " + data
+    return store.finish(lease,payload=data)["artifact_id"]
+
+
+def _bundle_read(f,store,ids,**kwargs):
+    from tapi_gate0.asset_candidate_evidence import assemble_candidate_bundle
+    return assemble_candidate_bundle(store,kwargs.get("tenant",TENANT),
+        kwargs.get("object_id",f.q.ref.object_id),ids,purpose=kwargs.get("purpose",f.spec.purpose))
+
+
+@pytest.mark.parametrize("discard_fixture",[("retain","process","all_processors")],indirect=True)
+def test_candidate_bundle_four_header_abstentions(queue_fixture):
+    from tapi_gate0.asset_processor_results import Abstention
+    f=queue_fixture
+    store=DerivedPayloadStore(f.queue,b"d"*32)
+    ids=[_bundle_finish(f,store,Abstention(processor=p,reason="fixture_header_only"))
+         for p in ("vlm","ocr","temporal","asr_vad")]
+    with f.q.f.engine.connect() as db:
+        events=db.scalar(select(func.count()).select_from(domain_events))
+    bundle=_bundle_read(f,store,ids)
+    assert bundle.coverage()=={p:"abstained" for p in ("asr_vad","ocr","temporal","vlm")}
+    assert bundle.object_id==f.q.ref.object_id and bundle.content_id==f.q.ref.target.content_id
+    assert bundle.input_sha256==f.q.ref.target.sha256
+    assert not bundle.canonical_rubric and not bundle.scientific_evidence and bundle.calibrated_probability is None
+    assert bundle.fingerprint()==_bundle_read(f,store,list(reversed(ids))).fingerprint()
+    assert [e.observation.result.processor for e in bundle.entries]==["asr_vad","ocr","temporal","vlm"]
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(domain_events))==events
+        assert db.scalar(select(func.count()).select_from(payloads))==4
+
+
+@pytest.mark.parametrize("discard_fixture",[("retain","process","ocr_sales","bundle_visual")],indirect=True)
+def test_candidate_bundle_same_image_distinct_modalities(queue_fixture):
+    from tapi_gate0.asset_processor_results import Frame,OCR,Word,VLM
+    f=queue_fixture;store=DerivedPayloadStore(f.queue,b"d"*32)
+    frame=Frame(time_ms=0,frame_sha256=f.q.ref.target.sha256,timeline="image")
+    ocr=_bundle_finish(f,store,OCR(frame=frame,width=960,height=540,
+        words=(Word(text="Organize",box_px=(10,20,100,30),confidence_raw=96.0),)))
+    vlm=_bundle_finish(f,store,VLM(frame=frame,scene="text_card",text_present="yes"))
+    bundle=_bundle_read(f,store,[vlm,ocr])
+    assert bundle.coverage()=={"asr_vad":"not_applicable","ocr":"observed","temporal":"not_applicable","vlm":"observed"}
+    assert bundle.entries[0].observation.result.frame==bundle.entries[1].observation.result.frame
+    assert _bundle_read(f,store,[ocr]).coverage()["vlm"]=="missing"
+    assert _bundle_read(f,store,[ocr]).fingerprint()!=bundle.fingerprint()
+
+
+@pytest.mark.parametrize("discard_fixture",[("retain","process")],indirect=True)
+def test_candidate_bundle_rejects_selection_and_duplicate_processor(queue_fixture):
+    from tapi_gate0.asset_processor_results import Abstention
+    f=queue_fixture;store=DerivedPayloadStore(f.queue,b"d"*32)
+    r=Abstention(processor="temporal",reason="no_observable_signal")
+    x=_bundle_finish(f,store,r)
+    y=_bundle_finish(f,store,r,method="bundle-test-v2")
+    for ids in ([],[x,x],[x]*5,["../wrong"]):
+        with pytest.raises(AssetRightsDenied,match="ARTIFACT_SELECTION"):
+            _bundle_read(f,store,ids)
+    with pytest.raises(AssetRightsDenied,match="BUNDLE_CONTRACT"):
+        _bundle_read(f,store,[x,y])
+    with pytest.raises(AssetRightsDenied,match="ROOT_UNKNOWN"):
+        _bundle_read(f,store,[x],tenant="other")
+    with pytest.raises(AssetRightsDenied,match="PURPOSE_MISMATCH"):
+        _bundle_read(f,store,[x],purpose="studio_creation")
+
+
+@pytest.mark.parametrize("discard_fixture",[("retain","process")],indirect=True)
+@pytest.mark.parametrize("mutate",[{"attempt":2},{"configuration_sha256":"c"*64},{"input_sha256":"e"*64}])
+def test_candidate_bundle_rejects_authenticated_wrong_binding(queue_fixture,mutate):
+    from tapi_gate0.asset_processor_results import Abstention
+    f=queue_fixture;store=DerivedPayloadStore(f.queue,b"d"*32)
+    ident=_bundle_finish(f,store,Abstention(processor="temporal",reason="no_observable_signal"),mutate=mutate)
+    # AEAD authenticates these bytes but cannot establish their semantic binding.
+    assert store.read_for_processing(TENANT,ident,purpose=f.spec.purpose)
+    with pytest.raises(AssetRightsDenied,match="PROCESSOR_CONTRACT"):
+        _bundle_read(f,store,[ident])
+
+
+@pytest.mark.parametrize("discard_fixture",[("retain","process")],indirect=True)
+@pytest.mark.parametrize("opaque",[False,True])
+def test_candidate_bundle_rejects_noncanonical_or_opaque_bytes(queue_fixture,opaque):
+    from tapi_gate0.asset_processor_results import Abstention
+    f=queue_fixture;store=DerivedPayloadStore(f.queue,b"d"*32)
+    if opaque:
+        ident=store.finish(_payload_job(f),payload=b"not a processor envelope")["artifact_id"]
+    else:
+        ident=_bundle_finish(f,store,Abstention(processor="temporal",reason="no_observable_signal"),noncanonical=True)
+    with pytest.raises(AssetRightsDenied,match="PROCESSOR_CONTRACT|NONCANONICAL_PROCESSOR_PAYLOAD"):
+        _bundle_read(f,store,[ident])
+
+
+@pytest.mark.parametrize("discard_fixture",[("retain","process","ocr_sales")],indirect=True)
+@pytest.mark.parametrize("timeline,digest",[("image","e"*64),("resampled_uniform",None)])
+def test_candidate_bundle_rejects_wrong_frame(queue_fixture,timeline,digest):
+    from tapi_gate0.asset_processor_results import Frame,OCR,Word
+    f=queue_fixture;store=DerivedPayloadStore(f.queue,b"d"*32)
+    frame=Frame(time_ms=0,frame_sha256=digest or f.q.ref.target.sha256,timeline=timeline)
+    ident=_bundle_finish(f,store,OCR(frame=frame,width=960,height=540,
+        words=(Word(text="Organize",box_px=(10,20,100,30)),)))
+    with pytest.raises(AssetRightsDenied,match="BUNDLE_CONTRACT"):
+        _bundle_read(f,store,[ident])
+
+
+@pytest.mark.parametrize("discard_fixture",[("retain","process")],indirect=True)
+def test_candidate_bundle_rejects_same_content_and_digest_different_root(queue_fixture,monkeypatch):
+    from tapi_gate0.asset_processor_results import Abstention
+    f=queue_fixture;store=DerivedPayloadStore(f.queue,b"d"*32)
+    ident=_bundle_finish(f,store,Abstention(processor="temporal",reason="no_observable_signal"))
+    q=f.q
+    retention=Permission(operation="retain",purpose="research_analysis",field="video")
+    other=q.f.grant(grant_id="grant.other",target=q.ref.target,permissions=(retention,))
+    q.f.svc.register_grant(q.f.anchor,other,verified_approval_digest="b"*64)
+    ref=q.ref.model_copy(update={"grant_id":"grant.other",
+        "object_id":expected_object_id(q.f.anchor,"grant.other",q.ref.target,q.ref.mime)})
+    assert q.index.register_retained(q.f.anchor,ref,purpose="research_analysis")
+    monkeypatch.setattr(store,"_read_in_transaction",lambda *a,**k:pytest.fail("must reject before decrypt"))
+    with pytest.raises(AssetRightsDenied,match="ROOT_MISMATCH"):
+        _bundle_read(f,store,[ident],object_id=ref.object_id)
+
+
+@pytest.mark.parametrize("discard_fixture",[("retain",)],indirect=True)
+def test_candidate_bundle_requires_derived_process(queue_fixture):
+    from tapi_gate0.asset_processor_results import Abstention
+    f=queue_fixture;store=DerivedPayloadStore(f.queue,b"d"*32)
+    ident=_bundle_finish(f,store,Abstention(processor="temporal",reason="no_observable_signal"))
+    with pytest.raises(AssetRightsDenied,match="SCOPE_MISMATCH"):
+        _bundle_read(f,store,[ident])
+
+
+@pytest.mark.parametrize("discard_fixture",[("retain","process")],indirect=True)
+def test_candidate_bundle_rechecks_revocation_and_tombstone(queue_fixture):
+    from tapi_gate0.asset_processor_results import Abstention
+    f=queue_fixture;store=DerivedPayloadStore(f.queue,b"d"*32)
+    ident=_bundle_finish(f,store,Abstention(processor="temporal",reason="no_observable_signal"))
+    assert _bundle_read(f,store,[ident]).entries
+    rv=f.q.f.state(2,revoked_asset_ids=(f.q.ref.target.asset_id,))
+    f.q.f.svc.advance(f.q.f.anchor,TENANT,"instagram",rv)
+    f.queue.resolve_anchor=lambda ref:f.q.f.pin(rv)
+    with pytest.raises(AssetRightsDenied,match="ASSET_RIGHTS_REVOKED"):
+        _bundle_read(f,store,[ident])
+    f.q.index.reconcile_signed_revocations(f.q.f.pin(rv),TENANT,"instagram")
+    store.purge_invalidated(TENANT,ident)
+    with pytest.raises(AssetRightsDenied,match="INACTIVE_ANCESTOR"):
+        _bundle_read(f,store,[ident])
+
+
+@pytest.mark.parametrize("discard_fixture",[("retain","process")],indirect=True)
+def test_candidate_bundle_final_expiry_check(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_candidate_evidence as module
+    from tapi_gate0.asset_processor_results import Abstention
+    f=queue_fixture;store=DerivedPayloadStore(f.queue,b"d"*32)
+    ident=_bundle_finish(f,store,Abstention(processor="temporal",reason="no_observable_signal"))
+    monkeypatch.setattr(module,"now_utc",lambda:f.q.ref.retain_until+timedelta(seconds=1))
+    with pytest.raises(AssetRightsDenied,match="INACTIVE_ANCESTOR"):
+        _bundle_read(f,store,[ident])
+
+
+@pytest.mark.parametrize("discard_fixture",[("retain","process")],indirect=True)
+def test_candidate_bundle_rejects_tampered_ciphertext(queue_fixture):
+    from tapi_gate0.asset_processor_results import Abstention
+    f=queue_fixture;store=DerivedPayloadStore(f.queue,b"d"*32)
+    ident=_bundle_finish(f,store,Abstention(processor="temporal",reason="no_observable_signal"))
+    with f.q.f.engine.begin() as db:
+        item=db.scalar(select(payloads.c.envelope).where(payloads.c.artifact_id==ident))
+        db.execute(update(payloads).where(payloads.c.artifact_id==ident).values(envelope=item[:-1]+bytes([item[-1]^1])))
+    with pytest.raises(AssetRightsDenied,match="AUTHENTICATION_FAILED"):
+        _bundle_read(f,store,[ident])
+
+
+@_WINDOWS_JOB
+@pytest.mark.parametrize("discard_fixture",[("retain","process","ocr_blank","bundle_visual")],indirect=True)
+def test_candidate_bundle_real_blank_ocr_and_vlm(queue_fixture):
+    from tapi_gate0 import asset_ocr_fixture as o, asset_vlm_fixture as v
+    f=queue_fixture;store=DerivedPayloadStore(f.queue,b"d"*32)
+    assert o.fixture("blank")[0]==v.fixture("blank")[0]
+    spec,lease,directory=_ocr_job(f,"blank")
+    ocr=o.run_ocr_fixture_windows(f.queue,f.q.vault,store,lease,tessdata_dir=directory)
+    spec,lease,model,server=_vlm_job(f,"blank")
+    vlm=v.run_vlm_fixture_windows(f.queue,f.q.vault,store,lease,case="blank",model_dir=model,server_exe=server)
+    assert vlm["model_calls"]==0 and ocr["model_calls"]==1
+    bundle=_bundle_read(f,store,[ocr["artifact_id"],vlm["artifact_id"]])
+    assert bundle.coverage()=={"asr_vad":"not_applicable","ocr":"abstained","temporal":"not_applicable","vlm":"observed"}
+    assert bundle.entries[0].observation.result.reason=="no_observable_signal"
+    assert bundle.entries[1].observation.result.scene=="blank"
+    assert bundle.entries[1].observation.result.frame.frame_sha256==bundle.input_sha256
+    assert not bundle.canonical_rubric and not bundle.scientific_evidence

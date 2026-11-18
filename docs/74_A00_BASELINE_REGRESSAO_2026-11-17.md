@@ -1860,3 +1860,75 @@ $py = Join-Path $env:CONDA_PREFIX "python.exe"
 ```
 9 PASS esperados sem skips; se PASS, repetir suite focal 316 com
 opt-ins ASR/OCR/VLM anteriores. Não chamar manutenção no DB real.
+
+
+## A02.6 — manutenção aprovada; EvidenceBundle candidato (18/11)
+Operador HEAD b77e294f2bcf80c33a8763401b7aaac1cfb92f7e:
+9/9 novos PASS, 85 deselected, 6,28s, espelho 32/32 e zero-spend
+PASS. Evidência de console do operador, não JUnit. Reconciliador
+aprovado em fixtures; 316 focal ainda não executado no mesmo SHA.
+
+Novo asset_candidate_evidence.py: asset-candidate-evidence-bundle.v1.
+Complementa, não altera, EvidenceBundle textual E1 (DEC017).
+Entrada explícita tenant, object_id, purpose e 1..4 artifact_ids;
+um resultado por processador, sem busca automática de latest.
+Exige raiz RetainedAssetRef ativa e mesmo objeto exato (não só
+content_id/digest), derivações diretas, nenhuma mistura de grants,
+raízes, tenants ou finalidades. Valida seleção antes de decrypt.
+Reusa leitura AEAD/fence de job completed, receipt, attempt, método,
+config, hash do input, digest de payload, parent e direitos atuais.
+Refatora read_for_processing em helper privado de transação (API
+pública inalterada), validate_persisted_binding sem inventar lease.
+Todas as leituras e revalidação final de ancestrais, TTL, direitos de
+retain/derive/process e head atual em uma transação BEGIN IMMEDIATE.
+Nenhuma mutação de payload/audit, model call, ingestão, publicação,
+chave nova ou persistência do bundle. Contrato frozen/strict, entradas
+ordenadas por processador, fingerprint SHA256 canônico determinístico,
+payload JSON canônico obrigatório. Rejeita opaque bytes e typed
+payload com spec divergente apesar de AEAD válido. Sem retorno
+de erro Pydantic bruto do parser/contrato. Imagem exige frame t=0
+timeline=image e SHA256 do PNG igual ao input; vídeo requer timeline
+resampled_uniform, não prova igualdade de frames entre modalidades.
+Sem concatenação textual, caption arbitrária ou inferência de ausência.
+Coverage explicita observed/abstained/missing/not_applicable por
+tipo de entrada, não cobertura temporal integral. Sem probability,
+canonical_rubric ou scientific_evidence. Fingerprint não é grant,
+assinatura de execução do modelo, nem prova de verdade. O store
+continua confiando no host que finaliza payload: typed outputs
+podem ser fabricados por código privilegiado. Não armazenar bundle
+como autorização; reassemblar em cada boundary, revogação não
+recupera bytes já retornados. Não deriva rubric_evidence nem
+concede direitos adicionais; S1/fusão/uso operacional ainda pendentes.
+Sem novo schema, migração, API, gate ou alteração do DB operacional.
+
+16 casos novos no registry: 15 SQLite com payloads sintéticos
+construídos pelos testes (inclui 4 abstenções header e OCR+VLM
+observados na mesma imagem simulados); um nativo Windows opt-in
+usa PNG blank idêntico dos adapters (OCR real + guard VLM,
+sem chamada Qwen), valida co-referência real. Casos negativos
+de seleção, duplicate processor, tenant/purpose, mesmo digest
+em outra raiz, três bindings falsos, bytes opacos/não canônicos,
+frame/hash divergente, missing process, revogação/purge, expiry
+no final e ciphertext adulterado. Sintaxe dos novos módulos
+e testes compilada localmente; refatoração revisada por diff,
+não executei testes SQLite ou Windows no checkout integral.
+332 focal esperados (307+9+16), sem skips com os três opt-ins.
+IMP-054/063/064/136/137 parcial, não fechamento ou gate. Próximo:
+fusão conservadora com proveniência e direitos rubric_evidence,
+runner A00 com opt-ins ASR/VLM, regressão integral e smoke.
+
+### Operador — bundle
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+conda activate tapi-asr-recovery
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+& $py docs/base_atemporal/ferramentas/validar_espelho.py
+& $py -m pytest -q --tb=short tests/test_asset_rights_registry.py -k "test_candidate_bundle_ and not test_candidate_bundle_real_blank"
+& $py scripts/verify_zero_spend.py
+```
+15 PASS esperados. Com opt-ins OCR/VLM anteriores, execute também
+`pytest -q --tb=short tests/test_asset_rights_registry.py -k test_candidate_bundle_real_blank`
+(1 PASS; não carrega Qwen). Depois focal completo 332 com todos os
+opt-ins. Sem uso no banco real ou novos modelos.
