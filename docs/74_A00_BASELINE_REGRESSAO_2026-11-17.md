@@ -2937,3 +2937,50 @@ Esperados 129 focal, 9 policy; se PASS:
 ```
 Esperados dois nativos sem skip, enviar HEAD e SHARED_AV_PARTIAL.
 Nenhum PASS integral ou semântico pressuposto.
+
+
+## A02.7.3 — validação focal PASS; nativos parciais bloqueados por capacidade (18/11/2026)
+
+Operador: 129/129 focal PASS em 6,97s, 9/9 policy PASS
+em 21,41s (148 deselected), zero-spend PASS.
+Dois testes parciais nativos FAIL em 70,16s (155 deselected),
+ambos SHARED_AV_WINDOWS_MODEL_HOST_HEADROOM_INSUFFICIENT,
+em _run_model_fixture -> require_model_headroom, antes de
+spawn ASR. Complementary: physical 2508 MiB, commit 8223 MiB.
+Audio_only: physical 2696 MiB, commit 8378 MiB.
+Exigidos 4096 MiB physical e 7168 MiB commit (6144 + 1024).
+Commit disponível atende, physical não. Não há saída ASR
+nem SHARED_AV_PARTIAL nesta execução; não inferir que modo
+parcial falhou semanticamente ou que WER foi reproduzido.
+Jobs temporais/OCR precedem o bloqueio; não inferir recibos
+finais completos. Falha ambiental fail-closed correta.
+HEAD local não impresso; remoto confirmado b85e105.
+Último full strict aprovado 20aea11, qualidade ASR ainda FAIL.
+
+Decisão: nenhuma alteração de código, orçamento, VAD, modelo,
+WER, tolerância ou proteção de headroom. Sem conversão de
+insuficiência de recursos em quality rejection. Não repetir
+focal já aprovado após mudança apenas documental. Fechar
+aplicações não necessárias, salvar trabalho, parar servidores/
+writers do projeto de forma normal; se necessário reiniciar
+Windows, reativar ambiente e restaurar opt-ins locais anteriores.
+Não matar processos por PID/nome, não limpar banco/vault,
+não aumentar pagefile para contornar physical. Preflight
+usa a mesma função do supervisor, snapshot sem reserva.
+Só repetir nativos após PASS; se bloqueio voltar, registrar
+valores e parar. Fixtures pytest usam armazenamento temporário;
+não reconciliar leases do banco operacional por este log.
+
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+& $py -c "from tapi_gate0.asset_windows_job import require_model_headroom, ModelFixtureLimits; print(require_model_headroom(ModelFixtureLimits()))"
+if ($LASTEXITCODE -ne 0) { throw "Headroom ASR insuficiente; nao iniciar testes nativos" }
+& $py -m pytest -q --capture=tee-sys --tb=short tests/test_asset_rights_registry.py -k test_partial_shared_av_native_pipeline
+```
+
+Enviar HEAD, preflight e SHARED_AV_PARTIAL/traceback.
+Nenhum PASS nativo novo, perfil promovido, migração, gasto,
+merge, operação externa ou liberação de gate.
