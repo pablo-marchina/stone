@@ -664,3 +664,61 @@ def test_jobs_wrong_tenant_and_clock_regression(queue_fixture,monkeypatch):
     monkeypatch.setattr(module,"now_utc",lambda:earlier)
     with pytest.raises(AssetRightsDenied,match="CLOCK_REGRESSION"):
         f.queue.claim(TENANT,"worker")
+
+
+def test_jobs_revoked_queued_input_never_reserves_attempt(queue_fixture):
+    f=queue_fixture
+    f.queue.enqueue(f.spec)
+    rv=f.q.f.state(2,revoked_grant_ids=("grant.fixture",))
+    f.q.f.svc.advance(f.q.f.anchor,TENANT,"instagram",rv)
+    f.queue.resolve_anchor=lambda ref:f.q.f.pin(rv)
+    assert f.queue.claim(TENANT,"worker")["status"]=="rights_blocked"
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(attempts))==0
+    f.q.index.reconcile_signed_revocations(f.q.f.pin(rv),TENANT,"instagram")
+    assert f.queue.reconcile_invalidated(TENANT)["changed"]==[f.spec.job_id]
+    assert f.queue.status(TENANT,f.spec.job_id)["state"]=="canceled"
+
+
+def test_jobs_cancel_lease_expiry_and_restart(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_jobs as module
+    f=queue_fixture
+    clock=[now_utc()]
+    monkeypatch.setattr(module,"now_utc",lambda:clock[0])
+    f.queue.enqueue(f.spec)
+    lease=f.queue.claim(TENANT,"worker")["lease"]
+    f.queue.cancel(TENANT,f.spec.job_id)
+    restarted=AssetJobQueue(AssetLineageIndex(f.q.f.engine),resolve_anchor=lambda ref:f.q.f.anchor)
+    assert restarted.claim(TENANT,"worker2")["status"]=="busy"
+    clock[0]+=timedelta(seconds=121)
+    assert restarted.claim(TENANT,"worker2")["status"]=="empty"
+    assert restarted.status(TENANT,f.spec.job_id)["state"]=="canceled"
+    with pytest.raises(AssetRightsDenied,match="STALE_LEASE"):
+        restarted.acknowledge_cancel(lease)
+
+
+def test_nonempty_job_migration_downgrade_refused(tmp_path,monkeypatch):
+    from sqlalchemy import insert,inspect
+    from tapi_gate0.sa_store import tenants
+    root=Path(__file__).resolve().parents[1]
+    url="sqlite:///"+str(tmp_path/"jobs.sqlite3")
+    monkeypatch.setenv("TAPI_DATABASE_URL",url)
+    cfg=Config(str(root/"alembic.ini"))
+    cfg.set_main_option("script_location",str(root/"migrations"))
+    command.upgrade(cfg,"0015_asset_jobs")
+    engine=engine_for(url)
+    try:
+        with engine.begin() as db:
+            db.execute(insert(tenants).values(tenant_id=TENANT,name="Fixture"))
+            db.execute(insert(nodes).values(tenant_id=TENANT,node_id="a"*64,kind="asset",
+                purpose="research_analysis",payload="{}",state="active"))
+            spec=JobSpec(tenant_id=TENANT,object_id="a"*64,purpose="research_analysis",
+                processor="temporal",method_version="v1",configuration_sha256="b"*64)
+            db.execute(insert(jobs).values(tenant_id=TENANT,job_id=spec.job_id,
+                object_id=spec.object_id,spec=spec.model_dump_json(),state="queued",
+                attempt=0,version=1,created_ms=0,updated_ms=0,available_ms=0))
+        with pytest.raises(RuntimeError,match="ASSET_JOBS_DOWNGRADE_NONEMPTY"):
+            command.downgrade(cfg,"0014_asset_lineage")
+        assert {"asset_processing_jobs","asset_processing_attempts"}<=set(inspect(engine).get_table_names())
+    finally:
+        engine.dispose()
