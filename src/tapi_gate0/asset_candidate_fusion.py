@@ -200,7 +200,17 @@ def evaluate_shared_av_ablation(store,tenant,object_id,artifact_ids,*,purpose):
     return _evaluate_authorized(store,tenant,object_id,artifact_ids,purpose=purpose,ablation=True)
 
 
-def _evaluate_authorized(store,tenant,object_id,artifact_ids,*,purpose,ablation):
+def evaluate_shared_av_coverage_guard(store,tenant,object_id,artifact_ids,*,purpose):
+    """Experimental conservative replay; not the default fusion or router.
+
+    Accept an authorized partial shared bundle and explicitly label missing
+    modalities. A selected-frame absence is not absence throughout a video.
+    """
+    return _evaluate_authorized(store,tenant,object_id,artifact_ids,purpose=purpose,
+                                ablation=False,coverage_guard=True)
+
+
+def _evaluate_authorized(store,tenant,object_id,artifact_ids,*,purpose,ablation,coverage_guard=False):
     """One local transaction; derive rubric permission before decrypt and after decision.
 
     Only in-memory candidates, no retain/display/export rights conferred.
@@ -219,7 +229,8 @@ def _evaluate_authorized(store,tenant,object_id,artifact_ids,*,purpose,ablation)
         _grant(db,q.resolve_anchor(root),root,now,permission)
         bundle,by_id,bindings=_assemble_in_transaction(store,db,now,tenant,object_id,artifact_ids,purpose=purpose,by_id=by_id)
         try:
-            result=_ablation(bundle) if ablation else _evaluate(bundle)
+            result=(_ablation(bundle) if ablation else
+                    _coverage_guard(bundle) if coverage_guard else _evaluate(bundle))
         except ValueError:
             raise AssetRightsDenied("ASSET_S1_CONTRACT") from None
         fresh=_recheck_bundle(store,db,now,by_id,bindings,purpose=purpose)
@@ -245,3 +256,40 @@ def _ablation(bundle):
             "source_fingerprint":bundle.fingerprint(),"arms":arms,
             "inference_reexecuted":False,"scientific_evidence":False,
             "canonical_rubric":False}
+
+
+def _coverage_guard(bundle):
+    if any(e.observation.shared_av is None for e in bundle.entries):
+        raise AssetRightsDenied("ASSET_S1_SHARED_AV_REQUIRED")
+    baseline=_evaluate(bundle)
+    by={e.observation.result.processor:e.observation.result for e in bundle.entries}
+    coverage=bundle.coverage()
+    # A no-observable-signal observation is a bounded negative guard on
+    # the fixture, not proof of absence in real content.
+    usable={k for k,r in by.items() if r.state=="observed" or
+            (r.state=="abstained" and r.reason=="no_observable_signal")}
+    reasons={}
+    if not {"asr_vad","ocr","vlm"}<=usable:
+        reasons.update({k:"INCOMPLETE_MODALITY_EVIDENCE" for k in ("tema_principal","tipo_cta","tem_cta")})
+    if not {"ocr","vlm"}<=usable:
+        reasons["texto_na_tela"]="INCOMPLETE_VISUAL_EVIDENCE"
+    fields={d.field_id:d for d in baseline.fields}
+    topic=fields["tema_principal"]
+    if (coverage["asr_vad"]==coverage["ocr"]=="observed" and topic.state=="candidate"
+            and {s.processor for s in topic.supports}!={"asr_vad","ocr"}):
+        reasons.setdefault("tema_principal","UNCORROBORATED_THEME_WITH_OBSERVED_MODALITIES")
+    suppressed=[]
+    guarded=[]
+    for d in baseline.fields:
+        if d.state=="candidate" and d.field_id in reasons:
+            suppressed.append(d.field_id)
+            guarded.append(FieldCandidate(field_id=d.field_id,state="abstained",
+                reason=reasons[d.field_id],supports=d.supports,vetoes=d.vetoes))
+        else:
+            guarded.append(d)
+    decision=CandidateDecisions.model_validate({**baseline.model_dump(mode="python"),"fields":tuple(guarded)})
+    return {"schema_version":"shared-av-coverage-guard.v1",
+            "source_fingerprint":bundle.fingerprint(),"coverage":coverage,
+            "baseline":baseline,"guarded":decision,"suppressed_fields":tuple(suppressed),
+            "inference_reexecuted":False,"canonical_rubric":False,"scientific_evidence":False,
+            "policy_promoted":False}

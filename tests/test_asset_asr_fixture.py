@@ -374,3 +374,52 @@ def test_recovery_progress_identifies_failed_arm_without_continuing(monkeypatch)
     assert [(e["event"],e["profile"],e["completed"]) for e in events]==[
         ("started","beam10",0),("completed","beam10",1),("started","word_context_500ms",1)]
     assert all(e["case"]=="inventory" and e["total"]==14 and e["pcm_sha256"]==pcm for e in events)
+
+
+def test_recovery_small_round_uses_only_explicit_pinned_checkpoint(monkeypatch):
+    from tapi_gate0 import asset_asr_recovery as recovery
+    from tapi_gate0 import asset_windows_job as windows
+    monkeypatch.setattr(windows,"_native_api",lambda:None)
+    calls=[]
+    runtime={"checkpoint":"small"}
+    def verify(path,*,candidate):
+        assert candidate=="small" and path.name=="small"
+        return runtime
+    monkeypatch.setattr(a,"_runtime",verify)
+    def fixture(case,transport):
+        return b"fixture",{"pcm_sha256":recovery.V1_PCM[(case,transport)]}
+    monkeypatch.setattr(a,"_authored_fixture",fixture)
+    def plan(data,meta,path,*,profile,candidate):
+        assert path.name=="small" and profile=="baseline" and candidate=="small"
+        return {"runtime":runtime,"input_sha256":sha256(data).hexdigest(),
+                "configuration_sha256":"a"*64},"code"
+    monkeypatch.setattr(a,"_plan",plan)
+    def native(code,data,check,**kw):
+        check()
+        calls.append(code)
+        return b"{}",{}
+    monkeypatch.setattr(windows,"_run_model_fixture",native)
+    monkeypatch.setattr(recovery,"_score",lambda *args,**kw:{"quality_passed":True,"semantic_exact_match":True})
+    with pytest.raises(ValueError,match="EXPLICIT_SMALL"):
+        recovery.run("medium",round_id="v3")
+    with pytest.raises(ValueError,match="EXPLICIT_SMALL"):
+        recovery.run("medium",round_id="v2",small_model_dir="small")
+    report=recovery.run("medium",round_id="v3",small_model_dir="small")
+    assert len(calls)==len(report["rows"])==7
+    assert report["checkpoint_candidate"]=="small"
+    assert report["profiles"]["small_baseline"]["engineering_gate_passed"]
+    assert not report["automatic_profile_selected"]
+
+
+def test_recovery_small_plan_binds_candidate_without_changing_default(monkeypatch):
+    def runtime(path,*,candidate="medium"):
+        return {"checkpoint":candidate}
+    monkeypatch.setattr(a,"_runtime",runtime)
+    data,meta=a.fixture("silence")
+    baseline,_=a._plan(data,meta,"C:/trusted/model")
+    candidate,_=a._plan(data,meta,"C:/trusted/model",candidate="small")
+    assert baseline["runtime"]["checkpoint"]=="medium"
+    assert "experimental_checkpoint_candidate" not in baseline
+    assert candidate["experimental_checkpoint_candidate"]=="small"
+    assert baseline["input_sha256"]==candidate["input_sha256"]
+    assert baseline["configuration_sha256"]!=candidate["configuration_sha256"]

@@ -2528,12 +2528,15 @@ def test_shared_av_rechecks_revocation_between_decode_and_finish(queue_fixture,m
     ("cta_conflict","Comente sua dúvida.","Salve este post",None,None),
     ("context_veto","Não salve este post.","Salve este post",None,None),
     ("split_request","Salve","este post",None,None),
+    ("unrecognized_audio","Palavras sem classificação.","Organize suas vendas","vendas",None),
+    ("audio_insufficient",None,"Organize suas vendas","vendas",None),
+    ("audio_no_signal",None,"Organize suas vendas","vendas",None),
 ])
 def test_shared_av_ablation_policy_and_rights(queue_fixture,case,spoken,screen,expected_topic,expected_cta):
     """Persist authored surrogate observations: contract/policy test, not native inference."""
     from tapi_gate0.asset_processor_results import (SharedAVSource,SharedAVBinding,SHARED_AV_METHOD,
-        ProcessorResult,ASR,Speech,Interval,OCR,Word,VLM,Frame,Temporal,encode)
-    from tapi_gate0.asset_candidate_fusion import evaluate_shared_av_ablation
+        ProcessorResult,ASR,Speech,Interval,OCR,Word,VLM,Frame,Temporal,Abstention,encode)
+    from tapi_gate0.asset_candidate_fusion import evaluate_shared_av_ablation,evaluate_shared_av_coverage_guard
     f=queue_fixture
     store=DerivedPayloadStore(f.queue,b"d"*32)
     src=SharedAVSource(container_sha256=f.q.ref.target.sha256,decoder_sha256="1"*64,
@@ -2541,8 +2544,9 @@ def test_shared_av_ablation_policy_and_rights(queue_fixture,case,spoken,screen,e
         frame_count=12,pcm_samples=48000,temporal_sample_sha256=("6"*64,)*12)
     frame=Frame(time_ms=1000,frame_sha256=src.frame_sha256,timeline="resampled_uniform")
     observations=(
-        ASR(duration_ms=3000,segments=(Speech(start_ms=1000,end_ms=2000,text=spoken),),
-            vad=(Interval(start_ms=900,end_ms=2100),)),
+        (ASR(duration_ms=3000,segments=(Speech(start_ms=1000,end_ms=2000,text=spoken),),
+            vad=(Interval(start_ms=900,end_ms=2100),)) if spoken is not None else
+         Abstention(processor="asr_vad",reason="no_observable_signal" if case=="audio_no_signal" else "insufficient_evidence")),
         OCR(frame=frame,width=960,height=540,words=tuple(Word(text=w,box_px=(10+i*110,20,100,30))
             for i,w in enumerate(screen.split()))),
         Temporal(samples=12,threshold=0.2,candidates=()),
@@ -2576,6 +2580,26 @@ def test_shared_av_ablation_policy_and_rights(queue_fixture,case,spoken,screen,e
         assert fields["tipo_cta"].supports[0].processor=="asr_vad"
         assert fields["tema_principal"].supports[0].processor=="ocr"
     assert len(replay["arms"])==15
+    guarded=evaluate_shared_av_coverage_guard(store,TENANT,f.q.ref.object_id,ids,purpose=f.spec.purpose)
+    assert guarded["baseline"]==replay["arms"]["asr_vad+ocr+temporal+vlm"]
+    assert guarded["policy_promoted"] is False and not guarded["inference_reexecuted"]
+    g={x.field_id:x for x in guarded["guarded"].fields}
+    if case in ("complementary","unrecognized_audio","audio_insufficient"):
+        assert g["tema_principal"].value is None and "tema_principal" in guarded["suppressed_fields"]
+        assert g["tema_principal"].reason==("INCOMPLETE_MODALITY_EVIDENCE" if case=="audio_insufficient" else
+            "UNCORROBORATED_THEME_WITH_OBSERVED_MODALITIES")
+    else:
+        assert g["tema_principal"].value==expected_topic
+    assert g["tipo_cta"].value==expected_cta
+    assert g["texto_na_tela"].value is True
+    missing=evaluate_shared_av_coverage_guard(store,TENANT,f.q.ref.object_id,ids[1:],purpose=f.spec.purpose)
+    m={x.field_id:x for x in missing["guarded"].fields}
+    assert missing["coverage"]["asr_vad"]=="missing"
+    assert all(m[k].value is None for k in ("tema_principal","tipo_cta","tem_cta"))
+    assert m["texto_na_tela"].value is True
+    no_vlm=evaluate_shared_av_coverage_guard(store,TENANT,f.q.ref.object_id,ids[:-1],purpose=f.spec.purpose)
+    assert no_vlm["coverage"]["vlm"]=="missing"
+    assert all(x.value is None for x in no_vlm["guarded"].fields)
     with pytest.raises(AssetRightsDenied,match="SHARED_AV_COMPLETE_REQUIRED"):
         evaluate_shared_av_ablation(store,TENANT,f.q.ref.object_id,ids[:-1],purpose=f.spec.purpose)
     with f.q.f.engine.connect() as db:
@@ -2586,3 +2610,5 @@ def test_shared_av_ablation_policy_and_rights(queue_fixture,case,spoken,screen,e
     f.queue.resolve_anchor=lambda ref:f.q.f.pin(rv)
     with pytest.raises(AssetRightsDenied,match="ASSET_RIGHTS_REVOKED"):
         evaluate_shared_av_ablation(store,TENANT,f.q.ref.object_id,ids,purpose=f.spec.purpose)
+    with pytest.raises(AssetRightsDenied,match="ASSET_RIGHTS_REVOKED"):
+        evaluate_shared_av_coverage_guard(store,TENANT,f.q.ref.object_id,ids[1:],purpose=f.spec.purpose)
