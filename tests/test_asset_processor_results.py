@@ -64,3 +64,79 @@ def test_binding_and_unvalidated_copy():
             validate_binding(bad,spec=spec,ref=ref,lease=lease)
     with pytest.raises(ValueError):
         encode(r.model_copy(update={"scientific_evidence":True}))
+
+
+# The shared binding is additive, but legacy canonical bytes must not drift.
+def test_shared_av_legacy_encoding_unchanged():
+    r=ProcessorResult(**BASE,result=Abstention(processor="ocr",reason="fixture_header_only"))
+    expected={**BASE,"schema_version":"asset-processor-result.v1",
+        "result":{"processor":"ocr","state":"abstained","reason":"fixture_header_only"},
+        "scientific_evidence":False,"canonical_rubric":False,"calibrated_probability":None}
+    assert encode(r)==json.dumps(expected,sort_keys=True,separators=(",",":"),ensure_ascii=False,allow_nan=False).encode()
+    assert "shared_av" not in r.model_dump(mode="json")
+
+
+def _shared_result():
+    from tapi_gate0.asset_processor_results import SharedAVSource,SharedAVBinding,SHARED_AV_METHOD,Frame
+    source=SharedAVSource(container_sha256=BASE["input_sha256"],decoder_sha256="d"*64,
+        rgb_stream_sha256="e"*64,pcm_sha256="f"*64,frame_sha256="1"*64,frame_png_sha256="2"*64,
+        frame_count=12,pcm_samples=48000,temporal_sample_sha256=("3"*64,)*12)
+    binding=SharedAVBinding(source=source,adapter_configuration_sha256="4"*64)
+    result=VLM(frame=Frame(time_ms=1000,frame_sha256=source.frame_sha256,timeline="resampled_uniform"),
+        scene="text_card",text_present="yes")
+    return ProcessorResult(**{**BASE,"method_version":SHARED_AV_METHOD,"origin":"adapter_candidate",
+        "configuration_sha256":binding.configuration("vlm")},result=result,shared_av=binding)
+
+
+def test_shared_av_result_roundtrip_and_binding():
+    r=_shared_result()
+    assert decode(encode(r))==r
+    assert r.shared_av.source.pcm_samples==48000
+    for change,code in [
+        ({"shared_av":None},"SHARED_AV_METHOD"),
+        ({"method_version":"old"},"SHARED_AV_METHOD"),
+        ({"configuration_sha256":"c"*64},"SHARED_AV_BINDING"),
+        ({"input_sha256":"9"*64},"SHARED_AV_BINDING"),
+        ({"result":r.result.model_copy(update={"frame":r.result.frame.model_copy(update={"time_ms":2000})})},"SHARED_AV_FRAME"),
+    ]:
+        with pytest.raises(ValueError,match=code):
+            encode(r.model_copy(update=change))
+
+
+def test_shared_av_temporal_samples_bound_to_manifest():
+    from tapi_gate0.asset_processor_results import Frame,Transition
+    r=_shared_result()
+    binding=r.shared_av
+    obs=Temporal(samples=12,threshold=0.2,candidates=(Transition(
+        previous=Frame(time_ms=750,frame_sha256="3"*64,timeline="resampled_uniform"),
+        current=Frame(time_ms=1000,frame_sha256="3"*64,timeline="resampled_uniform"),
+        normalized_difference=0.5),))
+    r=r.model_copy(update={"result":obs,"configuration_sha256":binding.configuration("temporal")})
+    assert decode(encode(r))==r
+    bad=obs.candidates[0].model_copy(update={"current":obs.candidates[0].current.model_copy(update={"frame_sha256":"9"*64})})
+    with pytest.raises(ValueError,match="SHARED_AV_SAMPLE_BINDING"):
+        encode(r.model_copy(update={"result":obs.model_copy(update={"candidates":(bad,)})}))
+
+
+def test_shared_av_bundle_rejects_mixed_source_and_legacy():
+    from hashlib import sha256
+    from tapi_gate0.asset_candidate_evidence import CandidateEvidence,CandidateEvidenceBundle
+    from tapi_gate0.asset_processor_results import SharedAVBinding,Abstention
+    r=_shared_result()
+    def entry(result):
+        digest=sha256(encode(result)).hexdigest()
+        ident="artifact."+sha256((result.job_id+":"+digest).encode()).hexdigest()
+        return CandidateEvidence(artifact_id=ident,payload_sha256=digest,observation=result)
+    def bundle(first):
+        return CandidateEvidenceBundle(tenant_id=r.tenant_id,content_id="content",object_id=r.object_id,
+            input_sha256=r.input_sha256,media_kind="video",purpose=r.purpose,entries=(entry(first),entry(r)))
+    legacy=ProcessorResult(**{**BASE,"job_id":"job.2"},result=Abstention(processor="ocr",reason="fixture_header_only"))
+    with pytest.raises(ValueError,match="EVIDENCE_SHARED_AV_SOURCE_MISMATCH"):
+        bundle(legacy)
+    source=r.shared_av.source.model_copy(update={"pcm_sha256":"8"*64})
+    binding=SharedAVBinding(source=source,adapter_configuration_sha256="5"*64)
+    other=r.model_copy(update={"job_id":"job.3","shared_av":binding,
+        "configuration_sha256":binding.configuration("ocr"),
+        "result":Abstention(processor="ocr",reason="no_observable_signal")})
+    with pytest.raises(ValueError,match="EVIDENCE_SHARED_AV_SOURCE_MISMATCH"):
+        bundle(other)

@@ -228,6 +228,10 @@ def run(queue,vault,store,lease,*,fixture,paths):
     try:
         windows._native_api()
         spec,ref=queue.check_lease(lease)
+        # Do not trust caller-constructed dataclasses or supplied decoder code.
+        # Regenerate the fixed recipe on this runtime, then compare everything.
+        if fixture!=prepare(fixture.case):
+            _deny("FIXTURE_RECIPE_CHANGED")
         binding,config,code=plan(fixture,spec.processor,paths)
         if (spec.method_version!=METHOD or spec.configuration_sha256!=binding.configuration(spec.processor)
                 or ref.target.sha256!=fixture.source.container_sha256 or ref.byte_count!=len(fixture.data)

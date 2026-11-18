@@ -397,12 +397,21 @@ def discard_fixture(registry,tmp_path,request):
         assert len(vlm_cases)==1 and not temporal_cases and not ocr_cases and not asr_cases
         data,_=fixture(vlm_cases[0])
         media_kind,mime,output_field="image","image/png","visual_features"
+    shared_cases=[x.removeprefix("shared_av_") for x in requested if x.startswith("shared_av_")]
+    if shared_cases:
+        from tapi_gate0.asset_shared_av_fixture import prepare
+        assert len(shared_cases)==1 and not (temporal_cases or ocr_cases or asr_cases or vlm_cases)
+        data=prepare(shared_cases[0]).data
+        media_kind,mime,output_field="video","video/mp4","visual_features"
     target=f.target.model_copy(update={"sha256":sha256(data).hexdigest(),"media_kind":media_kind})
     retention=Permission(operation="retain",purpose="research_analysis",field=media_kind)
     processing=Permission(operation="process",purpose="research_analysis",field=media_kind)
     f.svc.provision(f.anchor,TENANT,"instagram",f.rv)
     extra=tuple(Permission(operation=op,purpose="research_analysis",field=output_field)
-        for op in requested if op not in ("all_processors","bundle_visual","bundle_rubric") and not op.startswith(("temporal_","ocr_","asr_","vlm_")))
+        for op in requested if op not in ("all_processors","bundle_visual","bundle_rubric","shared_modalities") and not op.startswith(("temporal_","ocr_","asr_","vlm_","shared_av_")))
+    if "shared_modalities" in requested:
+        extra+=tuple(Permission(operation="process",purpose="research_analysis",field=field)
+            for field in ("audio","image"))
     if "bundle_rubric" in requested:
         extra+=(Permission(operation="derive",purpose="research_analysis",field="rubric_evidence"),)
     if "bundle_visual" in requested:
@@ -2318,4 +2327,122 @@ def test_fixture_pipeline_signed_revocation_and_receipt_only(queue_fixture):
         pipe.step("worker")
     with f.q.f.engine.connect() as db:
         assert db.scalar(select(func.count()).select_from(attempts))==1
+        assert db.scalar(select(func.count()).select_from(payloads))==0
+
+
+# A02.7.2 — shared lossless video/PCM with the same retained root.
+def test_shared_av_requires_both_modality_scopes(queue_fixture):
+    from tapi_gate0.asset_processor_results import SHARED_AV_METHOD
+    f=queue_fixture
+    spec=f.spec.model_copy(update={"method_version":SHARED_AV_METHOD})
+    with pytest.raises(AssetRightsDenied,match="SCOPE_MISMATCH"):
+        f.queue.enqueue(spec)
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(jobs))==0
+
+
+@_WINDOWS_JOB
+@pytest.mark.parametrize("discard_fixture,case",[
+    (("retain","process","all_processors","bundle_rubric","shared_modalities","shared_av_inventory"),"inventory"),
+    (("retain","process","all_processors","bundle_rubric","shared_modalities","shared_av_silence"),"silence"),
+],indirect=["discard_fixture"])
+def test_shared_av_native_pipeline(queue_fixture,case):
+    import os
+    from tapi_gate0.asset_candidate_evidence import assemble_candidate_bundle
+    f=queue_fixture
+    paths={k:os.environ.get(v) for k,v in (
+        ("tessdata_dir","TAPI_OCR_TEST_TESSDATA"),("asr_model_dir","TAPI_ASR_TEST_MODEL_DIR"),
+        ("vlm_model_dir","TAPI_VLM_TEST_MODEL_DIR"),("vlm_server_exe","TAPI_VLM_TEST_SERVER_EXE"))}
+    if not all(paths.values()):
+        pytest.skip("explicit shared AV native opt-ins required")
+    pipe=_pipeline(f,mode="shared_av",case=case,**paths)
+    source=pipe._shared.source
+    assert source.container_sha256==f.q.ref.target.sha256
+    assert source.container_sha256!=source.frame_sha256!=source.frame_png_sha256
+    artifacts=[]
+    for processor in ("temporal","ocr","asr_vad","vlm"):
+        step=pipe.step("worker")
+        assert step["status"]=="processed" and step["processor"]==processor
+        expected={"temporal":0,"ocr":1,"asr_vad":2 if case=="inventory" else 0,
+                  "vlm":1 if case=="inventory" else 0}
+        assert step["model_calls"]==expected[processor]
+        artifacts.append(step["artifact_id"])
+    result=pipe.step("worker")
+    assert result["status"]=="candidate_complete"
+    assert result["artifact_ids"]==tuple(artifacts)
+    bundle=assemble_candidate_bundle(pipe.store,TENANT,f.q.ref.object_id,artifacts,purpose=f.spec.purpose)
+    assert bundle.fingerprint()==result["decisions"].evidence_fingerprint
+    by={e.observation.result.processor:e.observation for e in bundle.entries}
+    assert all(r.shared_av.source==source and r.input_sha256==source.container_sha256 for r in by.values())
+    assert all(r.object_id==f.q.ref.object_id and not r.canonical_rubric for r in by.values())
+    assert by["temporal"].result.samples==len(source.temporal_sample_sha256)
+    assert [x.current.time_ms for x in by["temporal"].result.candidates]==([1000] if case=="inventory" else [])
+    assert by["vlm"].result.frame.time_ms==1000
+    assert by["vlm"].result.frame.frame_sha256==source.frame_sha256
+    assert by["vlm"].result.frame.timeline=="resampled_uniform"
+    fields={x.field_id:x for x in result["decisions"].fields}
+    if case=="inventory":
+        assert by["asr_vad"].result.state==by["ocr"].result.state=="observed"
+        assert by["ocr"].result.frame==by["vlm"].result.frame
+        assert by["asr_vad"].result.duration_ms==(source.pcm_samples*1000+15999)//16000
+        assert fields["texto_na_tela"].value is True
+        assert any(x.frame_sha256==source.frame_sha256 for x in fields["texto_na_tela"].supports)
+    else:
+        assert by["asr_vad"].result.state==by["ocr"].result.state=="abstained"
+        assert all(x.value is None for x in fields.values())
+    assert pipe.step("worker")==result
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(attempts))==4
+        assert db.scalar(select(func.count()).select_from(payloads))==4
+    print("SHARED_AV_SOURCE "+source.model_dump_json())
+
+
+@_WINDOWS_JOB
+@pytest.mark.parametrize("discard_fixture",[
+    ("retain","process","all_processors","bundle_rubric","shared_modalities","shared_av_silence")
+],indirect=True)
+def test_shared_av_rejects_forged_recipe_before_spawn(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_shared_av_fixture as shared
+    f=queue_fixture
+    fixture=shared.prepare("silence")
+    binding,_,_=shared.plan(fixture,"temporal",(None,None,None,None))
+    spec=f.spec.model_copy(update={"method_version":shared.METHOD,
+        "configuration_sha256":binding.configuration("temporal")})
+    f.queue.enqueue(spec)
+    lease=f.queue.claim(TENANT,"worker",job_id=spec.job_id)["lease"]
+    forged=replace(fixture,decoder_code=fixture.decoder_code+"\nraise SystemExit(0)\n")
+    monkeypatch.setattr(shared.windows,"_run_fixture_output",lambda *a,**k:pytest.fail("must deny before spawn"))
+    with pytest.raises(AssetRightsDenied,match="FIXTURE_RECIPE_CHANGED"):
+        shared.run(f.queue,f.q.vault,DerivedPayloadStore(f.queue,b"d"*32),lease,
+            fixture=forged,paths=(None,None,None,None))
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(payloads))==0
+
+
+@_WINDOWS_JOB
+@pytest.mark.parametrize("discard_fixture",[
+    ("retain","process","all_processors","bundle_rubric","shared_modalities","shared_av_silence")
+],indirect=True)
+def test_shared_av_rechecks_revocation_between_decode_and_finish(queue_fixture,monkeypatch):
+    from tapi_gate0 import asset_shared_av_fixture as shared
+    f=queue_fixture
+    fixture=shared.prepare("silence")
+    binding,_,_=shared.plan(fixture,"temporal",(None,None,None,None))
+    spec=f.spec.model_copy(update={"method_version":shared.METHOD,
+        "configuration_sha256":binding.configuration("temporal")})
+    f.queue.enqueue(spec)
+    lease=f.queue.claim(TENANT,"worker",job_id=spec.job_id)["lease"]
+    real=shared.windows._run_fixture_output
+    def revoke_after_decode(*a,**kw):
+        result=real(*a,**kw)
+        rv=f.q.f.state(2,revoked_asset_ids=(f.q.ref.target.asset_id,))
+        f.q.f.svc.advance(f.q.f.anchor,TENANT,"instagram",rv)
+        f.queue.resolve_anchor=lambda ref:f.q.f.pin(rv)
+        return result
+    monkeypatch.setattr(shared.windows,"_run_fixture_output",revoke_after_decode)
+    with pytest.raises(AssetRightsDenied,match="ASSET_RIGHTS_REVOKED"):
+        shared.run(f.queue,f.q.vault,DerivedPayloadStore(f.queue,b"d"*32),lease,
+            fixture=fixture,paths=(None,None,None,None))
+    assert f.queue.status(TENANT,spec.job_id)["receipt_sha256"] is None
+    with f.q.f.engine.connect() as db:
         assert db.scalar(select(func.count()).select_from(payloads))==0
