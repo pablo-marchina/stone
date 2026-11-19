@@ -4548,3 +4548,52 @@ if ($LASTEXITCODE -ne 0) { throw "Backup bloqueado" }
 ```
 Enviar resumos sem IDs/segredos. Depois piloto contextual
 e grounded rubric atuais, revisão de ranking e A04.
+
+
+### A03.5 — oito perfis registrados; escopos locais prontos para provisionamento
+
+Operador confirmou SAMPLING_PROFILES_REGISTERED:
+8 novos, 21 já registrados, plano exatamente os oito
+V11/V12, sem conflito; 0 source_contexts_created,
+0 scientific_admissions, external_data_accessed=false,
+database_mutated/operation_mutated/sampling_registry_mutated/
+identity_session_written=true. Total 29 perfis formalmente
+registrados (a confirmar no novo data card). Não repetir
+registro. CAPTION_RESEARCH_PLANNED: 29 linhas, 21
+ALREADY_PROVISIONED e 8 PROVISION, zero outras ações,
+0 admissões. Escopos anteriores preservados. HEAD local
+não impresso; remoto cceb91f confirmado. Não afirmar
+provisionamento concluído antes da execução.
+
+Próximo: mesmo V12/tenant/viewer, escritores parados,
+backup diário anterior preservado; executar registro de
+contextos via admin autenticado, esperado 8 novos/21
+existentes. Reavaliar readiness (esperado 29 registrados,
+29 contextos documentais ativos, 1349 técnicos primários,
+1348 legendas, 0 excluded_unregistered, 0 científico),
+confirmar escopo local com a6_audience_contextual sem modo
+execute, global classify deny preservado. Backup pós
+contextos, verify_zero_spend. Se qualquer divergência,
+parar e inspecionar sem repetir writes. Nenhum uso Meta,
+mídia, nova aprovação DEC-018 ou exigência de data token.
+Contextos documentais não são revisão humana.
+
+Depois, com backup e preflight aprovados, executar
+grounded audience V12 em tapi-s1 diretamente ativado,
+checkpoint local previamente fixado
+C:\Models\tapi\gliner25-multi-decide, sem download,
+flags HF_HUB_OFFLINE/TRANSFORMERS_OFFLINE/HF_DATASETS_OFFLINE=1,
+TAPI_SYSTEM_ONE_ENABLED=1 temporária (restaurar a 0).
+Usar --execute --grounded --manifest V12
+--confirm-all-ingestion-stopped --report-name
+a03-grounded-v12-<stamp>.json. Gate sintético repetido
+no fluxo; não forçar se GROUNDED_BENCHMARK_NOT_PASSED.
+Esperar 1348 candidatos se partição inalterada, não
+inferir performance científica ou novos labels. Guardar
+relatório privado, modelo/hash/manifesto/partição.
+Depois avaliar rubrica em dois pares disjuntos (tema/CTA,
+prova/oferta), mesmo checkpoint e partição, antes de
+ranking exploratório V12. Não reutilizar resultados V10
+nem persistir novos drafts sem suporte. Commit somente
+documental; nenhuma execução local/DB/Meta/modelo pelo
+assistente. Sem merge/gates.
