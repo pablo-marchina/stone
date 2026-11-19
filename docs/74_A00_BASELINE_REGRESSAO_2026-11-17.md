@@ -4124,3 +4124,76 @@ if ($identityExit -ne 0) { throw "Identidade interrompida; preservar relatorio, 
 Enviar status/cycle_key/reservas e username/status/code,
 sem IDs privados ou segredos. Não provisionar ou
 coletar V12 antes de reconciliar resultados efetivos.
+
+
+### A03.4 — segundo lote identity parcial, V12 com três sucessos
+
+Operador: IDENTITY_BATCH_STOPPED, ciclo
+a6identity-20261119120439-0e4f8f74, manifesto V11
+19c38ca968585a7e056402dd2f5f743df232f778c161b762e9c764d713e71840,
+DEC-018, UTC 19/11. 3 IDENTIFIED: casa.artemisia.escola,
+endeavorbrasil, institutolojasrenner. wabizapp BLOCKED
+PROVIDER_REQUEST_FAILED, HTTP400 code110 sub2207013
+(mesmo diagnóstico numérico de aanadesales, causa não
+demonstrada; não é regra de bloqueio global 190).
+abraseloestepotiguar reservada sem resultado, não
+consultada. 5 reservas integralmente mantidas, 10/10
+identity hoje; 34/80 compartilhadas (estimativa a
+confirmar), saldo 46, até 11 runs history, margem 2.
+4 resultados, zero grants/posts/admissões, sem
+produção. HEAD local não impresso, remoto 5544088.
+Não atribuir falha a expiração ou remover grant;
+não resetar auth sem bloqueio 190. Não repetir wabizapp
+ou abraseloestepotiguar automaticamente, inclusive
+próximo dia: planner considera ambos prior attempt
+review. Fonte reservada sem resultado não é falha
+de provider e requer tratamento distinto na revisão
+posterior; não devolver quota ou apagar eventos.
+
+Reconciliar ciclo exato sobre V11, 3 IDs adicionados,
+2 skipped (PROVIDER_REQUEST_FAILED e NO_RESULT_RESERVED),
+50 fontes, 26 aprovadas. Provisionar apenas três
+sucessos via fluxo DEC-018, 29 approved esperados.
+Backup local antes da escrita, todos writers parados.
+Não criar grant para as duas deferidas. Após V12,
+prévia history 3 novas fontes (12 unidades, 120
+observações máximas); se sucesso e saldo confirmado,
+reauditar e planejar outros 8 runs (32 unidades)
+em lotes de até 5. Total máximo 440 observações
+adicionais hoje, não promessa de rendimento. Mesmo
+com 3 novos perfis observados, 29/30; identificação
+adicional somente novo dia UTC, com seleção inédita
+do planner. 758 posts gap atual, mínimo 19 runs
+otimistas, impossível completar 2000 neste dia
+com saldo atual. Não inferir admissões científicas.
+Prioridade de cobertura preservada. Sem mídia, gasto,
+merge ou liberação de gates. Atualização documental.
+
+```powershell
+git pull --ff-only
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+$v11 = "artifacts/private/bd_manifest_a6_v11.json"
+$reconciled = "artifacts/private/bd_manifest_a6_v12_identified.json"
+$v12 = "artifacts/private/bd_manifest_a6_v12.json"
+$cycle = "a6identity-20261119120439-0e4f8f74"
+$sources = @("--source","casa.artemisia.escola","--source","endeavorbrasil","--source","institutolojasrenner")
+& $py -m scripts.a6_reconcile_identities --manifest "$v11" --cycle "$cycle" --output "$reconciled"
+if ($LASTEXITCODE -ne 0) { throw "Reconciliacao bloqueada" }
+& $py -m scripts.a6_provision_grants --manifest "$reconciled" @sources
+if ($LASTEXITCODE -ne 0) { throw "Plano de grants bloqueado" }
+```
+Após conferir 3 sucessos/2 skips e plano de 3 grants:
+```powershell
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+& $py -m scripts.a6_backup_restore_drill --output-name "a03-pre-v12-$stamp.sqlite3" --confirm-all-writers-stopped
+if ($LASTEXITCODE -ne 0) { throw "Backup bloqueado" }
+& $py -m scripts.a6_provision_grants --manifest "$reconciled" @sources --execute --output "$v12"
+if ($LASTEXITCODE -ne 0) { throw "Provisionamento bloqueado" }
+$manifest = $v12
+& $py -m scripts.a5_business_discovery_cycle --manifest "$manifest" --mode history --max-sources 3 --page-limit 10 --max-pages 4 --daily-request-budget 80 --priority-policy coverage
+$head = (git rev-parse HEAD).Trim()
+& $py -m scripts.a03_expansion_capacity --expected-head "$head"
+```
+Enviar resumos/contagens/fingerprint/seleção, sem IDs
+privados, credenciais ou relatório bruto. Não executar
+histórico antes de confirmar prévia V12.
