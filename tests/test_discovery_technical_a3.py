@@ -365,3 +365,126 @@ def test_technical_reader_maturity_boundary_includes_exactly_fourteen_days():
         assert report["provider_data_not_scientifically_reviewed"] is True
     finally:
         client.close()
+
+
+# IMP-071: parity qualification of the separate, non-operational batch auditor.
+# These tests use only the existing synthetic A3 transport and temporary DB.
+
+
+def test_batched_trace_audit_equals_original_and_denies_cross_tenant(tmp_path):
+    from tapi_gate0.discovery_trace_batch import audit_run_batched
+    engine, store = setup(tmp_path)
+    provider, _, client = transport(pages=[OLD])
+    try:
+        TechnicalDiscoveryService(store).execute(
+            TENANT, request(pages=1), token=TOKEN, http=provider
+        )
+        original = audit_run(engine, TENANT, request().run_key)
+        batched = audit_run_batched(engine, TENANT, request().run_key)
+        assert original == batched
+        assert original["all_traces_valid"]
+        assert original["observations"] == 2
+        with pytest.raises(ConnectorError, match="BD_RUN_NOT_FOUND"):
+            audit_run_batched(engine, "another-tenant", request().run_key)
+    finally:
+        client.close()
+        engine.dispose()
+
+
+def test_batched_trace_audit_matches_when_outbox_is_missing(tmp_path):
+    from sqlalchemy import delete
+    from tapi_gate0.discovery_trace_batch import audit_run_batched
+    engine, store = setup(tmp_path)
+    provider, _, client = transport(pages=[OLD])
+    try:
+        TechnicalDiscoveryService(store).execute(
+            TENANT, request(pages=1), token=TOKEN, http=provider
+        )
+        with engine.begin() as db:
+            event_seq = db.execute(select(domain_events.c.seq).where(
+                domain_events.c.tenant_id == TENANT,
+                domain_events.c.aggregate_type == "bd_technical_run",
+            ).limit(1)).scalar_one()
+            db.execute(delete(outbox).where(outbox.c.seq == event_seq))
+        original = audit_run(engine, TENANT, request().run_key)
+        assert not original["all_traces_valid"]
+        assert any(not row["outbox_exists"] for row in original["items"])
+        assert original == audit_run_batched(engine, TENANT, request().run_key)
+    finally:
+        client.close()
+        engine.dispose()
+
+
+def test_batched_trace_audit_matches_wrong_snapshot_to_content(tmp_path):
+    from tapi_gate0.discovery_trace_batch import audit_run_batched
+    engine, store = setup(tmp_path)
+    provider, _, client = transport(pages=[OLD])
+    try:
+        TechnicalDiscoveryService(store).execute(
+            TENANT, request(pages=1), token=TOKEN, http=provider
+        )
+        with engine.begin() as db:
+            events = db.execute(select(domain_events.c.payload).where(
+                domain_events.c.tenant_id == TENANT,
+                domain_events.c.aggregate_type == "bd_technical_run",
+            )).scalars().all()
+            assert len(events) == 2
+            first, second = [json.loads(e) for e in events]
+            assert first["content_id"] != second["content_id"]
+            db.execute(update(metrics_snapshots).where(
+                metrics_snapshots.c.tenant_id == TENANT,
+                metrics_snapshots.c.id == first["snapshot_id"],
+            ).values(content_id=second["content_id"]))
+        original = audit_run(engine, TENANT, request().run_key)
+        assert not original["all_traces_valid"]
+        assert any(not row["snapshot_exists"] for row in original["items"])
+        assert original == audit_run_batched(engine, TENANT, request().run_key)
+    finally:
+        client.close()
+        engine.dispose()
+
+
+def test_batched_trace_audit_chunks_over_400_events_without_changing_result(tmp_path):
+    from uuid import uuid4
+    from tapi_gate0.discovery_trace_batch import audit_run_batched
+    engine, store = setup(tmp_path)
+    provider, _, client = transport(pages=[OLD])
+    try:
+        TechnicalDiscoveryService(store).execute(
+            TENANT, request(pages=1), token=TOKEN, http=provider
+        )
+        with engine.begin() as db:
+            observations = db.execute(select(domain_events).where(
+                domain_events.c.tenant_id == TENANT,
+                domain_events.c.aggregate_type == "bd_technical_run",
+            ).order_by(domain_events.c.aggregate_version)).mappings().all()
+            assert len(observations) == 2
+            template = observations[-1]
+            for i in range(1, 403):
+                seq = db.execute(insert(domain_events).values(
+                    event_id=str(uuid4()),
+                    tenant_id=TENANT,
+                    aggregate_type=template["aggregate_type"],
+                    aggregate_id=template["aggregate_id"],
+                    event_type=template["event_type"],
+                    aggregate_version=template["aggregate_version"] + i,
+                    occurred_at=template["occurred_at"],
+                    payload=template["payload"],
+                )).inserted_primary_key[0]
+                db.execute(insert(outbox).values(
+                    seq=seq, attempts=0, dead_letter=0,
+                ))
+            db.execute(update(ingestion_runs).where(
+                ingestion_runs.c.tenant_id == TENANT,
+                ingestion_runs.c.run_key == request().run_key,
+            ).values(
+                duplicate_records=ingestion_runs.c.duplicate_records + 402,
+            ))
+        original = audit_run(engine, TENANT, request().run_key)
+        batched = audit_run_batched(engine, TENANT, request().run_key)
+        assert original == batched
+        assert original["observations"] == 404
+        assert original["all_traces_valid"]
+    finally:
+        client.close()
+        engine.dispose()
