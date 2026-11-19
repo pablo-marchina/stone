@@ -5142,3 +5142,51 @@ sealed-test; não fabricar gold e não declarar benchmark
 concluído sem labels reais. Acesso apenas local autorizado,
 sem gastos, grants novos, mudança de política, merge,
 publicação ou liberação de gates.
+
+
+### A05/IMP-071 — núcleo experimental SQL FTS5 local (não operacional)
+
+Após o operador aprovar os 6 testes do diagnóstico A05
+em 19/11, o próximo incremento no mesmo Plano Único
+IMP-071/CAP-009, DEC-006/CT-04 foi iniciado (não aceito).
+Implementados:
+- src/tapi_gate0/discovery_retrieval_fts.py, módulo puro
+  TransientScopedFts, armazenamento SQLite :memory: FTS5,
+  tokenização Unicode, queries literalizadas como termos AND
+  para não executar sintaxe MATCH fornecida pelo usuário.
+  Recebe apenas registros já filtrados pelo chamador e
+  fingerprint de manifesto, não acessa banco operacional,
+  rede, direitos, tokens ou quaisquer arquivos, não guarda
+  índice persistente, não emite legendas nas respostas.
+  Não basta instanciar a classe para provar o escopo:
+  o runner futuro deve aplicar require_scoped_research
+  antes/depois e readiness_report._record_observer apenas
+  para STAGES[7], tenant e viewer fixos, ingestão parada.
+- Função evaluate_complete_gold fornece Recall@k/nDCG@k
+  apenas se relevância explícita e julgamento completo
+  declarados pelo chamador. Não autentica gold, não substitui
+  prova de isolamento por criador do CT-04, não calcula
+  métricas sobre labels ausentes. p95_ms nearest-rank.
+- tests/test_discovery_retrieval_fts.py com cinco testes
+  sintéticos para busca em português, injeção FTS,
+  duplicação, manifest pin, fechamento, gold incompleto
+  e p95. Não há consultas gold reais nesta etapa.
+
+Commits 6a24811, f0655a9, 832fb8c; este
+corte ainda NÃO possui teste focal executado no ambiente
+operador, nem benchmark de relevância, nem gold test,
+nem latência medida no corpus. IMP-071 / CAP-009 /
+DEC-006 / G1-CONTRACT permanecem pendentes.
+Não expor o núcleo genérico ao agente ou MCP antes de
+runner autenticado com filtro de direitos efetivo,
+CT-04 e avaliações reais. Não alterar ranking ER,
+não inferir público MPE com retrieval, não criar labels,
+não armazenar corpus no GitHub, não publicar mídia.
+Próximo operador: validar espelho v6.1; testar com
+python -m pytest -q tests/test_discovery_retrieval_fts.py
+tests/test_discovery_editorial_agent.py e zero_spend,
+em tapi-s1-recovery com git HEAD exato e checkout
+limpo. Após testes, implementar wrapper read-only
+que recolhe legendas via readiness de escopo27 e
+verifica elegibilidade novamente antes de buscas;
+benchmark gold só após consultas e labels verdadeiros.
