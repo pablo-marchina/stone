@@ -3,6 +3,7 @@ from collections import Counter
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
+import sqlite3
 from sqlalchemy.engine import make_url
 from .discovery_backup import _readonly, _integrity
 from .discovery_local_db import validate_existing_database_url
@@ -36,7 +37,7 @@ def inspect(raw_url,tenant):
     path=Path(url.database).absolute()
     _require(path.resolve()==path and path.is_file(),"SOURCE_REDIRECTED")
     with closing(_readonly(path)) as db:
-        db.row_factory=__import__("sqlite3").Row
+        db.row_factory=sqlite3.Row
         db.execute("PRAGMA query_only=ON")
         db.execute("BEGIN")
         now=datetime.now(timezone.utc)
@@ -48,7 +49,7 @@ def inspect(raw_url,tenant):
         # Integrity helper uses tuple comparisons; temporarily restore tuple rows.
         db.row_factory=None
         _integrity(db)
-        db.row_factory=__import__("sqlite3").Row
+        db.row_factory=sqlite3.Row
         scope=(tenant,"instagram")
         records=scalar("SELECT count(*) FROM ingestion_records WHERE tenant_id=? AND platform=? AND metadata_only=1",scope)
         unique=scalar("SELECT count(DISTINCT source_item_id) FROM ingestion_records WHERE tenant_id=? AND platform=? AND metadata_only=1",scope)
@@ -82,7 +83,8 @@ def inspect(raw_url,tenant):
         # An optimistic mathematical lower bound, not a scheduling forecast.
         # Every new observed profile requires at least one history run;
         # new identities, excluded posts and renewals may increase costs.
-        min_runs=max((missing+39)//40,missing_profiles)
+        items_per_run=PAGES_PER_RUN*ITEMS_PER_PAGE
+        min_runs=max((missing+items_per_run-1)//items_per_run,missing_profiles)
         min_units=min_runs*PAGES_PER_RUN
         return {"schema_version":"a03-technical-capacity.v1","status":"A03_CAPACITY_INSPECTED_PLAN_ONLY",
             "captured_at_utc":now.isoformat(),"utc_day":day,

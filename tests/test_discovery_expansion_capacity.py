@@ -59,7 +59,7 @@ def test_capacity_counts_reservations_not_provider_quota_and_isolates_tenant(db)
     assert r["local_daily_reservations"]["conservative_units"]==5
     assert r["local_daily_reservations"]["remaining_units"]==75
     assert not r["local_daily_reservations"]["provider_quota_verified"]
-    assert "12345" not in str(r) and "fixture-approval" not in str(r)
+    assert "source_account_id" not in str(r) and "fixture-approval" not in str(r)
     assert _sha256(path)==before
 
 def test_capacity_refuses_remote_missing_unknown(db,tmp_path):

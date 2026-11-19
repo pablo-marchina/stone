@@ -3199,3 +3199,71 @@ $head = git rev-parse HEAD
 & $py -m scripts.a02_operational_readiness --expected-head "$head"
 ```
 Sem migração, mídia, grants, alteração de gates ou merge.
+
+
+## A02.8/9 — diagnóstico operacional concluído; A03 em andamento
+
+Operador: JSON A02_READINESS_INSPECTED_MEDIA_BLOCKED,
+2026-11-19T02:39:45.551590+00:00, HEAD local
+d563a36c90bc4e2cd6b872d59d038b7d72379d9e, anterior ao fix
+6c8288b (modo módulo funcionou). 5/5 readiness anteriores
+PASS, dois testes CLI novos ainda não reportados. Banco
+operacional local-research, revisão 0016, integrity/FK ok,
+sete tabelas A02 vazias, zero leases/jobs/tentativas/bytes,
+ingestão inativa. Nenhum grant por ativo, nenhuma autoridade
+ou referência retida. Trust independente/permissões exatas,
+chaves e adapter real não avaliados/habilitados. Sem mutação,
+chaves carregadas, chamadas externas ou liberação de gates.
+Ausência de autorização operacional não é nova exigência
+institucional. A02 infraestrutura/diagnóstico concluídos
+na extensão demonstrada; execução de mídia real continua
+bloqueada. Qualidade ASR/VLM FAIL, full strict anterior
+20aea11, sem promoção de política.
+
+A03: seguir Plano Único IMP-048/049/050/051/052/164-170,
+sem abrir backlog paralelo. A aquisição oficial metadata-only
+já tem caminhos supervisionados (identidade, reconciliação,
+grants técnicos, histórico e scheduler). Não confundir
+ingestion_source_grants com asset_rights_grants. Última
+evidência 17/11: 1065 únicos/21 perfis, 859 primários,
+858 legendas, zero admissão científica. Referência bruta
+mínima 2000/30: gap histórico 935/9, não gap científico.
+A aquisição pode avançar sem mídia se guardas e credenciais
+existentes permitirem. Não executar rede automaticamente.
+
+096b59c: snapshot A03 read-only mode=ro/query_only, revisão
+0016, integrity/FK, uma transação, contagens metadata_only
+Instagram distintas por item/perfil, registro de perfis,
+grants técnicos ativos e estados de frontier apenas
+agregados. Limite conservador igual ao planner existente:
+4 unidades por run + identity reservations no dia UTC,
+80/dia, 10 identidades/dia; não quota Meta. Estimativa
+otimista de runs max(ceil(gap bruto/40), gap perfis),
+exclui identidades, perdas, formatos, idade, validade
+e audiência. Não promessa de atingir a meta. Nenhum
+ID/cursor/credencial exposto, sem validar manifesto/viewer/
+cursor ou autorização, sem inferência/admissão. 3 novos
+testes em DB descartável, não executados pelo assistente.
+
+### Operador — primeiro diagnóstico A03
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+& $py -m pytest -q --tb=short tests/test_asset_operational_readiness.py tests/test_discovery_expansion_capacity.py
+& $py scripts/verify_zero_spend.py
+$env:TAPI_TENANT_ID = "local-research"
+if ([string]::IsNullOrWhiteSpace($env:TAPI_DATABASE_URL)) { throw "Restaurar URL operacional existente" }
+$head = (git rev-parse HEAD).Trim()
+& $py -m scripts.a03_expansion_capacity --expected-head "$head"
+```
+Esperados 10/10 tests e A03_CAPACITY_INSPECTED_PLAN_ONLY.
+Não executar novo bootstrap, migration, restore ou mídia.
+Enviar JSON agregado. Depois usar manifesto privado V10
+existente (fingerprint faae42aa652a5b4b49c025d7522ac2e2f029c09bdc1434923c11df9d0ebdb1bb)
+e viewer IG existente, sem divulgar ID/token, para planner
+de identidade e histórico já implementados. Não usar
+78/80 histórico como saldo de hoje, não executar coleta
+sem preflight atual. Sem merge, alteração de matrizes,
+novo grant, gasto ou autorização.
