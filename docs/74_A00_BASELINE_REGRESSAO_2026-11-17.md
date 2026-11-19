@@ -3559,3 +3559,68 @@ sem token/IDs. Não executar se guardas atuais bloquearem.
 Ajuste exclusivamente documental e de configuração local
 prevista, sem alteração de código, teste, schema, matriz,
 grants, mídia, merge, gasto ou execução externa.
+
+
+### A03.3 — primeira identidade real V11 concluída (19/11/2026 UTC)
+
+Operador: IDENTITY_BATCH_COMPLETED, ciclo
+a6identity-20261119030035-8762664b, manifesto de entrada
+V10 faae42aa652a5b4b49c025d7522ac2e2f029c09bdc1434923c11df9d0ebdb1bb,
+DEC-018. 5/5 IDENTIFIED: abavnacional, abfoficial,
+agisaalimentos, amarefashiongo, andraeltec. 5 reservas
+identity; saldo esperado 75/80 conservador no mesmo dia
+se não houve outras operações. Expiry UNKNOWN não
+bloqueante (declaração opcional conforme operador);
+plan interno external_data_accessed=false é prévia, não
+nega as cinco consultas efetivamente realizadas.
+Zero grants, posts e admissões; production_approved=false.
+Não registrar IDs privados neste documento.
+HEAD local/testes/zero-spend não reapresentados; remoto
+af3b33a confirmado. Não declarar nova regressão PASS.
+
+Próximo: reconciliar somente ciclo exato contra V10,
+gerar intermediário privado exclusivo com IDs, sem
+DB write/rede; verificar 5 identidades, 5 IDs adicionados,
+21 approved, 50 fontes, 0 skipped. Planejar cinco grants
+técnicos (não asset rights) usando manifesto reconciliado,
+verificar 5 grants_to_create e nenhum conflito. Backup
+offline verificado com todos escritores parados antes
+da escrita administrativa; usar CLI existente sob DEC-018,
+não solicitar aprovação institucional. Saída exclusiva
+bd_manifest_a6_v11.json, esperado 26 approved, 5 criados,
+technical_verified=false até primeira coleta oficial.
+Não marcar as novas fontes cientificamente elegíveis,
+não contar grant como perfil observado. Nenhum grant
+provisionado pelo assistente. Não reexecutar identidade.
+Em caso de falha pós-commit, preservar arquivo/recibo,
+reconciliar estado antes de tentar novo nome; não
+sobrescrever manifesto nem recriar grants. Após sucesso,
+prévia history coverage em V11, preflight capacity
+atualizado; não usar V10 para coleta. Testes focais
+A03 ainda sem log. Sem merge, mídia, pagamento ou gates.
+
+```powershell
+git pull --ff-only
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+$env:TAPI_META_REQUIRE_TOKEN_EXPIRY = "0"
+$v10 = "artifacts/private/bd_manifest_a6_v10.json"
+$reconciled = "artifacts/private/bd_manifest_a6_v11_identified.json"
+$v11 = "artifacts/private/bd_manifest_a6_v11.json"
+$cycle = "a6identity-20261119030035-8762664b"
+$sources = @("--source","abavnacional","--source","abfoficial","--source","agisaalimentos","--source","amarefashiongo","--source","andraeltec")
+& $py -m scripts.a6_reconcile_identities --manifest "$v10" --cycle "$cycle" --output "$reconciled"
+if ($LASTEXITCODE -ne 0) { throw "Reconciliacao bloqueada" }
+& $py -m scripts.a6_provision_grants --manifest "$reconciled" @sources
+if ($LASTEXITCODE -ne 0) { throw "Plano de grants bloqueado" }
+```
+Após conferir resultados esperados e parar todos writers:
+```powershell
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+& $py -m scripts.a6_backup_restore_drill --output-name "a03-pre-v11-$stamp.sqlite3" --confirm-all-writers-stopped
+if ($LASTEXITCODE -ne 0) { throw "Backup bloqueado" }
+& $py -m scripts.a6_provision_grants --manifest "$reconciled" @sources --execute --output "$v11"
+if ($LASTEXITCODE -ne 0) { throw "Provisionamento bloqueado; inspecionar estado" }
+& $py -m scripts.a5_business_discovery_cycle --manifest "$v11" --mode history --max-sources 5 --page-limit 10 --max-pages 4 --daily-request-budget 80 --priority-policy coverage
+```
+Enviar somente status, contagens, fingerprint V11,
+seleção history e bloqueadores, sem IDs/credenciais.
