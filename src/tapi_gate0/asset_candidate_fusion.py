@@ -210,7 +210,17 @@ def evaluate_shared_av_coverage_guard(store,tenant,object_id,artifact_ids,*,purp
                                 ablation=False,coverage_guard=True)
 
 
-def _evaluate_authorized(store,tenant,object_id,artifact_ids,*,purpose,ablation,coverage_guard=False):
+def evaluate_shared_av_routing_replay(store,tenant,object_id,artifact_ids,*,purpose):
+    """Shadow replay only: all guarded subsets of one complete authorized bundle.
+
+    Never launches, skips or schedules a processor. A missing modality in
+    an arm is not a negative result, including an omitted rejected ASR.
+    """
+    return _evaluate_authorized(store,tenant,object_id,artifact_ids,purpose=purpose,
+                                ablation=False,coverage_guard=True,routing_replay=True)
+
+
+def _evaluate_authorized(store,tenant,object_id,artifact_ids,*,purpose,ablation,coverage_guard=False,routing_replay=False):
     """One local transaction; derive rubric permission before decrypt and after decision.
 
     Only in-memory candidates, no retain/display/export rights conferred.
@@ -232,7 +242,8 @@ def _evaluate_authorized(store,tenant,object_id,artifact_ids,*,purpose,ablation,
                 e.observation.shared_av.quality_policy==PARTIAL_QUALITY for e in bundle.entries):
             raise AssetRightsDenied("ASSET_S1_PARTIAL_REQUIRES_COVERAGE_GUARD")
         try:
-            result=(_ablation(bundle) if ablation else
+            result=(_routing_replay(bundle) if routing_replay else
+                    _ablation(bundle) if ablation else
                     _coverage_guard(bundle) if coverage_guard else _evaluate(bundle))
         except ValueError:
             raise AssetRightsDenied("ASSET_S1_CONTRACT") from None
@@ -301,3 +312,27 @@ def _coverage_guard(bundle):
             "baseline":baseline,"guarded":decision,"suppressed_fields":tuple(suppressed),
             "inference_reexecuted":False,"canonical_rubric":False,"scientific_evidence":False,
             "policy_promoted":False}
+
+
+def _routing_replay(bundle):
+    entries=bundle.entries
+    if (len(entries)!=4 or any(e.observation.shared_av is None for e in entries)
+            or {e.observation.result.processor for e in entries}!={"temporal","ocr","asr_vad","vlm"}):
+        raise AssetRightsDenied("ASSET_S1_SHARED_AV_COMPLETE_REQUIRED")
+    arms={}
+    for size in range(1,5):
+        for selected in combinations(entries,size):
+            processors=tuple(e.observation.result.processor for e in selected)
+            arms["+".join(processors)]=_coverage_guard(bundle.model_copy(update={"entries":selected}))
+    full=arms["asr_vad+ocr+temporal+vlm"]
+    # Only pre-VLM observations determine the hypothetical route. Do not
+    # choose based on a VLM outcome that would be unavailable if skipped.
+    by={e.observation.result.processor:e.observation.result for e in entries}
+    quiet=all(by[p].state=="abstained" and by[p].reason=="no_observable_signal"
+              for p in ("asr_vad","ocr"))
+    route="asr_vad+ocr+temporal" if quiet else "asr_vad+ocr+temporal+vlm"
+    return {"schema_version":"shared-av-routing-replay.v1","source_fingerprint":bundle.fingerprint(),
+            "arms":arms,"full_quality_rejections":full["quality_rejections"],
+            "shadow_route":route,"shadow_rule":"skip_vlm_only_if_both_text_channels_no_signal",
+            "inference_reexecuted":False,"routing_executed":False,"policy_promoted":False,
+            "scientific_evidence":False,"canonical_rubric":False}
