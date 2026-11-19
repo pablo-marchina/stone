@@ -16,6 +16,23 @@ from tapi_gate0.ingestion import IngestionStore
 from tapi_gate0.sa_store import engine_for
 
 
+def cycle_console_summary(report):
+    """Keep private evidence in the report; expose bounded failure diagnostics."""
+    summary = {k: v for k, v in report.items() if k != "batch"}
+    if "batch" in report:
+        batch = report["batch"]
+        summary["counts"] = batch["counts"]
+        for key in ("failure_code", "failed_run_key"):
+            if key in batch:
+                summary[key] = batch[key]
+        diagnostic = batch.get("provider_diagnostic", {})
+        safe = {key: diagnostic[key] for key in ("http_status", "code", "error_subcode")
+                if type(diagnostic.get(key)) is int and 0 <= diagnostic[key] <= 2_147_483_647}
+        if safe:
+            summary["provider_diagnostic"] = safe
+    return summary
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="CAP-001 A5 bounded local cycle")
     parser.add_argument("--manifest", required=True, type=Path)
@@ -78,9 +95,7 @@ def main(argv=None):
             except ConnectorError as exc:
                 report = {"status": "BLOCKED", "code": exc.code}
             json.dump(report, stream, ensure_ascii=False, indent=2)
-        summary = {k: v for k, v in report.items() if k != "batch"}
-        if "batch" in report:
-            summary["counts"] = report["batch"]["counts"]
+        summary = cycle_console_summary(report)
         summary["report_path"] = str(args.report)
         print(json.dumps(summary, ensure_ascii=False))
         return 0 if report["status"] in {"BATCH_COMPLETED", "BATCH_NO_ELIGIBLE_OBSERVATIONS", "NO_DUE_AUTHORIZED_SOURCES"} else 4

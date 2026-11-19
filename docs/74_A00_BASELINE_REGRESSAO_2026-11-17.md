@@ -3742,3 +3742,68 @@ Enviar resumo de ciclo, auditoria e nova seleção; não
 compartilhar relatório privado, IDs, cursor ou token.
 Commit exclusivamente documental, não executado pelo
 assistente no banco operacional.
+
+
+### A03.3 — primeiro histórico V11 interrompido, diagnóstico pendente
+
+Console operador 14585 bytes SHA256
+03a6848c3dc6679a090c0f19e8712d678a19f06bfe89360692df60aba3692055.
+Ciclo a5history-20261119112216-5adfc90b, manifesto V11
+pin 19c38ca968585a7e056402dd2f5f743df232f778c161b762e9c764d713e71840,
+BATCH_STOPPED_ON_SOURCE_FAILURE. Seleção 5 novas fontes,
+zero registros novos/refresh/duplicatas/returned/accepted/
+pages_examined no agregado; inventário antes/depois
+1065/21, 0 admissões, sem produção. A primeira fonte
+é abavnacional, nenhuma conclusão no batch; código exato
+não presente no console. O agregado zero não demonstra
+zero chamadas: a reserva pode ter sido registrada e o
+provider pode ter sido chamado antes da falha. Não assumir
+saldo 55 ou 71 até inspeção. Flags externas restauradas
+a 0 via finally. Relatório privado
+a03-history-v11-20261119-082214.json. HEAD local/testes
+não impressos; remoto e2946db confirmado.
+
+Defeito de observabilidade: CLI omitia failed_run_key,
+failure_code e diagnóstico numérico do batch. Adicionada
+função cycle_console_summary com projeção dos dois
+campos e allowlist numérica http_status/code/error_subcode;
+não expõe batch/evidence, mensagens ou payloads. Um
+teste focal de projeção ainda não executado pelo
+assistente. Não muda aquisição, recuperação, quotas,
+grants, schema, política ou autorização.
+
+Diagnosticar relatório existente sem nova chamada:
+```powershell
+git pull --ff-only
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+& $py -m pytest -q --tb=short tests/test_discovery_history_a5.py -k cycle_console_failure_summary
+$report = Get-Content -Raw -LiteralPath "artifacts/private/a03-history-v11-20261119-082214.json" | ConvertFrom-Json
+[pscustomobject]@{
+    status = $report.status
+    cycle_key = $report.cycle_key
+    failed_run_key = $report.batch.failed_run_key
+    failure_code = $report.batch.failure_code
+    provider_http_status = $report.batch.provider_diagnostic.http_status
+    provider_code = $report.batch.provider_diagnostic.code
+    provider_error_subcode = $report.batch.provider_diagnostic.error_subcode
+    attempted = $report.batch.selection.attempted
+} | ConvertTo-Json
+& $py -m scripts.a5_recover_business_discovery
+$head = (git rev-parse HEAD).Trim()
+& $py -m scripts.a03_expansion_capacity --expected-head "$head"
+```
+Da inspeção recovery enviar somente estado de lease
+(presente/ausente), reserved_runs, run_key, status,
+reason_code, observations_recorded, reviewed,
+recovery_action, meta_auth.status/blocked, e contagem
+de órfãos/quarentena; não enviar IDs. Sem review-failure,
+restart, reset auth, novo lote identity ou history até
+classificar erro. A política de recuperação só admite
+retry de falhas conhecidas sem observações, ou restart
+com checkpoint seguro em erros específicos de paginação;
+não promover erro desconhecido. Planner identity bloqueia
+quando há última falha A5 não revisada. Não usar relatório
+de sucesso para reauditar lote interrompido. Não repetir
+token debugger manual nem apagar expiração conhecida.
+Sem merge, novas permissões, chamadas externas ou gasto
+pelo assistente.

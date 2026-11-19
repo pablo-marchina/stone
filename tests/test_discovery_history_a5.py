@@ -506,3 +506,30 @@ def test_documentary_context_scope_and_revocation(tmp_path):
     finally:
         client.close()
         engine.dispose()
+
+
+def test_cycle_console_failure_summary_keeps_private_evidence_out():
+    from scripts.a5_business_discovery_cycle import cycle_console_summary
+    report = {
+        "status":"BATCH_STOPPED_ON_SOURCE_FAILURE",
+        "cycle_key":"a5history-20261119112216-5adfc90b",
+        "batch":{
+            "counts":{"new_records":0},
+            "failure_code":"PROVIDER_REQUEST_FAILED",
+            "failed_run_key":"a5history-20261119112216-5adfc90b-01",
+            "provider_diagnostic":{"http_status":400,"code":110,"error_subcode":2207013,
+                                   "message":"private-provider-message","invalid":"secret"},
+            "sources":[{"evidence":["private-item"],"source_account_id":"private-id"}],
+        },
+    }
+    result=cycle_console_summary(report)
+    assert result == {
+        "status":report["status"],"cycle_key":report["cycle_key"],
+        "counts":{"new_records":0},"failure_code":"PROVIDER_REQUEST_FAILED",
+        "failed_run_key":report["batch"]["failed_run_key"],
+        "provider_diagnostic":{"http_status":400,"code":110,"error_subcode":2207013},
+    }
+    assert cycle_console_summary({"status":"BLOCKED","code":"EXAMPLE"}) == {
+        "status":"BLOCKED","code":"EXAMPLE"}
+    assert cycle_console_summary({"status":"BATCH_COMPLETED","batch":{"counts":{"new_records":1}}}) == {
+        "status":"BATCH_COMPLETED","counts":{"new_records":1}}
