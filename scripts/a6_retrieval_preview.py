@@ -36,6 +36,7 @@ def main(argv=None):
     p.add_argument("--query", action="append", required=True)
     p.add_argument("--top-k", type=int, default=5)
     p.add_argument("--repeat", type=int, default=1, help="Repeat whole scoped audit 1..10 times, fail on drift")
+    p.add_argument("--profile-readiness", action="store_true", help="Aggregate timing phases only; keep all guards")
     p.add_argument("--report-name", required=True)
     p.add_argument("--confirm-all-ingestion-stopped", action="store_true")
     p.add_argument("--confirm-all-writers-stopped", action="store_true")
@@ -80,6 +81,7 @@ def main(argv=None):
                 expected_posts=args.expected_posts,
                 expected_sources=args.expected_sources,
                 limit=args.top_k,
+                profile_readiness=args.profile_readiness,
             )
             if (round_report["manifest_sha256"] != args.expected_manifest_sha256
                     or round_report["eligible_posts"] != args.expected_posts
@@ -137,6 +139,7 @@ def main(argv=None):
             "full_preview_includes_scope_and_revalidation": True,
             "performance_sample_is_exploratory": True,
             "repeat_experiment": report["repeat_experiment"],
+            "readiness_profile": report.get("readiness_profile"),
             "gold_relevance_judgments_available": False,
             "scientific_admissions": 0,
             "database_mutated": False,
