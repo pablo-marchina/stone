@@ -5250,3 +5250,61 @@ necessária, não concede acesso externo, publicação
 ou propriedade das obras. Revalidar finalidade/rights
 do uso antes de qualquer outro modo de consumo.
 Do not merge: PR #44 draft; R$0, sem mídia, sem admissão.
+
+
+### A05/IMP-071 — FTS5 scope27 real verificado; latência total adicionada, ainda não testada (19/11)
+
+Operador sincronizou e executou no HEAD
+3cc967cc94ea2abc4108725b22d7e9ba1e278b54:
+Base Atemporal dag=acyclic, unique_sink=IMP-131,
+software_tests=not_run, gates=not_assessed.
+Focais tests/test_discovery_retrieval_fts.py +
+tests/test_discovery_retrieval_scoped.py +
+tests/test_discovery_editorial_agent.py: 20 PASS (0.99s).
+verify_zero_spend PASS.
+IMP071_SCOPED_FTS_TESTS_VERIFIED.
+
+Operador rodou scripts.a6_retrieval_preview local somente
+em V12-scope27, pin
+d903366a975cb6e4c4e07c9e6300799c727c3efc3a8317530f14d90e19435b54.
+SCOPED_FTS_LOCAL_PREVIEW_COMPLETED, 1069 legendas
+elegíveis, 27 fontes, 3 queries operador (gestão financeira,
+vendas, pagamentos), top-k=5, hit_count 5/5/2.
+Partição pinada SHA256
+b842a43efd737abee7b78930ddb1243ccac93290cc7c45e9774d9bf542dafb44.
+Relatório privado
+a05-imp071-scoped-fts-20261119-200718-123.json,
+SHA256
+8b3ca3be109872dc1958674adad1dc1f5c96b25d8380e54d968b909ac39406d3.
+p95_search_latency_ms=0.2236 em apenas três consultas;
+EXCLUI leitura SQLite operacional, dois readiness,
+verificações grants/contextos, construção de FTS5 e
+gravação do report. Não é p95 end-to-end, SLO ou benchmark
+comparativo. Gold judgments ausentes, Recall@k/nDCG@k
+indefinidos, 0 admissões científicas, sem acesso externo,
+DB mutation ou publicação. Relatório contém IDs somente
+em artifacts/private; não compartilhar as linhas.
+
+Incremento posterior não executado pelo operador:
+- discovery_retrieval_scoped.preview_scoped_fts agora
+  valida strings/limites das queries ANTES de acessar captions;
+  mede full_preview_elapsed_ms incluindo gates,
+  2 readiness, materialização e indexação FTS5,
+  batch de consultas e rechecagem, com breakdown em 6
+  etapas. Escopo desse timer é função Python; exclui
+  parse de CLI, abertura de engine e escrita do JSON privado.
+- scripts.a6_retrieval_preview mostra tempos agregados
+  sem IDs, legendas ou texto de consultas no stdout.
+- testes sintéticos ampliados em dois novos casos para
+  medir breakdown, rejeitar consulta/limite inválido
+  antes do acesso e validar console sem private IDs.
+  Não há gold real ou novas avaliações semânticas.
+Commits 27669b9, 8ee82eb, 6201082; requer validação
+focal no novo HEAD, preservar PASS anterior somente
+para 3cc967c. Esperados 22 focais; verificar espelho
+e R$0. Depois reexecutar preview sobre mesmo recorte
+(se grants e corpus ainda elegíveis) com relatório novo,
+medir tempo total de uma rodada sob três consultas,
+sem confundir com percentil de latência de várias rodadas.
+DEC-006, IMP-071, G1 e CT-04 não homologados.
+PR #44 draft; nenhuma liberação global/merge/rights.
