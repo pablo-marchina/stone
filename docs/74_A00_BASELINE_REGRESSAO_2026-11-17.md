@@ -4737,3 +4737,37 @@ diagnosticar log sem repetir smoke ou alterar critérios.
 Preservar relatório anterior. Nenhum benchmark, corpus,
 DB, rede Meta, mídia, merge ou gate global. Atualização
 exclusivamente documental; último full strict 20aea11.
+
+
+### A03.5 — regressão semântica recuperada e aprovada
+
+Operador HEAD 1ca426a24bc4200728835f24f8907c645cbc0e4f,
+tree d9604097489502f6c58639850a3408dfeae2ff0f,
+checkout limpo e inalterado, tapi-s1-recovery/Python 3.11.18.
+pytest 9.2.0 instalado, torch 2.15.0/gliner2 2.1.0/
+transformers 5.22.1/safetensors 0.8.0 preservados.
+A00 semantic a03-semantic-recovery-20261119-102108-214:
+189/189 PASS, 0 FAIL/ERROR/SKIP, pytest 12.181s,
+checks_passed=true, legacy_gate0 e zero_spend exit 0.
+JUnit SHA256 3a4fbbc1e72dc90eb952827745dc012f857c106d73bb10efcc61727a88921a97,
+pytest.log SHA256 6c52c9398d578a21b6fa8c72d3489c0eed2de393907e628fabd6e6f636cc809e.
+121 módulos Python, 106 arquivos teste Python, 5 Node, 16 migrações.
+204 IMP/543 edges/23 CAP/18 DEC/7 gates preservados.
+Sem forwarding do banco operacional ou credenciais.
+Correção do ambiente demonstrada; não é full regression,
+não é benchmark de modelo, não é avaliação científica.
+Último full strict aprovado continua 20aea11.
+
+Próximo: sem repetir smoke/regressão de código idêntico,
+executar benchmarks standalone sintéticos de audiência grounded
+e rubrica grounded com checkpoint/revisão/hash existentes,
+mesmo ambiente isolado, flags offline, relatório privado
+exclusivo por benchmark. Inspecionar gates explícitos,
+não apenas exit code (standalone pode retornar 0 com gate false).
+Audiência exige zero positivos indevidos por split e
+>=5/10 development, >=3/6 additional; rubrica por campo
+e split exige >=2 candidatos esperados, zero incorretos,
+>=50% corretos. Prosseguir V12 apenas nos fluxos aprovados,
+com escopo local, manifesto pinado e ingestão parada.
+Nenhuma alteração de código, banco, direitos ou gates;
+sem mídia, Meta, gasto ou merge. Atualização documental.
