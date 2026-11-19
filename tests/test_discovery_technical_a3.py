@@ -499,3 +499,58 @@ def test_trace_batch_chunks_distinct_ids_at_sqlite_safe_boundary():
         str(i) for i in range(805)
     ]
     assert list(_chunks(["a", "a", "b", "b", "c"])) == [["a", "b", "c"]]
+
+
+def test_full_readiness_original_equals_batched_in_realistic_a3_fixture(tmp_path):
+    from tapi_gate0.discovery_batch import BatchManifest
+    from tapi_gate0.discovery_corpus_readiness import readiness_report
+    from tapi_gate0.discovery_trace_batch import audit_run_batched
+
+    engine, store = setup(tmp_path)
+    provider, _, client = transport(pages=[OLD])
+    try:
+        TechnicalDiscoveryService(store).execute(
+            TENANT, request(pages=1), token=TOKEN, http=provider
+        )
+        with engine.connect() as db:
+            grant = db.execute(select(source_grants).where(
+                source_grants.c.tenant_id == TENANT,
+                source_grants.c.platform == "instagram",
+                source_grants.c.source_account_id == TARGET,
+            )).mappings().one()
+
+        frame = BatchManifest.model_validate({
+            "schema_version": "tapi-bd-technical-batch.v1",
+            "sources": [{
+                "username": "sebrae",
+                "expected_ig_id": TARGET,
+                "sampling_stratum": "cross_sector_institution",
+                "audience_intent": "mpe_targeted",
+                "source_evidence_reference": "docs/local-technical-test",
+                "audience_rationale_reference": "docs/local-technical-rationale",
+                "status": "approved",
+                "approval_reference": grant["approval_reference"],
+                "expires_at": grant["expires_at"],
+                "allowed_operations": ["business_discovery_metadata_read"],
+            }],
+        })
+        canonical = readiness_report(engine, TENANT, frame, VIEWER)
+        shadow = readiness_report(
+            engine, TENANT, frame, VIEWER, _trace_auditor=audit_run_batched
+        )
+        for value in (canonical, shadow):
+            value.pop("as_of")
+            value["canonical_corpus_card"].pop("as_of")
+        assert canonical == shadow
+        assert canonical["completed_runs_without_valid_bd_trace"] == 0
+        assert canonical["audited_completed_nonempty_runs"] == 1
+        assert canonical["first_blocking_stage"][
+            "CAPTION_AVAILABLE_FOR_ASSESSMENT"
+        ] == 2
+        assert canonical["sources"][0]["source_gate"] == "TECHNICAL_SCOPE_MATCHED"
+        assert canonical["database_mutated"] is False
+        with pytest.raises(ValueError, match="BD_READINESS_TRACE_AUDITOR_INVALID"):
+            readiness_report(engine, TENANT, frame, VIEWER, _trace_auditor="no")
+    finally:
+        client.close()
+        engine.dispose()
