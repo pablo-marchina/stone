@@ -4597,3 +4597,84 @@ ranking exploratório V12. Não reutilizar resultados V10
 nem persistir novos drafts sem suporte. Commit somente
 documental; nenhuma execução local/DB/Meta/modelo pelo
 assistente. Sem merge/gates.
+
+
+### A03.5 — consolidação V12 confirmada; runtime semântico ausente
+
+Console operador 45272 bytes SHA256
+4a21e160af74bf4c6cbcea500b79c181ca16337b2369f3029b7d17962f636d0f.
+CAPTION_RESEARCH_PROVISIONED 8 novos/21 existentes,
+offline_bd_caption_candidate_classification, 0 humanos/
+admissões, sem rede; DB/operation/identity session escritos.
+CORPUS_READINESS_PLANNED 2026-11-19T12:29:17.091662+00:00,
+V12 pin 43372c6fe04ae12e5735e7b932d98a53a114ee0f5eb44d06fa5bea86a465b081:
+1630 únicos, 29 perfis observados e registrados,
+29 grants/technical verification, 29 contextos
+documentais ativos por eventos, 1349 posts técnicos
+primários com contexto, 1348 legendas disponíveis,
+1 indisponível, 281 não primários, 0 fora manifesto/
+unregistered/trace missing/invalid metrics/other blockers,
+63 runs não vazios auditados, 0 sem trace válido.
+Setores técnicos commerce291 food133 services470
+beauty85 other370. 0 elegíveis científicos, 0 reviews
+e contextos humanos; déficit científico 2000/30.
+Gap técnico primário 651 posts/1 perfil; gap bruto
+370/1 não equivale a elegibilidade primária. Não
+alterar critérios para atingir contagem. Preflight
+CONTEXTUAL_READINESS local_caption_scope_allowed=true
+29 fontes; classification_scope_allowed=false,
+EXTERNAL_DENIED_PENDING_VERIFIED_GRANT preservado.
+verify_zero_spend PASS invariantes locais.
+
+BACKUP_RESTORE_VERIFIED 2026-11-19T12:29:25.397606+00:00,
+a03-post-context-v12-20261119-092924.sqlite3,
+SHA256 211000248f0913a0f24a0b0a4a67c6c7b5d272999898c20a1a38bdaace380b8d,
+15020032 bytes, backup734ms/drill406ms, integrity/FK
+ok, inventário e conteúdo lógico equivalentes, 0016,
+restore descartável, escritores parados atestados.
+1630 content/ingestion/rubric, 1734 snapshots,
+29 creators/corpus_profiles/checkpoints, 30 grants,
+70 runs, 3630 events/outbox (+16), 41 identity sessions,
+75 audit; 0 scientific_reviews/source_research_contexts
+(tabelas humanas), sete tabelas A02 vazias. Não repetir
+registro/contextos/backup sem alteração relevante.
+
+Inferência: conda activate tapi-s1 retornou
+EnvironmentNameNotFound; PowerShell permaneceu em
+tapi-asr-recovery. Execução --execute --grounded
+V12 retornou BLOCKED BD_CONTEXTUAL_LOCAL_ERROR,
+stage checkpoint_validation, RuntimeError,
+SAFETENSORS_REQUIRED_FOR_CHECKPOINT_VALIDATION,
+0 candidates, sem mutação/rede. Escopo local 29
+true. Causa imediata import safetensors indisponível
+no interpretador usado; não prova pesos inválidos.
+HEAD local não impresso, remoto 718b832 confirmado.
+Flag S1 restaurada a 0. Nenhum resultado de inferência.
+
+Recuperar runtime isolado, não instalar GLiNER no
+tapi-asr-recovery que passou regressão audiovisual.
+Inspecionar conda info --envs e espaço em disco,
+reaproveitar ambiente semântico compatível se houver;
+caso ausente, criar tapi-s1-recovery com Python 3.11.18
+e pip, instalar extra existente .[system_one_local]
+e versões previamente reportadas torch 2.15.0,
+gliner2 2.1.0, transformers 5.22.1, safetensors 0.8.0.
+Verificar disponibilidade de pacotes antes de trocar
+versões; não prometer reprodução integral sem lock
+transitivo. Preferir cache/artefatos locais quando
+disponíveis; downloads públicos de dependências só
+se necessários e sem cobrança, nunca baixar pesos
+novamente nem usar prepare checkpoint downloader.
+Não remover ambientes, alterar banco, secrets ou
+política. Validar pip check/imports/versões, validar
+checkpoint existente por validate_local_checkpoint
+com hash publicado e revisão e173bca1f0c4217d7a55b3b0c705d5ece8a0218d;
+não contornar verificação. Usar caminho absoluto do
+python do ambiente confirmado; não continuar após
+falha de ativação. Regressão focal semantic e smoke/
+gate grounded antes de processar legendas reais.
+Flags HF offline e S1 temporária, novo relatório
+privado exclusivo. Se falha, parar e enviar código
+agregado; nenhum novo acesso Meta ou registro.
+Commit exclusivamente documental; nenhum pacote
+instalado ou inferência executada pelo assistente.
