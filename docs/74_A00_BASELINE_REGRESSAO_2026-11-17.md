@@ -4469,3 +4469,82 @@ if ($LASTEXITCODE -ne 0) { throw "Previa bloqueada" }
 ```
 Conferir registration_plan e readiness antes de
 registrar; enviar agregados, não IDs/credenciais.
+
+
+### A03.5 — regressão documental aprovada, registro e escopo local planejados
+
+Console operador 47589 bytes SHA256
+e37c18a18aab0eeac55e792cfae0b6c0f617754fd445fd4e4d1cb2d823265255.
+51 PASS em 2,98s (audience_signals, corpus_readiness,
+contextual_integration), verify_zero_spend PASS.
+HEAD local não impresso; remoto 41d14f5 confirmado.
+AUDIENCE_SIGNALS_PLANNED 2026-11-19T12:23:34.870032+00:00,
+CORPUS_READINESS_PLANNED 2026-11-19T12:23:39.790502+00:00,
+pin V12 43372c6fe04ae12e5735e7b932d98a53a114ee0f5eb44d06fa5bea86a465b081.
+1630 registros/IDs únicos, 29 perfis observados, 0 fora
+do manifesto, 29 TECHNICAL_SCOPE_MATCHED, 63 runs
+completos não vazios auditados, 0 completed runs sem
+trace válido. Partição readiness: 281 NONPRIMARY_FORMAT,
+1 CAPTION_UNAVAILABLE, 1348 CAPTION_AVAILABLE_FOR_ASSESSMENT,
+zero demais bloqueios. Não confundir 1349 primários
+no readiness com 1063 tecnicamente elegíveis no card
+canônico pré-registro; este exclui 335 posts dos oito
+perfis não registrados antes de excluir 232 formatos.
+21 perfis registrados, 21 contextos documentais ativos
+por eventos, 1063 posts técnicos com contexto, 0
+contextos revisados/decisões científicas. 9 sinais
+lexicais explícitos (Sebrae 7, Aliança 1, CDL-BH 1),
+63 mention_only, 1276 abstain, total 1348; não inferir
+negativos, precisão ou targeting confirmado.
+Registro planejado 8 REGISTER, 21 ALREADY_REGISTERED,
+zero conflitos: abavnacional, abfoficial, agisaalimentos,
+amarefashiongo, andraeltec, casa.artemisia.escola,
+endeavorbrasil, institutolojasrenner. Mapeamentos
+V11/V12 confirmados. Nenhuma mutação ou rede nos previews.
+
+Próximo: com todos writers parados e backup diário
+já verificado (se houve outra mutação relevante após
+backup, renovar backup), mesmo tenant/viewer/V12,
+registro autenticado local via --register-profiles.
+Esperado SAMPLING_PROFILES_REGISTERED 8 novos/21
+existentes, 0 contextos e admissões; se divergência,
+parar e inspecionar. Depois --plan-contexts, projetar
+somente username/action e contagens (context bruto
+contém IDs, não compartilhar). Esperado 8 PROVISION,
+21 ALREADY_PROVISIONED, confirmar sem conflito;
+somente então --register-contexts. Escopos locais
+DEC-018 por eventos auditados, não tabelas de revisão,
+não nova aprovação institucional. Reavaliar readiness:
+29 registros, 0 excluded_unregistered, 1349 posts
+tecnicamente elegíveis se estado inalterado, 1348
+legendas, 29 contextos ativos após provisionamento.
+Não afirmar números antes da saída. Backup pós-registro
+e contexto. Nenhuma consulta Meta, sem mídia, sem
+mudança de credencial/expiry/gates. Ainda 78/80 reservas
+e 0 slots no dia 19/11. Atualização documental apenas.
+
+```powershell
+git pull --ff-only
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+$manifest = "artifacts/private/bd_manifest_a6_v12.json"
+& $py -m scripts.a6_corpus_bridge --manifest "$manifest" --register-profiles --confirm-all-ingestion-stopped
+if ($LASTEXITCODE -ne 0) { throw "Registro bloqueado" }
+$planJson = & $py -m scripts.a6_corpus_bridge --manifest "$manifest" --plan-contexts
+if ($LASTEXITCODE -ne 0) { throw "Plano de contextos bloqueado" }
+$contextPlan = $planJson | ConvertFrom-Json
+$contextPlan.sources | Select-Object username,action | Format-Table
+$contextPlan | Select-Object status,scoped_sources,sources_to_provision,scientific_admissions | ConvertTo-Json
+```
+Se registro e plano confirmados e todos actions
+PROVISION/ALREADY_PROVISIONED:
+```powershell
+& $py -m scripts.a6_corpus_bridge --manifest "$manifest" --register-contexts --confirm-all-ingestion-stopped
+if ($LASTEXITCODE -ne 0) { throw "Contextos bloqueados" }
+& $py -m scripts.a6_corpus_readiness --manifest "$manifest"
+if ($LASTEXITCODE -ne 0) { throw "Readiness bloqueado" }
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+& $py -m scripts.a6_backup_restore_drill --output-name "a03-post-context-v12-$stamp.sqlite3" --confirm-all-writers-stopped
+if ($LASTEXITCODE -ne 0) { throw "Backup bloqueado" }
+```
+Enviar resumos sem IDs/segredos. Depois piloto contextual
+e grounded rubric atuais, revisão de ranking e A04.
