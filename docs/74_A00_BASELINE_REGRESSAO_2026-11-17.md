@@ -4942,3 +4942,84 @@ DEC-018 não requer autorização institucional genérica nova,
 mas não substitui prova técnica. Não afirmar renovação ou
 migração possível sem evidências. Último full strict 20aea11,
 semantic 189/189 e benchmarks inalterados. Commit documental.
+
+
+### A03.5/A04 — três pilotos e ranking exploratório scope27 concluídos (19/11)
+
+Console operador Texto colado(20261119-222223).txt SHA256
+467d8006bb35f78ef2576336540c76ecbf5604d946d4c877c7f2a516869f81a4.
+Execução em HEAD 289114e8e87ab1266b4c1eecbae1bebdc0ae3822
+(fast-forward de e80ebb7), conda tapi-s1-recovery.
+Manifesto privado V12 original pin
+43372c6fe04ae12e5735e7b932d98a53a114ee0f5eb44d06fa5bea86a465b081;
+recorte V12-scope27 pin
+d903366a975cb6e4c4e07c9e6300799c727c3efc3a8317530f14d90e19435b54.
+Receipt V12_SCOPE27_VERIFIED: 27 approved/ALREADY_PROVISIONED,
+excluídos stone e seliganoton expirados, DB total 1630/29,
+287 fora do manifesto derivado, 273 nonprimary, 1 caption
+unavailable, 1069 caption assessable; 0 trace inválido.
+Escopo local dec018-bd-caption-research.v1, sem alterar V12 ou DB.
+
+GROUNDED_CONTEXTUAL_CANDIDATES: 1069 legendas avaliadas,
+revisão e173bca1f0c4217d7a55b3b0c705d5ece8a0218d
+e pesos 9efe0f88c99f2aa794452e9559dc60e98d60d9fa2bf1b60cf2710411b6da5b4e.
+1 grounded positivo/1068 abstain, zero negativos grounded;
+razões sem âncora 819, citado 194, reportagem 53,
+público amplo 2, destinatário+ação 1; 0 decisões de targeting.
+Benchmark autoral 48 synthetic, engineering_gate_passed true.
+Relatório a03-scope27-audience-20261119-105137-669.json,
+SHA256 0e85dba2fc336b45613a7948491937335ff89215b313c2d99883e6b6c99c4d4c.
+
+Rubrica tema/CTA: 1069 legendas, tema 56 positivos/1013
+ABSTAIN, CTA 49 positivos/1020 ABSTAIN, 0 rubric assessments
+canônicos. Relatório a03-scope27-theme-cta-20261119-105137-669.json,
+SHA256 fda48c71a5a8317251048909e1ae718fdfe2826ab487b12b08f18a842a1b2b27.
+Prova/oferta: prova 0/1069, oferta 1/1069 (positive_claim
+só alegação da legenda), 0 rubric assessments escritos.
+Relatório a03-scope27-proof-offer-20261119-105137-669.json,
+SHA256 567b348c3a99a887f1aba4d837cb7c0cfb7d645ee11f9017613498dbaca6cc29.
+Quatro field engineering gates synthetic PASS, tom FAIL.
+Não inferir negativos da abstenção, nem acurácia sobre corpus.
+
+A04 EXPLORATORY_EDITORIAL_COMPLETED:
+a04-scope27-ranking-20261119-105137-669.json
+SHA256 befb7dc794f34a86612d14d58f87dac21a46da5fd1776d19815924e0b500b9c7.
+1069 posts/27 perfis, mediana ER 0.075494%, top global
+ceil(1069/10)=107, mediana top 1.543210%; grupo
+semantic_exploratory 466 (1 grounded positivo+465
+semantic_consensus_only), 497 signal-only, 106 unresolved.
+Top intraperfil 120 em 26 perfis com n>=10, excluídos 5
+posts 1 perfil, interseção 46, Jaccard 0.254144.
+Concentração: varejointeligentecdlbh 22/107,
+prodarteoficial 18/107, casa.artemisia.escola 15/107.
+Rubric coverage 20x1069=21380 células, 1069 metadata,
+748 lexical candidates, 1069 measures, 18494 not assessed;
+candidatos grounded não são o mesmo que labels canônicos.
+Contrastes da rubrica trazem missingness bounds largos:
+não extrair lift causal nem orientação editorial automática.
+Dados salvos e snapshots revalidados no runner; reproduções
+do modelo não independentes no ranking.
+verify_zero_spend PASS; sem DB mutation, Meta/media externas,
+admissão científica, human review, liberação global ou merge.
+Warnings transformers/torch preservados, sem troca de runtime.
+Resultado parcial scope27, não A04 integral ou corpus 1630/29 completo.
+
+Próximo incremento mínimo reutilizando A05: a6_exploratory_ranking
+--agent-preview read-only sobre exatamente os três relatórios,
+mesmo manifesto e checkpoint já usados; --rubric-input-name
+duas vezes e --confirm-all-ingestion-stopped, novo report
+exclusivo. Registrar findings_count, reference_posts_count,
+creatives_count, hypotheses, selection_policy e action;
+nenhum --persist-studio-drafts até avaliar evidências.
+Código atual discovery_editorial_agent.build_agent_preview
+gera 5 templates apenas se hipótese topic=vendas
+passa quatro contrastes, com refs válidas, >=2 perfis
+e suporte mínimo; não afrouxar limiares para obter cinco.
+Rubrica grounded é reconciliada no ranking, mas achados
+do agente ainda vêm dos observáveis lexicais de analyze_editorial;
+não declarar integração semântica definitiva A05/CAP-005.
+Mapeamento IMP-055/057/058/059/066/135/147 (CAP-002/008/012)
+parcial/descritivo; IMP-072–076 (CAP-005/006/009)
+e IMP-078–080 (CAP-007/010/014/023) pendentes.
+R$0, DEC-018, sem nova aprovação genérica; rights e
+composição científica continuam gates separados.
