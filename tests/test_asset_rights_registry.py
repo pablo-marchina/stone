@@ -2631,6 +2631,8 @@ def test_shared_av_ablation_policy_and_rights(queue_fixture,case,spoken,screen,e
 @pytest.mark.parametrize("discard_fixture,case",[
     (("retain","process","all_processors","bundle_rubric","shared_modalities","shared_av_complementary"),"complementary"),
     (("retain","process","all_processors","bundle_rubric","shared_modalities","shared_av_audio_only"),"audio_only"),
+    *((("retain","process","all_processors","bundle_rubric","shared_modalities","shared_av_"+case),case)
+      for case in ("inventory","silence","agreement","conflict","screen_only","tone_negative")),
 ],indirect=["discard_fixture"])
 def test_partial_shared_av_native_pipeline(queue_fixture,case):
     import os,json
@@ -2638,6 +2640,8 @@ def test_partial_shared_av_native_pipeline(queue_fixture,case):
     from tapi_gate0.asset_candidate_fusion import (evaluate_shared_av_coverage_guard,
         evaluate_candidate_bundle,evaluate_shared_av_ablation)
     from tapi_gate0.asset_processor_results import PARTIAL_QUALITY,encode
+    from tapi_gate0.asset_shared_av_routing import row_from_replay
+    from tapi_gate0.asset_candidate_fusion import evaluate_shared_av_routing_replay
     f=queue_fixture
     paths={k:os.environ.get(v) for k,v in (
         ("tessdata_dir","TAPI_OCR_TEST_TESSDATA"),("asr_model_dir","TAPI_ASR_TEST_MODEL_DIR"),
@@ -2646,25 +2650,34 @@ def test_partial_shared_av_native_pipeline(queue_fixture,case):
         pytest.skip("explicit partial shared AV native opt-ins required")
     pipe=_pipeline(f,mode="shared_av_partial",case=case,**paths)
     ids=[]
+    metrics={}
     for processor in ("temporal","ocr","asr_vad","vlm"):
         step=pipe.step("worker")
         assert step["status"]=="processed" and step["processor"]==processor
-        if processor=="asr_vad":
+        metrics[processor]=step
+        if processor=="asr_vad" and case in ("complementary","audio_only"):
             assert step["quality"]["reason"]=="ASR_FIXTURE_WER_GATE"
             assert step["quality"]["wer"]>0.50
             assert "hypothesis_sha256" not in step["quality"]
         ids.append(step["artifact_id"])
     result=pipe.step("worker")
-    assert result["status"]=="candidate_partial"
-    assert result["asr_fixture_quality_gate_passed"] is False
+    failed=case in ("complementary","audio_only")
+    assert result["status"]==("candidate_partial" if failed else "candidate_complete_guarded")
+    assert result["asr_fixture_quality_gate_passed"] is (not failed)
     assert result["semantic_quality_validated"] is False
-    assert result["coverage_details"]["asr_vad"]=={"state":"abstained","reason":"fixture_quality_rejected"}
-    assert result["quality_rejections"]["asr_vad"]["wer"]>0.50
+    if failed:
+        assert result["coverage_details"]["asr_vad"]=={"state":"abstained","reason":"fixture_quality_rejected"}
+        assert result["quality_rejections"]["asr_vad"]["wer"]>0.50
+    else:
+        assert result["quality_rejections"]=={}
     bundle=assemble_candidate_bundle(pipe.store,TENANT,f.q.ref.object_id,ids,purpose=f.spec.purpose)
     assert all(e.observation.shared_av.quality_policy==PARTIAL_QUALITY for e in bundle.entries)
     audio=next(e.observation for e in bundle.entries if e.observation.result.processor=="asr_vad")
-    assert audio.result.state=="abstained" and audio.shared_av_quality_rejection is not None
-    assert b'"segments"' not in encode(audio) and b'"hypothesis_sha256"' not in encode(audio)
+    if failed:
+        assert audio.result.state=="abstained" and audio.shared_av_quality_rejection is not None
+        assert b'"segments"' not in encode(audio) and b'"hypothesis_sha256"' not in encode(audio)
+    else:
+        assert audio.shared_av_quality_rejection is None
     for evaluator in (evaluate_candidate_bundle,evaluate_shared_av_ablation):
         with pytest.raises(AssetRightsDenied,match="PARTIAL_REQUIRES_COVERAGE_GUARD"):
             evaluator(pipe.store,TENANT,f.q.ref.object_id,ids,purpose=f.spec.purpose)
@@ -2672,8 +2685,19 @@ def test_partial_shared_av_native_pipeline(queue_fixture,case):
     assert guard["guarded"]==result["decisions"]
     assert guard["quality_rejections"]==result["quality_rejections"]
     fields={x.field_id:x for x in result["decisions"].fields}
-    assert all(fields[k].value is None for k in ("tema_principal","tipo_cta","tem_cta"))
-    assert fields["texto_na_tela"].value is (True if case=="complementary" else None)
+    if failed:
+        assert all(fields[k].value is None for k in ("tema_principal","tipo_cta","tem_cta"))
+        assert fields["texto_na_tela"].value is (True if case=="complementary" else None)
+    replay=evaluate_shared_av_routing_replay(pipe.store,TENANT,f.q.ref.object_id,ids,purpose=f.spec.purpose)
+    assert replay==evaluate_shared_av_routing_replay(pipe.store,TENANT,f.q.ref.object_id,list(reversed(ids)),purpose=f.spec.purpose)
+    assert replay["arms"]["asr_vad+ocr+temporal+vlm"]["guarded"]==result["decisions"]
+    assert replay["full_quality_rejections"]==result["quality_rejections"]
+    for arm,report in replay["arms"].items():
+        assert all(s.processor in arm.split("+") for field in report["guarded"].fields
+                   for s in (*field.supports,*field.vetoes))
+    with pytest.raises(AssetRightsDenied,match="SHARED_AV_COMPLETE_REQUIRED"):
+        evaluate_shared_av_routing_replay(pipe.store,TENANT,f.q.ref.object_id,ids[:-1],purpose=f.spec.purpose)
+    print("SHARED_AV_ROUTING "+json.dumps(row_from_replay(case,replay,metrics),ensure_ascii=True,sort_keys=True))
     assert pipe.step("worker")==result
     print("SHARED_AV_PARTIAL "+json.dumps({"case":case,"status":result["status"],
         "quality_rejections":result["quality_rejections"],"coverage":result["coverage_details"],
@@ -2687,3 +2711,5 @@ def test_partial_shared_av_native_pipeline(queue_fixture,case):
     f.queue.resolve_anchor=lambda ref:f.q.f.pin(rv)
     with pytest.raises(AssetRightsDenied,match="ASSET_RIGHTS_REVOKED"):
         evaluate_shared_av_coverage_guard(pipe.store,TENANT,f.q.ref.object_id,ids,purpose=f.spec.purpose)
+    with pytest.raises(AssetRightsDenied,match="ASSET_RIGHTS_REVOKED"):
+        evaluate_shared_av_routing_replay(pipe.store,TENANT,f.q.ref.object_id,ids,purpose=f.spec.purpose)

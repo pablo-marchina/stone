@@ -73,7 +73,8 @@ MULTIMODAL_GROUPS=(
     ("shared_av","tests.test_asset_rights_registry","test_shared_av_",22),
     ("shared_av_partial_contract","tests.test_asset_processor_results","test_partial_shared_av_",1),
     ("shared_av_partial_asr","tests.test_asset_asr_fixture","test_partial_shared_av_",2),
-    ("shared_av_partial_native","tests.test_asset_rights_registry","test_partial_shared_av_",2),
+    ("shared_av_partial_native","tests.test_asset_rights_registry","test_partial_shared_av_",8),
+    ("shared_av_routing","tests.test_asset_shared_av_routing","test_routing_",4),
 )
 
 
