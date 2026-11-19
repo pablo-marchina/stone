@@ -3455,3 +3455,51 @@ $manifest = "artifacts/private/bd_manifest_a6_v10.json"
 Não habilitar flags externas, não executar chamadas,
 não alterar token ou expiração. Enviar seleção/motivos
 ou novo código de bloqueio, sem IDs ou credenciais.
+
+
+### A03.2 — prévias V10 concluídas, credencial ainda não verificada
+
+Operador log 13305 bytes SHA256 5ee0379011564ebd1f29dbbb8c4a49e68975b2c709ad6b7b495bb17deda025e7.
+EXPANSION_PLAN_READY, PLAN_ONLY_NO_EXTERNAL_READ, UTC
+19/11, manifesto V10 pin confirmado. HEAD local/testes
+não impressos neste log; remoto 2f7b383 confirmado.
+Identidade: abavnacional, abfoficial, agisaalimentos,
+amarefashiongo, andraeltec. Cinco estratos distintos,
+todos 0 aprovados/observados/posts, audience uncertain.
+16 outros não tentados; 6 missing rationale/viewer e 2
+prior attempt review (nuvemshop, aanadesales). Não repetir
+deferidos. Nenhuma pending_identity_action. História:
+seliganoton (105, fairness), menteempreendedora (3),
+contaazul (20), ifoodparaparceiros (26),
+empreendedorasdabelezagb (29); 183 posts vs 367 recency,
+5 estratos em ambos, predicted_yield=null. 50 fontes,
+21 aprovadas, 29 não aprovadas, 16 aprovadas deferidas
+por limite. Grant extra fora das 21 aprovadas não usar.
+Saldo 80/80 local, 5 identidades/20 páginas máximas
+nas prévias. 1065/21, zero duplicatas/admissões/mutação.
+Auth NOT_CHECKED, expiry UNKNOWN, provider_verified=false.
+Não confundir prévia pronta com autenticação confirmada.
+
+Próximo: executar somente primeiro lote de 5 identidades
+após operador confirmar validade real do token existente
+com ferramenta oficial da Meta e R$0, datas reais ISO
+8601 com fuso (data de acesso somente se informada),
+TAPI_META_REQUIRE_TOKEN_EXPIRY=1; não inventar prazo,
+não usar expiração de grant. Manter secret local, nunca
+colar token ou IDs em chat. Reexecutar plan-expansion
+e confirmar mesmo dia UTC, mesmo manifesto pin, seleção,
+saldo >=5, sem bloqueio. Validar teste focal A03 e zero
+spend antes; writers/ingestão parados. Se token ausente
+restaurar por input seguro local, não imprimir. Identidade
+execute exige admin existente e flags específicas;
+ativar só identidade/metadata/zero-billing temporariamente,
+restaurar flags a 0 em finally. Relatório exclusivo privado
+a6-identity-v11-<stamp>.json, stdout não compartilhar IDs.
+Enviar apenas status/cycle_key/username/status/code e
+contagem reserved_requests. Primeiro erro interrompe;
+reservas do lote não reembolsadas, não repetir automaticamente.
+Depois reconciliar apenas sucessos do ciclo exato, planejar
+grant técnico existente DEC-018; não executar history
+usando manifesto desatualizado. Nenhuma execução externa
+pelo assistente, nenhuma autorização adicional, mídia,
+merge ou gate liberado. Commit documental.
