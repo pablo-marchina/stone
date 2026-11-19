@@ -130,3 +130,44 @@ def test_cli_different_evidence_blocks_entire_private_report(
     assert calls["original"] == 2
     assert calls["batched"] == 2
     assert "TRACE_PARITY_LOCAL_ERROR" in capsys.readouterr().out
+
+
+def test_readiness_shadow_flag_verifies_both_complete_pipelines(
+        monkeypatch, tmp_path, capsys):
+    private, calls, argv = fixture(monkeypatch, tmp_path)
+    run_labels = []
+
+    def readiness(*_, auditor, **__):
+        run_labels.append(auditor)
+        return "c" * 64, 120.5 if len(run_labels) == 1 else 35.5
+
+    monkeypatch.setattr(cli, "_readiness_variant", readiness)
+    assert cli.main(argv + ["--compare-readiness"]) == 0
+    assert run_labels == [cli.audit_run, cli.audit_run_batched]
+    assert calls["scope"] == 3
+    assert calls["population"] == 2
+    output = capsys.readouterr().out
+    assert "READINESS_BATCH_SHADOW_PARITY_VERIFIED" in output
+    assert "private-run-A" not in output
+    report = json.loads((private / "trace-parity.json").read_text())
+    assert report["readiness_parity"]["all_non_temporal_fields_equal"] is True
+    assert report["readiness_parity"]["original_readiness_ms"] == 120.5
+    assert report["readiness_parity"]["batched_readiness_ms"] == 35.5
+    assert report["readiness_parity"]["shadow_algorithm_not_active"]
+
+
+def test_shadow_readiness_mismatch_fails_before_any_report(
+        monkeypatch, tmp_path, capsys):
+    private, calls, argv = fixture(monkeypatch, tmp_path)
+    counter = {"value": 0}
+
+    def readiness(*_, **__):
+        counter["value"] += 1
+        return ("c" * 64 if counter["value"] == 1 else "d" * 64), 20.0
+
+    monkeypatch.setattr(cli, "_readiness_variant", readiness)
+    assert cli.main(argv + ["--compare-readiness"]) == 2
+    assert counter["value"] == 2
+    assert calls["population"] == 1
+    assert not (private / "trace-parity.json").exists()
+    assert "TRACE_PARITY_LOCAL_ERROR" in capsys.readouterr().out
