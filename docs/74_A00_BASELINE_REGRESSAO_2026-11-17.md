@@ -4323,3 +4323,58 @@ a03-history-v12-20261119-090921.json. Parar se falha.
 Depois capacity e prévia max-sources3. Nenhuma execução
 externa, alteração de código ou banco pelo assistente;
 commit exclusivamente documental. Sem merge ou gates.
+
+
+### A03.4 — expansão histórica V12: 1513 únicos, último lote planejado
+
+Console operador 36176 bytes SHA256
+5475ec0e7ae8e585425a6a52805bcf2d4f13cb3bd77d7a23cbf98bae01c5308c.
+HEAD local 0250df8bbb166baa1b9fb51baaae8b416767bfd7 igual remoto.
+BATCH_COMPLETED a5history-20261119121236-ec966c97,
+a03-history-v12-expansion-20261119-091234.json,
+V12 pin 43372c6fe04ae12e5735e7b932d98a53a114ee0f5eb44d06fa5bea86a465b081.
+200 retornados, 192 aceitos/novos, 8 missing_metrics,
+0 too_recent/unsupported/invalid/duplicates/refresh,
+20 páginas. seliganoton +38 (143), menteempreendedora
++40 (43), contaazul +34 (54), ifoodparaparceiros +40
+(66), empreendedorasdabelezagb +40 (69); todas
+continuation_available. Rendimento técnico 96%.
+HISTORY_REPORTS_REAUDITED 4 relatórios/13 runs,
+501 retornados, 448 aceitos/novos, 44 too_recent,
+9 missing_metrics, 51 páginas, 13/13 audit_valid,
+zero duplicatas/refresh/invalid/unsupported.
+Aproveitamento acumulado 448/501 (89,42%).
+Sem admissões científicas, cobertura exaustiva ou
+produção. Corpus 1513 únicos/29 observados/21 registrados.
+Snapshot 2026-11-19T12:13:26.217929+00:00: 66/80
+reservas (10 identity + 14 runs x4, inclui falha OAuth),
+14 restantes, 3 slots history, 0 identity slots.
+30 grants tecnicamente verificados, 29 com registros,
+28 continuation, 1 frontier_unconfirmed, 1 no_checkpoint,
+zero scope_mismatch/unknown. Ingestão inativa.
+Gap 487 posts/1 perfil; mínimo otimista 13 runs/52
+unidades antes de identidade. Snapshot sem rede/mutação.
+
+Prévia final: stone (106, fairness), institutolojasrenner
+(29), abfoficial (31). Soma 166 vs baseline recency
+218, 3 estratos em ambas, predicted_yield=null.
+12 unidades/120 observações máximas; se 3 runs,
+78/80 e margem 2. Não usar margem para novas
+identidades (10/10) ou reduzir orçamento por run.
+Manter Casa Artemisia bloqueada para history,
+não usar grant extra. Dia UTC 19/11. Executar
+somente se prévia atual ainda compatível, mesmo
+manifesto/viewer/tenant, saldo >=12, R$0, escritores
+parados. Flags temporárias como nos lotes anteriores,
+relatório privado exclusivo a03-history-v12-final-<stamp>.json.
+Após batch completo, reauditar os 5 relatórios do dia
+(incluir a03-history-v12-expansion-20261119-091234.json
+e os três anteriores, nunca relatório falho OAuth).
+Recalcular capacity, confirmar estado de recuperação,
+backup final com escritores parados e verify_zero_spend.
+Se sucesso, avançar consolidação documental dos 8 perfis
+e análise atual; próxima expansão de identidade só
+em novo dia UTC com prévia inédita. Não declarar
+2k/30 atingido, nem cobertura científica. Commit
+exclusivamente documental, sem rede Meta, mutação
+operacional, mídia, merge ou liberação de gates.
