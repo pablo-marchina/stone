@@ -5505,3 +5505,78 @@ focais esperados**, ainda não reportados neste HEAD.
 Sem alterações na matriz, no original V12, em grants,
 no critério de elegibilidade ou nas DEC-016/017/018.
 Não alegar resolução de gargalo antes das medições.
+
+
+### IMP-071 — readiness profile verificado; otimização N+1 sob paridade, não ativada (19/11)
+
+Arquivo de console recebido Texto colado(20261119-233542).txt
+SHA256 79cf2221052d396b0754c895b4f56a55d245b975dd1eba75afb8cafe6aea3074.
+Operador HEAD 5b3943a6ab9f1e1f2604fc4aa06cc556709e8845.
+PASS_ESPELHO_DOCUMENTAL 32 blobs, 204 IMP/543 edges,
+DAG acíclico/IMP-131 único sink; documento indica
+software_tests=not_run, gates=not_assessed porque apenas
+verifica espelho. Testes focais FTS/scoped/editorial
+27 passed in 2.09s; verify_zero_spend PASS.
+IMP071_READINESS_PROFILING_TESTS_VERIFIED.
+A05 scope27 1069 captions/27 fontes, manifest
+d903366a975cb6e4c4e07c9e6300799c727c3efc3a8317530f14d90e19435b54
+e partição SHA256
+b842a43efd737abee7b78930ddb1243ccac93290cc7c45e9774d9bf542dafb44
+inalterados em cinco rodadas, hits 5/5/2, todos
+grants/contextos/traces revalidados em cada passagem.
+Tempos full_path (ms) [2198.9747, 2106.8956,
+2173.9196, 2237.9943, 2151.7241],
+p50 2173.9196, p95 nearest-rank 2237.9943,
+sem engine startup/CLI/report write.
+Relatório privado
+a05-imp071-readiness-profile-20261119-203509-007.json,
+SHA256
+6399e427641c114ec6400758f63432b5c371b67bbc606928c953c3cb72420334.
+A média agregada de 10 passagens de readiness (5x2):
+technical_trace_audit 844.00ms/pass, 79.89% do
+tempo interno; canonical_data_card 105.19ms, 9.96%;
+domain_read_and_decode 85.94ms, 8.13%;
+demais fases 21.4ms, 2.02%.
+Auditoria 1687.99ms por rodada (duas passagens),
+N+1 provável: discovery_technical.audit_run usa
+três consultas de existência para CADA evento
+(snapshot/content/outbox). Profiling não prova
+benefício do batching, apenas prioriza investigação.
+0 científicos, 0 DB writes, 0 network, R$0, no release.
+
+Incremento separado, não habilitado e NÃO validado por
+operador neste HEAD:
+- src/tapi_gate0/discovery_trace_batch.py com
+  audit_run_batched, seleção tenant-bound de runs/events,
+  consulta por lotes de até 400 IDs para snapshots
+  (id E content_id), content items e outbox seq,
+  preservando ordem/campos/status/all_traces_valid,
+  faltantes, cross-tenant e vínculo de observação.
+  A função antiga audit_run e readiness_report
+  NÃO foram modificados para usar a alternativa.
+- scripts/a6_trace_batch_parity.py, CLI privado
+  read-only, confirmação de writers/ingestão parados,
+  pin explícito de manifesto e partição, readiness
+  integral antes e depois, escopo antes/depois,
+  compara JSON semântico completo de todos completed
+  runs das 27 fontes, aborta em primeira divergência
+  e só cria um relatório privado se 100% igual.
+  Alterna ordem dos algoritmos por run para reduzir
+  viés de warm cache; tempos por-run são diagnósticos,
+  não experimento causal controlado.
+- tests/test_discovery_technical_a3.py: equivalência
+  com traces saudáveis, outbox faltante, mismatch de
+  content_id do snapshot, 404 eventos e chunk 805
+  IDs distintos; testes/test_discovery_trace_batch_parity.py
+  verifica execução privada, saída agregada sem IDs
+  e abortos. Todos os testes são sintéticos, não gold.
+Commits 61de4d0, f5e0b4a, 7ef7bdb, 38554e5,
+7b13ff7, 0a75ee0, 04909f8. Novo código ainda
+pendente de pytest no Windows do operador; nenhum
+valor de speedup, paridade real, ativação de cache,
+rights ou gate global alegado. Não alterar o V12,
+não renovar legados e não promover IMP-071/DEC-006.
+Depois de testar localmente, rodar paridade
+read-only com pin e escopos vigentes, sem executar
+ingestão ou modelos. Se qualquer BLOCKED, não
+substituir o auditor original.
