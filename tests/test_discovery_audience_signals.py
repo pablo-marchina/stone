@@ -44,6 +44,14 @@ def test_sector():
     ("artisan_market_access","sector_organization","commerce","commerce"),
     ("pet_retail_education","educator_expert","commerce","commerce"),
     ("retail_digital_training","sector_organization","commerce","commerce"),
+    ("travel_agency_business_education","other","services","services"),
+    ("franchise_business_education","other","cross_sector","other"),
+    ("food_safety_consulting","other","food","food"),
+    ("fashion_sector_entrepreneurship","other","commerce","commerce"),
+    ("erp_consulting","other","services","services"),
+    ("natural_cosmetics_microbusiness_training","other","beauty","beauty"),
+    ("entrepreneurship_growth","other","cross_sector","other"),
+    ("circular_fashion_enterprise_inclusion","other","commerce","commerce"),
 ])
 def test_expanded_sampling_context(stratum,creator,context_sector,analytic_sector):
     from types import SimpleNamespace

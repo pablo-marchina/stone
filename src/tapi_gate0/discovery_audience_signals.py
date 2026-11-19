@@ -55,6 +55,15 @@ SECTORS = {
     "artisan_market_access": "commerce",
     "pet_retail_education": "commerce",
     "retail_digital_training": "commerce",
+    # V11/V12: broad documentary strata, not post labels.
+    "travel_agency_business_education": "services",
+    "franchise_business_education": "other",
+    "food_safety_consulting": "food",
+    "fashion_sector_entrepreneurship": "commerce",
+    "erp_consulting": "services",
+    "natural_cosmetics_microbusiness_training": "beauty",
+    "entrepreneurship_growth": "other",
+    "circular_fashion_enterprise_inclusion": "commerce",
 }
 
 

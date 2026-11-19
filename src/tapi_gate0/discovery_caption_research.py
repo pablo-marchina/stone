@@ -50,6 +50,15 @@ TYPES = {
     "artisan_market_access": ("sector_organization", "commerce"),
     "pet_retail_education": ("educator_expert", "commerce"),
     "retail_digital_training": ("sector_organization", "commerce"),
+    # V11/V12: sector hypotheses only; creator type remains unknown.
+    "travel_agency_business_education": ("other", "services"),
+    "franchise_business_education": ("other", "cross_sector"),
+    "food_safety_consulting": ("other", "food"),
+    "fashion_sector_entrepreneurship": ("other", "commerce"),
+    "erp_consulting": ("other", "services"),
+    "natural_cosmetics_microbusiness_training": ("other", "beauty"),
+    "entrepreneurship_growth": ("other", "cross_sector"),
+    "circular_fashion_enterprise_inclusion": ("other", "commerce"),
 }
 
 

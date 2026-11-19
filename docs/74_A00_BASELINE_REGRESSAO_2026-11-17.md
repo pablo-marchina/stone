@@ -4378,3 +4378,94 @@ em novo dia UTC com prévia inédita. Não declarar
 2k/30 atingido, nem cobertura científica. Commit
 exclusivamente documental, sem rede Meta, mutação
 operacional, mídia, merge ou liberação de gates.
+
+
+### A03.5 — fechamento de aquisição UTC 19/11 e preparação documental
+
+Console operador 33382 bytes SHA256
+942ed48952c08d7241cb7c08e5ee6d64a5622d3986e7d1945905b9c5956b3686.
+HEAD local 83cd76a7d0815488c91b9722c719b4d09e778c09 igual remoto.
+BATCH_COMPLETED a5history-20261119121535-76c2eeb6,
+a03-history-v12-final-20261119-091533.json, V12 pin
+43372c6fe04ae12e5735e7b932d98a53a114ee0f5eb44d06fa5bea86a465b081.
+120 retornados/117 aceitos e novos, 3 missing_metrics,
+12 páginas; stone +38 (144), institutolojasrenner
++39 (68), abfoficial +40 (71); todos continuation_available.
+Reauditoria 5 relatórios/16 runs, 621 retornados,
+565 aceitos/novos, 44 too_recent, 12 missing_metrics,
+63 páginas, 16/16 audit_valid, zero duplicatas,
+refresh, unsupported_format ou invalid_metadata.
+Corpus 1065→1630 únicos (+53,05%), 21→29 observados,
+90,98% aproveitamento de aquisição, 0 admissões.
+Snapshot 2026-11-19T12:16:01.660261+00:00:
+78/80 reservas, 10 identity + 17 runs x4 (1 falho
+OAuth), saldo 2, zero slots history/identity. 30
+grants ativos verificados, 29 com registros,
+28 continuation, 1 frontier_unconfirmed, 1 no_checkpoint,
+21 perfis formalmente registrados; gap documental 8.
+Gap bruto 370 posts e 1 perfil, mínimo otimista 10
+runs/40 unidades antes de identidade. Ingestão inativa,
+sem execução autorizada pelo snapshot.
+RECOVERY_INSPECTION: lease null, 0 falhas A5 pendentes,
+órfãos/reservas/quarentena, auth RESET_UNVERIFIED
+não bloqueado, expiry UNKNOWN não bloqueante.
+verify_zero_spend PASS invariantes locais (não auditoria
+de fatura). BACKUP_RESTORE_VERIFIED
+2026-11-19T12:16:05.501470+00:00, backup
+a03-daily-final-20261119-091604.sqlite3, SHA256
+cc7f5399c368a59c9ad3435f43e32f6e2280226240d1af647c61de2808adf5a5,
+14991360 bytes, backup 641ms/drill 390ms.
+Integrity/FK ok, inventário/conteúdo lógico iguais,
+0016, writers parados atestados, restore descartável.
+1630 content_items/ingestion_records/rubric_assessments,
+1734 snapshots, 29 creators/checkpoints, 21 corpus_profiles,
+70 runs, 30 grants, 3614 events/outbox, 0 scientific_reviews
+e source_research_contexts (contextos DEC-018 por eventos
+são separados), sete tabelas A02 vazias. Sem restore live.
+
+A03.5 offline: antes de registrar os oito perfis V11/V12,
+estender mapas documentais SECTORS/TYPES com os oito
+estratos observados. Decisão de implementação: setor
+amplo a partir do rótulo amostral (travel/ERP services,
+food safety food, fashion/circular fashion commerce,
+cosmetics beauty, franchise/growth cross_sector no
+contexto e other na análise); creator_type_candidate
+other para todos, business_size unknown, nenhum rótulo
+por post. Nenhuma alteração dos 21 mapeamentos anteriores,
+nenhum aumento de escopo, gates ou inferência legal.
+Oito casos adicionados à parametrização existente
+test_expanded_sampling_context, ainda não executados
+pelo assistente. Não registrar antes da aprovação focal.
+
+Próximo: nenhum novo acesso Meta neste dia UTC.
+Com backup pré-escrita já verificado, escritores parados,
+mesmo tenant/viewer e V12, executar testes focais,
+preview lexical/registration_plan e readiness.
+Esperado 8 REGISTER e 21 ALREADY_REGISTERED, sem
+conflitos; conferir antes da mutação. Registrar
+sampling_profiles por admin autenticado via bridge,
+sem contexto ou admissão automática. Depois plan-contexts
+esperado 8 PROVISION e 21 ALREADY_PROVISIONED se eventos
+anteriores ativos; não pressupor contagem, verificar.
+Só provisionar contextos se todos actions permitidos.
+Contextos são eventos DEC-018 de escopo offline, não
+human reviews nem autorização mídia. Atualizar readiness,
+pilotos e ranking com pin V12 e partição atual; relatórios
+V10 antigos não reutilizáveis como evidência de V12.
+Sem nova aprovação institucional, token debugger,
+mídia, gastos, merge ou liberação de gates.
+
+```powershell
+git pull --ff-only
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+$manifest = "artifacts/private/bd_manifest_a6_v12.json"
+& $py -m pytest -q --tb=short tests/test_discovery_audience_signals.py tests/test_discovery_corpus_readiness.py tests/test_discovery_contextual_integration.py
+if ($LASTEXITCODE -ne 0) { throw "Regressao documental bloqueada" }
+& $py scripts/verify_zero_spend.py
+if ($LASTEXITCODE -ne 0) { throw "Zero spend falhou" }
+& $py -m scripts.a6_corpus_bridge --manifest "$manifest"
+if ($LASTEXITCODE -ne 0) { throw "Previa bloqueada" }
+& $py -m scripts.a6_corpus_readiness --manifest "$manifest"
+```
+Conferir registration_plan e readiness antes de
+registrar; enviar agregados, não IDs/credenciais.
