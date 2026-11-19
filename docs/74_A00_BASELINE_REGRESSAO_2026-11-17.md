@@ -4710,3 +4710,30 @@ benchmark. Se falha, preservar relatórios e diagnosticar sem
 flexibilizar critérios. Zero rede Meta, mídia, gasto ou nova admissão.
 Último full strict permanece 20aea11. Atualização exclusivamente
 documental; sem merge ou gates globais.
+
+
+### A03.5 — ambiente semântico confirmado; runner sem pytest
+
+Operador 40df63a0a1abadb5ba48fd272fe00f29cefd28b3,
+tree 219804006132d98acb28d809e14b81b751e29119,
+tapi-s1-recovery/Python 3.11.18, pip check sem conflitos,
+imports torch/gliner2/transformers/safetensors OK.
+A00 semantic a03-semantic-recovery-20261119-101836-904:
+legacy_gate0 e zero_spend exit 0, checkout unchanged,
+matrizes 204 IMP/543 edges/23 CAP/18 DEC/7 gates,
+121 módulos, 106 testes Python, 5 Node, 16 migrações.
+pytest package=null, subprocess exit 1 em 0.078s,
+pytest=null (sem JUnit), checks_passed=false. Log SHA256
+242ac110f36b4074a2aeb8c20866d894f2cbf7e2cc5bf0743a6553ee5c112765.
+Causa provável ausência do pytest; confirmar log original
+antes de instalar. Não interpretar como falhas de casos.
+pyproject dev exige pytest>=8,<10; nove arquivos do perfil
+importam pytest. Instalar apenas essa dependência no
+tapi-s1-recovery, sem upgrade de modelos/runtime ou extra
+audiovisual. pip check e versões novamente, runner semantic
+no novo HEAD limpo com nome exclusivo; verificar zero
+falhas/erros/skips antes de benchmarks. Se outra falha,
+diagnosticar log sem repetir smoke ou alterar critérios.
+Preservar relatório anterior. Nenhum benchmark, corpus,
+DB, rede Meta, mídia, merge ou gate global. Atualização
+exclusivamente documental; último full strict 20aea11.
