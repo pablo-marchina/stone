@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import re
+import sqlite3
 
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -103,7 +104,7 @@ def main(argv=None):
         code = exc.code
     except RetrievalBaselineError as exc:
         code = str(exc)
-    except (OSError, ValueError, KeyError, TypeError, SQLAlchemyError):
+    except (OSError, ValueError, KeyError, TypeError, SQLAlchemyError, sqlite3.DatabaseError):
         code = "RETRIEVAL_LOCAL_PREVIEW_ERROR"
     finally:
         if engine is not None:
