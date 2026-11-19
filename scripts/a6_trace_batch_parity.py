@@ -30,7 +30,7 @@ from tapi_gate0.ingestion import ingestion_runs
 from tapi_gate0.sa_store import engine_for
 
 ROOT = Path(__file__).resolve().parents[1]
-_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,100}\\.json")
+_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,100}\.json")
 _PIN = re.compile(r"[0-9a-f]{64}")
 
 
