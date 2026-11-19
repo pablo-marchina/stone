@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import re
 import sqlite3
+from math import ceil
 
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -34,6 +35,7 @@ def main(argv=None):
     p.add_argument("--expected-sources", type=int, required=True)
     p.add_argument("--query", action="append", required=True)
     p.add_argument("--top-k", type=int, default=5)
+    p.add_argument("--repeat", type=int, default=1, help="Repeat whole scoped audit 1..10 times, fail on drift")
     p.add_argument("--report-name", required=True)
     p.add_argument("--confirm-all-ingestion-stopped", action="store_true")
     p.add_argument("--confirm-all-writers-stopped", action="store_true")
@@ -43,6 +45,8 @@ def main(argv=None):
     try:
         if not args.confirm_all_ingestion_stopped or not args.confirm_all_writers_stopped:
             raise RetrievalBaselineError("RETRIEVAL_STOP_CONFIRMATION_REQUIRED")
+        if not 1 <= args.repeat <= 10:
+            raise RetrievalBaselineError("RETRIEVAL_REPEAT_BOUNDS")
         private = ROOT / "artifacts" / "private"
         if not private.is_dir() or private.resolve() != private.absolute():
             raise RetrievalBaselineError("RETRIEVAL_PRIVATE_DIRECTORY_INVALID")
@@ -66,13 +70,48 @@ def main(argv=None):
         if not tenant or not viewer:
             raise RetrievalBaselineError("RETRIEVAL_TENANT_VIEWER_REQUIRED")
         engine = engine_for(url)
-        report = preview_scoped_fts(
-            engine, tenant, frame, viewer,
-            queries=args.query,
-            expected_posts=args.expected_posts,
-            expected_sources=args.expected_sources,
-            limit=args.top_k,
-        )
+        report = None
+        elapsed = []
+        stable_key = None
+        for _ in range(args.repeat):
+            round_report = preview_scoped_fts(
+                engine, tenant, frame, viewer,
+                queries=args.query,
+                expected_posts=args.expected_posts,
+                expected_sources=args.expected_sources,
+                limit=args.top_k,
+            )
+            if (round_report["manifest_sha256"] != args.expected_manifest_sha256
+                    or round_report["eligible_posts"] != args.expected_posts
+                    or round_report["eligible_sources"] != args.expected_sources
+                    or round_report["query_count"] != len(args.query)):
+                raise RetrievalBaselineError("RETRIEVAL_REPEAT_CONTRACT_DRIFT")
+            # Preserve order and exact evidence references; never confuse
+            # stable hit counts with stable result rankings or snapshots.
+            key = (round_report["partition_sha256"], tuple(
+                (h["query_sha256"], tuple(h["content_ids"]),
+                 tuple(h["snapshot_ids"])) for h in round_report["queries"]
+            ))
+            if stable_key is not None and key != stable_key:
+                raise RetrievalBaselineError("RETRIEVAL_REPEAT_PARTITION_OR_HITS_DRIFT")
+            stable_key = key
+            elapsed.append(round_report["full_preview_elapsed_ms"])
+            report = round_report
+
+        sorted_elapsed = sorted(elapsed)
+        report["repeat_experiment"] = {
+            "repetitions": args.repeat,
+            "full_path_latency_samples_ms": elapsed,
+            "full_path_p50_ms": sorted_elapsed[ceil(0.50 * len(elapsed)) - 1],
+            "full_path_p95_ms": sorted_elapsed[ceil(0.95 * len(elapsed)) - 1],
+            "full_path_min_ms": sorted_elapsed[0],
+            "full_path_max_ms": sorted_elapsed[-1],
+            "partition_and_hits_stable": True,
+            "each_round_revalidated_scope_and_captions": True,
+            "latency_excludes_engine_setup_and_report_write": True,
+            "exploratory_not_service_slo": True,
+            "relevance_gold_available": False,
+        }
         # The only filesystem output is private; refuse overwrites.
         fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
@@ -97,6 +136,7 @@ def main(argv=None):
             "timing_breakdown_ms": report["timing_breakdown_ms"],
             "full_preview_includes_scope_and_revalidation": True,
             "performance_sample_is_exploratory": True,
+            "repeat_experiment": report["repeat_experiment"],
             "gold_relevance_judgments_available": False,
             "scientific_admissions": 0,
             "database_mutated": False,
