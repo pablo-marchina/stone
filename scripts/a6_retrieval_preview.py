@@ -73,6 +73,7 @@ def main(argv=None):
         engine = engine_for(url)
         report = None
         elapsed = []
+        readiness_profiles = []
         stable_key = None
         for _ in range(args.repeat):
             round_report = preview_scoped_fts(
@@ -98,6 +99,13 @@ def main(argv=None):
                 raise RetrievalBaselineError("RETRIEVAL_REPEAT_PARTITION_OR_HITS_DRIFT")
             stable_key = key
             elapsed.append(round_report["full_preview_elapsed_ms"])
+            if args.profile_readiness:
+                profile = round_report.get("readiness_profile")
+                if (not isinstance(profile, dict)
+                        or not isinstance(profile.get("first_readiness"), dict)
+                        or not isinstance(profile.get("second_readiness"), dict)):
+                    raise RetrievalBaselineError("RETRIEVAL_READINESS_PROFILE_INVALID")
+                readiness_profiles.append(profile)
             report = round_report
 
         sorted_elapsed = sorted(elapsed)
@@ -113,6 +121,7 @@ def main(argv=None):
             "latency_excludes_engine_setup_and_report_write": True,
             "exploratory_not_service_slo": True,
             "relevance_gold_available": False,
+            "readiness_profile_samples": readiness_profiles if args.profile_readiness else None,
         }
         # The only filesystem output is private; refuse overwrites.
         fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
