@@ -3329,3 +3329,85 @@ viewer existente e planners identity/history já
 implementados, inicialmente em modo plano, não execute.
 Sem merge, mídia, novos grants, nova aprovação DEC-018,
 gasto ou execução externa por este incremento.
+
+
+## A03.1 — capacidade operacional confirmada e seleção da próxima onda
+
+Operador: A03_CAPACITY_INSPECTED_PLAN_ONLY, HEAD
+a33ce31cf03261923691518ebee073eb271adb8d igual remoto,
+captured_at_utc 2026-11-19T02:46:16.382415+00:00.
+1065 registros metadata_only/1065 IDs únicos/21 perfis
+observados/21 perfis registrados/0 duplicatas entre fontes.
+22 grants técnicos ativos/verificados, 21 com registros,
+21 continuation_recorded, 1 no_checkpoint, zero scope_mismatch,
+frontier_unconfirmed e unknown_state. O grant adicional
+sem registros não é automaticamente elegível: conferir
+correspondência ao manifesto, viewer, grant, prazo e
+frontier pelo planner existente. Não criar novo grant
+nem modificar manifesto a partir da contagem agregada.
+Ingestão inativa, 0 reservas identity/metadata, saldo
+local conservador 80/80, 10 slots identity e até 20 runs
+sem identity. Não é quota Meta, manifesto/viewer/cursor
+não verificados pelo snapshot. Zero chamadas, mutação,
+credenciais carregadas, admissões, mídia, autorização.
+Testes A03 3/3 e espelho não reapresentados neste log;
+não afirmar PASS não reportado. Zero-spend anterior PASS
+em bdc2045; readiness 7/7. Qualidade/gates inalterados.
+
+Referência bruta: 935 posts e 9 perfis faltantes.
+Limite otimista 24 runs/96 unidades de história antes
+de identidade, exclusões, repetições e validade. Proposta
+para 19/11 UTC (não autorização): até 10 identidades em
+dois lotes de até 5; até 17 runs história (68 unidades)
+em lotes de até 5 fontes; total 78/80, margem 2. Se
+menos candidatos elegíveis, recalcular saldo; não repetir
+falhas/ignorar guardas para preencher orçamento. Máximo
+teórico 680 observações de história, não 680 novos posts;
+gap bruto mínimo ainda 255 mesmo no caso otimista.
+Diversidade de estratos e fontes antes de concentrar
+volume; usar política coverage já existente. Replanejar
+depois de cada lote e confirmar dia UTC; nenhum cron
+ou loop automático. Priorizar identidade para ampliar
+frame, reconciliar somente sucessos exatos, provisionar
+grant técnico sob DEC-018 existente, depois históricos
+de fontes novas e elegíveis. Não reusar artefatos
+grounded/ranking antigos como se refletissem corpus novo.
+Sem ajuste de matrizes ou promoção de qualidade.
+
+### Operador — prévias offline da próxima onda (sem execute)
+
+Usar ambiente e DB existentes, parar ingestão/writers
+normalmente; não imprimir credenciais ou ID do viewer.
+Não baixar modelos, não criar backup/restore/migration
+para mera prévia. Verificar manifesto canônico V10
+antes de passar aos planners existentes:
+
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+& $py -m pytest -q --tb=short tests/test_discovery_expansion_capacity.py
+if ($LASTEXITCODE -ne 0) { throw "Teste A03 falhou" }
+& $py scripts/verify_zero_spend.py
+if ($LASTEXITCODE -ne 0) { throw "Zero spend falhou" }
+$manifest = "artifacts/private/bd_manifest_a6_v10.json"
+if (!(Test-Path -LiteralPath $manifest -PathType Leaf)) { throw "Manifesto V10 ausente" }
+if ([string]::IsNullOrWhiteSpace($env:TAPI_META_IG_ID)) { throw "Restaurar viewer existente sem imprimir ID" }
+& $py -c "from pathlib import Path; from tapi_gate0.discovery_batch import BatchManifest; m=BatchManifest.model_validate_json(Path(r'artifacts/private/bd_manifest_a6_v10.json').read_text(encoding='utf-8')); print(m.fingerprint()); assert m.fingerprint()=='faae42aa652a5b4b49c025d7522ac2e2f029c09bdc1434923c11df9d0ebdb1bb', 'Manifesto V10 divergente'"
+if ($LASTEXITCODE -ne 0) { throw "Manifesto nao corresponde ao pin V10" }
+& $py -m scripts.a6_identify_sources --manifest "$manifest" --plan-expansion --max-sources 5 --daily-request-budget 80
+& $py -m scripts.a5_business_discovery_cycle --manifest "$manifest" --mode history --max-sources 5 --page-limit 10 --max-pages 4 --daily-request-budget 80 --priority-policy coverage
+```
+
+Enviar status, seleção e motivos de deferimento das
+prévias (nomes públicos já selecionados pelo manifesto,
+sem IDs, token, credenciais, cursors ou payloads privados).
+Esperados EXPANSION_PLAN_READY ou EXPANSION_NO_NEW_CANDIDATES
+e PLAN_ONLY_NO_EXTERNAL_READ, não assumir sucesso.
+Guardas auth/recovery/expiração/escopo têm precedência;
+se bloqueio, registrar código e parar. Nenhuma execução
+oficial até confirmar prévias, token real vigente,
+gasto zero e condições existentes. Sem nova aprovação
+institucional. Este commit apenas documental, não
+introduz planner redundante nem modifica código testado.
