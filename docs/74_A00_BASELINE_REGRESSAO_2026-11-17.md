@@ -5347,3 +5347,43 @@ Próximo: repetição explícita da rodada completa com
 pin de partição e igualdade dos IDs/snapshots/hits,
 amostras e p50/p95 rotulados diagnósticos (não gold).
 CT-04/IMP-071/DEC-006/G1 ainda pendentes.
+
+
+### IMP-071 — benchmark repetido fail-closed, ainda sem execução (19/11)
+
+A execução real anterior com full_preview_elapsed_ms 2512.931
+e 22 testes PASS foi registrada no commit f1d641b;
+não a duplicar como evidência do novo runner. Incremento
+ainda sem validação em ambiente operador:
+scripts/a6_retrieval_preview.py aceita --repeat de 1 a 10
+(default=1), cada rodada chama preview_scoped_fts
+integralmente com 3 gates de contexto/rights e 2 readiness
+com verificações de traces e hashes de caption/snapshot.
+A sequência valida a MESMA partição SHA256, mesmo manifesto,
+contagens e mesmos IDs e snapshot IDs em mesma ordem
+para cada query; falha RETRIEVAL_REPEAT_PARTITION_OR_HITS_DRIFT
+em qualquer discrepância antes de criar relatório.
+Calcula p50/p95 nearest-rank de uma amostra de tempos
+full_preview_elapsed_ms com cardinalidade <=10,
+conserva todos os tempos no report privado, stdout apenas
+sumário sem captions, URLs ou IDs. Mesmo em 5 rodadas,
+o p95 será o máximo; é diagnóstico local exploratório
+de variabilidade, não SLO, não inferência populacional
+nem comparação controlada. Setup de CLI, engine e
+gravação JSON excluídos de cada amostra. Sem cache
+de autorização nem omissão de dupla leitura para
+melhorar números.
+
+Testes novos tests/test_discovery_retrieval_scoped.py:
+- repeat de 3 rondas idênticas produz amostras, p50 e p95;
+- troca de snapshot na segunda interrompe toda gravação;
+- repeat=11 bloqueia antes de ler banco.
+Commits 39c0414, 235d9dd; suite focal 25 prevista,
+não rodada neste novo HEAD. Pendentes CT-04 e gold
+de relevância real, Recall@k e nDCG@k permanecem null.
+PR #44 draft, R$0, no merge, sem release ou media.
+Operador após validar checkout limpo, 25 testes,
+espelho e zero_spend pode executar consulta local
+do V12-scope27 via --repeat 5 com relatório novo,
+mesmo pin de manifesto e partição; parar em BLOCKED.
+Preservar todos arquivos privados fora de GitHub.
