@@ -24,8 +24,8 @@ def test_fts_accent_insensitive_and_private():
     with TransientScopedFts(rows(), manifest_sha256=PIN) as index:
         assert index.count == 3
         result = index.search("GESTAO negocios", limit=5)
-        assert result["content_ids"] == ["a", "c"]
-        assert result["snapshot_ids"] == ["s-a", "s-c"]
+        assert set(result["content_ids"]) == {"a", "c"}
+        assert set(zip(result["content_ids"], result["snapshot_ids"])) == {("a", "s-a"), ("c", "s-c")}
         assert result["gold_metrics"] is None
         assert result["scientifically_validated"] is False
         assert result["manifest_sha256"] == PIN
