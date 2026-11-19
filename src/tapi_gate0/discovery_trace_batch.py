@@ -53,7 +53,7 @@ def audit_run_batched(engine, tenant: str, run_key: str, *, connection=None) -> 
 
         snapshots = set()
         for ids in _chunks(snapshot_ids):
-            snapshots.update(db.execute(
+            snapshots.update((sid, cid) for sid, cid in db.execute(
                 select(metrics_snapshots.c.id, metrics_snapshots.c.content_id).where(
                     metrics_snapshots.c.tenant_id == tenant,
                     metrics_snapshots.c.id.in_(ids),
