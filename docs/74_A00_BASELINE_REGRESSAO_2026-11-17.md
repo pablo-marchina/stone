@@ -4814,3 +4814,45 @@ Reconciliar partições e snapshots via ranking/contraste existente
 antes de atualizar replay/UI; nenhuma reutilização de V10.
 Sem nova coleta no orçamento UTC esgotado, mídia, cobrança,
 alteração de política, merge ou gate global. Commit documental.
+
+
+### A03.5 — V12 bloqueado por perda de elegibilidade de duas fontes
+
+Console operador 10226 bytes SHA256
+765efa22cfefb718417d7b3d844c3cc35a8ad4ed07beddfdc7df6577bdae1e4b.
+Readiness pin V12 inalterado
+43372c6fe04ae12e5735e7b932d98a53a114ee0f5eb44d06fa5bea86a465b081:
+1630 registros/únicos, 29 perfis observados, 0 fora manifesto,
+287 SOURCE_NOT_ELIGIBLE, 273 NONPRIMARY_FORMAT, 1
+CAPTION_UNAVAILABLE, 1069 CAPTION_AVAILABLE_FOR_ASSESSMENT,
+demais etapas zero, 0 runs com trace inválido. Antes 1348
+legendas/281 não primários/0 source blocked; delta 279
+legendas e 8 não primários. CONTEXTUAL_READINESS 27 escopos
+locais, allowed=false, global deny preservado. Operador
+continuou após throws em blocos interativos separados;
+guard interno bloqueou --execute em scope_preflight,
+BD_CONTEXTUAL_CLASSIFICATION_SCOPE_BLOCKED, 0 candidatos,
+sem rede/mutação/admissões; pilotos rubrica não executados,
+S1 restaurada a 0. Não repetir execução até resolver.
+HEAD local não impresso neste console; remoto ff54773.
+
+Próximo: somente diagnóstico read-only, extrair do readiness
+sources username/source_gate/contagens e do --plan-contexts
+username/action, filtrar bloqueados, sem IDs/referências
+privadas. source_gate distingue expiração do manifesto,
+grant ausente/desabilitado/expirado, divergência de referência
+e verificação técnica ausente/futura. Expiração é hipótese,
+não confirmada; não confundir com token OAuth. Se necessário,
+inspecionar datas e estado dos dois grants sem expor IDs,
+credenciais ou referências. Não renovar automaticamente,
+editar V12, reativar, revogar, regravar contextos ou contornar
+guardas; eventual novo manifesto/grant exige base documental
+específica, preservação do histórico, revalidação do vínculo
+grant_approved_at dos contextos. Se não houver escopo legítimo,
+avaliar população menor explicitamente versionada e rastreável,
+sem declarar V12 completo ou alterar critérios. Usar preflight
+e execução futura no mesmo scriptblock para não prosseguir
+após throw. Regressão 189 PASS e gates sintéticos permanecem
+evidências válidas para código/modelo inalterados. R$0,
+sem Meta/mídia, sem merge, sem liberação global.
+Atualização exclusivamente documental.
