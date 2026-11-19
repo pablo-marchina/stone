@@ -488,3 +488,14 @@ def test_batched_trace_audit_chunks_over_400_events_without_changing_result(tmp_
     finally:
         client.close()
         engine.dispose()
+
+
+def test_trace_batch_chunks_distinct_ids_at_sqlite_safe_boundary():
+    from tapi_gate0.discovery_trace_batch import _chunks, CHUNK
+    groups = list(_chunks(str(i) for i in range(805)))
+    assert CHUNK == 400
+    assert [len(g) for g in groups] == [400, 400, 5]
+    assert [key for group in groups for key in group] == [
+        str(i) for i in range(805)
+    ]
+    assert list(_chunks(["a", "a", "b", "b", "c"])) == [["a", "b", "c"]]
