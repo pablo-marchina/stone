@@ -19,7 +19,7 @@ def fake_rows(monkeypatch, *, drift=False, invalid_source=False, bad_trace=False
         runs["scopes"] += 1
         return "dec018-bd-caption-research.v1"
 
-    def readiness(_engine, _tenant, _frame, _viewer, *, _record_observer):
+    def readiness(_engine, _tenant, _frame, _viewer, *, _record_observer, _timing_observer=None):
         runs["ready"] += 1
         captions = [
             ("a", "s-a", "Gestão de pagamentos"),
@@ -33,6 +33,16 @@ def fake_rows(monkeypatch, *, drift=False, invalid_source=False, bad_trace=False
                 NS(content_id=cid, caption=caption),
                 NS(snapshot_id=sid),
             )
+        if _timing_observer is not None:
+            _timing_observer({
+                "source_gate_and_inventory_ms": 1.0,
+                "domain_read_and_decode_ms": 2.0,
+                "technical_trace_audit_ms": 3.0,
+                "eligibility_and_observers_ms": 4.0,
+                "summary_ms": 5.0,
+                "canonical_data_card_ms": 6.0,
+                "profile_is_performance_diagnostic_only": True,
+            })
         return {
             "status": "CORPUS_READINESS_PLANNED",
             "manifest_sha256": PIN,
@@ -340,3 +350,28 @@ def test_repeat_bounds_reject_before_database_read(monkeypatch, capsys):
                  "--confirm-all-ingestion-stopped",
                  "--confirm-all-writers-stopped"]) == 2
     assert "RETRIEVAL_REPEAT_BOUNDS" in capsys.readouterr().out
+
+
+def test_optional_readiness_phase_profile_keeps_same_guards_and_hits(monkeypatch):
+    runs = fake_rows(monkeypatch)
+    report = scoped.preview_scoped_fts(
+        object(), "tenant", frame(), "viewer",
+        queries=["gestao", "vendas"],
+        expected_posts=3, expected_sources=1, limit=3,
+        profile_readiness=True,
+    )
+    assert runs == {"ready": 2, "scopes": 3}
+    profile = report["readiness_profile"]
+    assert profile["timing_is_diagnostic_only"]
+    assert profile["first_readiness"]["technical_trace_audit_ms"] == 3.0
+    assert profile["second_readiness"]["canonical_data_card_ms"] == 6.0
+    assert len(profile["first_readiness"]) == 7
+    assert report["gold_relevance_judgments_available"] is False
+    assert report["database_mutated"] is False
+
+    with pytest.raises(RetrievalBaselineError, match="PROFILE_FLAG_INVALID"):
+        scoped.preview_scoped_fts(
+            object(), "tenant", frame(), "viewer",
+            queries=["gestao"], expected_posts=3, expected_sources=1,
+            profile_readiness="yes",
+        )
