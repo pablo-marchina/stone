@@ -5438,3 +5438,49 @@ IMP-071 e CT-04 continuam não homologados. Próximo
 incremento opcional deve instrumentar etapas internas
 de readiness sem alterar auditoria, e usar benchmark
 diagnóstico sobre mesmo recorte e direitos.
+
+
+### IMP-071 — profiling opt-in do readiness sem mudança de gates (19/11)
+
+Continuação após o operador comprovar cinco rodadas idênticas
+em 32a90d3; evidência logada em be49f40. Gargalo
+medido na última rodada: first_readiness 1589.0449 ms,
+second_readiness_and_final_scope 1666.6384 ms, FTS
+index 32.9563 ms e query_batch 0.6708 ms. Não se sabe
+ainda se custo do readiness vem de loading, validação
+de payload, auditoria de run trace ou geração do
+canonical_corpus_data_card: a instrumentação é diagnóstico,
+não alteração de política ou conclusão de SLO.
+
+Incremento posterior **não executado no ambiente operador**:
+- discovery_corpus_readiness.readiness_report agora aceita
+  callback privado opcional _timing_observer, invocado
+  somente após checks existentes, reportando 6 fases
+  numéricas em ms: source_gate_and_inventory,
+  domain_read_and_decode, technical_trace_audit,
+  eligibility_and_observers, summary e canonical_data_card.
+  Não altera returned readiness, gate/source scope, trace
+  validation ou corpus_data_card canônico.
+- discovery_retrieval_scoped.preview_scoped_fts recebe
+  profile_readiness=False por padrão; quando true
+  recolhe um perfil para cada readiness auditado, só
+  depois de completar as mesmas três verificações de
+  scope e comparação de dois hashes da partição.
+  O perfil não contém IDs, caption, token ou referência.
+- scripts.a6_retrieval_preview --profile-readiness é
+  opt-in e admite --repeat 1..10. Perfil agregado da
+  última rodada fica no JSON privado e stdout; cada
+  rodada mantém escopo e fingerprint, sem caches e
+  sem reduzir número de auditorias.
+- tests/test_discovery_retrieval_scoped.py: testes
+  adicionais do callback e flag CLI sem vazamento
+  de identificadores. Novos commits 0e87318, 59316b3,
+  69e6882, 5e0f729, 321d7c2; **sem pytest no novo
+  SHA ainda**. Esperados 27 testes focais após git pull,
+  além de espelho e zero_spend. Rodar --profile-readiness
+  com --repeat 3 ou 5 somente se fontes ainda elegíveis,
+  mesmo V12-scope27 e pin de partição; qualquer BLOCKED
+  suspende, não contornar. O percentual de cada fase
+  ainda é desconhecido e não deve ser fabricado.
+IMP-071/DEC-006/CT-04/G1 continuam pendentes, PR #44
+draft, R$0, nenhuma mutação do banco, Meta, mídia ou merge.
