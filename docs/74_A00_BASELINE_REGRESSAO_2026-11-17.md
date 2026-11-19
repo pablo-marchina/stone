@@ -3503,3 +3503,59 @@ grant técnico existente DEC-018; não executar history
 usando manifesto desatualizado. Nenhuma execução externa
 pelo assistente, nenhuma autorização adicional, mídia,
 merge ou gate liberado. Commit documental.
+
+
+### A03.2 — ajuste do protocolo de credenciais por solicitação do operador
+
+Decisão: retirar a consulta manual obrigatória ao Access
+Token Debugger e o preenchimento obrigatório de datas de
+expiração como pré-condição dos lotes A03. Substitui a
+instrução operacional imediatamente anterior; preserva
+o registro histórico de auth NOT_CHECKED e expiry UNKNOWN.
+Usar configuração existente do monitor (REQUIRE_EXPIRY=0).
+Não modificar guardas nem apagar datas de expiração
+conhecidas, não aceitar credencial ausente ou auth
+bloqueada, não ignorar expiração já declarada ou inválida.
+Erro de autenticação retornado pela Meta continua
+interrompendo o lote e acionando o bloqueio persistente.
+Nenhum bypass, retry automático ou alteração de quotas.
+Não requer nova aprovação institucional.
+
+Operador: com DB/tenant/viewer/manifesto V10 existentes,
+token local configurado, escritores parados e flags
+externas desligadas, validar testes e zero spend, repetir
+a prévia offline e confirmar os mesmos cinco nomes e
+saldo >=5. Se seleção mudou, parar e replanejar.
+```powershell
+git pull --ff-only
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+$manifest = "artifacts/private/bd_manifest_a6_v10.json"
+$env:TAPI_META_REQUIRE_TOKEN_EXPIRY = "0"
+& $py -m pytest -q --tb=short tests/test_discovery_identity_expansion.py tests/test_discovery_expansion_capacity.py
+if ($LASTEXITCODE -ne 0) { throw "Testes A03 falharam" }
+& $py scripts/verify_zero_spend.py
+if ($LASTEXITCODE -ne 0) { throw "Zero spend falhou" }
+& $py -m scripts.a6_identify_sources --manifest "$manifest" --plan-expansion --max-sources 5 --daily-request-budget 80
+```
+Após prévia compatível, token local presente e confirmação
+da operação oficial sem cobrança, executar o lote explícito:
+```powershell
+if ([string]::IsNullOrWhiteSpace($env:TAPI_INSTAGRAM_ACCESS_TOKEN)) { throw "Restaurar credencial existente localmente" }
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$env:TAPI_BD_IDENTITY_ENABLED = "1"
+$env:TAPI_OFFICIAL_METADATA_READS = "1"
+$env:TAPI_ZERO_BILLING_CONFIRMED = "1"
+try {
+    & $py -m scripts.a6_identify_sources --manifest "$manifest" --source abavnacional --source abfoficial --source agisaalimentos --source amarefashiongo --source andraeltec --daily-request-budget 80 --execute --report "artifacts/private/a6-identity-v11-$stamp.json"
+}
+finally {
+    $env:TAPI_BD_IDENTITY_ENABLED = "0"
+    $env:TAPI_OFFICIAL_METADATA_READS = "0"
+    $env:TAPI_ZERO_BILLING_CONFIRMED = "0"
+}
+```
+Enviar status/cycle_key/username/status/code e reservas,
+sem token/IDs. Não executar se guardas atuais bloquearem.
+Ajuste exclusivamente documental e de configuração local
+prevista, sem alteração de código, teste, schema, matriz,
+grants, mídia, merge, gasto ou execução externa.
