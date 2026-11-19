@@ -5190,3 +5190,63 @@ limpo. Após testes, implementar wrapper read-only
 que recolhe legendas via readiness de escopo27 e
 verifica elegibilidade novamente antes de buscas;
 benchmark gold só após consultas e labels verdadeiros.
+
+
+### A05 / IMP-071 — FTS5 focal validado; novo runner scoped pendente de testes (19/11)
+
+Operador HEAD 0d9ffe4eb916ad418209b768ebf9f8e83adce83d
+fast-forward de 4542240. Base Atemporal PASS_ESPELHO_DOCUMENTAL
+32 blobs, 204 IMP, 543 edges, 23 CAP, 18 requisitos,
+18 DEC, 7 gates, IMP-131 sink único; software_tests not_run
+na checagem do espelho, gates not_assessed.
+Suite focal tests/test_discovery_retrieval_fts.py +
+tests/test_discovery_editorial_agent.py: 11 PASSED em 0.66s,
+verify_zero_spend PASS, IMP071_FTS_CORE_TESTS_VERIFIED.
+Não transferir PASS para commits posteriores.
+
+Incremento read-only construído, ainda NÃO testado pelo operador:
+- src/tapi_gate0/discovery_retrieval_scoped.py:
+  preview_scoped_fts exige escopo por require_scoped_research
+  ANTES de acessar legendas e APÓS busca; readiness_report
+  _record_observer somente estágio elegível STAGES[7],
+  aplica contagens esperadas e verificação de source_gate,
+  traces, sem admissões, compara hashes de partições
+  username/content_id/snapshot_id/caption sha256 em duas
+  leituras antes de devolver resultados privados.
+  SQLite FTS5 :memory:, sem persistir índice, sem acesso
+  à Meta ou lançamento científico.
+- scripts/a6_retrieval_preview.py: CLI local exige
+  --confirm-all-ingestion-stopped e --confirm-all-writers-stopped,
+  manifesto em artifacts/private, pin explícito, posts e
+  fontes esperados, relatório JSON novo criado com O_EXCL
+  e permissões restritas; stdout apenas sumário sem legendas,
+  IDs ou queries originais. Apenas IDs/snapshot IDs no
+  relatório privado; não conectar ao HTTP/MCP/Studio.
+- tests/test_discovery_retrieval_scoped.py: 9 casos de
+  aceitação sintética com scope negado antes e depois,
+  snapshot drift, fonte expirada, trace inválido,
+  inputs vazios, sem captions em output, bloqueio de
+  overwrite e confirmação explícita de writers.
+  Reaproveita cinco testes originais da baseline FTS5.
+Commits: 331bfbf, 8b59643, a041358, e118340, 9649b34.
+Nenhum desses commits equivale a benchmark real ou gold.
+P95 reportado pelo runner mede somente MATCH em memória,
+EXCLUI tempo de preparar e indexar; não usar para comparar
+TCO ou latência ponta a ponta. DEC-006 fica aberta;
+IMP-071 não aceito; CT-04 leakage/gold ainda pendentes.
+
+Operação futura, somente após testes e com mesmo recorte
+V12-scope27 d903366a975cb6e4c4e07c9e6300799c727c3efc3a8317530f14d90e19435b54,
+27 fontes/1069 legendas e todos escritores parados:
+executar runner com --expected-posts 1069,
+--expected-sources 27 e consultas exploratórias neutras
+(gestão financeira; vendas; pagamentos), arquivo privado
+exclusivo. Falha se grants caducarem, se contextos
+revogados, se inventário/dados/snapshots mudarem ou
+se escopo ficar inelegível. Não contornar bloqueio.
+Sem consulta gold real, recall/nDCG permanecem null.
+A operação local caption research existente é condição
+necessária, não concede acesso externo, publicação
+ou propriedade das obras. Revalidar finalidade/rights
+do uso antes de qualquer outro modo de consumo.
+Do not merge: PR #44 draft; R$0, sem mídia, sem admissão.
