@@ -4197,3 +4197,58 @@ $head = (git rev-parse HEAD).Trim()
 Enviar resumos/contagens/fingerprint/seleção, sem IDs
 privados, credenciais ou relatório bruto. Não executar
 histórico antes de confirmar prévia V12.
+
+
+### A03.4 — V12 provisionado e backup pré-escrita verificado
+
+Console operador 11904 bytes SHA256
+31e10e28e6d7ea34ffdad86ddcb54c382edfa6358012757a81741b453872936f.
+IDENTITIES_RECONCILED: ciclo a6identity-20261119120439-0e4f8f74,
+V11 pin confirmado, 3 verificadas/3 IDs adicionados,
+2 skipped: abraseloestepotiguar NO_RESULT_RESERVED,
+wabizapp PROVIDER_REQUEST_FAILED. 50 fontes, 26 approved,
+0 grants, database_written=false, external_data_accessed=false.
+Intermediário privado V12 fingerprint
+d4a2ddb5f7df5289bd7d32d1cb8215ceb43feeb32fd1cb42c79c5e48a7ab79e2.
+TECHNICAL_GRANTS_PLANNED 3 novos/0 existentes, DEC-018,
+lease técnico 30 dias, sem rede/admissões.
+
+BACKUP_RESTORE_VERIFIED 2026-11-19T12:07:02.701881+00:00,
+a03-pre-v12-20261119-090701.sqlite3, SHA256
+651cd8cd94f626954817f96f779dd6a6b816cc58284b6cc31a78ed5135337cc6,
+11624448 bytes, backup 672ms/drill 391ms. Integrity/FK
+ok, inventory/logical contents match, schema 0016,
+writers parados atestados, restore descartável, não live.
+Pré-provisionamento 1242 únicos/26 perfis, 1346 snapshots,
+26 creators/checkpoints, 59 ingestion_runs, 27 grants
+no DB, 2835 events/outbox, 21 corpus_profiles, 0
+corpus_source_research_contexts e scientific_reviews,
+sete tabelas A02 vazias. Diferença de 5 perfis observados
+vs registrados confirmada; tratar na consolidação
+documental sem inferir elegibilidade.
+
+TECHNICAL_GRANTS_PROVISIONED: 3 criados, 29 approved,
+50 fontes, V12 privado bd_manifest_a6_v12.json pin
+43372c6fe04ae12e5735e7b932d98a53a114ee0f5eb44d06fa5bea86a465b081.
+Sem rede, technical_verified=false, 0 admissões.
+Não repetir reconciliação/provisionamento/backup
+pré-V12. HEAD local/testes não impressos, remoto
+0a44ace confirmado. Prévia history V12 e capacity
+ainda não reportadas. Saldo estimado 46 (34/80),
+10/10 identity no dia UTC, confirmar snapshot.
+
+Próximo: prévia history 3 fontes e capacity, verificar
+pin V12, seleção exata casa.artemisia.escola,
+endeavorbrasil, institutolojasrenner, saldo >=12,
+ingestão inativa, sem bloqueios. Sob condições R$0
+e writers parados, flags temporárias e relatório
+exclusivo, executar max-sources 3, page-limit10,
+max-pages4, coverage, orçamento80. Reauditar apenas
+novo batch completo junto aos dois relatórios V11.
+Se falha, parar; não tentar outras fontes para contornar.
+Após sucesso, snapshot e prévia próximo lote <=5,
+saldo estimado 34 (8 runs de história, margem2).
+Sem novas identidades hoje, sem nova autorização
+institucional ou declaração manual de validade de
+token. Não prometer rendimento. Sem mídia, gasto,
+merge ou gates. Atualização exclusivamente documental.
