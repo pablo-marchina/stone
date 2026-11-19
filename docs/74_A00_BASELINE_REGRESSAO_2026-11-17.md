@@ -5387,3 +5387,54 @@ espelho e zero_spend pode executar consulta local
 do V12-scope27 via --repeat 5 com relatório novo,
 mesmo pin de manifesto e partição; parar em BLOCKED.
 Preservar todos arquivos privados fora de GitHub.
+
+
+### IMP-071 — repetição integral scope27 verificada em 5 rodadas (19/11)
+
+Operador no HEAD 32a90d356b5ed88acfaf169f3b7fe750331b49f8:
+espelho PASS_ESPELHO_DOCUMENTAL, 32 blobs/204 IMP/543 DAG/
+23 CAP/18 DEC/7 gates, DAG acíclico IMP-131 sink único;
+gates=not_assessed e software_tests=not_run no verificador
+documental, testes focais separados:
+tests/test_discovery_retrieval_fts.py +
+tests/test_discovery_retrieval_scoped.py +
+tests/test_discovery_editorial_agent.py: 25 passed em 2.64s.
+verify_zero_spend PASS; IMP071_REPEAT_TESTS_VERIFIED.
+
+5 ciclos completos scripts.a6_retrieval_preview --repeat 5,
+em recorte V12-scope27 manifest
+d903366a975cb6e4c4e07c9e6300799c727c3efc3a8317530f14d90e19435b54:
+27 fontes/1069 legendas, 3 queries operador (gestão
+financeira, vendas, pagamentos), top-k=5, 5/5/2 hits;
+partição SHA256
+b842a43efd737abee7b78930ddb1243ccac93290cc7c45e9774d9bf542dafb44
+ESTÁVEL em todas cinco rodadas, IDs/snapshot IDs/ordem
+de hits iguais e scope+caption revalidados a cada uma.
+Amostras full_preview_elapsed_ms:
+5320.8965, 5521.2882, 2515.8147, 3586.0533, 3303.6243.
+p50=3586.0533ms, p95 nearest-rank=5521.2882ms,
+min=2515.8147ms, max=5521.2882ms.
+Última rodada 3303.6243ms:
+pre_scope_check=5.5996ms,
+first_readiness=1589.0449ms,
+fts_index_build=32.9563ms,
+query_batch=0.6708ms,
+post_scope_check=8.7143ms,
+second_readiness_and_final_scope=1666.6384ms.
+FTS query p95=0.3271ms em três queries da última rodada.
+p50/p95 não são SLOs: n=5, nearest rank p95=max,
+sem medição de setup engine, CLI, escrita JSON e máquina
+controlada. Diferença entre 2.5s e 5.5s requer profiling
+do readiness; NÃO remover verificação de escopo ou hashes.
+0 rights escalated, sem DB mutation, rede, agentes,
+Creative Studio, admissões científicas, release ou merge.
+
+Relatório exclusivamente privado:
+a05-imp071-repeat5-20261119-202727-963.json
+SHA256
+64465430683d37000ea5bc46dd4f5f78d90ca0bb718088c712f9ef3ba5478dc7.
+Gold relevance ausente, Recall@k/nDCG@k null, DEC-006,
+IMP-071 e CT-04 continuam não homologados. Próximo
+incremento opcional deve instrumentar etapas internas
+de readiness sem alterar auditoria, e usar benchmark
+diagnóstico sobre mesmo recorte e direitos.
