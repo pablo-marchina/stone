@@ -20,7 +20,7 @@ from .discovery_retrieval_fts import (
 VERSION = "tapi-imp071-scoped-fts-preview.v1"
 
 
-def _scoped_rows(engine, tenant, frame, viewer, expected_sources, expected_posts):
+def _scoped_rows(engine, tenant, frame, viewer, expected_sources, expected_posts, *, timing_sink=None):
     """Read only STAGES[7] records through the audited readiness observer."""
     rows = []
     population = []
@@ -35,9 +35,10 @@ def _scoped_rows(engine, tenant, frame, viewer, expected_sources, expected_posts
         population.append((source.username, post.content_id, metric.snapshot_id,
                            sha256(caption.encode("utf-8")).hexdigest()))
 
-    ready = readiness_report(
-        engine, tenant, frame, viewer, _record_observer=capture,
-    )
+    kwargs = {"_record_observer": capture}
+    if timing_sink is not None:
+        kwargs["_timing_observer"] = timing_sink
+    ready = readiness_report(engine, tenant, frame, viewer, **kwargs)
     if (ready["status"] != "CORPUS_READINESS_PLANNED"
             or ready["manifest_sha256"] != frame.fingerprint()
             or len(frame.sources) != expected_sources
@@ -60,7 +61,8 @@ def _scoped_rows(engine, tenant, frame, viewer, expected_sources, expected_posts
 
 
 def preview_scoped_fts(engine, tenant, frame, viewer, *, queries,
-                       expected_posts: int, expected_sources: int, limit: int = 5):
+                       expected_posts: int, expected_sources: int, limit: int = 5,
+                       profile_readiness: bool = False):
     """Fail closed on live rights or snapshot drift; return no caption text.
 
     This is a private operator diagnostic, not a general-purpose retrieval API:
@@ -74,6 +76,8 @@ def preview_scoped_fts(engine, tenant, frame, viewer, *, queries,
         raise RetrievalBaselineError("RETRIEVAL_SCOPE_EXPECTATION_INVALID")
     if not isinstance(queries, (list, tuple)) or not 1 <= len(queries) <= 10:
         raise RetrievalBaselineError("RETRIEVAL_QUERY_BATCH_INVALID")
+    if not isinstance(profile_readiness, bool):
+        raise RetrievalBaselineError("RETRIEVAL_PROFILE_FLAG_INVALID")
     # Reject malformed search queries before any private caption is read.
     for query in queries:
         _fts_query(query)
@@ -82,11 +86,14 @@ def preview_scoped_fts(engine, tenant, frame, viewer, *, queries,
         raise RetrievalBaselineError("RETRIEVAL_LIMIT_INVALID")
 
     t0 = perf_counter()
+    first_profile = []
+    second_profile = []
     # Gate before ANY local caption material enters the transient index.
     require_scoped_research(engine, tenant, frame, viewer)
     t_scope_before = perf_counter()
     rows, partition_before = _scoped_rows(
         engine, tenant, frame, viewer, expected_sources, expected_posts,
+        timing_sink=first_profile.append if profile_readiness else None,
     )
     t_readiness_before = perf_counter()
     try:
@@ -106,12 +113,15 @@ def preview_scoped_fts(engine, tenant, frame, viewer, *, queries,
     t_scope_after = perf_counter()
     verify_rows, partition_after = _scoped_rows(
         engine, tenant, frame, viewer, expected_sources, expected_posts,
+        timing_sink=second_profile.append if profile_readiness else None,
     )
     verify_rows.clear()
     require_scoped_research(engine, tenant, frame, viewer)
     if partition_before != partition_after:
         raise RetrievalBaselineError("RETRIEVAL_PARTITION_DRIFT")
     t_end = perf_counter()
+    if profile_readiness and (len(first_profile) != 1 or len(second_profile) != 1):
+        raise RetrievalBaselineError("RETRIEVAL_READINESS_PROFILE_INVALID")
 
     return {
         "status": "SCOPED_FTS_LOCAL_PREVIEW_COMPLETED",
@@ -135,6 +145,11 @@ def preview_scoped_fts(engine, tenant, frame, viewer, *, queries,
         },
         "full_preview_includes_scope_and_revalidation": True,
         "performance_sample_is_exploratory": True,
+        "readiness_profile": ({
+            "first_readiness": first_profile[0],
+            "second_readiness": second_profile[0],
+            "timing_is_diagnostic_only": True,
+        } if profile_readiness else None),
         "gold_relevance_judgments_available": False,
         "recall_at_k": None,
         "ndcg_at_k": None,
