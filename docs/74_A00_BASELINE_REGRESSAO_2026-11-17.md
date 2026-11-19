@@ -4252,3 +4252,74 @@ Sem novas identidades hoje, sem nova autorização
 institucional ou declaração manual de validade de
 token. Não prometer rendimento. Sem mídia, gasto,
 merge ou gates. Atualização exclusivamente documental.
+
+
+### A03.4 — V12 coletado, 29 perfis observados, 34 unidades restantes
+
+Console operador 48392 bytes SHA256
+bb81d0ad8f72f89a13f216854f9d7c50896ed5a69c882566a5ce0d3cf386a6de.
+HEAD local eaf3472b007f27184eedefddff8e5bf5affd2c01 igual remoto.
+V12 pin 43372c6fe04ae12e5735e7b932d98a53a114ee0f5eb44d06fa5bea86a465b081.
+Snapshot antes 2026-11-19T12:09:10.556689+00:00: 34/80,
+46 restantes, 1242 únicos/26 perfis, 27 grants verificados.
+BATCH_COMPLETED a5history-20261119120923-47012abc,
+a03-history-v12-20261119-090921.json. 101 retornados,
+79 novos, 21 too_recent, 1 missing_metrics, 11 páginas.
+Casa Artemisia 17/21 (3 páginas, frontier_unconfirmed),
+Endeavor 33/40, Renner 29/40 (ambos 4 páginas,
+continuation_available). Não presumir fim de histórico
+nem reiniciar Casa Artemisia; planner exclui com
+BD_HISTORY_FRONTIER_UNCONFIRMED. Sem refresh/duplicatas.
+Reauditoria 3 reports/8 runs, 301 retornados/256 novos
+e aceitos, 44 too_recent, 1 missing_metrics, 31 páginas,
+8/8 audit_valid, 0 invalid_metadata/unsupported_format/
+duplicates. 85,05% aproveitamento técnico. Sem
+admissões, produção ou cobertura exaustiva.
+
+Snapshot depois 2026-11-19T12:09:41.777427+00:00:
+1321 registros/IDs únicos, 29 observados, 21 registrados
+(gap documental 8), 30 grants ativos tecnicamente
+verificados, 29 com registros. 28 continuation,
+1 frontier_unconfirmed, 1 no_checkpoint (grant extra
+fora do manifesto não usar). 0 scope_mismatch/unknown.
+46/80 unidades reservadas (10 identity + 9 runs x4,
+inclui run falho OAuth anterior), saldo 34, 8 runs
+history possíveis, identity slots 0. Ingestão inativa;
+snapshot sem mutação/rede/gates. Gap bruto 679 posts/
+1 perfil, 17 runs/68 unidades otimistas. Meta técnica
+não atingível hoje, teto adicional 320 observações
+(não previsão de novos). Nenhuma declaração manual
+de expiração; credencial funcionou nestes runs.
+
+Prévia V12 confirmada para cinco fontes já observadas:
+seliganoton (105, fairness), menteempreendedora (3),
+contaazul (20), ifoodparaparceiros (26),
+empreendedorasdabelezagb (29); soma 183 posts existentes
+vs recency 367, cinco estratos distintos em ambas,
+predicted_yield=null. 20 unidades/200 observações
+máximas. Depois reauditar quatro relatórios completos,
+recalcular capacidade e planejar até 3 runs finais
+(12 unidades; saldo esperado 2). Não fixar seleção
+do último lote antecipadamente. Não repetir falhas,
+não usar grant extra, não alterar limites ou resetar
+quota. Dia UTC 19/11, sem novas identidades até novo dia.
+Após conclusão do dia, backup verificado e consolidação
+documental dos oito novos perfis; reavaliar corpus
+e rankings atuais, sem inferência científica automática.
+
+Próximo: manter condições R$0, escritores parados,
+mesmo manifesto/viewer/tenant/credencial, confirmar
+prévia atual e saldo >=20. Usar CLI existente com
+--mode history --max-sources 5 --page-limit 10
+--max-pages 4 --daily-request-budget 80
+--priority-policy coverage --execute, relatório privado
+exclusivo a03-history-v12-expansion-<stamp>.json;
+flags CONTINUOUS/TECHNICAL_INGEST/OFFICIAL_METADATA_READS/
+ZERO_BILLING_CONFIRMED temporárias e restauradas
+a 0 em finally. Reauditar apenas novo batch completo
+junto com a03-history-v11-recovery-20261119-085857.json,
+a03-history-v11-remaining-20261119-090144.json e
+a03-history-v12-20261119-090921.json. Parar se falha.
+Depois capacity e prévia max-sources3. Nenhuma execução
+externa, alteração de código ou banco pelo assistente;
+commit exclusivamente documental. Sem merge ou gates.
