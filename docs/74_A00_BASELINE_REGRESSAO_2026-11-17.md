@@ -4856,3 +4856,42 @@ após throw. Regressão 189 PASS e gates sintéticos permanecem
 evidências válidas para código/modelo inalterados. R$0,
 sem Meta/mídia, sem merge, sem liberação global.
 Atualização exclusivamente documental.
+
+
+### A03.5 — expiração confirmada; inspecionar renewal técnico existente
+
+Console operador 24624 bytes SHA256
+e2fcf96251195eed338bb75224175d9bed523a8ac47b64ece4f4833c8b9c5493.
+stone 144 e seliganoton 143 registros, ambos approved,
+MANIFEST_SOURCE_EXPIRED, expires_at 2026-11-19T13:43:35.768353Z,
+diagnóstico UTC 13:46:03.9058047. 21 outros candidates com
+zero registros e sem approval não são regressões. Plano
+CAPTION_RESEARCH_PLANNED: 27 escopos, 0 provision, exatamente
+duas ações MANIFEST_SOURCE_EXPIRED, sem mutação/admissão.
+Não confundir manifesto/grant com token OAuth.
+
+Inspeção do código: scripts.a6_provision_grants --renew-due
+já existe e reutiliza discovery_grant_renewal.renew_due.
+Renova leases A6 com PREFIX próprio, referência viewer/account
+exata, identidade auditada do mesmo viewer, grant habilitado,
+sem quarentena/ingestão ativa e expiração correspondente ou
+reconciliação exata de evento anterior. Prazo técnico 30 dias,
+janela 7 dias; preserva approved_at/referência/verificação,
+escreve evento/outbox autenticado e novo manifesto privado.
+Não estende autorização institucional nem direitos por ativo.
+Não assume elegibilidade dos dois grants iniciais: referências
+legadas sem PREFIX são ignoradas, não renovadas pelo CLI.
+IngestionStore.grant é create-only; não recriar grants ou
+contextos. Diagnóstico read-only de PREFIX/estado/expiração/
+identidade auditada sem imprimir IDs/referências; preview
+--renew-due sobre V12, sem --execute/--output.
+Se ambos cobertos, avaliar renovação existente com writers
+parados, backup e novo manifesto, revalidar contextos/readiness
+antes da inferência. Se legado ou conflito, não contornar:
+avaliar migração auditada conforme autoridade real e evidências;
+continuar em recorte explicitamente versionado das 27 fontes
+válidas se necessário, com exclusões e cobertura registradas,
+V12 original intacto, não declarar corpus completo. Nenhuma
+renovação, escrita DB ou execução modelo realizada. R$0,
+sem Meta/mídia, sem nova aprovação institucional genérica,
+sem merge/gates. Atualização exclusivamente documental.
