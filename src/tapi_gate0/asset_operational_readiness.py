@@ -13,7 +13,7 @@ from sqlalchemy.engine import make_url
 from .discovery_backup import _readonly, _integrity
 from .discovery_local_db import validate_existing_database_url
 from .asset_jobs import (MAX_PENDING, MAX_DAILY_TENANT_ATTEMPTS,
-    MAX_DAILY_GLOBAL_ATTEMPTS, MAX_CONCURRENT)
+    MAX_DAILY_GLOBAL_ATTEMPTS, MAX_CONCURRENT, MAX_TENANT_HISTORY, MAX_GLOBAL_HISTORY)
 from .asset_derived_payloads import MAX_TENANT_BYTES, MAX_GLOBAL_BYTES
 
 REVISION="0016_asset_derived_payloads"
@@ -64,6 +64,7 @@ def inspect(raw_url,tenant):
             lineage[key]=n
         ms=int(now.timestamp()*1000)
         day=int(now.replace(hour=0,minute=0,second=0,microsecond=0).timestamp()*1000)
+        global_history=count("SELECT count(*) FROM asset_processing_jobs")
         active=count("SELECT count(*) FROM asset_processing_jobs WHERE state IN ('running','cancel_requested')")
         expired=count("SELECT count(*) FROM asset_processing_jobs WHERE tenant_id=? AND state IN ('running','cancel_requested') AND (lease_ms<=? OR deadline_ms<=?)",(tenant,ms,ms))
         pending=count("SELECT count(*) FROM asset_processing_jobs WHERE state IN ('queued','running','cancel_requested') AND tenant_id=?",(tenant,))
@@ -87,6 +88,8 @@ def inspect(raw_url,tenant):
             blockers.append("ACTIVE_GLOBAL_LEASES_REQUIRE_RECONCILIATION")
         if ingestion_busy:
             blockers.append("ACTIVE_INGESTION")
+        if counts["asset_processing_jobs"]>=MAX_TENANT_HISTORY or global_history>=MAX_GLOBAL_HISTORY:
+            blockers.append("JOB_HISTORY_LIMIT")
         if pending>=MAX_PENDING:
             blockers.append("TENANT_PENDING_LIMIT")
         if attempts_tenant>=MAX_DAILY_TENANT_ATTEMPTS or attempts_global>=MAX_DAILY_GLOBAL_ATTEMPTS:
@@ -100,6 +103,8 @@ def inspect(raw_url,tenant):
             "tenant_expired_active_leases":expired,"global_active_leases":active,
             "global_concurrency_limit":MAX_CONCURRENT,"active_ingestion":ingestion_busy,
             "tenant_pending":pending,"tenant_pending_limit":MAX_PENDING,
+            "job_history":{"tenant":counts["asset_processing_jobs"],"global":global_history,
+                "tenant_limit":MAX_TENANT_HISTORY,"global_limit":MAX_GLOBAL_HISTORY},
             "daily_attempts":{"tenant":attempts_tenant,"global":attempts_global,
                 "tenant_limit":MAX_DAILY_TENANT_ATTEMPTS,"global_limit":MAX_DAILY_GLOBAL_ATTEMPTS,
                 "window":"utc_calendar_day"},

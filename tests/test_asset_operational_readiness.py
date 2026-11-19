@@ -80,3 +80,29 @@ def test_readiness_cli_rejects_checkout_before_inspection(monkeypatch,capsys):
     monkeypatch.setattr(cli,"inspect",lambda *a:pytest.fail("inspection must not run"))
     assert cli.main(["--expected-head","a"*40])==2
     assert "BASELINE_HEAD_MISMATCH" in capsys.readouterr().out
+
+
+def test_readiness_counts_expired_lease_without_reconciliation(db):
+    from datetime import datetime,timezone
+    path,url=db
+    ms=int(datetime.now(timezone.utc).timestamp()*1000)
+    # Minimal surrogate rows for aggregate metrics, not authentic lineage,
+    # a valid job spec, or a permission grant.
+    with closing(sqlite3.connect(path)) as conn:
+        conn.execute("PRAGMA foreign_keys=ON")
+        conn.execute("INSERT INTO asset_lineage_nodes (tenant_id,node_id,kind,payload,purpose,state) VALUES (?,?,?,?,?,?)",
+            (TENANT,"fixture-node","asset","{}","research_analysis","active"))
+        conn.execute("INSERT INTO asset_processing_jobs (tenant_id,job_id,object_id,spec,state,attempt,version,created_ms,updated_ms,available_ms,worker,fence,lease_ms,deadline_ms) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (TENANT,"fixture-job","fixture-node","{}","running",1,1,ms-2000,ms-2000,ms-2000,"fixture-worker","a"*32,ms-1000,ms+10000))
+        conn.execute("INSERT INTO asset_processing_attempts (tenant_id,job_id,attempt,started_ms) VALUES (?,?,?,?)",
+            (TENANT,"fixture-job",1,ms))
+        conn.commit()
+    before=_sha256(path)
+    report=inspect(url,TENANT)
+    assert report["global_active_leases"]==report["tenant_expired_active_leases"]==1
+    assert report["tenant_job_states"]["running"]==report["tenant_pending"]==1
+    assert report["job_history"]["tenant"]==report["job_history"]["global"]==1
+    assert report["daily_attempts"]["tenant"]==report["daily_attempts"]["global"]==1
+    assert "ACTIVE_GLOBAL_LEASES_REQUIRE_RECONCILIATION" in report["blockers"]
+    assert "fixture-worker" not in str(report) and "fixture-job" not in str(report)
+    assert _sha256(path)==before and not report["media_enabled"]

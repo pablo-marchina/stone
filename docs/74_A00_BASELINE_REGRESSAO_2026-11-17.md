@@ -3072,3 +3072,101 @@ if ($LASTEXITCODE -ne 0) { throw "Coorte incompleta; nao agregar" }
 Esperados 8/8 sem skip, 8 linhas SHARED_AV_ROUTING,
 JSON agregado 15 braços; enviar HEAD, resultado testes
 e resumo. Sem full neste passo.
+
+
+## A02.7.4 — coorte shadow PASS e decisão de não promover (18/11/2026)
+
+Operador: 25/25 focal (0,91s), 9/9 policy (14,97s),
+zero-spend PASS; preflight physical 5379497984 bytes,
+commit 11493392384 bytes, total physical 16597598208.
+8/8 nativos PASS (399,44s), 155 deselected, 8 linhas
+SHARED_AV_ROUTING, agregado 15 braços, 120 replays.
+Console 33406 bytes SHA256
+03c2417cc6271d039c5d17e93c652a121cf31ebf98bdb9ef3da5c4a99d6da41f.
+HEAD local não impresso neste log; remoto confirmado 45decc3.
+Sem nova validação documental neste console. WER rejected
+complementary/audio_only 4/7, IoU .931281, boundary .1793125,
+sem transcrição admitida. 6 outros complete_guarded.
+32 células, 12 positivos esperados. Baseline diagnóstico:
+8 corretos, 1 errado (inventory), 4 perdidos, cobertura
+9/32, selective error 1/9, exatos 5/8. Guard completo:
+7 corretos, 0 errados, 5 perdidos, cobertura 7/32,
+selective error 0/7, exatos 6/8. Suprime erro inventory
+mas também tema correto complementary. Não generalizar
+zero erro ou promover policy com esta amostra autoral.
+
+Custo soma de passos: 352937.913 ms; VLM 238289.086,
+ASR/VAD 91131.026, OCR 13032.681, temporal 10485.120.
+24 chamadas (11 ASR/VAD, 8 OCR, 5 VLM; métricas do
+adaptador, não somente chamadas ao Whisper). Peak Job
+5270228992 bytes. Guard OCR+VLM: 5 corretos, 7 perdidos,
+251321.767ms, 13 chamadas. ASR+OCR+VLM: 7 corretos,
+5 perdidos, 342452.793ms, 24 chamadas. Temporal não
+acrescenta aos 4 campos semânticos, mas suas medições
+permanecem necessárias ao escopo IMP-136 e rubrica.
+Zero cobertura em vários braços é consequência do
+guard, não prova de incapacidade do modelo isolado.
+
+Shadow mantém valores completos nos oito casos:
+omite apenas VLM em silence/tone_negative, 343734.238ms,
+estimativa 9203.675ms (2,61%), zero chamadas economizadas
+porque guard de imagem vazia já evitou inferência.
+Decisão IMP-129: não promover roteador/guard a default
+nem executar omissão; ganho contrafactual pequeno,
+sem controles visuais difíceis e gold independente.
+A02.7.4 experimento concluído, roteamento operacional
+não aprovado. A02.7.3 qualidade ASR FAIL e VLM quality FAIL
+preservados. Último full strict aprovado 20aea11.
+Não gastar outra rodada nas mesmas fixtures agora.
+
+## A02.8/9 — diagnóstico de prontidão operacional somente leitura
+
+7fb0dc3: asset_operational_readiness.inspect e CLI
+scripts/a02_operational_readiness.py. Usa SQLite existente,
+mode=ro + query_only, transação de leitura única, revisão
+0016 obrigatória, tenant existente, integrity/foreign keys.
+Não abre vault, descriptografa payloads, lê chaves, fornece
+trust anchor, concede grants, chama modelo, rede, claim,
+reconcilia lease ou altera banco. Contagens agregadas
+por tenant: 7 tabelas A02, linhagem por estado, jobs por
+estado, lease expirado, pendência, histórico, tentativas
+por dia UTC e bytes de envelope; globais apenas limites
+de segurança/contagens agregadas. Não expõe IDs, conteúdo,
+credenciais ou paths. Snapshot pode ficar obsoleto, não
+constitui lock nem atestado de autorização; SQLite pode
+usar infraestrutura de leitura WAL/SHM. Bloqueadores
+explícitos mesmo se grants existirem: trust independente,
+permissão exata por ativo, chaves e adaptador de mídia
+real não avaliados/ativados. Não é PEP. A02.8 real
+continua condicionado às credenciais/licenças/grants
+legítimos e execução autorizada, não repetir DEC-018.
+Cinco testes em DB descartável (sem execução pelo
+assistente): revisão/tenant, ausência de arquivo, URL
+remota, isolamento tenant, integridade do arquivo,
+agregação de lease expirado sem reconciliação, CLI HEAD.
+Não alterar schema, matrizes, grants ou gates.
+Não é necessário rerodar coorte 8 nem full para este
+diagnóstico; preservar última evidência full.
+
+### Operador — prontidão local
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+& $py docs/base_atemporal/ferramentas/validar_espelho.py
+& $py -m pytest -q --tb=short tests/test_asset_operational_readiness.py
+& $py scripts/verify_zero_spend.py
+```
+Se PASS, parar writers normalmente para snapshot de
+manutenção (não é necessário backup novo, migração ou
+restauração). Reutilizar TAPI_DATABASE_URL e TAPI_TENANT_ID
+configurados para banco local 0016, nunca imprimir valores:
+```powershell
+$head = git rev-parse HEAD
+& $py scripts/a02_operational_readiness.py --expected-head "$head"
+```
+Enviar JSON agregado; status esperado A02_READINESS_INSPECTED_MEDIA_BLOCKED,
+não PASS de autorização. Ausência de grants não é falha
+da infraestrutura nem pedido de nova aprovação; não
+fabricar chaves/autoridades nem executar mídia real.
