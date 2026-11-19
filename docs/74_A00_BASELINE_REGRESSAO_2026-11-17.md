@@ -5308,3 +5308,42 @@ medir tempo total de uma rodada sob três consultas,
 sem confundir com percentil de latência de várias rodadas.
 DEC-006, IMP-071, G1 e CT-04 não homologados.
 PR #44 draft; nenhuma liberação global/merge/rights.
+
+
+### IMP-071 — full-preview scope27 medido com ledger e R$0, 22 testes PASS (19/11)
+
+Operador no HEAD 2b6c67b06dff8a6b11b528c71408b1245b8526a3:
+espelho DAG acíclico, IMP-131 sink, software_tests=not_run
+no verificador documental, gates=not_assessed.
+Testes focais retrieval_fts, retrieval_scoped, editorial_agent:
+22 passed in 2.04s; zero_spend PASS.
+IMP071_FULL_TIMING_TESTS_VERIFIED.
+Preview SCOPED_FTS_LOCAL_PREVIEW_COMPLETED,
+1.069 legendas / 27 fontes, três consultas, hits 5/5/2;
+manifest fingerprint
+d903366a975cb6e4c4e07c9e6300799c727c3efc3a8317530f14d90e19435b54;
+partition sha256
+b842a43efd737abee7b78930ddb1243ccac93290cc7c45e9774d9bf542dafb44
+(igual ao preview anterior).
+Relatório privado a05-imp071-full-timing-20261119-202141-874.json,
+SHA256 a6a58d42c109af6c648d85d1dec12c784908623c2586f1665f9711628294d776.
+full_preview_elapsed_ms 2512.931 (uma só rodada de
+3 queries; exclui setup do CLI e escrita do relatório).
+p95_search_latency_ms 0.3648 (somente MATCH em 3 queries).
+breakdown (ms): pre_scope_check 28.9341,
+first_readiness 1114.3092, fts_index_build 27.8356,
+query_batch 0.6759, post_scope_check 8.5360,
+second_readiness_and_final_scope 1332.6402.
+Readiness dupla 2446.9494ms, cerca de 97.37% do
+tempo da função; FTS build+query 28.5115ms.
+Não é p95 fim a fim e não representa SLO: N=1 rodada,
+3 consultas, sem controle de cache/CPU/IO, timings
+sem overhead de engine init e JSON. Segurança de
+escopo/trace revalidada, não otimizar retirando
+readiness nem concedendo rights via cache.
+No gold labels, Recall@k/nDCG@k null. 0 admissions,
+sem DB write, Meta, publicação, modelo ou merge.
+Próximo: repetição explícita da rodada completa com
+pin de partição e igualdade dos IDs/snapshots/hits,
+amostras e p50/p95 rotulados diagnósticos (não gold).
+CT-04/IMP-071/DEC-006/G1 ainda pendentes.
