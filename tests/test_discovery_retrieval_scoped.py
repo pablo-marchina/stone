@@ -396,3 +396,8 @@ def test_cli_profile_option_only_adds_aggregate_timing(
     report = json.loads((private / "repeat.json").read_text(encoding="utf-8"))
     assert report["readiness_profile"]["first_readiness"]["technical_trace_audit_ms"] == 3.0
     assert report["readiness_profile"]["second_readiness"]["technical_trace_audit_ms"] == 4.0
+    samples = report["repeat_experiment"]["readiness_profile_samples"]
+    assert len(samples) == 3
+    assert all(item["first_readiness"]["technical_trace_audit_ms"] == 3.0
+               and item["second_readiness"]["technical_trace_audit_ms"] == 4.0
+               for item in samples)
