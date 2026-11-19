@@ -2984,3 +2984,91 @@ if ($LASTEXITCODE -ne 0) { throw "Headroom ASR insuficiente; nao iniciar testes 
 Enviar HEAD, preflight e SHARED_AV_PARTIAL/traceback.
 Nenhum PASS nativo novo, perfil promovido, migração, gasto,
 merge, operação externa ou liberação de gate.
+
+
+## A02.7.4 — evidência parcial nativa PASS; replay de roteamento (18/11/2026)
+
+Operador HEAD 556cd1c5b34560c179e3d28d51bbc5dcb5a960ec
+igual remoto, diff desde b85e105 apenas docs/74. Espelho PASS
+32 blobs, 13 matrizes, 204 IMP, 543 dependências, DAG acíclico
+sink IMP-131. Focal 129/129 PASS 3,11s; policy 9/9 PASS
+12,16s; zero-spend PASS. Nativos parciais 2/2 PASS 111,10s,
+155 deselected. Ambos candidate_partial, WER 4/7=.571429,
+8 hyp/7 ref, IoU .9312810088202866, boundary .1793125s,
+VAD/ASR 1/1. Complementary OCR observado, texto_na_tela
+true, 3 semânticos abstidos. Audio_only OCR no_observable_signal,
+4 abstidos. Temporal e VLM observados nos dois. Sem promoção
+semântica, sem recuperar CTA, sem mudar gate de WER.
+Preflight headroom não impresso, porém execução nativa completa.
+Último full strict válido 20aea11, dois casos strict WER FAIL
+permanecem. A02.7.3 infraestrutura parcial PASS, qualidade FAIL.
+
+Incremento IMP-063/064/129:
+- 342a7b3: evaluate_shared_av_routing_replay, 15 subconjuntos
+  guardados do mesmo bundle completo autenticado, strict ou
+  parcial, mesma transação de direitos pré/pós, sem inferência
+  nova. Preserva reprovações do conjunto completo e distingue
+  ausência de modalidade em cada braço. Seleção shadow fixa:
+  só propor omitir VLM se ASR e OCR ambos no_observable_signal,
+  nunca se ASR quality rejected/insuficiente. Não usar VLM
+  para decidir se VLM seria chamado. Não executar roteamento.
+- 8a874d6: coorte 8 clipes pelo mesmo modo parcial, 32
+  células semânticas e 16 outros campos não avaliados por
+  clipe. Dois casos WER rejeitados preservados; outros seis
+  devem completar sem rejeição. Todos 4 processadores de
+  todos os clipes realmente executados uma vez por caso;
+  15 braços reaproveitam resultados. Inclui baseline
+  diagnóstico (não permitido como decisão parcial) e guard
+  completo. Testa igualdade do braço completo ao resultado
+  pipeline, ordem invariável, seleção incompleta negada,
+  suportes confinados, revogação e idempotência. Sem mudar
+  testes strict originais. Strict grupo partial native 2->8,
+  novo grupo summary 4. Total 10 casos adicionais.
+- Relatório SHARED_AV_ROUTING por caso, agregado offline
+  scripts/a02_shared_av_routing.py. Oracle autoral fixo
+  igual anterior, exige oito casos únicos e 15 braços.
+  Conta correct/wrong_nonabstained, missed_candidates,
+  exact_cases, coverage, selective_error_rate (null se
+  zero candidatos), custos (soma step wall observado,
+  chamadas, max pico commit Job). Custos contrafactuais
+  não medidos; não são economia realizada, nem custo
+  total de host ou percentil. Exclui replay final. Não
+  otimizar por acerto de abstenções apenas. Sem escolha
+  automática. CLI aceita log UTF8/UTF16 BOM de PowerShell;
+  entrada diagnóstica local, não autorização autenticada.
+
+Testes novos não executados pelo assistente em Windows.
+Sem downloads, alterações de gates/matrizes, schema DB,
+grants, mídia real, gasto, merge ou release.
+Próximo: comparar risco-cobertura-custo após 8/8; se shadow
+sem perdas nesta coorte, ainda não aprovar omissão real sem
+validação de controles difíceis independentes de seleção.
+Não inferir qualidade VLM aprovada.
+
+### Operador — avaliação de roteamento shadow
+
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+& $py docs/base_atemporal/ferramentas/validar_espelho.py
+& $py -m pytest -q --tb=short tests/test_asset_shared_av_routing.py tests/test_a00_baseline.py
+& $py -m pytest -q --tb=short tests/test_asset_rights_registry.py -k test_shared_av_ablation_policy_and_rights
+& $py scripts/verify_zero_spend.py
+```
+Esperados summary 4/4 e policy 9/9; demais runner sem
+falha. Se PASS, preflight e execução serial (sem outros
+workers, parar writers/servidores normalmente):
+
+```powershell
+& $py -c "from tapi_gate0.asset_windows_job import require_model_headroom, ModelFixtureLimits; print(require_model_headroom(ModelFixtureLimits()))"
+if ($LASTEXITCODE -ne 0) { throw "Headroom ASR insuficiente" }
+$log = Join-Path $env:TEMP ("stone-routing-" + (Get-Date -Format "yyyyMMdd-HHmmss") + ".txt")
+& $py -m pytest -q --capture=tee-sys --tb=short tests/test_asset_rights_registry.py -k test_partial_shared_av_native_pipeline | Tee-Object -FilePath $log
+if ($LASTEXITCODE -ne 0) { throw "Coorte incompleta; nao agregar" }
+& $py scripts/a02_shared_av_routing.py --log "$log"
+```
+Esperados 8/8 sem skip, 8 linhas SHARED_AV_ROUTING,
+JSON agregado 15 braços; enviar HEAD, resultado testes
+e resumo. Sem full neste passo.
