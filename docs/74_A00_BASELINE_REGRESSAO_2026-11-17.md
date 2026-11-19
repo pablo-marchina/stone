@@ -3948,3 +3948,83 @@ da reauditoria. Após sucesso, planejar quatro fontes
 restantes e segundo lote identity. Nenhuma mudança de
 código, dados operacionais, gates, merge ou rede pelo
 assistente. Saldo 71 apenas na prévia observada.
+
+
+### A03.3 — recuperação oficial ABAV concluída e reauditoria aprovada
+
+Console operador 16210 bytes SHA256
+1d9bfc1d09342dce10c851d788c16c5174d6a0b3bf397ab8707fe56f2407f568.
+BATCH_COMPLETED a5history-20261119115859-a83ea47a,
+V11 pin 19c38ca968585a7e056402dd2f5f743df232f778c161b762e9c764d713e71840,
+abavnacional, report privado
+a03-history-v11-recovery-20261119-085857.json.
+40 retornados, 38 aceitos/novos, 2 too_recent,
+0 refresh/duplicates, 4 páginas. Reauditoria
+HISTORY_REPORTS_REAUDITED 1 report/1 run, 38/38
+observações válidas, 0 missing_metrics/invalid_metadata/
+unsupported_format/duplicate_in_page. Checkpoint
+continuation_available. Corpus 1065→1103 únicos,
+21→22 perfis observados, zero cross-source duplicates.
+26 fontes aprovadas no manifesto, zero admissões,
+sem validação científica ou produção. Credencial
+substituída funcionou nesta coleta, não afirmar
+validade futura; RESET_UNVERIFIED no plano é estado
+anterior ao run, não resultado OAuth negativo.
+A falha anterior e reserva de 4 unidades preservadas.
+Estimativa pós-run 13/80 (5 identity + 2 runs x4),
+saldo 67, 5 slots identity, confirmar snapshot atual.
+HEAD local/testes não impressos; remoto 9be6556.
+
+Próximo: continuar V11 com max-sources=4, coverage,
+esperadas abfoficial/agisaalimentos/amarefashiongo/
+andraeltec (sem registros), confirmar prévia atual;
+16 unidades/160 observações máximas, não previsão.
+Se seleção divergente, parar e replanejar. Após
+conclusão, reauditar conjuntamente recuperação ABAV
+e novo relatório completo (não incluir batch falho).
+Depois planejar segundo lote identity com V11,
+até 5 candidatos inéditos. Se 4 runs e 5 identities,
+saldo estimado 46/80; até 11 runs adicionais (44
+unidades, margem 2), sujeito a quotas/dia/guardas.
+Não alterar token ou repetir reset sem nova falha.
+Usar flags temporárias existentes, R$0, writers
+parados, relatório exclusivo. Sem mídia, gasto,
+nova aprovação institucional ou merge.
+
+```powershell
+git pull --ff-only
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+$manifest = "artifacts/private/bd_manifest_a6_v11.json"
+$head = (git rev-parse HEAD).Trim()
+& $py -m scripts.a03_expansion_capacity --expected-head "$head"
+& $py -m scripts.a5_business_discovery_cycle --manifest "$manifest" --mode history --max-sources 4 --page-limit 10 --max-pages 4 --daily-request-budget 80 --priority-policy coverage
+```
+Após prévia compatível, saldo >=16, e condições
+de aquisição oficial sem cobrança:
+```powershell
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$historyReport = "artifacts/private/a03-history-v11-remaining-$stamp.json"
+$env:TAPI_BD_CONTINUOUS_ENABLED = "1"
+$env:TAPI_BD_TECHNICAL_INGEST = "1"
+$env:TAPI_OFFICIAL_METADATA_READS = "1"
+$env:TAPI_ZERO_BILLING_CONFIRMED = "1"
+try {
+    & $py -m scripts.a5_business_discovery_cycle --manifest "$manifest" --mode history --max-sources 4 --page-limit 10 --max-pages 4 --daily-request-budget 80 --priority-policy coverage --execute --report "$historyReport"
+    $historyExit = $LASTEXITCODE
+}
+finally {
+    $env:TAPI_BD_CONTINUOUS_ENABLED = "0"
+    $env:TAPI_BD_TECHNICAL_INGEST = "0"
+    $env:TAPI_OFFICIAL_METADATA_READS = "0"
+    $env:TAPI_ZERO_BILLING_CONFIRMED = "0"
+}
+if ($historyExit -ne 0) { throw "Historico bloqueado; nao repetir" }
+$result = Get-Content -Raw -LiteralPath $historyReport | ConvertFrom-Json
+if ($result.status -notin @("BATCH_COMPLETED","BATCH_NO_ELIGIBLE_OBSERVATIONS")) { throw "Coleta nao concluida" }
+& $py -m scripts.a6_audit_history_reports --report "artifacts/private/a03-history-v11-recovery-20261119-085857.json" --report "$historyReport"
+if ($LASTEXITCODE -ne 0) { throw "Reauditoria falhou" }
+& $py -m scripts.a6_identify_sources --manifest "$manifest" --plan-expansion --max-sources 5 --daily-request-budget 80
+```
+Enviar resumo/auditoria/seleção, sem relatório bruto,
+IDs privados, cursors ou segredos. Documentação apenas;
+nenhuma execução externa ou mutação DB pelo assistente.
