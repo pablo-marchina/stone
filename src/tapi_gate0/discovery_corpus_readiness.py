@@ -4,6 +4,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 import re
+from time import perf_counter
 
 
 STAGES = ("SOURCE_NOT_ELIGIBLE", "CONTENT_INVALID", "NONPRIMARY_FORMAT",
@@ -49,8 +50,10 @@ def source_gate(source, grant, now):
     return "TECHNICAL_SCOPE_MATCHED"
 
 
-def readiness_report(engine, tenant, manifest, viewer, *, _caption_observer=None, _record_observer=None):
-    """Aggregate only. No caption export, model inference, registration or admission."""
+def readiness_report(engine, tenant, manifest, viewer, *, _caption_observer=None, _record_observer=None,
+                     _timing_observer=None):
+    """Aggregate only. Optional timings are aggregate phases, never captions or IDs."""
+    t0 = perf_counter()
     from sqlalchemy import select
     from pydantic import ValidationError
     from .connectors import ConnectorError
@@ -81,6 +84,7 @@ def readiness_report(engine, tenant, manifest, viewer, *, _caption_observer=None
         gates = {sid: source_gate(manifest_by_id.get(sid), grants.get(sid), now) for sid in source_ids}
         allowed_ids = {sid for sid, reason in gates.items() if reason == "TECHNICAL_SCOPE_MATCHED"}
         allowed_content = {r["content_id"] for r in records if r["source_account_id"] in allowed_ids}
+        t_source = perf_counter()
         posts, latest = {}, {}
         # Chunk IN predicates to remain within older SQLite variable limits.
         keys = sorted(allowed_content)
@@ -105,6 +109,7 @@ def readiness_report(engine, tenant, manifest, viewer, *, _caption_observer=None
                 previous = latest.get(cid)
                 if previous is None or (metric.observed_at, metric.snapshot_id) > (previous.observed_at, previous.snapshot_id):
                     latest[cid] = metric
+        t_domain = perf_counter()
         traces = set()
         audited_runs = invalid_runs = 0
         for run in instagram_rows(ingestion_runs):
@@ -123,6 +128,7 @@ def readiness_report(engine, tenant, manifest, viewer, *, _caption_observer=None
                         and item["acquisition_method"] == "graph_business_discovery"
                         and re.fullmatch(r"[a-f0-9]{64}", item["metadata_sha256"])):
                     traces.add((sid, item["source_item_id"], item["content_id"]))
+        t_trace = perf_counter()
         per_source = defaultdict(list)
         for r in records:
             sid, cid = r["source_account_id"], r["content_id"]
@@ -134,6 +140,7 @@ def readiness_report(engine, tenant, manifest, viewer, *, _caption_observer=None
                 _caption_observer(manifest_by_id[sid], cid, posts[cid].caption)
             if _record_observer is not None and stage == STAGES[7]:
                 _record_observer(manifest_by_id[sid], posts[cid], latest[cid])
+    t_classify = perf_counter()
     sources = []
     for source in manifest.sources:
         sid = source.expected_ig_id
@@ -144,8 +151,20 @@ def readiness_report(engine, tenant, manifest, viewer, *, _caption_observer=None
             "profile_registered": sid in profiles, "source_context_registered": sid in contexts})
     stages = [stage for values in per_source.values() for stage in values]
     totals = counts_for(stages)
+    t_summary = perf_counter()
     # Canonical card remains the authority on scientific eligibility; do not promote.
     card = corpus_data_card(engine, tenant, as_of=now)
+    t_card = perf_counter()
+    if _timing_observer is not None:
+        _timing_observer({
+            "source_gate_and_inventory_ms": round((t_source - t0) * 1000, 6),
+            "domain_read_and_decode_ms": round((t_domain - t_source) * 1000, 6),
+            "technical_trace_audit_ms": round((t_trace - t_domain) * 1000, 6),
+            "eligibility_and_observers_ms": round((t_classify - t_trace) * 1000, 6),
+            "summary_ms": round((t_summary - t_classify) * 1000, 6),
+            "canonical_data_card_ms": round((t_card - t_summary) * 1000, 6),
+            "profile_is_performance_diagnostic_only": True,
+        })
     return {"schema_version": "tapi-bd-corpus-readiness.v1", "status": "CORPUS_READINESS_PLANNED",
             "as_of": now.isoformat(), "manifest_sha256": manifest.fingerprint(),
             "technical_inventory": {"records": len(records),
