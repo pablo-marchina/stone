@@ -5023,3 +5023,67 @@ parcial/descritivo; IMP-072–076 (CAP-005/006/009)
 e IMP-078–080 (CAP-007/010/014/023) pendentes.
 R$0, DEC-018, sem nova aprovação genérica; rights e
 composição científica continuam gates separados.
+
+
+### A05 — preview scope27 realizado; diagnóstico de robustez exposto
+
+Operador sobre HEAD 8b6526e98ef5df0593ce2fa272c5a023d5aebe1b:
+MANIFEST_FINGERPRINT_VERIFIED,
+THREE_INPUT_REPORTS_VERIFIED,
+A05_AGENT_PREVIEW_VERIFIED, zero_spend PASS.
+Preview local scope27 read-only: action inspect_or_test_hypotheses,
+findings_count=1, reference_posts_count=4,
+creatives_count=0, confidence_flag EXPLORATORY_NOT_INDEPENDENTLY_VALIDATED.
+Relatório privado SHA256
+e53a6fbcdd425bea1fbf7e595c4a7f3f2bb04113df22c1c472a37dcb5f28659e.
+Hipótese única CTA lexical seguir, four_view_concordance=true:
+technical_all global +30.274262 pp (top 5/12 observados,
+rest 27/237, top_total 107/rest_total 962);
+technical_all intraperfil +9.792228 pp (5/23,
+rest 27/226, top_total 120);
+semantic_exploratory global +50.990991 pp
+(3/5, rest 10/111, top_total 47);
+semantic_exploratory intraperfil +20.47619 pp
+(3/10, rest 10/105, top_total 51).
+Distribuição de sensibilidade por perfil, membership fixa:
+technical_all 14 matched/1000 replicates,
+[-0.79932,+41.193806] pp;
+semantic_exploratory 7 matched/1000,
+[-9.437229,+59.747899] pp.
+Ambos incluem zero; não são intervalos de confiança de
+efeito populacional. Quatro views sobrepostas não são
+replicações independentes. CTA deriva de captura lexical,
+não do campo da rubrica grounded; não inferir benefício
+causal, público MPE validado ou recomendação editorial.
+0 CreativeSpecs/DesignDocuments novos; Studio não persistido.
+
+Incremento aditivo A05 feito no PR #44:
+src/tapi_gate0/discovery_editorial_agent.py inclui
+describe_finding_limits, anexado em finding.evidence_limits.
+Expõe observados/denominadores e cobertura por 4 views,
+não trata ausentes como negativos, indica cruzamento de
+zero nos 2 recortes e esclarece limites causais e a
+proveniência lexical. Testes de casos forte sintético e
+cobertura escassa/intervalos cruzando zero adicionados
+em tests/test_discovery_editorial_agent.py.
+Sem alteração de thresholds, seleção de hipóteses,
+CreativeSpec/autorização/Studio ou matriz normativa.
+Commits 866c651 e 642cfc9; código novo não tem
+regressão local do operador no HEAD atualizado.
+IMP-075 avaliação do agente continua parcial e dependente
+de IMP-074; não declarar seus critérios de aceite
+cumpridos por este diagnóstico. CAP-005/CAP-009 pendentes.
+
+Próximo: operador sincronizar HEAD exato deste commit
+documental e checkout limpo, validar espelho atemporal,
+executar pytest -q tests/test_discovery_editorial_agent.py,
+verify_zero_spend. Se aprovado, reexecutar somente preview
+read-only usando recorte d903366..., mesmos 3 relatórios
+pinados, relatório privado novo; NÃO executar inferência
+GLiNER, ingestion/Meta, --persist-studio-drafts ou publicar.
+Verificar evidence_limits (quatro coberturas, dois
+interval_includes_zero=true) e 1 finding/4 refs/0 creatives,
+registrar sha/versões. Full multimodal regressão ainda
+no SHA 20aea11, nunca transferir PASS para novo HEAD.
+DEC-018 e R$0 preservados, sem merge, grants antigos
+continuam bloqueados. Diagnóstico não homologa IMP-131.
