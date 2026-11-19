@@ -3624,3 +3624,25 @@ if ($LASTEXITCODE -ne 0) { throw "Provisionamento bloqueado; inspecionar estado"
 ```
 Enviar somente status, contagens, fingerprint V11,
 seleção history e bloqueadores, sem IDs/credenciais.
+
+
+### A03.3 — reconciliação V11 concluída
+
+Operador: IDENTITIES_RECONCILED, ciclo
+a6identity-20261119030035-8762664b, V10 pin confirmado,
+intermediário bd_manifest_a6_v11_identified.json fingerprint
+662300b06739d886a613c6682993638c86cc383edc0a26bc4792c56e461c3623.
+5 identidades verificadas, 5 IDs adicionados, 0 skipped,
+50 fontes, 21 approved; novas cinco ainda candidate.
+Zero grants, database_written=false, external_data_accessed=false,
+scientific_admissions=0. Não repetir reconciliação/identidade
+ou sobrescrever intermediário. HEAD local não impresso;
+remoto anterior 8e81036 confirmado. Próximo: plano de
+grants das cinco fontes, verificar grants_to_create=5,
+backup com escritores parados e provisionamento conforme
+comandos anteriores. Após gerar V11, prévia history e
+snapshot de capacidade. Nenhuma nova aprovação ou
+declaração manual de validade de token. Saldo 75/80
+era estimativa pós-lote no mesmo dia, conferir snapshot
+antes de coletar. Commit documental, sem alteração
+de código, grants, banco, mídia, gates ou merge.
