@@ -54,3 +54,54 @@ def test_small_matched_clusters_no_interval():
                        {"p.a.1"},"topic","vendas")
     assert r["matched_profiles"]==1 and r["replicates"]==0
     assert r["resampling_interval_pp"] is None
+
+
+def test_finding_exposes_coverage_and_noncausal_limits():
+    r = build_agent_preview(dataset(), tenant="tenant-a",
+                            as_of="2026-11-14T03:00:00+00:00",
+                            manifest_sha256="b"*64)
+    limits = r["findings"][0]["evidence_limits"]
+    assert not limits["four_views_are_independent_replications"]
+    assert not limits["scientific_or_causal_claim_supported"]
+    assert not limits["editorial_recommendation_approved"]
+    assert limits["observables_provenance"] == "caption_lexical_not_grounded_rubric"
+    assert len(limits["coverage"]) == 4
+    assert all(v["top_coverage_fraction"] == 1
+               and v["rest_coverage_fraction"] == 1
+               for v in limits["coverage"].values())
+    assert all(v["interval_includes_zero"] is False
+               and not v["interval_is_population_confidence_interval"]
+               for v in limits["sensitivity"].values())
+
+
+def test_finding_limits_do_not_hide_sparse_coverage_or_zero_crossing():
+    from tapi_gate0.discovery_editorial_agent import (
+        COHORTS, SCOPES, describe_finding_limits,
+    )
+    views = {(c, s): {"top_total": 100, "top_observed": 5,
+                      "rest_total": 900, "rest_observed": 20}
+             for c in COHORTS for s in SCOPES}
+    sensitivity = {
+        "technical_all": {"matched_profiles": 14,
+                          "resampling_interval_pp": [-0.8, 41.2]},
+        "semantic_exploratory": {"matched_profiles": 7,
+                                "resampling_interval_pp": [-9.4, 59.8]},
+    }
+    limits = describe_finding_limits(views, sensitivity)
+    assert all(x["top_coverage_fraction"] == 0.05
+               and x["rest_coverage_fraction"] == round(20/900, 6)
+               and x["unknown_is_not_negative"]
+               for x in limits["coverage"].values())
+    assert all(x["interval_includes_zero"] is True
+               for x in limits["sensitivity"].values())
+    assert not limits["editorial_recommendation_approved"]
+
+    with pytest.raises(ValueError, match="PARTITION_MISMATCH"):
+        describe_finding_limits({}, sensitivity)
+    invalid = {**views}
+    invalid[("technical_all", "observables_global")] = {
+        **views[("technical_all", "observables_global")],
+        "top_observed": 101,
+    }
+    with pytest.raises(ValueError, match="COVERAGE_INVALID"):
+        describe_finding_limits(invalid, sensitivity)
