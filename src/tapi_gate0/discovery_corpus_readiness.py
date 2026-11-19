@@ -51,8 +51,12 @@ def source_gate(source, grant, now):
 
 
 def readiness_report(engine, tenant, manifest, viewer, *, _caption_observer=None, _record_observer=None,
-                     _timing_observer=None):
-    """Aggregate only. Optional timings are aggregate phases, never captions or IDs."""
+                     _timing_observer=None, _trace_auditor=None):
+    """Aggregate only; private auditor injection supports read-only parity tests.
+
+    Normal callers always use the original audit_run. Never wire this private
+    test seam to an HTTP/MCP request or an external caller.
+    """
     t0 = perf_counter()
     from sqlalchemy import select
     from pydantic import ValidationError
@@ -65,6 +69,9 @@ def readiness_report(engine, tenant, manifest, viewer, *, _caption_observer=None
     from .scientific_corpus import source_research_contexts
     from .storage import now_utc
 
+    trace_auditor = audit_run if _trace_auditor is None else _trace_auditor
+    if not callable(trace_auditor):
+        raise ValueError("BD_READINESS_TRACE_AUDITOR_INVALID")
     if not re.fullmatch(r"[0-9]{5,32}", viewer):
         raise ConnectorError("BD_BATCH_INVALID_VIEWER", 422)
     now = now_utc().astimezone(timezone.utc)
@@ -116,7 +123,7 @@ def readiness_report(engine, tenant, manifest, viewer, *, _caption_observer=None
             sid = run["source_account_id"]
             if sid not in allowed_ids or run["status"] != "completed":
                 continue
-            audit = audit_run(engine, tenant, run["run_key"], connection=db)
+            audit = trace_auditor(engine, tenant, run["run_key"], connection=db)
             if not audit["all_traces_valid"]:
                 invalid_runs += 1
                 continue
