@@ -41,3 +41,21 @@ def test_expansion_prioritizes_distinct_uncovered_strata_and_never_retries(tmp_p
         assert r["identity_reserved_today"]==1
     finally:
         engine.dispose()
+
+
+def test_identity_cli_missing_viewer_is_explicit_before_database(monkeypatch,capsys):
+    import json
+    from scripts import a6_identify_sources as cli
+    monkeypatch.setenv("TAPI_TENANT_ID","fixture-tenant")
+    monkeypatch.setenv("TAPI_DATABASE_URL","sqlite:///not-opened.sqlite3")
+    monkeypatch.delenv("TAPI_META_IG_ID",raising=False)
+    def never(*args,**kwargs):
+        raise AssertionError("database must not open")
+    monkeypatch.setattr(cli,"engine_for",never)
+    for value in (None,"   "):
+        if value is not None:
+            monkeypatch.setenv("TAPI_META_IG_ID",value)
+        assert cli.main(["--manifest","not-opened.json","--plan-expansion"])==2
+        assert json.loads(capsys.readouterr().out)=={
+            "status":"BLOCKED","code":"BD_IDENTITY_PREREQUISITES_MISSING",
+            "missing_environment_names":["TAPI_META_IG_ID"],"external_data_accessed":False}

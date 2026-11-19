@@ -3411,3 +3411,47 @@ oficial até confirmar prévias, token real vigente,
 gasto zero e condições existentes. Sem nova aprovação
 institucional. Este commit apenas documental, não
 introduz planner redundante nem modifica código testado.
+
+
+### A03.2 — prévias bloqueadas por ambiente incompleto
+
+Operador: fingerprint V10 faae42aa652a5b4b49c025d7522ac2e2f029c09bdc1434923c11df9d0ebdb1bb confirmado.
+Identidade retornou BD_IDENTITY_INVALID_INPUT_OR_DATABASE;
+history A5_PREREQUISITES_MISSING, missing_environment_names
+[TAPI_META_IG_ID], external_data_accessed=false. O CLI
+identity acessava os.environ antes de abrir DB e capturava
+KeyError genericamente; ausência do viewer explica ambos.
+HEAD local não impresso; remoto anterior 16ffd69.
+Nenhuma seleção, reserva ou rede realizada. Não inferir
+falha de banco/manifesto, quota, token ou autorização.
+Corrigido CLI identity para prévia/execute detectar nomes
+ausentes/vazios antes de abrir manifesto, DB ou relatório.
+Novo teste de CLI (ausente e whitespace) não executado
+pelo assistente. Sem mudança de guardas, grants ou flags.
+
+Restaurar somente o viewer já registrado no doc/57,
+sem exibir seu valor nem consultar a Meta. Extrair a
+atribuição documentada localmente; exigir exatamente um
+ID distinto compatível com o formato esperado. Não
+selecionar ID de fonte do manifesto como viewer.
+Executar prévias offline novamente:
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+& $py -m pytest -q --tb=short tests/test_discovery_identity_expansion.py tests/test_discovery_expansion_capacity.py
+if ($LASTEXITCODE -ne 0) { throw "Testes A03 falharam" }
+& $py scripts/verify_zero_spend.py
+if ($LASTEXITCODE -ne 0) { throw "Zero spend falhou" }
+$viewerIds = @(Select-String -LiteralPath "docs/57_CAP001_A6_EXPANSAO_IDENTIFICACAO_2026-11-12.md" -Pattern '^\s*\$env:TAPI_META_IG_ID\s*=\s*"([0-9]{5,32})"\s*$' | ForEach-Object { $_.Matches[0].Groups[1].Value } | Sort-Object -Unique)
+if ($viewerIds.Count -ne 1) { throw "Viewer documentado ambiguo ou ausente" }
+$env:TAPI_META_IG_ID = $viewerIds[0]
+Remove-Variable viewerIds
+$manifest = "artifacts/private/bd_manifest_a6_v10.json"
+& $py -m scripts.a6_identify_sources --manifest "$manifest" --plan-expansion --max-sources 5 --daily-request-budget 80
+& $py -m scripts.a5_business_discovery_cycle --manifest "$manifest" --mode history --max-sources 5 --page-limit 10 --max-pages 4 --daily-request-budget 80 --priority-policy coverage
+```
+Não habilitar flags externas, não executar chamadas,
+não alterar token ou expiração. Enviar seleção/motivos
+ou novo código de bloqueio, sem IDs ou credenciais.

@@ -27,6 +27,12 @@ def main(argv=None):
     p.add_argument("--report", type=Path)
     p.add_argument("--admin", default="admin")
     args = p.parse_args(argv)
+    required = ("TAPI_TENANT_ID", "TAPI_META_IG_ID", "TAPI_DATABASE_URL")
+    missing = [k for k in required if not os.getenv(k, "").strip()]
+    if missing:
+        print(json.dumps({"status":"BLOCKED","code":"BD_IDENTITY_PREREQUISITES_MISSING",
+                          "missing_environment_names":missing,"external_data_accessed":False}))
+        return 2
     engine = None
     try:
         tenant, viewer = os.environ["TAPI_TENANT_ID"], os.environ["TAPI_META_IG_ID"]
