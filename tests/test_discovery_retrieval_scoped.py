@@ -296,6 +296,10 @@ def _repeat_fixture(monkeypatch, tmp_path, *, drift=False):
             "p95_search_latency_ms": 0.3,
             "full_preview_elapsed_ms": float(10 - n["calls"]),
             "timing_breakdown_ms": {"first_readiness": 3.0},
+            "readiness_profile": ({
+                "first_readiness": {"technical_trace_audit_ms": 3.0},
+                "second_readiness": {"technical_trace_audit_ms": 4.0},
+            } if _kwargs.get("profile_readiness") else None),
         }
 
     monkeypatch.setattr(cli, "preview_scoped_fts", simulate)
@@ -375,3 +379,20 @@ def test_optional_readiness_phase_profile_keeps_same_guards_and_hits(monkeypatch
             queries=["gestao"], expected_posts=3, expected_sources=1,
             profile_readiness="yes",
         )
+
+
+def test_cli_profile_option_only_adds_aggregate_timing(
+        monkeypatch, tmp_path, capsys):
+    import json
+    cli, argv, runs, private = _repeat_fixture(monkeypatch, tmp_path)
+    argv.append("--profile-readiness")
+    assert cli.main(argv) == 0
+    assert runs["calls"] == 3
+    stdout = capsys.readouterr().out
+    assert "technical_trace_audit_ms" in stdout
+    assert "private-id" not in stdout
+    assert "private-snapshot" not in stdout
+    assert "gestão" not in stdout
+    report = json.loads((private / "repeat.json").read_text(encoding="utf-8"))
+    assert report["readiness_profile"]["first_readiness"]["technical_trace_audit_ms"] == 3.0
+    assert report["readiness_profile"]["second_readiness"]["technical_trace_audit_ms"] == 4.0
