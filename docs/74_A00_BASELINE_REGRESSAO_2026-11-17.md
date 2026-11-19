@@ -3807,3 +3807,108 @@ de sucesso para reauditar lote interrompido. Não repetir
 token debugger manual nem apagar expiração conhecida.
 Sem merge, novas permissões, chamadas externas ou gasto
 pelo assistente.
+
+
+### A03.3 — causa confirmada: credencial Meta rejeitada, recuperação técnica
+
+Operador HEAD 32e81210dcfe6238438528f445375dc8e48e19b0
+igual ao remoto; teste cycle_console_failure_summary
+1 PASS, 19 deselected, 2,65s. Relatório existente
+a03-history-v11-20261119-082214.json: attempted=1,
+failed_run_key a5history-20261119112216-5adfc90b-01,
+PROVIDER_PERMISSION_DENIED HTTP401, Graph code190
+sub463 (token/sessão expirado ou inválido segundo
+https://developers.facebook.com/docs/graph-api/guides/error-handling).
+Não é evidência de falha específica da ABAV ou grant.
+Recuperação: último run failed, reviewed=false,
+BD_META_AUTH_INVALID, 0 observações; recovery_action
+blocked_unclassified_or_integrity (não review-failure
+genérico). Circuit breaker global BLOCKED desde
+2026-11-19T11:22:17.481917+00:00. Lease null, 0 reserved,
+0 órfãos e 0 quarentena. Sem mutação na inspeção.
+Capacity 2026-11-19T11:50:12.657579+00:00: 1065/21,
+22 grants ativos tecnicamente verificados (21 com
+registros), 21 continuation, 1 no_checkpoint.
+Cinco grants recém-provisionados V11 não entram na
+contagem de verificados até sucesso técnico; não
+reprovisionar nem inferir desaparecimento dos grants.
+9/80 reservas UTC (5 identidade + 4 por um run),
+saldo 71, 5 slots identity, até 17 history sem
+identity. Sem quota provider verificada; saldo datado.
+
+Recuperar usando fluxo existente: substituir credencial
+realmente rejeitada pelo mesmo app/conta e escopos
+autorizados, sem exigir debugger/datas de expiração.
+Input local seguro, não imprimir token. Com todos
+processos de ingestão parados, CLI
+--reset-meta-auth-after-rotation autenticado, somente
+após substituição. META_AUTH_RESET_UNVERIFIED é reset
+local, não validação. Não apagar evento, alterar quota,
+review-failure genérico, restart-history, revogar grant
+ou contornar auth. Planner history permite último
+AUTH_INVALID sem registros após reset; planner identity
+expansion ainda bloqueia falha não revisada, então
+primeiro executar history de uma fonte (ABAV) para
+confirmar funcionamento no fluxo real, não chamada
+extra de diagnóstico. Planejar com max-sources=1,
+page-limit=10/max-pages=4, coverage, conferir seleção
+ABAV, pin V11, auth RESET_UNVERIFIED não bloqueado e
+saldo >=4; se incompatível parar. Sob R$0 confirmado,
+flags metadata temporárias e relatório privado novo,
+executar exatamente um run; reauditar sucesso antes
+de planejar restantes. Se 190 novamente, breaker
+bloqueia; não repetir automaticamente. Preservar
+reserva anterior. Não exigir validação manual da
+expiração; datas conhecidas válidas continuam guardadas,
+não apagar para contornar. Sem nova aprovação DEC-018.
+
+```powershell
+git pull --ff-only
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+$manifest = "artifacts/private/bd_manifest_a6_v11.json"
+$env:TAPI_META_REQUIRE_TOKEN_EXPIRY = "0"
+# Somente apos gerar novo token pelo fluxo oficial do mesmo app/conta.
+$secret = Read-Host "Novo token Meta" -AsSecureString
+$bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secret)
+try {
+    $env:TAPI_INSTAGRAM_ACCESS_TOKEN = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+}
+finally {
+    [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+    $secret.Dispose()
+    Remove-Variable secret,bstr
+}
+& $py -m scripts.a5_recover_business_discovery --reset-meta-auth-after-rotation --confirm-all-ingestion-stopped
+if ($LASTEXITCODE -ne 0) { throw "Reset bloqueado" }
+& $py -m scripts.a5_business_discovery_cycle --manifest "$manifest" --mode history --max-sources 1 --page-limit 10 --max-pages 4 --daily-request-budget 80 --priority-policy coverage
+```
+Apos prévia compatível e operação oficial sem cobrança:
+```powershell
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$historyReport = "artifacts/private/a03-history-v11-recovery-$stamp.json"
+$env:TAPI_BD_CONTINUOUS_ENABLED = "1"
+$env:TAPI_BD_TECHNICAL_INGEST = "1"
+$env:TAPI_OFFICIAL_METADATA_READS = "1"
+$env:TAPI_ZERO_BILLING_CONFIRMED = "1"
+try {
+    & $py -m scripts.a5_business_discovery_cycle --manifest "$manifest" --mode history --max-sources 1 --page-limit 10 --max-pages 4 --daily-request-budget 80 --priority-policy coverage --execute --report "$historyReport"
+    $historyExit = $LASTEXITCODE
+}
+finally {
+    $env:TAPI_BD_CONTINUOUS_ENABLED = "0"
+    $env:TAPI_BD_TECHNICAL_INGEST = "0"
+    $env:TAPI_OFFICIAL_METADATA_READS = "0"
+    $env:TAPI_ZERO_BILLING_CONFIRMED = "0"
+}
+if ($historyExit -ne 0) { throw "Historico bloqueado; nao repetir" }
+& $py -m scripts.a6_audit_history_reports --report "$historyReport"
+```
+Reauditar somente batch completo (inclusive vazio);
+se nenhum devido, parar sem reauditoria de sucesso.
+Enviar reset, prévia, resumo de ciclo e auditoria sem
+IDs/credenciais. Se sucesso, recalcular reservas,
+planejar 4 restantes e segundo lote identidade após
+recuperação. Não declarar token validado permanentemente
+nem exigir data manual. Commit exclusivamente documental,
+sem alteração de código, DB, rede, gates ou merge pelo
+assistente.
