@@ -3646,3 +3646,99 @@ declaração manual de validade de token. Saldo 75/80
 era estimativa pós-lote no mesmo dia, conferir snapshot
 antes de coletar. Commit documental, sem alteração
 de código, grants, banco, mídia, gates ou merge.
+
+
+### A03.3 — V11 provisionado e primeiro histórico planejado
+
+Console operador 23953 bytes SHA256
+55c76415f145a847aa07b4dfe94c9643e5f9d6fe8b6bd493febbcd6de72027bd.
+Reconciliacao 5/5 confirmada novamente no console;
+TECHNICAL_GRANTS_PLANNED 5 novos, 0 existentes,
+DEC-018, lease técnico 30 dias, sem rede.
+BACKUP_RESTORE_VERIFIED 2026-11-19T11:12:01.002827+00:00,
+a03-pre-v11-20261119-081159.sqlite3, SHA256
+f586e7f3ed2d49b12c9ea1c08b5014aebc19d2e2a2ffcd434228b76f567ade20,
+10121216 bytes, backup 1172ms/drill 406ms.
+Integridade/FK OK, schema 02f66a45b4e198183176faaafea2ee7262dfd91f63042d3d6d83a50ca4133c6f,
+0016, inventário e conteúdo lógico iguais, restore
+descartável, writers parados atestados, sem restore live.
+Pré-provisionamento 1065 posts/21 perfis/1169 snapshots,
+53 runs/21 checkpoints/22 grants técnicos no banco,
+2465 eventos/outbox; sete tabelas A02 vazias,
+0 revisões científicas. Não confundir tabela de contextos
+vazia com eventos de contexto documental.
+
+TECHNICAL_GRANTS_PROVISIONED 5 criados, 26 approved,
+50 fontes, fingerprint V11
+19c38ca968585a7e056402dd2f5f743df232f778c161b762e9c764d713e71840,
+arquivo privado bd_manifest_a6_v11.json. Sem rede,
+technical_verified=false, 0 admissões. Contagem de
+grants no DB pós-escrita não reaferida; não confundir
+26 manifesto com 27 linhas esperadas no DB.
+PLAN_ONLY_NO_EXTERNAL_READ history coverage: cinco
+novos perfis abavnacional, abfoficial, agisaalimentos,
+amarefashiongo, andraeltec, 0 posts/5 estratos vazios,
+20 páginas/200 observações máximas, 5/80 reservas
+usadas, saldo 75 no momento da prévia. 24 fontes não
+aprovadas e 21 aprovadas deferidas por limite. Sem
+previsão de yield, auth NOT_CHECKED, expiry UNKNOWN
+não bloqueante (opção do operador), sem rede nessa
+prévia. HEAD local/testes não impressos; remoto ba0aa75.
+Não repetir grant/backup pré-V11 já verificados.
+
+Próximo: executar exatamente um histórico V11 com
+planner coverage (replaneja sob lease), mesmas fontes
+se estado inalterado. Flags específicas temporárias,
+token existente, R$0, sem exigência manual de expiração.
+Parar writers, verificar prévia atual, fingerprint V11,
+quota/dia e condições de coleta metadata-only. Guardas
+prevalecem; parar se seleção mudou, erro ou bloqueio.
+Relatório privado exclusivo; reauditar somente se
+BATCH_COMPLETED ou BATCH_NO_ELIGIBLE_OBSERVATIONS.
+Não repetir falhas automaticamente. Depois planejar
+segundo lote identity em V11 (até 5 slots restantes);
+se coleta usar todas 20 reservas, saldo 55, após mais
+5 identidades saldo 50, até 12 runs adicionais de
+história com 2 unidades de margem, no mesmo dia e
+sem outras operações. Não fixar yield nem forçar quota.
+Sem mídia, cobrança, nova aprovação, produção ou merge.
+
+```powershell
+git pull --ff-only
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+$manifest = "artifacts/private/bd_manifest_a6_v11.json"
+$env:TAPI_META_REQUIRE_TOKEN_EXPIRY = "0"
+& $py scripts/verify_zero_spend.py
+if ($LASTEXITCODE -ne 0) { throw "Zero spend falhou" }
+& $py -m scripts.a5_business_discovery_cycle --manifest "$manifest" --mode history --max-sources 5 --page-limit 10 --max-pages 4 --daily-request-budget 80 --priority-policy coverage
+```
+Se prévia compatível e operação oficial sem cobrança:
+```powershell
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$historyReport = "artifacts/private/a03-history-v11-$stamp.json"
+$env:TAPI_BD_CONTINUOUS_ENABLED = "1"
+$env:TAPI_BD_TECHNICAL_INGEST = "1"
+$env:TAPI_OFFICIAL_METADATA_READS = "1"
+$env:TAPI_ZERO_BILLING_CONFIRMED = "1"
+try {
+    & $py -m scripts.a5_business_discovery_cycle --manifest "$manifest" --mode history --max-sources 5 --page-limit 10 --max-pages 4 --daily-request-budget 80 --priority-policy coverage --execute --report "$historyReport"
+    $historyExit = $LASTEXITCODE
+}
+finally {
+    $env:TAPI_BD_CONTINUOUS_ENABLED = "0"
+    $env:TAPI_BD_TECHNICAL_INGEST = "0"
+    $env:TAPI_OFFICIAL_METADATA_READS = "0"
+    $env:TAPI_ZERO_BILLING_CONFIRMED = "0"
+}
+if ($historyExit -ne 0) { throw "Historico bloqueado; nao repetir" }
+```
+Somente se batch completo (inclusive sem observações):
+```powershell
+& $py -m scripts.a6_audit_history_reports --report "$historyReport"
+if ($LASTEXITCODE -ne 0) { throw "Reauditoria falhou" }
+& $py -m scripts.a6_identify_sources --manifest "$manifest" --plan-expansion --max-sources 5 --daily-request-budget 80
+```
+Enviar resumo de ciclo, auditoria e nova seleção; não
+compartilhar relatório privado, IDs, cursor ou token.
+Commit exclusivamente documental, não executado pelo
+assistente no banco operacional.
