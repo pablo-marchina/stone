@@ -5580,3 +5580,69 @@ Depois de testar localmente, rodar paridade
 read-only com pin e escopos vigentes, sem executar
 ingestão ou modelos. Se qualquer BLOCKED, não
 substituir o auditor original.
+
+
+### IMP-071 — auditoria batch real 56/56; shadow readiness em avaliação (19/11)
+
+Operador após HEAD ea418ea4fa69e4e2145755d40ab79ceb17376124
+reexecutou PASS_ESPELHO_DOCUMENTAL (32 blobs, DAG 204 IMP /
+543 edges acíclico, sink IMP-131), 50 testes focais
+PASS em 12.55s, 1 StarletteDeprecationWarning em
+testclient, verify_zero_spend PASS.
+IMP071_BATCH_AUDIT_TESTS_VERIFIED.
+scripts.a6_trace_batch_parity read-only no V12-scope27:
+TRACE_AUDIT_BATCH_PARITY_VERIFIED, 56 completed runs e
+1399 observações, igualdade exata de todos os campos
+original/batched, todos os traces originais válidos.
+Manifesto pin
+d903366a975cb6e4c4e07c9e6300799c727c3efc3a8317530f14d90e19435b54,
+partição pin
+b842a43efd737abee7b78930ddb1243ccac93290cc7c45e9774d9bf542dafb44.
+Tempos totais por-run comparados:
+original 850.6057ms, batched 118.0283ms;
+speedup observado ~7.207x, redução ~86.12% no
+componente de auditoria, não no readiness inteiro.
+A ordem dos algoritmos foi alternada por run;
+cache, IO, CPU e ambiente não controlados, portanto
+não é SLO ou ganho de produção garantido.
+Report privado de operador SHA256
+71760a0a7a318166b296a4fc5133392e4edfe924d022dc724b20291c05476ac7.
+Nenhum novo auditor foi ativado no readiness corrente;
+DB write=false, network=false, scientific_admissions=0.
+
+Incremento posterior ainda não validado pelo operador:
+- src/tapi_gate0/discovery_corpus_readiness.py recebe
+  parâmetro privado opcional _trace_auditor=None. O
+  default continua a importar/chamar audit_run original.
+  Apenas runner experimental com acesso local pode
+  injetar audit_run_batched em readiness_report.
+  Qualquer injeção não-callable é bloqueada.
+- scripts/a6_trace_batch_parity.py --compare-readiness
+  realiza, além da paridade de todos os 56 runs,
+  dois readiness completos sobre as fontes elegíveis:
+  um usa auditor original e outro o batch. Cada um
+  revalida escopo, 1069 legendas únicas, stages, traz
+  SHA256 da mesma partição (username/content_id/
+  snapshot_id/caption digest) e calcula digest do
+  relatório integral excluindo somente as_of externo
+  e no data card (naturalmente diferentes em duas
+  chamadas); a comparação exige igualdade de TODOS
+  outros campos, inclusive card canônico, fontes,
+  traces e primeira barreira. Divergência aborta
+  antes de escrever qualquer relatório.
+  Registra os tempos de cada readiness como
+  diagnóstico sob cache não controlado.
+- Dois testes sintéticos no CLI para aprovação e
+  bloqueio por mismatch; teste de integração
+  A3 com SQLite local compara relatórios completos
+  em fonte/população técnica, sem redes externas.
+Commits e2147cf, b27a3b8, f244685, 0c568f4b.
+Testes esperados agora 53 para as mesmas cinco
+suítes focais; não foram reportados no novo HEAD.
+--compare-readiness deve permanecer flag opt-in;
+NÃO substituir auditor original em runtime, REST/MCP,
+ingestão ou Creative Studio antes dos testes, da
+prova real e de A00 full regression. Nenhum gate,
+DEC-006/CT-04/IMP-071 ou release homologado.
+Sem nova autorização, aumento de direitos, Meta ou
+custos; PR #44 continua draft.
