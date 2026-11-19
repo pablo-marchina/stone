@@ -4895,3 +4895,50 @@ V12 original intacto, não declarar corpus completo. Nenhuma
 renovação, escrita DB ou execução modelo realizada. R$0,
 sem Meta/mídia, sem nova aprovação institucional genérica,
 sem merge/gates. Atualização exclusivamente documental.
+
+
+### A03.5 — grants legados expirados; recorte autorizado para continuidade
+
+Operador HEAD e80ebb74a21e202363e7ed8c44fb75a87a34b98f.
+TECHNICAL_GRANT_RENEWAL_PLANNED V12 pin inalterado,
+0 a renovar, 0 changes, 26 A6 NOT_DUE (dezembro), zero
+rede/escrita/admissões. EXPIRED_GRANTS_INSPECTED:
+stone e seliganoton, grant existente/habilitado/expirado,
+referência e expiry coincidem manifesto/DB, technical_verified
+true, sem PREFIX A6 nem identidade auditada no fluxo A6.
+Não usar --renew-due --execute, não alterar expiry/ref,
+não recriar/revogar grant/contexto. Sebrae terceira fonte
+legada inferida pela diferença dos 29 approved/26 A6;
+27 escopos válidos no diagnóstico anterior.
+
+Decisão operacional: recorte privado derivado do V12, somente
+27 entradas approved com ALREADY_PROVISIONED, sem modificar
+qualquer campo; excluir stone/seliganoton e 21 candidates
+sem registros; manter V12 original e registrar pin pai,
+pin derivado, exclusões, as_of e contagens em receipt privado.
+Verificar novamente plano completo e recorte, readiness
+1630 únicos/29 observados (inventário tenant), 287 fora
+manifesto e SOURCE_NOT_ELIGIBLE, 273 NONPRIMARY_FORMAT,
+1 CAPTION_UNAVAILABLE, 1069 legendas, 0 trace inválido,
+zero admissões, 27 escopos ativos/global deny. Se divergência,
+parar. Nenhuma redução do escopo normativo, resultado parcial
+explicitamente rotulado V12-scope27, não V12 integral.
+Sem writes DB, sem Meta/mídia, sem novos grants/contextos.
+Executar somente os três pilotos grounded existentes, em
+bloco único com preflight fail-closed, mesmo checkpoint
+fixado, flags offline, ingestão/writers parados. Depois
+scripts.a6_exploratory_ranking com os três relatórios do
+mesmo recorte, dois --rubric-input-name, --editorial,
+sem --agent-preview ou --persist-studio-drafts nesta rodada.
+Revalidação de caption hash, população e snapshots pelo
+runner; 1069/27 esperados, top ceil(1069/10)=107 se inalterado.
+Não promover resultados a corpus científico ou playbook final.
+
+Frente paralela futura: identidade oficial dos legados quando
+quota permitir, revisar proveniência histórica e desenhar
+transição auditável sem ampliar direitos, sem reset de quotas
+ou reativação silenciosa; manter contexto vinculado ao grant.
+DEC-018 não requer autorização institucional genérica nova,
+mas não substitui prova técnica. Não afirmar renovação ou
+migração possível sem evidências. Último full strict 20aea11,
+semantic 189/189 e benchmarks inalterados. Commit documental.
