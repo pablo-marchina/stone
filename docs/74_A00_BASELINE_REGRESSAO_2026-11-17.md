@@ -4028,3 +4028,99 @@ if ($LASTEXITCODE -ne 0) { throw "Reauditoria falhou" }
 Enviar resumo/auditoria/seleção, sem relatório bruto,
 IDs privados, cursors ou segredos. Documentação apenas;
 nenhuma execução externa ou mutação DB pelo assistente.
+
+
+### A03.3 — V11 completo e segundo lote identity V12 selecionado
+
+Console operador 33999 bytes SHA256
+5dfc611627bd0e3b59a65e5a73f6bbf5a07ec09d2eecbd167200fbaa319c4b62.
+Capacity 2026-11-19T12:01:39.775522+00:00, HEAD local
+060e3d2735d80f54e2ab0aa1bab2f744b750bf90 igual remoto.
+Antes do lote restante: 1103 únicos/22 observados,
+23 grants ativos tecnicamente verificados (22 com
+registros), 22 continuation/1 no_checkpoint, 21
+registered_profiles. A diferença registered_profiles
+vs perfis com registros deve ser inspecionada na
+consolidação documental A03.4; não pressupor que
+registro/contexto de pesquisa foi criado pela coleta.
+13/80 unidades (5 identity + 2 runs), saldo 67, ingestão
+inativa, zero mutação/rede/admissões/gates no snapshot.
+
+BATCH_COMPLETED a5history-20261119120146-fd412051,
+relatório privado a03-history-v11-remaining-20261119-090144.json,
+V11 pin 19c38ca968585a7e056402dd2f5f743df232f778c161b762e9c764d713e71840.
+Quatro fontes esperadas, 160 retornados, 139 novos,
+21 too_recent, 16 páginas, zero refresh/duplicatas.
+Corpus 1103→1242 IDs únicos, 22→26 perfis observados.
+Reauditoria conjunta HISTORY_REPORTS_REAUDITED: 2
+reports/5 runs, 200 retornados/177 novos e aceitos,
+23 too_recent, 20 páginas, zero missing_metrics,
+unsupported_format, invalid_metadata, duplicate_in_page,
+refresh/unchanged_duplicates. ABAV 38, ABF 31,
+Agisa 37, Amare 35, Andraeltec 36; todas 40 retornados
+e continuation_available, audit_valid=true. 88,5% de
+aproveitamento técnico; nenhuma admissão científica,
+produção ou cobertura exaustiva. Não repetir V11 inicial.
+Gap bruto agora 758 posts e 4 perfis; mínimo otimista
+19 runs/76 unidades antes de custos de identidade.
+
+EXPANSION_PLAN_READY V11, mesmo dia UTC 19/11,
+5/10 identity e 29/80 unidades usadas, saldo 51.
+Selecionados casa.artemisia.escola, endeavorbrasil,
+institutolojasrenner, wabizapp, abraseloestepotiguar.
+Quatro estratos ainda vazios, último foodservice_association_regional
+já 1 fonte/45 posts, declared_audience=mpe_targeted;
+quatro demais uncertain. 11 outros candidatos inéditos,
+8 deferidos (6 rationale/viewer, 2 prior attempt),
+pending_identity_actions vazio. Não inferir elegibilidade
+científica a partir de intent ou estrato. Não repetir
+identidade de fontes já tentadas.
+
+Próximo: executar somente segundo lote explícito de 5
+identidades sob DEC-018, mesma credencial, sem
+declaração manual de expiração. Confirmar prévia atual
+V11 e dia UTC, condições R$0, writers parados e
+credencial configurada; não alterar viewer/manifesto.
+Se falha, parar e preservar reservas; reconciliar apenas
+sucessos exatos. Se 5 sucessos, provisionar em V12
+(31 approved potenciais), depois history de cinco
+novas fontes e mais seis runs se orçamento permitir:
+34/80 após identity, 54/80 após cinco histories,
+78/80 após seis histories, margem 2. 440 observações
+máximas adicionais (11 runs), não previsão de yield.
+Não prometer atingir 2000 hoje. Após aquisição e
+auditoria: backup, registrar perfis/contextos
+documentais faltantes pelo fluxo existente e recalcular
+elegibilidade/caption/ranking com corpus atual; não
+reusar métricas grounded V10. Sem mídia, cobrança,
+merge ou gates. Atualização apenas documental.
+
+```powershell
+git pull --ff-only
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+$manifest = "artifacts/private/bd_manifest_a6_v11.json"
+$env:TAPI_META_REQUIRE_TOKEN_EXPIRY = "0"
+& $py -m scripts.a6_identify_sources --manifest "$manifest" --plan-expansion --max-sources 5 --daily-request-budget 80
+```
+Se seleção e saldo compatíveis, token presente e
+operação oficial sem cobrança:
+```powershell
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$identityReport = "artifacts/private/a03-identity-v12-$stamp.json"
+$env:TAPI_BD_IDENTITY_ENABLED = "1"
+$env:TAPI_OFFICIAL_METADATA_READS = "1"
+$env:TAPI_ZERO_BILLING_CONFIRMED = "1"
+try {
+    & $py -m scripts.a6_identify_sources --manifest "$manifest" --source casa.artemisia.escola --source endeavorbrasil --source institutolojasrenner --source wabizapp --source abraseloestepotiguar --daily-request-budget 80 --execute --report "$identityReport"
+    $identityExit = $LASTEXITCODE
+}
+finally {
+    $env:TAPI_BD_IDENTITY_ENABLED = "0"
+    $env:TAPI_OFFICIAL_METADATA_READS = "0"
+    $env:TAPI_ZERO_BILLING_CONFIRMED = "0"
+}
+if ($identityExit -ne 0) { throw "Identidade interrompida; preservar relatorio, nao repetir" }
+```
+Enviar status/cycle_key/reservas e username/status/code,
+sem IDs privados ou segredos. Não provisionar ou
+coletar V12 antes de reconciliar resultados efetivos.
