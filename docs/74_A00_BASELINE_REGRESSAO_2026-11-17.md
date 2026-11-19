@@ -3267,3 +3267,65 @@ de identidade e histórico já implementados. Não usar
 78/80 histórico como saldo de hoje, não executar coleta
 sem preflight atual. Sem merge, alteração de matrizes,
 novo grant, gasto ou autorização.
+
+
+### A02.8/9 — confirmação final do CLI direto e snapshot operacional
+
+Operador HEAD bdc20452728572f808beb9f27319cc7d955392f8,
+igual ao remoto confirmado. Diff desde d563a36: três
+commits, fix CLI, diagnóstico A03 e documentação.
+Readiness 7/7 PASS em 4,68s, zero-spend PASS. CLI direto
+scripts/a02_operational_readiness.py executado com
+--expected-head, JSON A02_READINESS_INSPECTED_MEDIA_BLOCKED
+em 2026-11-19T02:43:50.437192+00:00.
+Revisão 0016, integrity/foreign_key ok; todas sete tabelas
+A02 do tenant vazias. Zero jobs (todos estados), leases
+ativos globais/expirados tenant, pendência, histórico,
+tentativas UTC e bytes criptografados globais/tenant.
+Ingestão inativa. Limites: concorrência global 1,
+pendência tenant 100, histórico tenant/global 20000/50000,
+tentativas dia UTC tenant/global 50/100, envelope tenant/
+global 100000000/500000000 bytes. Nenhuma autoridade,
+grant por ativo ou referência retida ativa. Bloqueadores
+de trust independente/permissão exata, chaves e adapter
+real preservados. authorization_evaluated=false,
+keys_loaded=false, media_enabled=false, database_mutated=false,
+grants_created=0, jobs_claimed=0, external_calls=0,
+global_gates_released=false. Não confundir as sete tabelas
+A02 vazias com corpus/ingestion_source_grants vazios.
+Nenhuma migração ou provisionamento necessário neste
+passo. A02.8/9 diagnóstico local confirmado, execução
+operacional real ainda bloqueada; ASR/VLM qualidade FAIL,
+último full strict aprovado 20aea11, não declarar gate PASS.
+Espelho não reapresentado neste console.
+
+### A03 — próximo passo efetivo
+
+O incremento 096b59c já contém snapshot read-only de
+capacidade, não criar planejador paralelo. Os três testes
+A03 e execução contra banco operacional ainda não foram
+reportados. Primeiro executar somente o teste novo e o
+CLI, com tenant/URL existentes, sem token/rede:
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+& $py docs/base_atemporal/ferramentas/validar_espelho.py
+& $py -m pytest -q --tb=short tests/test_discovery_expansion_capacity.py
+if ($LASTEXITCODE -ne 0) { throw "Capacidade A03 nao validada" }
+& $py scripts/verify_zero_spend.py
+if ($LASTEXITCODE -ne 0) { throw "Zero spend nao validado" }
+$head = (git rev-parse HEAD).Trim()
+& $py -m scripts.a03_expansion_capacity --expected-head "$head"
+```
+Esperados 3/3 e A03_CAPACITY_INSPECTED_PLAN_ONLY. Enviar
+JSON agregado. Não repetir readiness já aprovado em
+código idêntico. Não assumir inventário ou quota atual
+a partir do histórico 1065/21 ou 78/80. A seguir, se
+capacidade permitir, usar o manifesto V10 existente e
+hash canônico faae42aa652a5b4b49c025d7522ac2e2f029c09bdc1434923c11df9d0ebdb1bb,
+viewer existente e planners identity/history já
+implementados, inicialmente em modo plano, não execute.
+Sem merge, mídia, novos grants, nova aprovação DEC-018,
+gasto ou execução externa por este incremento.
