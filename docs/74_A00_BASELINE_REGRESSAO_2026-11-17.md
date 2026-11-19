@@ -5484,3 +5484,24 @@ Incremento posterior **não executado no ambiente operador**:
   ainda é desconhecido e não deve ser fabricado.
 IMP-071/DEC-006/CT-04/G1 continuam pendentes, PR #44
 draft, R$0, nenhuma mutação do banco, Meta, mídia ou merge.
+
+
+### IMP-071 — adendo ao profiling opt-in: histórico das repetições (19/11)
+
+Após 6a494d3, dois commits não testados 41d401b e
+bb944e2 estendem somente telemetria sintética:
+scripts.a6_retrieval_preview --profile-readiness --repeat N
+agora mantém repeat_experiment.readiness_profile_samples
+de todas N rodadas (até 10) em artifacts/private,
+permitindo correlacionar variações de tempo do
+canonical_data_card, de auditoria de traces, de leitura
+e de classificação com full_path_latency_samples_ms.
+Continuam os mesmos checks e abortos de drifting
+partição/IDs/snapshot por rodada. stdout sem IDs/legendas,
+somente métricas agregadas. Teste verifica 3 perfis
+retidos. Nenhum valor real por fase é afirmado antes
+de rodar a nova flag no ambiente local. **27 testes
+focais esperados**, ainda não reportados neste HEAD.
+Sem alterações na matriz, no original V12, em grants,
+no critério de elegibilidade ou nas DEC-016/017/018.
+Não alegar resolução de gargalo antes das medições.
