@@ -3170,3 +3170,32 @@ Enviar JSON agregado; status esperado A02_READINESS_INSPECTED_MEDIA_BLOCKED,
 não PASS de autorização. Ausência de grants não é falha
 da infraestrutura nem pedido de nova aprovação; não
 fabricar chaves/autoridades nem executar mídia real.
+
+
+### A02.8 — correção de inicialização do CLI
+
+Operador: 5/5 readiness PASS (3,59s), zero-spend PASS.
+Execução direta do CLI falhou no import scripts.a00_baseline
+(ModuleNotFoundError: scripts), antes da inspeção do banco.
+HEAD local obtido em variável mas não impresso; remoto
+confirmado d563a36. Nenhum diagnóstico operacional emitido.
+Causa: execução por caminho inclui scripts/ e não
+necessariamente a raiz; pytest importa pela raiz.
+Corrigido import condicional por contexto __package__,
+sem modificar sys.path, controles de checkout/DB intactos.
+Dois testes de subprocesso real (direto fora da raiz,
+módulo na raiz), sem PYTHONPATH/PYTHONHOME ou TAPI_*,
+HEAD inválido deve chegar ao guard antes de acesso DB.
+Esperados 7/7 readiness; testes novos ainda não executados
+pelo assistente. Usar preferencialmente:
+```powershell
+git pull --ff-only
+git status --short
+git rev-parse HEAD
+$py = Join-Path $env:CONDA_PREFIX "python.exe"
+& $py -m pytest -q --tb=short tests/test_asset_operational_readiness.py
+& $py scripts/verify_zero_spend.py
+$head = git rev-parse HEAD
+& $py -m scripts.a02_operational_readiness --expected-head "$head"
+```
+Sem migração, mídia, grants, alteração de gates ou merge.

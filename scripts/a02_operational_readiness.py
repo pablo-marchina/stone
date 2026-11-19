@@ -4,7 +4,13 @@ import json
 import os
 from pathlib import Path
 
-from scripts.a00_baseline import check_checkout
+# Direct script execution exposes scripts/ on sys.path, not the repo root.
+# Module invocation exposes the package. Keep both entrypoints supported
+# without adding arbitrary working directories to the import path.
+if __package__ in (None, ""):
+    from a00_baseline import check_checkout
+else:
+    from .a00_baseline import check_checkout
 from tapi_gate0.asset_operational_readiness import inspect
 
 ROOT=Path(__file__).resolve().parents[1]

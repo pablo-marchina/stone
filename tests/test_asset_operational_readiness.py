@@ -106,3 +106,24 @@ def test_readiness_counts_expired_lease_without_reconciliation(db):
     assert "ACTIVE_GLOBAL_LEASES_REQUIRE_RECONCILIATION" in report["blockers"]
     assert "fixture-worker" not in str(report) and "fixture-job" not in str(report)
     assert _sha256(path)==before and not report["media_enabled"]
+
+
+@pytest.mark.parametrize("as_module",[False,True],ids=["direct","module"])
+def test_readiness_real_cli_entrypoint_without_pythonpath(as_module,tmp_path):
+    import json
+    import os
+    import subprocess
+    import sys
+    root=Path(__file__).resolve().parents[1]
+    env={k:v for k,v in os.environ.items() if k not in ("PYTHONPATH","PYTHONHOME")
+         and not k.startswith("TAPI_")}
+    # Deliberately invalid HEAD: must reach the checkout guard, not the DB.
+    # Direct invocation runs outside the repository to exercise import resolution.
+    entry=["-m","scripts.a02_operational_readiness"] if as_module else [
+        str(root/"scripts"/"a02_operational_readiness.py")]
+    proc=subprocess.run([sys.executable,*entry,"--expected-head","invalid"],
+        cwd=root if as_module else tmp_path,env=env,capture_output=True,text=True,timeout=30)
+    assert proc.returncode==2,proc.stderr
+    report=json.loads(proc.stdout)
+    assert report["code"]=="BASELINE_FULL_COMMIT_REQUIRED"
+    assert report["database_mutated"] is False and report["media_enabled"] is False
