@@ -4678,3 +4678,35 @@ privado exclusivo. Se falha, parar e enviar código
 agregado; nenhum novo acesso Meta ou registro.
 Commit exclusivamente documental; nenhum pacote
 instalado ou inferência executada pelo assistente.
+
+
+### A03.5 — smoke semântico recuperado; regressão e gates pendentes
+
+Operador reportou CONTEXTUAL_SYNTHETIC_SMOKE, relatório privado
+a03-s1-recovery-smoke-20261119-094220.json, 6 legendas sintéticas,
+model_load_ms=33114.425, torch 2.15.0, gliner2 2.1.0,
+transformers 5.22.1, safetensors 0.8.0. Revisão
+e173bca1f0c4217d7a55b3b0c705d5ece8a0218d, pesos SHA256
+9efe0f88c99f2aa794452e9559dc60e98d60d9fa2bf1b60cf2710411b6da5b4e.
+HEAD local, nome do ambiente e pip check não impressos; remoto
+ecd49bc confirmado. Carregamento e execução sintética demonstrados;
+não afirmar recuperação integral/reprodutibilidade ou qualidade.
+V1: 2 sinais explícitos negativos, 1 menção incerta positiva,
+3 sem sinal (2 positivos/1 negativo), zero abstenções. Não promover V1.
+Zero targeting, revisão humana, admissão, acesso externo ou mutação;
+global classification deny preservado. Não repetir smoke se mesmo
+runtime/checkpoint confirmados.
+
+Próximo: confirmar interpretador semântico isolado e checkout limpo,
+pip check, A00 --profile semantic, benchmarks --audience-benchmark
+--grounded e --rubric-grounded-benchmark com modelo existente,
+flags HF offline e S1 temporária. Os benchmarks standalone podem
+retornar exit 0 com gate falso: inspecionar engineering_gate_passed
+e field_engineering_gate dos quatro campos (tema/CTA/prova/oferta).
+Não inferir aprovação de tom. Se audience PASS, executar V12 apenas
+com readiness/escopo/ingestão parada confirmados e pin V12 inalterado;
+pilotos somente para pares com gates aprovados, cada fluxo repete seu
+benchmark. Se falha, preservar relatórios e diagnosticar sem
+flexibilizar critérios. Zero rede Meta, mídia, gasto ou nova admissão.
+Último full strict permanece 20aea11. Atualização exclusivamente
+documental; sem merge ou gates globais.
