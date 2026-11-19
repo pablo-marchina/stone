@@ -5087,3 +5087,58 @@ registrar sha/versões. Full multimodal regressão ainda
 no SHA 20aea11, nunca transferir PASS para novo HEAD.
 DEC-018 e R$0 preservados, sem merge, grants antigos
 continuam bloqueados. Diagnóstico não homologa IMP-131.
+
+
+### A05 — diagnostics de evidência testados, preview privado reproduzido (19/11)
+
+Arquivo de console do operador Texto colado(20261119-223853).txt.
+Operador executou validar_espelho da Base Atemporal:
+DAG acíclico, IMP-131 sink único, testes de software não
+incluídos na verificação do espelho, gates não avaliados.
+Teste focal no ambiente tapi-s1-recovery:
+tests/test_discovery_editorial_agent.py 6 PASS em 0.49s.
+scripts/verify_zero_spend.py PASS.
+A05_EVIDENCE_LIMITS_TESTS_VERIFIED.
+
+Runner a6_exploratory_ranking --agent-preview sobre o mesmo
+manifesto d903366a975cb6e4c4e07c9e6300799c727c3efc3a8317530f14d90e19435b54
+e os três inputs de SHA previamente verificados, sem
+reexecutar predições ou importar mídia. Report
+a05-scope27-evidence-limits-20261119-193819-803.json
+SHA256 aa8b05a13abff6e55f4d279c4db384d70d7568417d28c16eafc877eb02b3b3ad.
+EXPLORATORY_AGENT_PREVIEW_COMPLETED, 1069 posts/27 fontes,
+1 finding CTA lexical seguir, 4 referências, 0 criativos,
+confidence EXPLORATORY_NOT_INDEPENDENTLY_VALIDATED,
+scientific_admissions=0, no database_mutated, no external access,
+publication_approved=false, studio_mutated=false.
+Novo evidence_limits presente no output:
+provenance caption_lexical_not_grounded_rubric,
+four_views_are_independent_replications=false;
+top coverage global técnico 12/107=11.215%,
+intraperfil técnico 23/120=19.1667%,
+global semântico 5/47=10.6383%,
+intraperfil semântico 10/51=19.6078%.
+Rest coverage 237/962, 226/944, 111/419, 105/384.
+Unknown is not negative em todos os recortes.
+technical_all sensitivity matched_profiles=14,
+semantic_exploratory=7, ambos interval_includes_zero=true,
+population CI=false. scientific_or_causal_claim_supported=false,
+editorial_recommendation_approved=false. Não inferir efeito
+de seguir, não escrever Studio nem inventar 5 peças.
+
+Commits executáveis novos 866c651 e 642cfc9 tiveram
+6 testes focais reproduzidos no checkout após 4542240
+documental; full strict A00 NÃO repetido neste HEAD.
+A05/CAP-005 não homologado. Próximo priorizar IMP-071
+CAP-009 (SQL/FTS baseline, queries gold de relevância
+e Recall@k, nDCG@k, p95) antes de IMP-072
+lexical/vetorial/híbrido. Proteger direitos antes de
+recuperar, tenant e as-of; manter ranking ER separado
+de relevância. Implementação parcial B2 existente
+EvidenceRetriever.get por ID e MCP stdio não constitui
+retrieval gold ou contrato final. DEC-006 permanece aberta.
+Teste CT-04 requer isolamento de leakage por criador e
+sealed-test; não fabricar gold e não declarar benchmark
+concluído sem labels reais. Acesso apenas local autorizado,
+sem gastos, grants novos, mudança de política, merge,
+publicação ou liberação de gates.
