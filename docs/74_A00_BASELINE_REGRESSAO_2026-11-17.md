@@ -4771,3 +4771,46 @@ e split exige >=2 candidatos esperados, zero incorretos,
 com escopo local, manifesto pinado e ingestão parada.
 Nenhuma alteração de código, banco, direitos ou gates;
 sem mídia, Meta, gasto ou merge. Atualização documental.
+
+
+### A03.5 — gates grounded reproduzidos; piloto V12 autorizado pelo escopo existente
+
+Operador HEAD 13da7186711be9bd88235ce0cb4647262b678500,
+checkout limpo, tapi-s1-recovery, versões e checkpoint preservados.
+Console 107343 bytes SHA256
+fb15be01ac9d470ae93eefdc93a082db731f76562939e0d522a5396b33fffcc0.
+Relatórios privados a03-s1-audience-benchmark-20261119-102853-624.json
+e a03-s1-rubric-benchmark-20261119-102853-624.json.
+Revisão e173bca1f0c4217d7a55b3b0c705d5ece8a0218d,
+pesos 9efe0f88c99f2aa794452e9559dc60e98d60d9fa2bf1b60cf2710411b6da5b4e.
+Warnings de tipo de modelo Transformers e depreciação torch.jit.script,
+sem falha de carregamento; não suprimir nem alterar stack neste passo.
+Audiência bd-audience-grounded.v1: 48 casos, híbrido 8/10 e 4/6
+positivos corretos, zero positivos indevidos nos dois splits, 35/48
+exatos, 31 abstenções, engineering_gate_passed=true. Regra isolada
+16/16 positivos, 45/48 exatos, zero positivos indevidos; hipótese
+IMP-129 para avaliação adicional, não promoção automática.
+Rubrica bd-caption-rubric-grounded.v1: 62 casos, híbrido nos quatro
+campos aprovados 52/52 exatos (inclui abstenções), tema 8/8+3/3,
+CTA 5/5+3/3, prova 2/2+2/2, oferta 3/3+2/2 candidatos corretos;
+zero candidatos errados. Tom FAIL, 0/4+0/2 corretos e 10/10
+abstenções; não incluir nos pilotos. 5/5 gates necessários PASS,
+não gold independente, não validação científica. Ambos synthetic_only,
+database_mutated=false, external_data_accessed=false, zero admissões,
+classificação externa global deny preservada. Último full strict 20aea11.
+
+Próximo: mesmo V12, tenant/viewer, backup pós-contextos preservado,
+todos escritores/ingestão parados; confirmar readiness 1630/29,
+1348 legendas, pin 43372c6fe04ae12e5735e7b932d98a53a114ee0f5eb44d06fa5bea86a465b081,
+local_caption_scope_allowed=true/29 e global deny. Não trocar banco
+ou manifesto, não solicitar nova aprovação institucional.
+Executar --execute --grounded e dois --rubric-grounded-pilot
+pares disjuntos tema/CTA e prova/oferta, serialmente, com flags
+HF offline e S1 temporária; cada comando repete seu gate.
+Relatórios privados exclusivos; validar status, pin, revisão/hash,
+1348 assessed_captions em cada e zero mutação/admissão. Parar em
+falha ou divergência. Não enviar private_evidence ou conteúdo bruto.
+Reconciliar partições e snapshots via ranking/contraste existente
+antes de atualizar replay/UI; nenhuma reutilização de V10.
+Sem nova coleta no orçamento UTC esgotado, mídia, cobrança,
+alteração de política, merge ou gate global. Commit documental.
