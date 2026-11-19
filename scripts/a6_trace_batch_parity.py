@@ -63,6 +63,57 @@ def _population(engine, tenant, frame, viewer, *, sources, posts, pin):
         raise ValueError("TRACE_PARITY_PARTITION_DRIFT")
 
 
+
+def _readiness_variant(engine, tenant, frame, viewer, *,
+                       auditor, expected_sources, expected_posts,
+                       expected_partition):
+    """Private fail-closed shadow readiness comparison; never emits text/IDs."""
+    observed = []
+
+    def capture(source, post, metric):
+        observed.append((
+            source.username, post.content_id, metric.snapshot_id,
+            sha256(post.caption.encode("utf-8")).hexdigest(),
+        ))
+
+    require_scoped_research(engine, tenant, frame, viewer)
+    started = perf_counter()
+    report = readiness_report(
+        engine, tenant, frame, viewer, _record_observer=capture,
+        _trace_auditor=auditor,
+    )
+    elapsed = round((perf_counter() - started) * 1000, 6)
+    require_scoped_research(engine, tenant, frame, viewer)
+
+    if (report["status"] != "CORPUS_READINESS_PLANNED"
+            or report["manifest_sha256"] != frame.fingerprint()
+            or len(frame.sources) != expected_sources
+            or len(observed) != expected_posts
+            or len({item[1] for item in observed}) != expected_posts
+            or report["completed_runs_without_valid_bd_trace"] != 0
+            or report["first_blocking_stage"]["CAPTION_AVAILABLE_FOR_ASSESSMENT"] != expected_posts
+            or sum(row["source_gate"] == "TECHNICAL_SCOPE_MATCHED"
+                   for row in report["sources"]) != expected_sources
+            or report["database_mutated"] is not False
+            or report["external_data_accessed"] is not False
+            or report["new_scientific_admissions"] != 0):
+        raise ValueError("TRACE_PARITY_READINESS_POPULATION_INVALID")
+    part = json.dumps(sorted(observed), separators=(",", ":"), ensure_ascii=False)
+    if sha256(part.encode("utf-8")).hexdigest() != expected_partition:
+        raise ValueError("TRACE_PARITY_READINESS_PARTITION_DRIFT")
+
+    # UTC as_of necessarily differs between independent read-only scans.
+    # Every other canonical data-card and readiness field must match exactly.
+    normalized = dict(report)
+    normalized.pop("as_of", None)
+    card = dict(normalized["canonical_corpus_card"])
+    card.pop("as_of", None)
+    normalized["canonical_corpus_card"] = card
+    canonical = json.dumps(normalized, sort_keys=True, ensure_ascii=False,
+                           separators=(",", ":"))
+    return sha256(canonical.encode("utf-8")).hexdigest(), elapsed
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, required=True)
@@ -71,6 +122,8 @@ def main(argv=None):
     parser.add_argument("--expected-posts", type=int, required=True)
     parser.add_argument("--expected-sources", type=int, required=True)
     parser.add_argument("--report-name", required=True)
+    parser.add_argument("--compare-readiness", action="store_true",
+                        help="Compare canonical and batched audit inside full readiness")
     parser.add_argument("--confirm-all-ingestion-stopped", action="store_true")
     parser.add_argument("--confirm-all-writers-stopped", action="store_true")
     a = parser.parse_args(argv)
@@ -140,6 +193,34 @@ def main(argv=None):
                     raise ValueError("TRACE_PARITY_ORIGINAL_INVALID")
                 observation_count += compared["original"]["observations"]
 
+        readiness_comparison = None
+        if a.compare_readiness:
+            # Both paths perform the same complete run and existence checks.
+            original_hash, original_ms = _readiness_variant(
+                engine, tenant, frame, viewer, auditor=audit_run,
+                expected_sources=a.expected_sources,
+                expected_posts=a.expected_posts,
+                expected_partition=a.expected_partition_sha256,
+            )
+            shadow_hash, batched_ms = _readiness_variant(
+                engine, tenant, frame, viewer, auditor=audit_run_batched,
+                expected_sources=a.expected_sources,
+                expected_posts=a.expected_posts,
+                expected_partition=a.expected_partition_sha256,
+            )
+            if original_hash != shadow_hash:
+                raise ValueError("TRACE_PARITY_READINESS_MISMATCH")
+            readiness_comparison = {
+                "status": "READINESS_BATCH_SHADOW_PARITY_VERIFIED",
+                "all_non_temporal_fields_equal": True,
+                "report_sha256": original_hash,
+                "original_readiness_ms": original_ms,
+                "batched_readiness_ms": batched_ms,
+                "canonical_default_unchanged": True,
+                "shadow_algorithm_not_active": True,
+                "comparison_is_uncontrolled_cache_diagnostic": True,
+            }
+
         require_scoped_research(engine, tenant, frame, viewer)
         _population(engine, tenant, frame, viewer,
                     sources=a.expected_sources, posts=a.expected_posts,
@@ -166,6 +247,8 @@ def main(argv=None):
             "scientific_admissions": 0,
             "scientifically_validated": False,
         }
+        if readiness_comparison is not None:
+            report["readiness_parity"] = readiness_comparison
         # Preserve the detailed aggregate benchmark exclusively in private.
         fd = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as file:
