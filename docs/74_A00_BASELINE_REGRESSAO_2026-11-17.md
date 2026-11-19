@@ -3912,3 +3912,39 @@ recuperação. Não declarar token validado permanentemente
 nem exigir data manual. Commit exclusivamente documental,
 sem alteração de código, DB, rede, gates ou merge pelo
 assistente.
+
+
+### A03.3 — reset confirmado; execução de recuperação ainda pendente
+
+Console operador 13105 bytes SHA256
+058a735685395871cedc2d49cb80afd3eb51abcced45ab62cb2b09de2b300cf8.
+META_AUTH_RESET_UNVERIFIED, quota_reservation_preserved=true,
+external_data_accessed=false. Prévia V11 pin
+19c38ca968585a7e056402dd2f5f743df232f778c161b762e9c764d713e71840,
+RESET_UNVERIFIED desde 2026-11-19T11:53:40.321688+00:00,
+blocked=false, selected_sources=[abavnacional], 9/80
+reservas, 4 páginas/40 observações máximas, 1065/21.
+Não consta execução --execute após reset; chamada direta
+ao auditor com $historyReport retornou BD_REPORT_AUDIT_MISMATCH.
+Provável referência ao relatório interrompido anterior;
+arquivo efetivamente auditado não impresso, não afirmar
+identidade exata do arquivo. Auditor exige batch completo.
+Não é nova falha de OAuth nem evidência de defeito do
+auditor; nenhuma nova coleta demonstrada. HEAD local
+não impresso; remoto 2e63494 confirmado.
+
+Próximo: não repetir reset nem a rotação, nem consultar
+validade manual. Confirmar prévia atual com seleção ABAV
+e saldo >=4, sem bloqueio, flags externas desligadas.
+Com escritores parados, R$0 e mesma credencial local,
+usar novo nome exclusivo e executar exatamente uma coleta.
+Somente auditar o relatório recém-gerado se execução
+exit=0, status BATCH_COMPLETED/BATCH_NO_ELIGIBLE_OBSERVATIONS,
+manifesto V11 e seleção ABAV confirmados; não auditar
+NO_DUE_AUTHORIZED_SOURCES. Se erro, parar e preservar
+relatório e reservas. Usar comandos da seção anterior,
+com checagem explícita do status do arquivo novo antes
+da reauditoria. Após sucesso, planejar quatro fontes
+restantes e segundo lote identity. Nenhuma mudança de
+código, dados operacionais, gates, merge ou rede pelo
+assistente. Saldo 71 apenas na prévia observada.
