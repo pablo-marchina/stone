@@ -254,3 +254,89 @@ def test_cli_summary_has_full_timing_without_private_identifiers(
     assert "private-id" not in output
     assert "private-snapshot" not in output
     assert "gestão" not in output
+
+
+def _repeat_fixture(monkeypatch, tmp_path, *, drift=False):
+    from scripts import a6_retrieval_preview as cli
+    private = tmp_path / "artifacts" / "private"
+    private.mkdir(parents=True)
+    manifest = private / "scope.json"
+    manifest.write_text("fixture", encoding="utf-8")
+    monkeypatch.setattr(cli, "ROOT", tmp_path)
+    monkeypatch.setattr(cli.BatchManifest, "model_validate_json",
+                        lambda _text: NS(fingerprint=lambda: PIN))
+    monkeypatch.setattr(cli, "validate_existing_database_url", lambda url: url)
+    monkeypatch.setattr(cli, "engine_for", lambda _url: NS(dispose=lambda: None))
+    n = {"calls": 0}
+
+    def simulate(*_args, **_kwargs):
+        n["calls"] += 1
+        return {
+            "status": "SCOPED_FTS_LOCAL_PREVIEW_COMPLETED",
+            "policy_version": scoped.VERSION,
+            "manifest_sha256": PIN,
+            "partition_sha256": "c" * 64,
+            "eligible_posts": 3, "eligible_sources": 1,
+            "query_count": 1,
+            "queries": [{"query_sha256": "d" * 64,
+                         "hit_count": 1,
+                         "content_ids": ["private-id"],
+                         "snapshot_ids": ["changed" if drift and n["calls"] > 1
+                                          else "private-snapshot"]}],
+            "p95_search_latency_ms": 0.3,
+            "full_preview_elapsed_ms": float(10 - n["calls"]),
+            "timing_breakdown_ms": {"first_readiness": 3.0},
+        }
+
+    monkeypatch.setattr(cli, "preview_scoped_fts", simulate)
+    monkeypatch.setenv("TAPI_TENANT_ID", "fixture-tenant")
+    monkeypatch.setenv("TAPI_META_IG_ID", "12345")
+    monkeypatch.setenv("TAPI_DATABASE_URL", "sqlite:///fixture.sqlite3")
+    argv = ["--manifest", str(manifest),
+            "--expected-manifest-sha256", PIN,
+            "--expected-posts", "3", "--expected-sources", "1",
+            "--query", "gestão", "--report-name", "repeat.json",
+            "--repeat", "3",
+            "--confirm-all-ingestion-stopped", "--confirm-all-writers-stopped"]
+    return cli, argv, n, private
+
+
+def test_repeat_full_path_reports_samples_and_stable_private_hits(
+        monkeypatch, tmp_path, capsys):
+    import json
+    cli, argv, n, private = _repeat_fixture(monkeypatch, tmp_path)
+    assert cli.main(argv) == 0
+    assert n["calls"] == 3
+    stdout = capsys.readouterr().out
+    assert "private-id" not in stdout
+    assert "private-snapshot" not in stdout
+    assert "gestão" not in stdout
+    report = json.loads((private / "repeat.json").read_text(encoding="utf-8"))
+    samples = report["repeat_experiment"]
+    assert samples["repetitions"] == 3
+    assert samples["full_path_latency_samples_ms"] == [9.0, 8.0, 7.0]
+    assert samples["full_path_p50_ms"] == 8.0
+    assert samples["full_path_p95_ms"] == 9.0
+    assert samples["partition_and_hits_stable"] is True
+    assert "private-id" in str(report["queries"])
+
+
+def test_repeat_changed_evidence_ref_blocks_entire_report(
+        monkeypatch, tmp_path, capsys):
+    cli, argv, n, private = _repeat_fixture(monkeypatch, tmp_path, drift=True)
+    assert cli.main(argv) == 2
+    assert n["calls"] == 2
+    assert not (private / "repeat.json").exists()
+    assert "RETRIEVAL_REPEAT_PARTITION_OR_HITS_DRIFT" in capsys.readouterr().out
+
+
+def test_repeat_bounds_reject_before_database_read(monkeypatch, capsys):
+    from scripts.a6_retrieval_preview import main
+    assert main(["--manifest", "missing.json",
+                 "--expected-manifest-sha256", PIN,
+                 "--expected-posts", "3", "--expected-sources", "1",
+                 "--query", "gestão", "--report-name", "repeat.json",
+                 "--repeat", "11",
+                 "--confirm-all-ingestion-stopped",
+                 "--confirm-all-writers-stopped"]) == 2
+    assert "RETRIEVAL_REPEAT_BOUNDS" in capsys.readouterr().out
