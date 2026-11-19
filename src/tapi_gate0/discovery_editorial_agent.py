@@ -54,6 +54,59 @@ def cluster_contrast(rows, top_ids, field, value):
     return result
 
 
+
+def describe_finding_limits(views, sensitivity):
+    """Describe evidence limits without changing selection or granting approval.
+
+    Fractions use all ranked posts as denominator: missing lexical labels
+    remain unknown, never negative. Four views overlap and are not replications.
+    Bootstrap ranges are conditional sensitivity, not confidence intervals.
+    """
+    expected = {(cohort, scope) for cohort in COHORTS for scope in SCOPES}
+    if set(views) != expected or set(sensitivity) != set(COHORTS):
+        raise ValueError("BD_AGENT_EVIDENCE_PARTITION_MISMATCH")
+    coverage = {}
+    for cohort, scope in sorted(expected):
+        view = views[(cohort, scope)]
+        top, rest = view["top_total"], view["rest_total"]
+        top_observed, rest_observed = view["top_observed"], view["rest_observed"]
+        if (top <= 0 or rest <= 0
+                or not 0 <= top_observed <= top
+                or not 0 <= rest_observed <= rest):
+            raise ValueError("BD_AGENT_EVIDENCE_COVERAGE_INVALID")
+        coverage[cohort + "." + scope] = {
+            "top_observed": top_observed,
+            "top_total": top,
+            "top_coverage_fraction": round(top_observed / top, 6),
+            "rest_observed": rest_observed,
+            "rest_total": rest,
+            "rest_coverage_fraction": round(rest_observed / rest, 6),
+            "unknown_is_not_negative": True,
+        }
+    intervals = {}
+    for cohort in COHORTS:
+        measure = sensitivity[cohort]
+        bounds = measure["resampling_interval_pp"]
+        if bounds is not None and (len(bounds) != 2 or bounds[0] > bounds[1]):
+            raise ValueError("BD_AGENT_SENSITIVITY_INTERVAL_INVALID")
+        intervals[cohort] = {
+            "matched_profiles": measure["matched_profiles"],
+            "resampling_interval_available": bounds is not None,
+            "interval_includes_zero": (
+                bounds[0] <= 0 <= bounds[1] if bounds is not None else None
+            ),
+            "interval_is_population_confidence_interval": False,
+        }
+    return {
+        "observables_provenance": "caption_lexical_not_grounded_rubric",
+        "four_views_are_independent_replications": False,
+        "coverage": coverage,
+        "sensitivity": intervals,
+        "scientific_or_causal_claim_supported": False,
+        "editorial_recommendation_approved": False,
+    }
+
+
 def _references(rows, rankings, field, value):
     # Prefer semantic cohort and both ranks; then diverse creators, max five.
     sem = rankings[COHORTS[1]]
@@ -130,6 +183,7 @@ def build_agent_preview(rows, *, tenant, as_of, manifest_sha256):
                    "four_view_concordance":True,
                    "views":{name+"."+scope:v for (name,scope),v in views.items()},
                    "cluster_sensitivity":sensitivity,
+                   "evidence_limits":describe_finding_limits(views, sensitivity),
                    "reference_content_ids":[r["content_id"] for r in refs],
                    "claim":"Sinal descritivo para investigação editorial; não implica causalidade nem audiência MPE validada."}
         findings.append(finding)
