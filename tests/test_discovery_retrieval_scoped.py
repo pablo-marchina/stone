@@ -71,6 +71,11 @@ def test_realistic_ephemeral_preview_gates_twice_without_captions(monkeypatch):
     assert result["query_count"] == 2
     assert all(hit["gold_metrics"] is None for hit in result["queries"])
     assert result["p95_search_latency_ms"] >= 0
+    assert result["full_preview_elapsed_ms"] >= 0
+    assert result["full_preview_includes_scope_and_revalidation"]
+    assert result["performance_sample_is_exploratory"]
+    assert len(result["timing_breakdown_ms"]) == 6
+    assert all(v >= 0 for v in result["timing_breakdown_ms"].values())
     assert result["latency_excludes_readiness_and_index_build"]
     assert result["recall_at_k"] is None and result["ndcg_at_k"] is None
     assert not result["scientifically_validated"]
@@ -169,6 +174,8 @@ def test_cli_creates_private_exclusive_report_and_only_prints_aggregate(
                                          "content_ids": ["private-id"],
                                          "snapshot_ids": ["snapshot"]}],
                             "p95_search_latency_ms": 0.3,
+                            "full_preview_elapsed_ms": 7.5,
+                            "timing_breakdown_ms": {"first_readiness": 3.0},
                         })
     monkeypatch.setenv("TAPI_TENANT_ID", "fixture-tenant")
     monkeypatch.setenv("TAPI_META_IG_ID", "12345")
@@ -186,3 +193,64 @@ def test_cli_creates_private_exclusive_report_and_only_prints_aggregate(
     assert "private-id" in (private / "preview.json").read_text(encoding="utf-8")
     assert cli.main(argv) == 2
     assert "RETRIEVAL_REPORT_ALREADY_EXISTS" in capsys.readouterr().out
+
+
+def test_invalid_query_rejected_before_scoped_database_access(monkeypatch):
+    runs = fake_rows(monkeypatch)
+    with pytest.raises(RetrievalBaselineError, match="QUERY_TOKENS"):
+        scoped.preview_scoped_fts(
+            object(), "tenant", frame(), "viewer",
+            queries=["!!!"], expected_posts=3, expected_sources=1,
+        )
+    with pytest.raises(RetrievalBaselineError, match="LIMIT_INVALID"):
+        scoped.preview_scoped_fts(
+            object(), "tenant", frame(), "viewer",
+            queries=["gestão"], expected_posts=3,
+            expected_sources=1, limit=51,
+        )
+    assert runs == {"ready": 0, "scopes": 0}
+
+
+def test_cli_summary_has_full_timing_without_private_identifiers(
+        monkeypatch, tmp_path, capsys):
+    from scripts import a6_retrieval_preview as cli
+    private = tmp_path / "artifacts" / "private"
+    private.mkdir(parents=True)
+    manifest = private / "scope.json"
+    manifest.write_text("fixture", encoding="utf-8")
+    monkeypatch.setattr(cli, "ROOT", tmp_path)
+    monkeypatch.setattr(cli.BatchManifest, "model_validate_json",
+                        lambda _text: NS(fingerprint=lambda: PIN))
+    monkeypatch.setattr(cli, "validate_existing_database_url", lambda url: url)
+    monkeypatch.setattr(cli, "engine_for", lambda _url: NS(dispose=lambda: None))
+    monkeypatch.setattr(cli, "preview_scoped_fts",
+                        lambda *_args, **_kwargs: {
+                            "status": "SCOPED_FTS_LOCAL_PREVIEW_COMPLETED",
+                            "policy_version": scoped.VERSION,
+                            "manifest_sha256": PIN,
+                            "partition_sha256": "c" * 64,
+                            "eligible_posts": 3, "eligible_sources": 1,
+                            "query_count": 1,
+                            "queries": [{"query_sha256": "d" * 64,
+                                         "hit_count": 1,
+                                         "content_ids": ["private-id"],
+                                         "snapshot_ids": ["private-snapshot"]}],
+                            "p95_search_latency_ms": 0.3,
+                            "full_preview_elapsed_ms": 7.5,
+                            "timing_breakdown_ms": {"first_readiness": 3.0},
+                        })
+    monkeypatch.setenv("TAPI_TENANT_ID", "fixture")
+    monkeypatch.setenv("TAPI_META_IG_ID", "12345")
+    monkeypatch.setenv("TAPI_DATABASE_URL", "sqlite:///fixture.sqlite3")
+    argv = ["--manifest", str(manifest),
+            "--expected-manifest-sha256", PIN,
+            "--expected-posts", "3", "--expected-sources", "1",
+            "--query", "gestão", "--report-name", "preview.json",
+            "--confirm-all-ingestion-stopped", "--confirm-all-writers-stopped"]
+    assert cli.main(argv) == 0
+    output = capsys.readouterr().out
+    assert "full_preview_elapsed_ms" in output
+    assert '"full_preview_elapsed_ms": 7.5' in output
+    assert "private-id" not in output
+    assert "private-snapshot" not in output
+    assert "gestão" not in output
