@@ -171,3 +171,88 @@ def test_shadow_readiness_mismatch_fails_before_any_report(
     assert calls["population"] == 1
     assert not (private / "trace-parity.json").exists()
     assert "TRACE_PARITY_LOCAL_ERROR" in capsys.readouterr().out
+
+
+def test_readiness_shadow_repeats_balance_order_and_keep_all_evidence_equal(
+        monkeypatch, tmp_path, capsys):
+    private, calls, argv = fixture(monkeypatch, tmp_path)
+    labels = []
+
+    def readiness(*_, auditor, **__):
+        labels.append(auditor)
+        if auditor is cli.audit_run:
+            return "c" * 64, [100.0, 120.0, 110.0][
+                sum(x is cli.audit_run for x in labels) - 1
+            ]
+        return "c" * 64, [30.0, 35.0, 32.0][
+            sum(x is cli.audit_run_batched for x in labels) - 1
+        ]
+
+    monkeypatch.setattr(cli, "_readiness_variant", readiness)
+    assert cli.main(argv + ["--compare-readiness", "--readiness-repeats", "3"]) == 0
+    assert labels == [
+        cli.audit_run, cli.audit_run_batched,
+        cli.audit_run_batched, cli.audit_run,
+        cli.audit_run, cli.audit_run_batched,
+    ]
+    report = json.loads((private / "trace-parity.json").read_text())
+    comparison = report["readiness_parity"]
+    assert comparison["all_repetitions_equal"]
+    assert comparison["repetitions"] == 3
+    assert comparison["original_samples_ms"] == [100.0, 120.0, 110.0]
+    assert comparison["batched_samples_ms"] == [30.0, 35.0, 32.0]
+    assert comparison["original_p50_ms"] == 110.0
+    assert comparison["batched_p50_ms"] == 32.0
+    assert comparison["original_p95_ms"] == 120.0
+    assert comparison["batched_p95_ms"] == 35.0
+    assert comparison["alternating_readiness_order"]
+    assert calls["scope"] == 3
+    assert calls["population"] == 2
+    output = capsys.readouterr().out
+    assert "private-run-A" not in output
+
+
+def test_readiness_shadow_repeats_abort_if_partition_report_changes(
+        monkeypatch, tmp_path, capsys):
+    private, calls, argv = fixture(monkeypatch, tmp_path)
+    n = {"calls": 0}
+
+    def readiness(*_, **__):
+        n["calls"] += 1
+        return ("c" * 64 if n["calls"] <= 2 else "d" * 64), 20.0
+
+    monkeypatch.setattr(cli, "_readiness_variant", readiness)
+    assert cli.main(argv + ["--compare-readiness", "--readiness-repeats", "3"]) == 2
+    assert n["calls"] == 4
+    assert not (private / "trace-parity.json").exists()
+    assert calls["population"] == 1
+    assert "TRACE_PARITY_LOCAL_ERROR" in capsys.readouterr().out
+
+
+def test_readiness_shadow_repeat_bounds_fail_before_database_access(
+        monkeypatch, capsys):
+    assert cli.main([
+        "--manifest", "unavailable.json",
+        "--expected-manifest-sha256", PIN,
+        "--expected-partition-sha256", POPULATION,
+        "--expected-posts", "1069",
+        "--expected-sources", "2",
+        "--report-name", "trace-parity.json",
+        "--confirm-all-ingestion-stopped",
+        "--confirm-all-writers-stopped",
+        "--readiness-repeats", "6",
+        "--compare-readiness",
+    ]) == 2
+    assert "TRACE_PARITY_LOCAL_ERROR" in capsys.readouterr().out
+    assert cli.main([
+        "--manifest", "unavailable.json",
+        "--expected-manifest-sha256", PIN,
+        "--expected-partition-sha256", POPULATION,
+        "--expected-posts", "1069",
+        "--expected-sources", "2",
+        "--report-name", "trace-parity.json",
+        "--confirm-all-ingestion-stopped",
+        "--confirm-all-writers-stopped",
+        "--readiness-repeats", "2",
+    ]) == 2
+    assert "TRACE_PARITY_LOCAL_ERROR" in capsys.readouterr().out
