@@ -5646,3 +5646,43 @@ prova real e de A00 full regression. Nenhum gate,
 DEC-006/CT-04/IMP-071 ou release homologado.
 Sem nova autorização, aumento de direitos, Meta ou
 custos; PR #44 continua draft.
+
+
+### IMP-071 — shadow readiness validado integralmente no corpus real (19/11)
+
+Operador executou no HEAD 6c6b626f869bb24c0a360a708ca0a121705a5ed7:
+PASS_ESPELHO_DOCUMENTAL (32 exact blobs, 204 IMP, 543 DAG edges,
+IMP-131 sink único, 7 gates não avaliados pelo verificador);
+53 testes focais PASS em 9.94s; 1 StarletteDeprecationWarning
+httpx/starlette de fixture, sem falha; verify_zero_spend PASS.
+IMP071_READINESS_SHADOW_TESTS_VERIFIED.
+
+Resultado local scripts.a6_trace_batch_parity --compare-readiness:
+TRACE_AUDIT_BATCH_PARITY_VERIFIED, mesmos 56 runs e 1399
+observações, exact_report_parity=true, all_original_traces_valid=true.
+Manifesto V12-scope27 pin
+d903366a975cb6e4c4e07c9e6300799c727c3efc3a8317530f14d90e19435b54,
+partition SHA256
+b842a43efd737abee7b78930ddb1243ccac93290cc7c45e9774d9bf542dafb44.
+Auditoria isolada: original 802.66ms, batch 116.0145ms,
+ganho observado 6.918x. Paridade readiness completo:
+READINESS_BATCH_SHADOW_PARITY_VERIFIED,
+all_non_temporal_fields_equal=true, report hash
+1e97603f46059e7420c71d63ea3f753d3bc4f95e5236a9ded712c7b655568231,
+original_readiness_ms=967.9082,
+batched_readiness_ms=338.6496, ganho observado 2.858x
+(redução 65.01% somente nesse ensaio). A saída afirma
+canonical_default_unchanged=true, shadow_algorithm_not_active=true,
+uncontrolled_cache_diagnostic_only=true, database_mutated=false,
+external_data_accessed=false, scientific_admissions=0.
+Relatório privado SHA256
+1b0309b519543f809aafc6b1f3a64d8a3116f35006934d888c7de08161959e5;
+não transferir conteúdo bruto nem keys ao GitHub.
+
+Este ensaio NÃO homologa produção, desempenho SLO,
+direitos de uso de mídia, gold relevance, IMP-071, CT-04,
+DEC-006 ou gate global. Auditor original segue padrão.
+Antes de ativação normal: rodadas shadow adicionais
+alternando ordem e sem enfraquecer verificação, A00
+regressão ampla e avaliação adversarial de integridade.
+PR #44 segue draft, R$0, sem merge ou publicação.
