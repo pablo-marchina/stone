@@ -1,0 +1,154 @@
+{
+  "version": "tapi-imp060-fts-synthetic-benchmark.v1",
+  "registry": {
+    "schema_version": "tapi-imp060-synthetic-registry.v1",
+    "dataset_id": "ct04-fts-synthetic",
+    "tenant_id": "fixture-tenant",
+    "dataset_version": "v1",
+    "reference_kind": "synthetic_fixture",
+    "documents": [
+      {
+        "content_id": "development-content-1",
+        "creator_id": "development-creator-1",
+        "content_sha256": "95940a0fdaf5361cb3afca7c0d3b708c62c508f84ff8a176945ab4a94ef2e984",
+        "split": "development",
+        "origin": "synthetic_local"
+      },
+      {
+        "content_id": "development-content-2",
+        "creator_id": "development-creator-2",
+        "content_sha256": "73d52d405e68e6a979c3c6a0ca572c2fd7c482f67c07208bfddb7dc3f65ede8f",
+        "split": "development",
+        "origin": "synthetic_local"
+      },
+      {
+        "content_id": "validation-content-1",
+        "creator_id": "validation-creator-1",
+        "content_sha256": "f39a21c6565e51409a089382e10b41ec1088da60b39498e4e93fe9b917501ce0",
+        "split": "validation",
+        "origin": "synthetic_local"
+      },
+      {
+        "content_id": "validation-content-2",
+        "creator_id": "validation-creator-2",
+        "content_sha256": "e41a1e090ffe643b813e515ec2078c1116b175c0ceba813b87119b97027e0810",
+        "split": "validation",
+        "origin": "synthetic_local"
+      },
+      {
+        "content_id": "sealed_test-content-1",
+        "creator_id": "sealed_test-creator-1",
+        "content_sha256": "5ca2b0e39cc08a5b81c99cff89f0850103a9e40f27f95724ecb6b16ccd40af13",
+        "split": "sealed_test",
+        "origin": "synthetic_local"
+      },
+      {
+        "content_id": "sealed_test-content-2",
+        "creator_id": "sealed_test-creator-2",
+        "content_sha256": "eb3148d6e416e384dde924819d3af13b91073060a73d1e66431dd28ba019167e",
+        "split": "sealed_test",
+        "origin": "synthetic_local"
+      }
+    ],
+    "queries": [
+      {
+        "query_id": "development-query-1",
+        "query_sha256": "c02a2350a1ed0538b2ff6cd66de36b538a2e55b88787a76d873af07e14e1d157",
+        "split": "development",
+        "complete_judgments": true
+      },
+      {
+        "query_id": "validation-query-1",
+        "query_sha256": "4791d3cc1a41050df93cae4f11f4f38aa9886d11c0536dc6e7d15b5c15867df3",
+        "split": "validation",
+        "complete_judgments": true
+      },
+      {
+        "query_id": "sealed_test-query-1",
+        "query_sha256": "9b1a5228369aa103e76ab970d84521574dbbe69a57d7c743c4daf46f6da21066",
+        "split": "sealed_test",
+        "complete_judgments": true
+      }
+    ],
+    "judgments": [
+      {
+        "query_id": "development-query-1",
+        "content_id": "development-content-1",
+        "grade": 3,
+        "reference_kind": "synthetic_oracle"
+      },
+      {
+        "query_id": "development-query-1",
+        "content_id": "development-content-2",
+        "grade": 0,
+        "reference_kind": "synthetic_oracle"
+      },
+      {
+        "query_id": "validation-query-1",
+        "content_id": "validation-content-1",
+        "grade": 3,
+        "reference_kind": "synthetic_oracle"
+      },
+      {
+        "query_id": "validation-query-1",
+        "content_id": "validation-content-2",
+        "grade": 0,
+        "reference_kind": "synthetic_oracle"
+      },
+      {
+        "query_id": "sealed_test-query-1",
+        "content_id": "sealed_test-content-1",
+        "grade": 3,
+        "reference_kind": "synthetic_oracle"
+      },
+      {
+        "query_id": "sealed_test-query-1",
+        "content_id": "sealed_test-content-2",
+        "grade": 0,
+        "reference_kind": "synthetic_oracle"
+      }
+    ]
+  },
+  "synthetic_inputs": {
+    "documents": [
+      {
+        "content_id": "development-content-1",
+        "caption": "development caixa fluxo pequena empresa"
+      },
+      {
+        "content_id": "development-content-2",
+        "caption": "development decoração vitrine"
+      },
+      {
+        "content_id": "validation-content-1",
+        "caption": "validation caixa fluxo pequena empresa"
+      },
+      {
+        "content_id": "validation-content-2",
+        "caption": "validation decoração vitrine"
+      },
+      {
+        "content_id": "sealed_test-content-1",
+        "caption": "sealed_test caixa fluxo pequena empresa"
+      },
+      {
+        "content_id": "sealed_test-content-2",
+        "caption": "sealed_test decoração vitrine"
+      }
+    ],
+    "queries": [
+      {
+        "query_id": "development-query-1",
+        "text": "development caixa"
+      },
+      {
+        "query_id": "validation-query-1",
+        "text": "validation caixa"
+      },
+      {
+        "query_id": "sealed_test-query-1",
+        "text": "sealed_test caixa"
+      }
+    ]
+  }
+}
