@@ -31,6 +31,7 @@ def fixture(monkeypatch, tmp_path, *, mismatch=False, drift=False, deny=False):
         content = "private-other-id" if mismatch and label == "batched" else "private-id"
         return {
             "status": "SCOPED_FTS_LOCAL_PREVIEW_COMPLETED",
+            "policy_version": "tapi-imp071-scoped-fts-preview.v1",
             "manifest_sha256": MANIFEST,
             "partition_sha256": PARTITION,
             "eligible_posts": 3,
@@ -46,6 +47,8 @@ def fixture(monkeypatch, tmp_path, *, mismatch=False, drift=False, deny=False):
                 "scientifically_validated": False,
             }],
             "full_preview_elapsed_ms": float(10 + n),
+            "p95_search_latency_ms": 0.1,
+            "timing_breakdown_ms": {"first_readiness": 2.0},
             "full_preview_includes_scope_and_revalidation": True,
             "gold_relevance_judgments_available": False,
             "scientifically_validated": False,
