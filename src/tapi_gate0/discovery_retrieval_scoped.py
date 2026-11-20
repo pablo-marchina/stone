@@ -20,7 +20,8 @@ from .discovery_retrieval_fts import (
 VERSION = "tapi-imp071-scoped-fts-preview.v1"
 
 
-def _scoped_rows(engine, tenant, frame, viewer, expected_sources, expected_posts, *, timing_sink=None):
+def _scoped_rows(engine, tenant, frame, viewer, expected_sources, expected_posts, *, timing_sink=None,
+                 trace_auditor=None):
     """Read only STAGES[7] records through the audited readiness observer."""
     rows = []
     population = []
@@ -38,6 +39,8 @@ def _scoped_rows(engine, tenant, frame, viewer, expected_sources, expected_posts
     kwargs = {"_record_observer": capture}
     if timing_sink is not None:
         kwargs["_timing_observer"] = timing_sink
+    if trace_auditor is not None:
+        kwargs["_trace_auditor"] = trace_auditor
     ready = readiness_report(engine, tenant, frame, viewer, **kwargs)
     if (ready["status"] != "CORPUS_READINESS_PLANNED"
             or ready["manifest_sha256"] != frame.fingerprint()
@@ -62,7 +65,7 @@ def _scoped_rows(engine, tenant, frame, viewer, expected_sources, expected_posts
 
 def preview_scoped_fts(engine, tenant, frame, viewer, *, queries,
                        expected_posts: int, expected_sources: int, limit: int = 5,
-                       profile_readiness: bool = False):
+                       profile_readiness: bool = False, trace_auditor=None):
     """Fail closed on live rights or snapshot drift; return no caption text.
 
     This is a private operator diagnostic, not a general-purpose retrieval API:
@@ -78,6 +81,8 @@ def preview_scoped_fts(engine, tenant, frame, viewer, *, queries,
         raise RetrievalBaselineError("RETRIEVAL_QUERY_BATCH_INVALID")
     if not isinstance(profile_readiness, bool):
         raise RetrievalBaselineError("RETRIEVAL_PROFILE_FLAG_INVALID")
+    if trace_auditor is not None and not callable(trace_auditor):
+        raise RetrievalBaselineError("RETRIEVAL_TRACE_AUDITOR_INVALID")
     # Reject malformed search queries before any private caption is read.
     for query in queries:
         _fts_query(query)
@@ -94,6 +99,7 @@ def preview_scoped_fts(engine, tenant, frame, viewer, *, queries,
     rows, partition_before = _scoped_rows(
         engine, tenant, frame, viewer, expected_sources, expected_posts,
         timing_sink=first_profile.append if profile_readiness else None,
+        trace_auditor=trace_auditor,
     )
     t_readiness_before = perf_counter()
     try:
@@ -114,6 +120,7 @@ def preview_scoped_fts(engine, tenant, frame, viewer, *, queries,
     verify_rows, partition_after = _scoped_rows(
         engine, tenant, frame, viewer, expected_sources, expected_posts,
         timing_sink=second_profile.append if profile_readiness else None,
+        trace_auditor=trace_auditor,
     )
     verify_rows.clear()
     require_scoped_research(engine, tenant, frame, viewer)
