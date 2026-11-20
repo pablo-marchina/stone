@@ -1,0 +1,109 @@
+{
+  "schema_version": "tapi-imp060-synthetic-registry.v1",
+  "dataset_id": "ct04-synthetic-fixture",
+  "tenant_id": "fixture-tenant",
+  "dataset_version": "v1",
+  "reference_kind": "synthetic_fixture",
+  "documents": [
+    {
+      "content_id": "development-content-1",
+      "creator_id": "development-creator-1",
+      "content_sha256": "642f4e8e3f56c5d52583760002b14ceb35540d8b24757c2d99aa2946276a348c",
+      "split": "development",
+      "origin": "synthetic_local"
+    },
+    {
+      "content_id": "development-content-2",
+      "creator_id": "development-creator-2",
+      "content_sha256": "e7f6215643e065db8ed7e8c025ecec2f62c70dd421fd3dc40e7265715ee2c8c4",
+      "split": "development",
+      "origin": "synthetic_local"
+    },
+    {
+      "content_id": "validation-content-1",
+      "creator_id": "validation-creator-1",
+      "content_sha256": "b0e685c6deb224019bacbd2f2cb416e7ffde5e6b3b8bc4cddc3d8e08b859e85c",
+      "split": "validation",
+      "origin": "synthetic_local"
+    },
+    {
+      "content_id": "validation-content-2",
+      "creator_id": "validation-creator-2",
+      "content_sha256": "1463f407db5e7660311ec88992e95fe30a756b898afc50b95bde14f3d58867a9",
+      "split": "validation",
+      "origin": "synthetic_local"
+    },
+    {
+      "content_id": "sealed_test-content-1",
+      "creator_id": "sealed_test-creator-1",
+      "content_sha256": "23ca20fd4da0a8e2ab068353b5500c09603acbd652357b43ab19db59678207ab",
+      "split": "sealed_test",
+      "origin": "synthetic_local"
+    },
+    {
+      "content_id": "sealed_test-content-2",
+      "creator_id": "sealed_test-creator-2",
+      "content_sha256": "2964a7c7ec785db82414126e051110d91a0772865b5ae9d1ac73c28c154bfb5e",
+      "split": "sealed_test",
+      "origin": "synthetic_local"
+    }
+  ],
+  "queries": [
+    {
+      "query_id": "development-query-1",
+      "query_sha256": "e096c2808b369ff3e70bc25519125e6e99d057e31ba716708df62d846c8a015a",
+      "split": "development",
+      "complete_judgments": true
+    },
+    {
+      "query_id": "validation-query-1",
+      "query_sha256": "952e525d1ce6074ee06754650d162345b5c6bc95a9a4c4c784fc9a8a211ba1d4",
+      "split": "validation",
+      "complete_judgments": true
+    },
+    {
+      "query_id": "sealed_test-query-1",
+      "query_sha256": "96b34f0e41147d92445695a39cbf1640be29567d00c10f84530838d6d52385ad",
+      "split": "sealed_test",
+      "complete_judgments": true
+    }
+  ],
+  "judgments": [
+    {
+      "query_id": "development-query-1",
+      "content_id": "development-content-1",
+      "grade": 3,
+      "reference_kind": "synthetic_oracle"
+    },
+    {
+      "query_id": "development-query-1",
+      "content_id": "development-content-2",
+      "grade": 0,
+      "reference_kind": "synthetic_oracle"
+    },
+    {
+      "query_id": "validation-query-1",
+      "content_id": "validation-content-1",
+      "grade": 3,
+      "reference_kind": "synthetic_oracle"
+    },
+    {
+      "query_id": "validation-query-1",
+      "content_id": "validation-content-2",
+      "grade": 0,
+      "reference_kind": "synthetic_oracle"
+    },
+    {
+      "query_id": "sealed_test-query-1",
+      "content_id": "sealed_test-content-1",
+      "grade": 3,
+      "reference_kind": "synthetic_oracle"
+    },
+    {
+      "query_id": "sealed_test-query-1",
+      "content_id": "sealed_test-content-2",
+      "grade": 0,
+      "reference_kind": "synthetic_oracle"
+    }
+  ]
+}
