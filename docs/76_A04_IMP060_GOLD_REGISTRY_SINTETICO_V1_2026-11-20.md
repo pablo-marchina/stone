@@ -42,3 +42,16 @@ O operador deve conferir **cada código de saída**; a lista acima é referênci
 **IMP-060 não homologado**: não há gold humano ou avaliação independente sob DEC-018, não há registry de conteúdo externo autorizado, sealed test persistente com governança de acesso por ciclo, verificação de quase-duplicatas semânticas, isolamento temporal, integração automática com agente/benchmark, nem validação de critérios formais por responsável. **CT-04 não aceito** pelo simples PASS de fixtures. A próxima implementação deve integrar avaliação sintética ao runner de baseline sem permitir `scientifically_validated=true` e desenhar protocolo de evidência de engenharia sob DEC-018. IMP-071 continua sem Recall/nDCG de relevância real.
 
 **Restrições:** R$0; não usar Meta/API ou mídia externa, nem publicar, treinar ou permitir inferência em direitos não comprovados; PR #44 draft, sem merge, ativação externa ou mudança no auditor padrão; G0–G6 e IMP-131 não liberados. O plano mantém o DAG dos 204 IMP; este documento não altera matrices normativas.
+
+
+## Evidência de validação do registry v1 (operador, 20/11/2026)
+
+No HEAD anterior `5aea36ed12f49af2a159f0a9b77573083a24a8de`, operador confirmou:
+
+- `PASS_ESPELHO_DOCUMENTAL`, 32 blobs, backlog 204, dependências 543, DAG acíclico, IMP-131 único sink; o espelho registra testes de software como `not_run` e gates `not_assessed` por projeto.
+- 18 testes focais Gold Registry/CT-04 **PASS**, 0 falhas, 0 erros, em 0.30s; `verify_zero_spend.py` PASS.
+- `SYNTHETIC_GOLD_REGISTRY_CONTRACT_VERIFIED`: SHA256 do CT-04 positive `1a606d0d42301c8ed0d907a133ef3681ea866cd8bf01bc22917ba486be2b7298`, 2 docs e 1 query por split, 6 julgamentos **sintéticos**, `scientifically_validated=false`, `gold_relevance_judgments_available=false`, `gates_released=false`.
+- A00 padrão `--profile full`: relatório privado `a00-imp060-gold-registry-20261120-175748-272`; `checks_passed=true`, **1236 PASS**, 0 FAIL, 0 ERROR, **202 SKIPPED**, `checkout_unchanged=true`. `A00_IMP060_GOLD_REGISTRY_VERIFIED`. Não equivale a cobertura multimodal opt-in ou aceite CT-04.
+- Nenhum recurso externo ou DB modificado, nenhum gold humano ou promoção de produção. PR #44 draft.
+
+As provas acima pertencem ao SHA indicado, e NÃO se transferem automaticamente a commits posteriores. O próximo incremento de benchmark FTS5 abaixo permanece **ainda sem testes do operador**.
