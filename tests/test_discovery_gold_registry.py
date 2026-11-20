@@ -155,7 +155,12 @@ def test_reject_false_complete_and_absent_labels():
         reg.evaluate_synthetic_query(
             "sealed_test-query-1", ["sealed_test-content-1"]
         )
-    payload["judgments"] = payload["judgments"][:-1]
+    payload["judgments"] = [
+        j for j in payload["judgments"]
+        if not (j["query_id"] == "validation-query-1"
+                and j["content_id"] == "validation-content-2")
+    ]
+    payload["queries"][1]["complete_judgments"] = False
     reg = registry(payload)
     with pytest.raises(GoldRegistryError, match="JUDGMENTS_INCOMPLETE"):
         reg.evaluate_synthetic_query(
