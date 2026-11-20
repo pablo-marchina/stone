@@ -17,9 +17,12 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from tapi_gate0.connectors import ConnectorError
 from tapi_gate0.discovery_batch import BatchManifest
+from tapi_gate0.discovery_caption_research import require_scoped_research
 from tapi_gate0.discovery_local_db import validate_existing_database_url
 from tapi_gate0.discovery_retrieval_fts import RetrievalBaselineError
 from tapi_gate0.discovery_retrieval_scoped import preview_scoped_fts
+from tapi_gate0.discovery_trace_batch import audit_run_batched
+from scripts.a6_retrieval_shadow import _digest_ranked_evidence
 from tapi_gate0.sa_store import engine_for
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,6 +40,12 @@ def main(argv=None):
     p.add_argument("--top-k", type=int, default=5)
     p.add_argument("--repeat", type=int, default=1, help="Repeat whole scoped audit 1..10 times, fail on drift")
     p.add_argument("--profile-readiness", action="store_true", help="Aggregate timing phases only; keep all guards")
+    p.add_argument("--qualified-batched-local", action="store_true",
+                   help="Private opt-in only; run canonical and batched retrieval with pinned exact ranking")
+    p.add_argument("--expected-partition-sha256",
+                   help="Required only with qualified-batched-local")
+    p.add_argument("--expected-ranking-sha256",
+                   help="Exact private ranked evidence digest from an earlier validated shadow experiment")
     p.add_argument("--report-name", required=True)
     p.add_argument("--confirm-all-ingestion-stopped", action="store_true")
     p.add_argument("--confirm-all-writers-stopped", action="store_true")
@@ -48,6 +57,15 @@ def main(argv=None):
             raise RetrievalBaselineError("RETRIEVAL_STOP_CONFIRMATION_REQUIRED")
         if not 1 <= args.repeat <= 10:
             raise RetrievalBaselineError("RETRIEVAL_REPEAT_BOUNDS")
+        if args.qualified_batched_local:
+            if (args.repeat > 5
+                    or not args.expected_partition_sha256
+                    or not args.expected_ranking_sha256
+                    or not _HASH.fullmatch(args.expected_partition_sha256)
+                    or not _HASH.fullmatch(args.expected_ranking_sha256)):
+                raise RetrievalBaselineError("RETRIEVAL_QUALIFIED_BATCH_PINS_REQUIRED")
+        elif args.expected_partition_sha256 is not None or args.expected_ranking_sha256 is not None:
+            raise RetrievalBaselineError("RETRIEVAL_BATCH_PINS_WITHOUT_OPT_IN")
         private = ROOT / "artifacts" / "private"
         if not private.is_dir() or private.resolve() != private.absolute():
             raise RetrievalBaselineError("RETRIEVAL_PRIVATE_DIRECTORY_INVALID")
@@ -75,15 +93,49 @@ def main(argv=None):
         elapsed = []
         readiness_profiles = []
         stable_key = None
+        qualification_runs = []
         for _ in range(args.repeat):
-            round_report = preview_scoped_fts(
-                engine, tenant, frame, viewer,
-                queries=args.query,
-                expected_posts=args.expected_posts,
-                expected_sources=args.expected_sources,
-                limit=args.top_k,
-                profile_readiness=args.profile_readiness,
-            )
+            kwargs = {
+                "queries": args.query,
+                "expected_posts": args.expected_posts,
+                "expected_sources": args.expected_sources,
+                "limit": args.top_k,
+                "profile_readiness": args.profile_readiness,
+            }
+            if args.qualified_batched_local:
+                # DO NOT fallback silently: either both rights-gated pipelines
+                # match the previously validated ranking or no report is saved.
+                original = preview_scoped_fts(
+                    engine, tenant, frame, viewer, **kwargs,
+                )
+                canonical_digest, canonical_hits = _digest_ranked_evidence(
+                    original, args.expected_manifest_sha256,
+                    args.expected_partition_sha256,
+                    args.expected_posts, args.expected_sources, args.query,
+                )
+                candidate = preview_scoped_fts(
+                    engine, tenant, frame, viewer,
+                    **kwargs, trace_auditor=audit_run_batched,
+                )
+                candidate_digest, candidate_hits = _digest_ranked_evidence(
+                    candidate, args.expected_manifest_sha256,
+                    args.expected_partition_sha256,
+                    args.expected_posts, args.expected_sources, args.query,
+                )
+                if (canonical_digest != candidate_digest
+                        or canonical_digest != args.expected_ranking_sha256
+                        or candidate_hits != canonical_hits):
+                    raise RetrievalBaselineError("RETRIEVAL_QUALIFIED_BATCH_PARITY_MISMATCH")
+                qualification_runs.append({
+                    "original_full_preview_ms": original["full_preview_elapsed_ms"],
+                    "batched_full_preview_ms": candidate["full_preview_elapsed_ms"],
+                    "same_rank_and_snapshots": True,
+                })
+                round_report = candidate
+            else:
+                round_report = preview_scoped_fts(
+                    engine, tenant, frame, viewer, **kwargs,
+                )
             if (round_report["manifest_sha256"] != args.expected_manifest_sha256
                     or round_report["eligible_posts"] != args.expected_posts
                     or round_report["eligible_sources"] != args.expected_sources
@@ -123,6 +175,21 @@ def main(argv=None):
             "relevance_gold_available": False,
             "readiness_profile_samples": readiness_profiles if args.profile_readiness else None,
         }
+        if args.qualified_batched_local:
+            # A fresh final scope check is mandatory before saving any IDs.
+            require_scoped_research(engine, tenant, frame, viewer)
+            report["qualified_batched_local"] = {
+                "status": "PRIVATE_BATCH_AUDIT_QUALIFIED",
+                "operator_opt_in": True,
+                "prior_shadow_ranking_sha256": args.expected_ranking_sha256,
+                "live_partition_sha256": args.expected_partition_sha256,
+                "all_rounds_equal_to_canonical": True,
+                "canonical_readiness_default_unchanged": True,
+                "batch_experimental_local_only": True,
+                "failure_blocks_without_fallback": True,
+                "qualification_runs": qualification_runs,
+                "production_approved": False,
+            }
         # The only filesystem output is private; refuse overwrites.
         fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
@@ -149,6 +216,7 @@ def main(argv=None):
             "performance_sample_is_exploratory": True,
             "repeat_experiment": report["repeat_experiment"],
             "readiness_profile": report.get("readiness_profile"),
+            "qualified_batched_local": report.get("qualified_batched_local"),
             "gold_relevance_judgments_available": False,
             "scientific_admissions": 0,
             "database_mutated": False,
