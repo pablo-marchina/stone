@@ -5741,3 +5741,65 @@ focais não substituem regressão A00. A00 não prova
 direitos nem gold relevance. IMP-071, DEC-006,
 CT-04, G1 e IMP-131 seguem abertos. PR #44 draft,
 R$0, sem merge nem publicação.
+
+
+### IMP-071 shadow repeat PASS; A00 full collection BLOCKED no mesmo HEAD (20/11, execução 19/11 BRT)
+
+Console operador Texto colado(20261120-002237).txt,
+HEAD 27e3bdf0573928eb5cc40c35fad889c89508b053.
+Espelho PASS_ESPELHO_DOCUMENTAL, 32 blobs, 204 IMP,
+543 DAG, IMP-131 sink único; gates=not_assessed.
+Focal pytest 56 PASS, 1 StarletteDeprecationWarning,
+11.23s. verify_zero_spend PASS.
+IMP071_REPEAT_SHADOW_TESTS_VERIFIED.
+scripts.a6_trace_batch_parity --compare-readiness
+--readiness-repeats 3, manifest scope27
+d903366a975cb6e4c4e07c9e6300799c727c3efc3a8317530f14d90e19435b54
+e partição
+b842a43efd737abee7b78930ddb1243ccac93290cc7c45e9774d9bf542dafb44:
+56 runs, 1399 observações, exact_report_parity=true,
+all_original_traces_valid=true, all_repetitions_equal=true.
+original readiness samples [966.2545,1026.8573,996.8407] ms,
+batch samples [340.2003,274.9954,365.2034] ms;
+p50 original=996.8407, batch=340.2003 ms;
+p95 original=1026.8573, batch=365.2034 ms.
+Readiness hash não temporal
+1e97603f46059e7420c71d63ea3f753d3bc4f95e5236a9ded712c7b655568231;
+relatório privado SHA256
+e366fa63cd310a932b5412f9bc524f83aa408e7d9c25f769eb2f70ed96b77cf7.
+Default canonical unchanged, shadow not active, cache
+não controlado; 0 database_mutated, 0 external_data_accessed,
+0 scientific_admissions, R$0.
+
+A00 full iniciado via scripts.a00_baseline com profile full
+e expected_head idêntico; output report_name
+a00-imp071-shadow-20261119-211536-055.
+Status mostrado BASELINE_REGRESSION_COMPLETED indica
+execução do runner, NÃO aprovação: checks_passed=false,
+pytest exit_code=2, somente 2 erros de coleta, 0
+testes executados (test_asset_vlm_fixture e
+test_structural_integrity), JUnit 2 errors. Nenhum
+grupo multimodal coletado, nenhum aceito; Node exit 0,
+legacy_gate0 0, zero_spend 0, documentary_mirror 0,
+checkout_unchanged=true. Logs privados em
+artifacts/private/a00-imp071-shadow-20261119-211536-055/pytest.log,
+SHA256 bd5272ff660e23745e2d2b4e614245e33f067b6b316510747637f24afc5e5abc.
+Inventário Python 3.11.18 conda tapi-s1-recovery:
+Pillow ausente, opencv-python-headless ausente,
+faster-whisper, ctranslate2, onnxruntime, cryptography
+ausentes; gliner2 2.1.0 / torch 2.15.0 instalados.
+Fonte tests/test_asset_vlm_fixture.py importa PIL,
+tests/test_structural_integrity.py importa jsonschema;
+pyproject.toml [dev] declara Pillow e jsonschema.
+Erro exato do pytest.log NÃO foi compartilhado; coletar
+tracebacks antes de instalar pacotes ou alterar env.
+Não afirmar que ambos erros são definitivamente
+ModuleNotFoundError sem conferir log. Não instalar
+extras genericamente nem alterar torch/gliner pins.
+A00 full permanece BLOQUEADO; não ativar batch como
+default nem declarar IMP-071, DEC-006, CT-04, G1,
+IMP-131 concluídos. Próximo operador: leitura local
+somente de pytest.log e pip show Pillow/jsonschema,
+registrar falhas exatas; então escolher correção mínima
+reprodutível e rodar A00 em novo report exclusivo no
+mesmo SHA. Nenhuma coleta de mídia, rede ou merge.
