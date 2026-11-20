@@ -5803,3 +5803,37 @@ somente de pytest.log e pip show Pillow/jsonschema,
 registrar falhas exatas; então escolher correção mínima
 reprodutível e rodar A00 em novo report exclusivo no
 mesmo SHA. Nenhuma coleta de mídia, rede ou merge.
+
+
+### A00 — dois erros de coleta confirmados por traceback (19/11 BRT, 20/11 upload)
+
+Operador forneceu leitura local e checksum do relatório A00
+a00-imp071-shadow-20261119-211536-055/pytest.log;
+hash SHA256 confirmado
+bd5272ff660e23745e33f067b6b316510747637f24afc5e5abc.
+Falha concreta da coleção Python:
+- tests/test_asset_vlm_fixture.py: import PIL.Image,
+  ModuleNotFoundError: No module named 'PIL';
+- tests/test_structural_integrity.py: import jsonschema,
+  ModuleNotFoundError: No module named 'jsonschema'.
+Verificação local via importlib.util.find_spec:
+PIL=MISSING, jsonschema=MISSING. Logo, as duas causas
+observadas decorrem de dependências ausentes no
+conda tapi-s1-recovery, não falhas funcionais ainda
+demonstradas nesses testes.
+pyproject.toml [project.optional-dependencies].dev
+já declara Pillow>=11,<13 e jsonschema>=4,<5.
+Não relaxar testes nem mudar schema/risco de direitos;
+não fazer pip install -e .[dev] genérico no ambiente
+sensível ao GLiNER2. Um eventual reparo mínimo deve
+instalar só esses pacotes e dependências transitivas
+estritamente necessárias, sem upgrade de torch/gliner.
+Preferir fonte/cache confiável e logar versões reais;
+instalação PyPI exige acesso externo explícito do
+operador, não é acesso Meta à mídia.
+Depois do reparo, executar os dois testes, zero_spend,
+e novo A00 --profile full em HEAD exato com nome de
+relatório exclusivo, registrar checks_passed e erros
+remanescentes sem presumir aprovação. A00 continua
+BLOQUEADO até a reexecução. PR #44 draft, sem merge,
+gatilhos, admission, alterações de DB, mídia ou gasto.
