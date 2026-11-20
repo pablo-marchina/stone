@@ -6025,3 +6025,53 @@ original sem alteração e fail-closed se pins, grants
 ou rankings divergirem. Qualquer nova alteração de HEAD
 exige regressão novamente. DEC-006, IMP-071, CT-04, G1,
 IMP-131 seguem não homologados. PR #44 draft, sem merge.
+
+
+### IMP-071 — qualificação opt-in local do auditor batch, sem ativação padrão (19/11 BRT)
+
+Após PASS do full retrieval shadow (64 testes e ranking estável)
+e A00 standard no HEAD d510464 (1207 Python PASS,
+0 falhas, 202 skips, checks_passed=true), novos commits
+não testados criam opção exclusiva do operador:
+scripts/a6_retrieval_preview.py --qualified-batched-local.
+Sem flag, fluxo original permanece exatamente no default
+readiness_report audit_run. Com a flag, exige ainda
+--expected-partition-sha256 e
+--expected-ranking-sha256 (pins completos 64 hex),
+--confirm-all-ingestion-stopped e
+--confirm-all-writers-stopped. Somente 1..5 rodadas;
+nenhum uso HTTP/MCP, produção, workflow externo ou
+motor de recomendação. Em cada rodada, executa
+preview_scoped_fts integral PRIMEIRO pelo auditor
+original e depois pelo batch; cada preview reexecuta
+3 grants/context checks, 2 readiness e confirma
+mesmo manifesto/partição. A função de digest do shadow
+confere ranking, content IDs e snapshot IDs, links
+de queries e no-gold; ambas devem concordar entre si
+e com o hash anterior do ranking
+ef5a496658f6500eeb824277828811251daeaf73eed309828342e280be7faee0.
+Em qualquer divergência, nenhum relatório é salvo,
+sem fallback e sem bypass. Uma última consulta de
+scope imediatamente antes da escrita privada O_EXCL
+fecha o piloto. Relatório guarda IDs/snapshots
+SOMENTE em artifacts/private, stdout apresenta apenas
+status, contagens, hash/tempo e prova agregada; não
+imprime legenda ou IDs. Prova da execução não é
+nova autorização, não é gold relevance nem SLO.
+A qualificação executa AMBOS algoritmos; logo o
+tempo total do piloto NÃO mede aceleração. Para voltar
+ao caminho original basta omitir flag experimental;
+não foi mudado runtime default nem endpoints.
+Sem release, merge ou movimento dos gates.
+
+Commits recentes 539825c (evidência real),
+7599beb (qualificação privada com pins),
+b7cc5d0 (5 testes sintéticos fail-closed) e
+a8d05fb (mock de contrato completo). Suite focal
+anterior de 64 PASS só vale no HEAD d510464,
+novos HEAD ainda não validados; expect 69 focais nas
+mesmas seis suítes. A00 standard completa deve
+ser repetida depois de focais e piloto real,
+no SHA novo; os 202 skips continuam lacunas.
+DEC-006/IMP-071/CT-04/G1/IMP-131 abertos;
+PR #44 Draft; R$0, direitos intactos.
