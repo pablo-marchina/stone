@@ -101,6 +101,7 @@ def benchmark_synthetic_fts(raw: bytes, *, expected_sha256: str,
 
     scores = []
     latencies = []
+    ranked_evidence = []
     try:
         with TransientScopedFts((
             {"content_id": d.content_id,
@@ -124,6 +125,9 @@ def benchmark_synthetic_fts(raw: bytes, *, expected_sha256: str,
                         or score["synthetic_ndcg_at_k"] is None):
                     _fail("METRIC_UNAVAILABLE")
                 scores.append(score)
+                ranked_evidence.append((query.query_sha256,
+                                        tuple(hit["content_ids"]),
+                                        tuple(hit["snapshot_ids"])))
                 latencies.append(hit["latency_ms"])
     except RetrievalBaselineError:
         _fail("FTS_ENGINE_REJECTED")
@@ -136,6 +140,9 @@ def benchmark_synthetic_fts(raw: bytes, *, expected_sha256: str,
         "split": split,
         "documents_evaluated": len(safe_docs),
         "queries_evaluated": count,
+        "ranked_evidence_sha256": sha256(json.dumps(
+            ranked_evidence, ensure_ascii=False,
+            separators=(",", ":")).encode("utf-8")).hexdigest(),
         "k": k,
         "macro_synthetic_recall_at_k": round(
             sum(s["synthetic_recall_at_k"] for s in scores) / count, 6),
