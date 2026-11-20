@@ -5921,3 +5921,60 @@ curto. Autorização, CT-04, DEC-006, IMP-071,
 IMP-131 e gates seguem pendentes. PR #44 draft;
 no publication, media, DB mutation, external API,
 cost or merge.
+
+
+### IMP-071 — A00 standard PASS; shadow de retrieval completo implementado, não validado (19/11 BRT)
+
+Operador comprovou no HEAD 73da7bfcf3bddfa9db11bd8cdbb1e416dd46002a:
+A00_STANDARD_FULL_PROFILE_VERIFIED com checks_passed=true,
+1199 Python PASS, 0 FAIL, 0 ERROR, 202 SKIPPED, checkout limpo.
+Os scripts de Node, espelho documental, Gate0 legado e
+zero_spend também exit_code=0. Ambiente conda tapi-s1-recovery
+com Pillow 12.3.0, jsonschema 4.26.0,
+opencv-python-headless 4.14.0.94 e numpy 2.4.6;
+GLiNER2 2.1.0 e torch 2.15.0 preservados.
+Relatório privado
+a00-imp071-opencv-recovery-20261119-215840-067.
+202 SKIPPED são lacunas, predominantemente multimodais
+opt-in e cryptography ausente; multimodal_coverage=false,
+full_regression_without_skips=false. Não alegar full media
+ou liberar grants/CT-04/DEC-006/IMP-071/G1/IMP-131.
+
+Incremento experimental posterior NÃO aprovado em operador:
+- src/tapi_gate0/discovery_retrieval_scoped.py admite
+  trace_auditor=None private, mantendo audit_run
+  original como default e chamando mesmo auditor nas
+  duas passagens readiness. A injeção não habilita novo
+  runtime, HTTP, MCP, LLM ou Creative Studio.
+- scripts/a6_retrieval_shadow.py é runner separado,
+  privado, fail-closed: pin de manifesto e partição,
+  grants/contextos verificados em CADA preview
+  (3 checagens e 2 readiness), escritores e ingestão
+  atestados parados, 3 queries escopadas e 1..5
+  repetições em ordem alternada. Compara ranking
+  completo de IDs e snapshots e hashes de cada query
+  entre auditor original e batch; compara mesma
+  evidência entre rodadas. Nenhuma legenda ou ID
+  materializado em stdout/JSON; só hash do ranking,
+  hits, perfis temporais e estado original_default.
+  Só escreve relatório em artifacts/private com O_EXCL
+  se todas as comparações passarem; sem network, DB
+  mutation, admissions ou gold judgments.
+- tests/test_discovery_retrieval_shadow.py:
+  7 novos casos sintéticos para ordem, paridade,
+  drift de ranking/snapshot, revogação final, não
+  vazamento e flags inválidas;
+  tests/test_discovery_retrieval_scoped.py:
+  1 novo caso para preservar 2 readiness e 3 grants
+  checks e rejeitar auditor inválido.
+Novos commits ffd6f8b, 85c036d, c5361dd, 84840fd.
+Esperados 64 testes focais nas 6 suítes relevantes
+(56 anteriores + 8 novos), ainda SEM pytest no novo HEAD.
+Sem dados reais novos ou métricas de speedup do fluxo
+de retrieval; requer teste focal, zero_spend, espelho,
+execução shadow com mesmo V12-scope27 e pin de partição
+se grants ainda ativos; qualquer BLOCKED não contornar.
+Após nova edição, repetir A00 full padrão no HEAD exato,
+sem confundir com opt-in multimodal. PR #44 draft, nenhum
+merge ou release. Direitos/segurança sempre prevalecem
+sobre redução de latência.
