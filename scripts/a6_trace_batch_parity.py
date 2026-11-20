@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 from hashlib import sha256
 import json
+from math import ceil
 import os
 from pathlib import Path
 import re
@@ -124,6 +125,8 @@ def main(argv=None):
     parser.add_argument("--report-name", required=True)
     parser.add_argument("--compare-readiness", action="store_true",
                         help="Compare canonical and batched audit inside full readiness")
+    parser.add_argument("--readiness-repeats", type=int, default=1,
+                        help="Fully revalidated shadow pairs, 1..5; requires compare-readiness")
     parser.add_argument("--confirm-all-ingestion-stopped", action="store_true")
     parser.add_argument("--confirm-all-writers-stopped", action="store_true")
     a = parser.parse_args(argv)
@@ -131,6 +134,8 @@ def main(argv=None):
     try:
         if not a.confirm_all_ingestion_stopped or not a.confirm_all_writers_stopped:
             raise ValueError("TRACE_PARITY_STOP_CONFIRMATION_REQUIRED")
+        if not 1 <= a.readiness_repeats <= 5 or (a.readiness_repeats > 1 and not a.compare_readiness):
+            raise ValueError("TRACE_PARITY_READINESS_REPEAT_BOUNDS")
         private = ROOT / "artifacts" / "private"
         if (not private.is_dir() or private.resolve() != private.absolute()
                 or not _NAME.fullmatch(a.report_name)
@@ -195,27 +200,54 @@ def main(argv=None):
 
         readiness_comparison = None
         if a.compare_readiness:
-            # Both paths perform the same complete run and existence checks.
-            original_hash, original_ms = _readiness_variant(
-                engine, tenant, frame, viewer, auditor=audit_run,
-                expected_sources=a.expected_sources,
-                expected_posts=a.expected_posts,
-                expected_partition=a.expected_partition_sha256,
-            )
-            shadow_hash, batched_ms = _readiness_variant(
-                engine, tenant, frame, viewer, auditor=audit_run_batched,
-                expected_sources=a.expected_sources,
-                expected_posts=a.expected_posts,
-                expected_partition=a.expected_partition_sha256,
-            )
-            if original_hash != shadow_hash:
-                raise ValueError("TRACE_PARITY_READINESS_MISMATCH")
+            # Every read performs a fresh grant/context check and verifies the
+            # complete caption/snapshot partition. No authorization caching.
+            samples = {"original": [], "batched": []}
+            stable_readiness_hash = None
+            for round_index in range(a.readiness_repeats):
+                # Reverse the within-pair order every time, preserving a
+                # balanced ordering across repetitions.
+                order = (
+                    (("original", audit_run), ("batched", audit_run_batched))
+                    if round_index % 2 == 0 else
+                    (("batched", audit_run_batched), ("original", audit_run))
+                )
+                hashes = {}
+                for label, auditor in order:
+                    digest, elapsed = _readiness_variant(
+                        engine, tenant, frame, viewer, auditor=auditor,
+                        expected_sources=a.expected_sources,
+                        expected_posts=a.expected_posts,
+                        expected_partition=a.expected_partition_sha256,
+                    )
+                    hashes[label] = digest
+                    samples[label].append(elapsed)
+                if hashes["original"] != hashes["batched"]:
+                    raise ValueError("TRACE_PARITY_READINESS_MISMATCH")
+                if (stable_readiness_hash is not None
+                        and hashes["original"] != stable_readiness_hash):
+                    raise ValueError("TRACE_PARITY_READINESS_DRIFT")
+                stable_readiness_hash = hashes["original"]
+
+            def nearest_rank(values, quantile):
+                sorted_values = sorted(values)
+                return sorted_values[ceil(quantile * len(values)) - 1]
+
             readiness_comparison = {
                 "status": "READINESS_BATCH_SHADOW_PARITY_VERIFIED",
                 "all_non_temporal_fields_equal": True,
-                "report_sha256": original_hash,
-                "original_readiness_ms": original_ms,
-                "batched_readiness_ms": batched_ms,
+                "all_repetitions_equal": True,
+                "report_sha256": stable_readiness_hash,
+                "original_readiness_ms": samples["original"][-1],
+                "batched_readiness_ms": samples["batched"][-1],
+                "repetitions": a.readiness_repeats,
+                "original_samples_ms": samples["original"],
+                "batched_samples_ms": samples["batched"],
+                "original_p50_ms": nearest_rank(samples["original"], 0.50),
+                "batched_p50_ms": nearest_rank(samples["batched"], 0.50),
+                "original_p95_ms": nearest_rank(samples["original"], 0.95),
+                "batched_p95_ms": nearest_rank(samples["batched"], 0.95),
+                "alternating_readiness_order": True,
                 "canonical_default_unchanged": True,
                 "shadow_algorithm_not_active": True,
                 "comparison_is_uncontrolled_cache_diagnostic": True,
