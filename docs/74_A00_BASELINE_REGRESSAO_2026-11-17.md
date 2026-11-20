@@ -6187,3 +6187,58 @@ de flag volta ao runner original. Novo HEAD exigirá
 pytest focal e nova A00; não transferir PASS antigo.
 DEC-006/IMP-071/CT-04/G1/IMP-131 seguem abertos;
 PR #44 permanece draft, sem merge/publicação.
+
+
+### IMP-071 — batch-only local fastpath sob prova privada pinada (novo, NÃO VALIDADO)
+
+A qualificação local no HEAD 6f9927e permanece evidência:
+PRIVATE_BATCH_AUDIT_QUALIFIED, duas rodadas com
+rank/snapshots originais e batch iguais,
+1069 posts/27 perfis, partition SHA256
+b842a43efd737abee7b78930ddb1243ccac93290cc7c45e9774d9bf542dafb44,
+rank SHA256
+ef5a496658f6500eeb824277828811251daeaf73eed309828342e280be7faee0,
+report a05-imp071-qualified-batch-20261119-232407-949.json,
+SHA256 f788b9a09f939a4f01a3bb2af0e1d0fa1cec4bfc5da7b21d24228d2b80613173.
+A00 no mesmo SHA 1212 PASS/0FAIL/202SKIP/checks_passed=true.
+Esses PASS não se transferem a HEADs novos.
+
+NOVO código sob PR #44, ainda sem teste do operador:
+- scripts/a6_retrieval_batch_fastpath.py: entrypoint
+  estritamente local e explícito, SEPARADO do CLI
+  original, somente se hash SHA256 do arquivo de
+  qualificação privado coincide e este possui o
+  status/contrato completo de equal-ranking com original.
+  Checa SHA do manifesto e partição, digests e ordem de
+  queries, snapshot/content IDs em memória, limite
+  top-k e 1..5 rounds; exige confirmação de writers
+  e ingestão parados. Sem prova qualificadora válida,
+  bloqueia ANTES de abrir conexão. Cada preview batch
+  ainda repete 3 source/rights checks, 2 readiness,
+  todos audits de traces, snapshots e captions.
+  Após os rounds há novo scope check.
+  Se drift/revogação/erro, nenhum relatório.
+  Relatório privado contém hashes/tempos/contagens,
+  não exporta nenhum content/snapshot ID nem legenda;
+  stdout também agregado. Não lê API externa,
+  não executa modelos, não escreve no banco, não
+  cria índice persistente, não gera avaliação científica.
+  O caminho de rollback é voltar a executar
+  scripts.a6_retrieval_preview SEM qualquer opt-in
+  batch; o runtime default, API e ingestão NÃO mudam.
+  Este fastpath não faz comparação com canonical em
+  CADA run, portanto representa experimento técnico
+  restrito que DEPENDE da prova privada prévia
+  e nunca substitui autorização atual.
+- tests/test_discovery_retrieval_batch_fastpath.py:
+  6 testes sintéticos de sucesso/ausência de IDs,
+  prova SHA incorreta, prova sem status de qualificação,
+  drift de snapshot, revogação final e falta de
+  confirmação de writers. Testes não são gold.
+Novos commits e3c4379 / 851b0883 ainda NÃO
+validados; agora esperados 75 focais (69 + 6)
+nas sete suítes, A00 full standard nova no HEAD
+resultante é obrigatória. Rollback não significa
+downgrade dos gates nem permissão. DEC-006,
+IMP-071, CT-04, G1, IMP-131 continuam abertos,
+no release, no merge, PR #44 draft, R$0.
