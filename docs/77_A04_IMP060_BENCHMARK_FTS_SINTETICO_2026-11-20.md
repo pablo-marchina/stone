@@ -26,3 +26,10 @@ A A00 previamente confirmada no HEAD 5aea36e tem 1236 PASS, 0 FAIL, 0 ERROR e 20
 ## Passo seguinte após validação
 
 Avançar para rastreabilidade de avaliações por versão, separar rigorosamente dados usados em ajuste dos dados selados e manter DEC-018. Nenhuma validação independente é alegada. O backlog original 204 IMP, 543 dependências, PR #44 draft, custo R$0 e gates abertos permanecem inalterados.
+
+
+## Evidência executada pelo operador — 20/11/2026, HEAD bf9afaa
+
+No HEAD `bf9afaa4de70ec563bfd94a50fb71441045eb637`, operador reportou `29 passed in 0.37s` nas quatro suítes Gold Registry/CT-04/FTS sintético; `verify_zero_spend`: PASS; runner `scripts.a4_gold_fts_benchmark`: `SYNTHETIC_FTS_BENCHMARK_VERIFIED`, pin SHA256 do bundle `4c85e82412a31e63065685220db9f588870d5172ea014a42c61f04885a8571e6`, split validation, 2 docs, 1 query, k=2, `macro_synthetic_recall_at_k=1.0`, `macro_synthetic_ndcg_at_k=1.0`, `query_latency_p95_ms=0.1216` (consulta, **não indexação/E2E**); `sealed_test_queried=false`, nenhuma admissão científica, nenhuma escrita no banco ou rede, aprovação de produção false.
+
+A00 --profile full no MESMO HEAD: `A00_IMP060_SYNTHETIC_FTS_VERIFIED`, relatório privado `a00-imp060-fts-20261120-181334-920`, `checks_passed=true`, **1247 PASS, 0 FAILED, 0 ERRORS, 202 SKIPPED**, `checkout_unchanged=true`. Os skips não contam como aprovação multimodal. Não há reconhecimento institucional de gold nem aceite IMP-060/CT-04/IMP-071. Os resultados pertencem somente ao HEAD identificado; quaisquer commits seguintes exigem novos testes, e o PR #44 continua draft.
