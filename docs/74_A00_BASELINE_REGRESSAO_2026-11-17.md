@@ -5686,3 +5686,58 @@ Antes de ativação normal: rodadas shadow adicionais
 alternando ordem e sem enfraquecer verificação, A00
 regressão ampla e avaliação adversarial de integridade.
 PR #44 segue draft, R$0, sem merge ou publicação.
+
+
+### IMP-071 — paridade real do readiness confirmada; benchmark shadow repetido ainda sem execução (19/11)
+
+Operador no HEAD 6c6b626f869bb24c0a360a708ca0a121705a5ed7:
+PASS_ESPELHO_DOCUMENTAL com 32 blobs, 204 IMP,
+543 edges DAG, sink único IMP-131; 53 testes focais
+PASS em 9.94s e 1 StarletteDeprecationWarning,
+verify_zero_spend PASS.
+IMP071_READINESS_SHADOW_TESTS_VERIFIED.
+
+scripts.a6_trace_batch_parity --compare-readiness no
+manifesto scope27 fingerprint
+d903366a975cb6e4c4e07c9e6300799c727c3efc3a8317530f14d90e19435b54,
+partição
+b842a43efd737abee7b78930ddb1243ccac93290cc7c45e9774d9bf542dafb44:
+56 runs, 1399 observações, exact_report_parity=true,
+all_original_traces_valid=true, sem diferença entre
+campos não temporais de readiness original e shadow.
+Audit_run original 802.66ms, batch 116.0145ms
+(6.918x nesse ensaio); readiness completo original
+967.9082ms, batch 338.6496ms (2.858x nesse ensaio),
+readiness digest
+1e97603f46059e7420c71d63ea3f753d3bc4f95e5236a9ded712c7b655568231.
+Reporte privado SHA256
+1b0309b519543f809aafc6b1f3a64d8a3116f35006934d888c7de08161959e5.
+A ordem de auditoria isolada foi alternada entre runs,
+mas a comparação de readiness acima foi uma só
+amostra em ordem original seguida de batch; não é
+benchmark controlado, nem SLO. Default do readiness
+continua audit_run. Sem DB mutations, rede, admissões,
+novos grants, media, Creative Studio, release ou merge.
+
+Incremento posterior não validado pelo operador:
+scripts/a6_trace_batch_parity.py recebeu a flag opcional
+--readiness-repeats (1..5, default 1, requer
+--compare-readiness se maior que 1). Executa cada
+readiness na íntegra com scope antes/depois, compara
+todos campos não temporais original vs batched,
+compara mesmo digest entre rodadas, aborta antes de
+gravar em qualquer drift. Alterna ordem por rodada,
+salva amostras agregadas e p50/p95 nearest-rank dos
+dois algoritmos no relatório privado. Não modifica
+readiness_report, API, ingestão ou a função original.
+Novos testes cobrem ordem, quantis, variação da
+evidência, bounds e ausência de writes. Commits
+defa94b e 663c35a: testes ainda NÃO executados.
+Esperados 56 testes focais nas cinco suítes anteriores,
+após o fast-forward do novo HEAD. Também preparar A00
+baseline --profile full no mesmo SHA, sem opt-in de
+mídia/modelos, com resultados privados; os testes
+focais não substituem regressão A00. A00 não prova
+direitos nem gold relevance. IMP-071, DEC-006,
+CT-04, G1 e IMP-131 seguem abertos. PR #44 draft,
+R$0, sem merge nem publicação.
