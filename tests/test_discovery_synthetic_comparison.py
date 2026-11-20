@@ -193,3 +193,21 @@ def test_cli_bad_pin_and_external_path_refused(monkeypatch, tmp_path, capsys):
     assert cli.main(args) == 2
     assert not (private / "synthetic-comparison.json").exists()
     assert "outside.json" not in capsys.readouterr().out
+
+
+def test_candidate_nan_metric_or_latency_cannot_be_reported(monkeypatch):
+    raw, digest = pinned()
+    original = compare.benchmark_synthetic_fts
+    for field, reason in [
+        ("macro_synthetic_ndcg_at_k", "CANDIDATE_METRIC_INVALID"),
+        ("query_latency_p95_ms", "CANDIDATE_LATENCY_INVALID"),
+    ]:
+        def corrupted(*args, **kwargs):
+            result = original(*args, **kwargs)
+            result[field] = float("nan")
+            return result
+        monkeypatch.setattr(compare, "benchmark_synthetic_fts", corrupted)
+        with pytest.raises(GoldRegistryError, match=reason):
+            compare.compare_synthetic_baseline_candidate(
+                raw, expected_sha256=digest,
+            )
