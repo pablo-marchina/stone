@@ -5886,3 +5886,38 @@ este teste, zero_spend e A00 full em novo report.
 A00 segue BLOCKED, qualquer homologação ou
 ligação default da auditoria batch continua barrada.
 PR #44 draft, R$0, sem grants, mídia, API ou merge.
+
+
+### A00 standard full PASS após reparo mínimo OpenCV (19/11 BRT; 20/11 arquivo operador)
+
+Em HEAD 73da7bfcf3bddfa9db11bd8cdbb1e416dd46002a
+operador confirmou apenas Pillow 12.3.0, jsonschema 4.26.0
+e dependências transitivas previamente reparadas, depois
+opencv-python-headless 4.14.0.94 instalado via wheel
+cache; numpy 2.4.6 preservado e versões GLiNER2 2.1.0,
+torch 2.15.0 não alteradas. Focal
+tests/test_offline_visual.py: 5 PASS em 5.07s;
+zero_spend PASS; A00_VISUAL_FIXTURE_VERIFIED.
+
+A00 full profile run privado
+a00-imp071-opencv-recovery-20261119-215840-067:
+checks_passed=true, 1199 PASS, 0 FAIL, 0 ERROR,
+202 SKIPPED, checkout_unchanged=true, Node/gate0/
+zero_spend/espelho com exits=0.
+A00_STANDARD_FULL_PROFILE_VERIFIED.
+full_regression_without_skips=false;
+multimodal_coverage.all_required_passed=false;
+multimodal_required=false. Não confundir PASS standard
+com cobertura multimodal completa ou aprovação global.
+Grande parte dos skips é de direitos e mídia opt-in,
+incluindo cryptography ausente; outros exigem modelos
+locais explicitamente configurados. Não modificar
+testes para simular direitos ou suprir os 202 skips
+com falsas aprovações. Suite padrão de engenharia
+aprovada NO HEAD citado; novos commits exigem nova
+validação. Relatório completo privado não foi
+transferido, hashes não apresentados no console
+curto. Autorização, CT-04, DEC-006, IMP-071,
+IMP-131 e gates seguem pendentes. PR #44 draft;
+no publication, media, DB mutation, external API,
+cost or merge.
