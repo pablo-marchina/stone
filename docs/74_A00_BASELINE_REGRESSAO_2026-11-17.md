@@ -5837,3 +5837,52 @@ relatório exclusivo, registrar checks_passed e erros
 remanescentes sem presumir aprovação. A00 continua
 BLOQUEADO até a reexecução. PR #44 draft, sem merge,
 gatilhos, admission, alterações de DB, mídia ou gasto.
+
+
+### A00 — coleta recuperada, um teste visual sintético falha (19/11 BRT; arquivo enviado 20/11)
+
+Operador instalou em tapi-s1-recovery apenas Pillow 12.3.0
+e jsonschema 4.26.0 (+ attrs, referencing,
+jsonschema-specifications, rpds-py). Os 28 testes
+focais desses dois módulos PASS em 2.13s,
+verify_zero_spend PASS. GLiNER2 2.1.0 e torch 2.15.0
+mantidos. A00_COLLECTION_DEPENDENCIES_VERIFIED.
+
+Nova A00 full no HEAD
+8d464c0a385c9f4673d3e5284a899b382dcdf0ad:
+relatório privado
+a00-imp071-deps-recovery-20261119-213807-753.
+Runner BASELINE_REGRESSION_COMPLETED mas
+checks_passed=false e pytest exit_code=1.
+JUnit: 1401 coletados, 1198 PASS, 1 FAIL,
+0 ERROR, 202 SKIPPED. Única falha:
+tests.test_offline_visual.test_offline_scan_generated_image.
+pytest log SHA256
+06237fd4e104d4d913b09ca6c8bc4f15e32bb80221b5cfb39b25431153dfc454.
+Node, zero_spend, espelho documental e legacy_gate0
+exit_code=0, checkout_unchanged=true,
+operational_database_url_forwarded=false,
+multimodal_required=false. Multimodal coverage
+all_required_passed=false porque grupos opt-in skipped;
+skips não contam PASS.
+
+Causa exata do test_offline_scan_generated_image
+NÃO está no resumo; ler o traceback em
+artifacts/private/a00-imp071-deps-recovery-20261119-213807-753/pytest.log
+antes de corrigir ambiente.
+Inspeção de código mostra inspect_generated_visual_fixture
+importa cv2 e numpy e captura ImportError como
+MediaPermissionError LOCAL_OPENCV_UNAVAILABLE.
+A00 inventory indica opencv-python-headless=None,
+numpy=2.4.6. Portanto dependência ausente é a
+hipótese primária, mas não declarar causa confirmada
+sem traceback. Não contornar o teste, criar falso
+resultado visual, editar gates ou instalar extras
+desnecessários. Se LOCAL_OPENCV_UNAVAILABLE,
+verificar pip wheel opencv-python-headless para
+Python 3.11 / Windows x64 e contrato de numpy antes
+de instalar, preservar torch/gliner. Revalidar apenas
+este teste, zero_spend e A00 full em novo report.
+A00 segue BLOCKED, qualquer homologação ou
+ligação default da auditoria batch continua barrada.
+PR #44 draft, R$0, sem grants, mídia, API ou merge.
