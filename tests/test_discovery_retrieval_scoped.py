@@ -401,3 +401,33 @@ def test_cli_profile_option_only_adds_aggregate_timing(
     assert all(item["first_readiness"]["technical_trace_audit_ms"] == 3.0
                and item["second_readiness"]["technical_trace_audit_ms"] == 4.0
                for item in samples)
+
+
+def test_private_shadow_auditor_is_used_on_both_readiness_passes(monkeypatch):
+    calls = fake_rows(monkeypatch)
+    canonical = scoped.readiness_report
+    sentinel = lambda *_args, **_kwargs: None
+    auditors = []
+
+    def wrapped(*args, **kwargs):
+        auditors.append(kwargs.pop("_trace_auditor", None))
+        return canonical(*args, **kwargs)
+
+    monkeypatch.setattr(scoped, "readiness_report", wrapped)
+    result = scoped.preview_scoped_fts(
+        object(), "tenant", frame(), "viewer",
+        queries=["gestao"], expected_posts=3, expected_sources=1,
+        trace_auditor=sentinel,
+    )
+    assert auditors == [sentinel, sentinel]
+    assert calls == {"ready": 2, "scopes": 3}
+    assert result["query_count"] == 1
+    assert result["production_approved"] is False
+
+    with pytest.raises(RetrievalBaselineError, match="TRACE_AUDITOR_INVALID"):
+        scoped.preview_scoped_fts(
+            object(), "tenant", frame(), "viewer",
+            queries=["gestao"], expected_posts=3,
+            expected_sources=1, trace_auditor="unsafe",
+        )
+    assert calls == {"ready": 2, "scopes": 3}
