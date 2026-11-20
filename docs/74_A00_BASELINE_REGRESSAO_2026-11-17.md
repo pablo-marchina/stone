@@ -5978,3 +5978,50 @@ Após nova edição, repetir A00 full padrão no HEAD exato,
 sem confundir com opt-in multimodal. PR #44 draft, nenhum
 merge ou release. Direitos/segurança sempre prevalecem
 sobre redução de latência.
+
+
+### IMP-071 — retrieval shadow completo + A00 standard PASS no mesmo HEAD (19/11 BRT)
+
+Operador HEAD d5104649d93aac341dcf8402f4bfb16e95eeab48:
+PASS_ESPELHO_DOCUMENTAL (32 blobs, DAG 204 IMP / 543 edges
+acíclico, sink IMP-131), 64 testes focais PASS em
+14.98s, um StarletteDeprecationWarning não bloqueante,
+verify_zero_spend PASS. IMP071_RETRIEVAL_SHADOW_TESTS_VERIFIED.
+
+scripts.a6_retrieval_shadow sobre V12-scope27 com
+manifest pin d903366a975cb6e4c4e07c9e6300799c727c3efc3a8317530f14d90e19435b54
+e partition pin b842a43efd737abee7b78930ddb1243ccac93290cc7c45e9774d9bf542dafb44;
+1069 legendas, 27 fontes, 3 consultas, hits 5/5/2,
+3 repetições com ordem alternada e paridade exata de
+ranking, conteúdo e snapshots; digest de ranking
+ef5a496658f6500eeb824277828811251daeaf73eed309828342e280be7faee0.
+Original full-preview ms [2980.614, 3168.4149, 3503.8819],
+batch full-preview ms [1059.2371, 1110.2866, 971.4435].
+Medianas original 3168.4149ms, batch 1059.2371ms:
+speedup observado 2.991x, redução ~66.6%;
+p95 nearest-rank original 3503.8819ms,
+batch 1110.2866ms; N=3 e cache/IO não controlados,
+não SLO nem latência total de API. Cada preview realiza
+3 checks de escopo, 2 readiness, valida hash e revê
+acesso antes de materializar qualquer resultado.
+original_is_default=true, batched_runtime_active=false.
+0 DB mutation, 0 external, 0 scientific_admissions,
+gold_relevance_judgments_available=false.
+Relatório privado SHA256
+9c597b3cfbd60431e012f28d195fc728813ff5c796b42de654e8efa544e55047;
+arquivo a05-imp071-retrieval-shadow-20261119-222229-433.json.
+
+Na mesma revisão/HEAD, operador rodou A00 --profile full:
+A00_RETRIEVAL_SHADOW_STANDARD_VERIFIED, relatório privado
+a00-imp071-retrieval-shadow-20261119-222543-684.
+checks_passed=true, 1207 PASS, 0 FAILED, 0 ERROR,
+202 SKIPPED, checkout_unchanged=true,
+multimodal_required=false, full_regression_without_skips=false.
+A00 standard PASS não representa cobertura opt-in de
+mídia nem direitos audiovisuais. Próximo incremento de
+engenharia pode oferecer QUALIFICAÇÃO opt-in do batch
+somente no runner privado de operador, mantendo default
+original sem alteração e fail-closed se pins, grants
+ou rankings divergirem. Qualquer nova alteração de HEAD
+exige regressão novamente. DEC-006, IMP-071, CT-04, G1,
+IMP-131 seguem não homologados. PR #44 draft, sem merge.
