@@ -55,6 +55,7 @@ def fixture(monkeypatch, tmp_path, *, mismatch=False, drift=False, deny=False):
             "database_mutated": False,
             "external_data_accessed": False,
             "scientific_admissions": 0,
+            "production_approved": False,
         }
 
     def gate(*_):
