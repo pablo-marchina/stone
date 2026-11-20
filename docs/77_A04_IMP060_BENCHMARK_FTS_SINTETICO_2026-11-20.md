@@ -46,3 +46,28 @@ A00 --profile full no MESMO HEAD: `A00_IMP060_SYNTHETIC_FTS_VERIFIED`, relatóri
 - O uso do mesmo FTS5 repetido é um experimento de **reprodutibilidade de engenharia**, **não** comparação independente baseline versus candidata. O relatório define `baseline_candidate_comparison_completed=false`. Nenhum novo caminho de produção, provedor, HTTP/MCP, DB operacional, uso do teste selado ou validação científica.
 
 Para validar, executar as quatro suítes originais **mais** `tests/test_discovery_synthetic_eval_run.py` (39 PASS esperados), `scripts/verify_zero_spend.py`, o replay local em fixture sintética pinada e A00 `--profile full` no novo HEAD. A aprovação A00 anterior (1247 PASS / 202 SKIP em bf9afaa) não se transfere ao SHA novo. Nenhum gate é liberado automaticamente.
+
+## A04.3: replay versionado executado e aprovado no SHA 6e50cac (20/11/2026)
+
+O operador confirmou **39 passed in 0.56s**, `verify_zero_spend` PASS, e
+`SYNTHETIC_EVALUATION_REPLAY_VERIFIED` com 3 repetições no split validation
+(2 docs, 1 query, k=2), todas com rankings e métricas idênticos. Manifest SHA256
+`4c85e82412a31e63065685220db9f588870d5172ea014a42c61f04885a8571e6`;
+resultado determinístico
+`7367581c75a0088680b67af5faa4fb99a36bae3537d85565097d8d48798d2b18`;
+digest de ranking/snapshot
+`51bb87b4df0b25c476dbbaf1b9183c5f182cdea8d63129146ff860ad554270ca`.
+Recall@2 e nDCG@2 sintéticos de **1.0**; amostras de consulta em ms
+`[0.1996, 0.1001, 0.068]` (mediana 0.1001ms, p95 nearest-rank 0.1996ms,
+n=3, indexação e setup excluídos, sem SLO). Não houve consulta sealed nem
+baseline-vs-candidate, uso de dados externos ou alteração de DB; sem
+gold real, revisão humana, validação científica ou liberação de gate.
+
+Relatório privado `a04-imp060-eval-replay-20261120-183334-913.json`,
+SHA256 `04ffce87eeef48092b849ac15a0770429b20a8ac21aa3de965a1c9fb5c35b997`.
+A00 padrão no **mesmo HEAD** `6e50cac5a8363e308cff46de79c37c28982febbf`:
+`a00-imp060-versioned-eval-20261120-183851-555`,
+`checks_passed=true`, **1257 PASS, 0 FAIL, 0 ERROR, 202 SKIPPED**,
+`checkout_unchanged=true`; não corresponde à regressão multimodal opt-in
+sem skips. PR #44 continua draft; G0–G6/IMP-060/IMP-069/CT-04/IMP-071 não
+foram aceitos. As aprovações deste HEAD não se transferem a commits novos.
