@@ -154,8 +154,9 @@ class SyntheticGoldRegistry:
             _fail("JUDGMENTS_INCOMPLETE")
         if (type(k) is not int or not 1 <= k <= 50
                 or not isinstance(ranked_ids, (list, tuple))
-                or len(ranked_ids) != len(set(ranked_ids))
                 or any(not isinstance(cid, str) for cid in ranked_ids)):
+            _fail("RANKING_INVALID")
+        if len(ranked_ids) != len(set(ranked_ids)):
             _fail("RANKING_INVALID")
         eligible = {
             d.content_id for d in self._documents if d.split == q.split
