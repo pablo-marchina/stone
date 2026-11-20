@@ -6134,3 +6134,56 @@ se passar, executar A00 full no mesmo HEAD.
 Nenhum grant novo, publicação, merge, modelo, media,
 scientific admission ou gate; IMP-071/DEC-006/CT-04
 seguem pendentes. PR #44 draft, R$0.
+
+
+### IMP-071 — qualificação local REAL e A00 standard PASS no mesmo HEAD (19/11 BRT)
+
+Operador no HEAD 6f9927e610a1631df78cce65dcc615dcfcaf8e4b
+executou scripts.a6_retrieval_preview --qualified-batched-local
+em V12-scope27 com 1069 legendas/27 perfis, 3 consultas,
+hits 5/5/2, 2 rounds de original seguido de batch,
+same_rank_and_snapshots=true em ambos,
+all_rounds_equal_to_canonical=true,
+canonical_readiness_default_unchanged=true,
+failure_blocks_without_fallback=true.
+Manifest pin d903366a975cb6e4c4e07c9e6300799c727c3efc3a8317530f14d90e19435b54,
+partition SHA256 b842a43efd737abee7b78930ddb1243ccac93290cc7c45e9774d9bf542dafb44,
+prior ranking digest ef5a496658f6500eeb824277828811251daeaf73eed309828342e280be7faee0.
+Tempos de preview por par (ms):
+original [3346.5574, 2897.3674],
+batch [1013.5419, 995.7396].
+Médias: original 3121.9624ms,
+batch 1004.64075ms, gain 3.107x (redução 67.82%).
+A comparação executa os DOIS caminhos e não mede
+latência total da qualificação; caching/IO não
+controlados, não é SLO de serviço.
+O piloto batch capturou full_preview_ms
+[1013.5419, 995.7396], p95 nearest rank
+1013.5419ms, query time sub-ms;
+3 scope/rights checks e 2 readiness por preview.
+PRIVATE_BATCH_AUDIT_QUALIFIED, relatório privado
+a05-imp071-qualified-batch-20261119-232407-949.json
+SHA256 f788b9a09f939a4f01a3bb2af0e1d0fa1cec4bfc5da7b21d24228d2b80613173.
+No network, no DB mutation, no scientific admission,
+no gold relevance, production_approved=false,
+R$0, no runtime default activation.
+
+A00 --profile full no MESMO HEAD:
+A00_QUALIFIED_BATCH_STANDARD_VERIFIED,
+a00-imp071-qualified-batch-20261119-232418-730;
+checks_passed=true, Python 1212 PASS, 0 FAIL,
+0 ERROR, 202 SKIPPED, checkout_unchanged=true,
+multimodal_required=false. Não equivale a
+full_regression_without_skips nem a testes media opt-in.
+Qualificação local está verificada; ainda não autoriza
+mudar runtime de APIs, creative, jobs, ingestion ou
+produção. Próximo experimento só pode ser novo
+entrypoint privado, explicit opt-in, read-only, que
+amarre hash SHA256 do relatório qualificado, hashes do
+manifest/partition/ranking, queries, fontes e top-k;
+execute apenas batch completo 3 rights checks/2
+readiness por round e fail closed em drift. Ausência
+de flag volta ao runner original. Novo HEAD exigirá
+pytest focal e nova A00; não transferir PASS antigo.
+DEC-006/IMP-071/CT-04/G1/IMP-131 seguem abertos;
+PR #44 permanece draft, sem merge/publicação.
