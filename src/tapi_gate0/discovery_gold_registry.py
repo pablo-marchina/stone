@@ -18,7 +18,7 @@ from .discovery_retrieval_fts import RetrievalBaselineError, evaluate_complete_g
 
 VERSION = "tapi-imp060-synthetic-registry.v1"
 SPLITS = ("development", "validation", "sealed_test")
-_ID = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9_.:-]{2,127}\Z")
+_ID = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}\Z")
 _SHA = re.compile(r"[a-f0-9]{64}\Z")
 _MAX_MANIFEST_BYTES = 2_000_000
 
