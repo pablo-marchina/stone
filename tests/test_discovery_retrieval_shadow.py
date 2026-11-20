@@ -193,3 +193,140 @@ def test_shadow_rank_contract_rejects_missing_snapshot_or_gold():
     report["queries"][0]["gold_metrics"] = {"recall_at_k": 1.0}
     with pytest.raises(cli.RetrievalBaselineError, match="RESULT_INVALID"):
         cli._digest_ranked_evidence(report, MANIFEST, PARTITION, 3, 1, ["gestao"])
+
+
+def qualified_fixture(monkeypatch, tmp_path, *, mismatch=False, drift=False, deny=False):
+    from scripts import a6_retrieval_preview as preview_cli
+    private, argv, record = fixture(monkeypatch, tmp_path,
+                                    mismatch=mismatch, drift=drift, deny=deny)
+    # All private results live in the same already fixture-scoped process.
+    monkeypatch.setattr(preview_cli, "ROOT", tmp_path)
+    monkeypatch.setattr(preview_cli, "validate_existing_database_url",
+                        cli.validate_existing_database_url)
+    monkeypatch.setattr(preview_cli, "engine_for", cli.engine_for)
+    monkeypatch.setattr(preview_cli, "preview_scoped_fts", cli.preview_scoped_fts)
+    monkeypatch.setattr(preview_cli, "require_scoped_research",
+                        cli.require_scoped_research)
+    result = cli.preview_scoped_fts(
+        None, None, None, None, queries=["gestão financeira"]
+    )
+    rank_digest, _ = cli._digest_ranked_evidence(
+        result, MANIFEST, PARTITION, 3, 1, ["gestão financeira"],
+    )
+    record["calls"].clear()
+    return preview_cli, private, argv, record, rank_digest
+
+
+def test_qualified_batch_opt_in_preserves_canonical_and_pins_real_rank(
+        monkeypatch, tmp_path, capsys):
+    import json
+    qualified, private, _, record, rank = qualified_fixture(monkeypatch, tmp_path)
+    args = [
+        "--manifest", str(private / "pin.json"),
+        "--expected-manifest-sha256", MANIFEST,
+        "--expected-partition-sha256", PARTITION,
+        "--expected-ranking-sha256", rank,
+        "--expected-posts", "3", "--expected-sources", "1",
+        "--query", "gestão financeira",
+        "--repeat", "2", "--report-name", "qualified.json",
+        "--qualified-batched-local",
+        "--confirm-all-ingestion-stopped", "--confirm-all-writers-stopped",
+    ]
+    assert qualified.main(args) == 0
+    assert record["calls"] == ["original", "batched", "original", "batched"]
+    assert record["scopes"] == 1
+    stdout = capsys.readouterr().out
+    assert "private-id" not in stdout
+    assert "private-snapshot" not in stdout
+    assert "gestão financeira" not in stdout
+    report = json.loads((private / "qualified.json").read_text(encoding="utf-8"))
+    assert "private-id" in report["queries"][0]["content_ids"]
+    assert report["qualified_batched_local"]["status"] == "PRIVATE_BATCH_AUDIT_QUALIFIED"
+    assert report["qualified_batched_local"]["prior_shadow_ranking_sha256"] == rank
+    assert report["qualified_batched_local"]["all_rounds_equal_to_canonical"] is True
+    assert report["qualified_batched_local"]["canonical_readiness_default_unchanged"]
+    assert report["qualified_batched_local"]["failure_blocks_without_fallback"]
+    assert len(report["qualified_batched_local"]["qualification_runs"]) == 2
+    assert report["production_approved"] is False
+    assert qualified.main(args) == 2
+    assert "RETRIEVAL_REPORT_ALREADY_EXISTS" in capsys.readouterr().out
+
+
+def test_qualified_batch_refuses_wrong_prior_ranking_without_output(
+        monkeypatch, tmp_path, capsys):
+    qualified, private, _, record, rank = qualified_fixture(monkeypatch, tmp_path)
+    assert rank != "f" * 64
+    args = [
+        "--manifest", str(private / "pin.json"),
+        "--expected-manifest-sha256", MANIFEST,
+        "--expected-partition-sha256", PARTITION,
+        "--expected-ranking-sha256", "f" * 64,
+        "--expected-posts", "3", "--expected-sources", "1",
+        "--query", "gestão financeira",
+        "--report-name", "qualified.json", "--qualified-batched-local",
+        "--confirm-all-ingestion-stopped", "--confirm-all-writers-stopped",
+    ]
+    assert qualified.main(args) == 2
+    assert record["calls"] == ["original", "batched"]
+    assert record["scopes"] == 0
+    assert not (private / "qualified.json").exists()
+    assert "RETRIEVAL_QUALIFIED_BATCH_PARITY_MISMATCH" in capsys.readouterr().out
+
+
+def test_qualified_batch_refuses_batch_rank_drift_without_fallback(
+        monkeypatch, tmp_path, capsys):
+    qualified, private, _, record, rank = qualified_fixture(
+        monkeypatch, tmp_path, mismatch=True
+    )
+    args = [
+        "--manifest", str(private / "pin.json"),
+        "--expected-manifest-sha256", MANIFEST,
+        "--expected-partition-sha256", PARTITION,
+        "--expected-ranking-sha256", rank,
+        "--expected-posts", "3", "--expected-sources", "1",
+        "--query", "gestão financeira",
+        "--report-name", "qualified.json", "--qualified-batched-local",
+        "--confirm-all-ingestion-stopped", "--confirm-all-writers-stopped",
+    ]
+    assert qualified.main(args) == 2
+    assert record["calls"] == ["original", "batched"]
+    assert not (private / "qualified.json").exists()
+    assert "RETRIEVAL_QUALIFIED_BATCH_PARITY_MISMATCH" in capsys.readouterr().out
+
+
+def test_qualified_batch_final_scope_revocation_aborts_report(
+        monkeypatch, tmp_path, capsys):
+    qualified, private, _, record, rank = qualified_fixture(
+        monkeypatch, tmp_path, deny=True
+    )
+    args = [
+        "--manifest", str(private / "pin.json"),
+        "--expected-manifest-sha256", MANIFEST,
+        "--expected-partition-sha256", PARTITION,
+        "--expected-ranking-sha256", rank,
+        "--expected-posts", "3", "--expected-sources", "1",
+        "--query", "gestão financeira",
+        "--report-name", "qualified.json", "--qualified-batched-local",
+        "--confirm-all-ingestion-stopped", "--confirm-all-writers-stopped",
+    ]
+    assert qualified.main(args) == 2
+    assert record["calls"] == ["original", "batched"]
+    assert record["scopes"] == 1
+    assert not (private / "qualified.json").exists()
+    assert "SCOPE_DENIED" in capsys.readouterr().out
+
+
+def test_qualified_batch_requires_explicit_opt_in_and_pins_before_db(capsys):
+    from scripts import a6_retrieval_preview as preview_cli
+    args = [
+        "--manifest", "missing.json",
+        "--expected-manifest-sha256", MANIFEST,
+        "--expected-posts", "3", "--expected-sources", "1",
+        "--query", "gestão financeira",
+        "--report-name", "qualified.json",
+        "--confirm-all-ingestion-stopped", "--confirm-all-writers-stopped",
+    ]
+    assert preview_cli.main(args + ["--qualified-batched-local"]) == 2
+    assert "RETRIEVAL_QUALIFIED_BATCH_PINS_REQUIRED" in capsys.readouterr().out
+    assert preview_cli.main(args + ["--expected-ranking-sha256", "c" * 64]) == 2
+    assert "RETRIEVAL_BATCH_PINS_WITHOUT_OPT_IN" in capsys.readouterr().out
