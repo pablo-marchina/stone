@@ -239,3 +239,13 @@ def test_missing_split_or_incorrect_schema_rejected():
     payload["unknown"] = "silent drift"
     with pytest.raises(GoldRegistryError, match="SCHEMA_INVALID"):
         registry(payload)
+
+
+def test_rankings_with_unhashable_or_duplicate_refs_fail_typed():
+    reg = registry()
+    for ranking in ([{"not": "a-content-id"}],
+                    ["validation-content-1", "validation-content-1"]):
+        with pytest.raises(GoldRegistryError, match="RANKING_INVALID"):
+            reg.evaluate_synthetic_query(
+                "validation-query-1", ranking, k=2,
+            )
