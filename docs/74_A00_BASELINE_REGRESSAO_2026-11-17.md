@@ -6106,3 +6106,31 @@ ingestão e writers permaneçam parados. Se PASS, repetir
 A00 standard no SHA novo; skips opt-in não contam
 como aprovação multimodal. PR #44 draft, R$0,
 sem release/merge/admissão científica ou gate.
+
+
+### IMP-071 — fixture reparada e 69 testes focais PASS (19/11 BRT)
+
+Operador após HEAD baba56b728bb13bdf52dc0efecac7dc33085736f
+executou teste isolado
+test_qualified_batch_opt_in_preserves_canonical_and_pins_real_rank:
+1 PASS em 1.83s; as seis suítes focais (A3 technical,
+trace batch parity, FTS5, scoped, shadow, editorial)
+69 PASS, 0 FAIL, 0 ERROR em 10.90s, com 1
+StarletteDeprecationWarning não bloqueante.
+scripts/verify_zero_spend.py: PASS;
+IMP071_QUALIFIED_BATCH_TESTS_VERIFIED.
+
+Correção de contrato sintético production_approved=False
+foi confirmada; nenhum fluxo de produção alterado.
+Este novo HEAD ainda NÃO tem teste real do
+--qualified-batched-local, nem A00 --profile full;
+não atribuir ao novo HEAD a A00 anterior.
+Próximo controle: qualificação privada real com
+pinned manifesto V12-scope27, 1069/27, partição
+b842a43efd737abee7b78930ddb1243ccac93290cc7c45e9774d9bf542dafb44
+e rank digest
+ef5a496658f6500eeb824277828811251daeaf73eed309828342e280be7faee0;
+se passar, executar A00 full no mesmo HEAD.
+Nenhum grant novo, publicação, merge, modelo, media,
+scientific admission ou gate; IMP-071/DEC-006/CT-04
+seguem pendentes. PR #44 draft, R$0.
