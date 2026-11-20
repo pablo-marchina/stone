@@ -6075,3 +6075,34 @@ ser repetida depois de focais e piloto real,
 no SHA novo; os 202 skips continuam lacunas.
 DEC-006/IMP-071/CT-04/G1/IMP-131 abertos;
 PR #44 Draft; R$0, direitos intactos.
+
+
+### IMP-071 — falha isolada na fixture da qualificação batch (19/11 BRT)
+
+Operador no HEAD 3d301d842e56cc2f66447ea3290b7f631c2e5fc9:
+PASS_ESPELHO_DOCUMENTAL com 32 blobs, DAG acíclico,
+sink IMP-131; suíte focal nova 68 PASS, 1 FAIL,
+1 StarletteDeprecationWarning em 13.42s.
+Falha test_qualified_batch_opt_in_preserves_canonical_and_pins_real_rank
+em tests/test_discovery_retrieval_shadow.py:253:
+KeyError 'production_approved'. A fixture mock
+preview() simulava quase todos os campos da função
+real preview_scoped_fts mas omitia explicitamente
+production_approved=False; o relatório real sempre
+retorna esse campo false. O teste preserva a assertiva
+report["production_approved"] is False, e commit
+81be97d adiciona apenas production_approved=False
+na fixture, sem tocar em produção, direitos, grants,
+ranks, validações ou operação batch.
+É correção de contrato sintético, NÃO resultado
+validado: pytest deste novo HEAD ainda não executado,
+piloto privado de --qualified-batched-local não foi
+iniciado pelo operador devido a falha de testes, e
+A00 standard do novo HEAD também pendente.
+Esperados 69 testes focais após fix, seguidos da
+qualificação privada sob o mesmo manifesto V12 scope27,
+partição SHA256 e hash de ranking anterior, desde que
+ingestão e writers permaneçam parados. Se PASS, repetir
+A00 standard no SHA novo; skips opt-in não contam
+como aprovação multimodal. PR #44 draft, R$0,
+sem release/merge/admissão científica ou gate.
