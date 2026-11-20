@@ -19,7 +19,7 @@ Entretanto, DEC-018 vigente **dispensa a avaliação humana independente no plan
 - `evaluate_synthetic_query()`: só calcula Recall@k/nDCG@k de fixture completa e com ranking do mesmo split; **não produz métricas gold de domínio**.
 - `compare_synthetic_sealed()`: comparação agregada baseline/candidata na fixture selada exige intenção explícita, queries de teste completas e exclui referências individuais do resultado; **não equivale a teste selado institucional**, não libera gate e não garante uso único entre processos.
 - `scripts/a4_gold_registry_check.py`: CLI apenas para `tests/fixtures/CT-04_*.json` pinados, sem persistência/DB; imprime contagens e status, sem referência privada. `CT-04_positive.json` usa apenas textos sintéticos conhecidos (somente hashes no arquivo), `CT-04_negative.json` contém mutações negativas.
-- Testes: `tests/test_discovery_gold_registry.py` (11), `tests/test_discovery_gold_registry_cli.py` (2), `tests/contracts/test_ct_04.py` (4). **17 novos testes esperados, ainda não executados**. Não registrar como PASS antes do log do operador.
+- Testes: `tests/test_discovery_gold_registry.py` (12), `tests/test_discovery_gold_registry_cli.py` (2), `tests/contracts/test_ct_04.py` (4). **18 novos testes esperados, ainda não executados**. Não registrar como PASS antes do log do operador.
 
 ## Exercício local e critério de evidência
 
