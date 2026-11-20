@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from hashlib import sha256
 import json
+from math import isfinite
 import re
 from time import perf_counter
 
@@ -131,10 +132,15 @@ def compare_synthetic_baseline_candidate(raw: bytes, *,
     candidate_recall = candidate["macro_synthetic_recall_at_k"]
     candidate_ndcg = candidate["macro_synthetic_ndcg_at_k"]
     if any(
-        type(metric) not in (int, float) or not 0 <= metric <= 1
+        type(metric) not in (int, float)
+        or not isfinite(metric) or not 0 <= metric <= 1
         for metric in (candidate_recall, candidate_ndcg)
     ):
         _fail("CANDIDATE_METRIC_INVALID")
+    timing = candidate.get("query_latency_p95_ms")
+    if (type(timing) not in (int, float) or not isfinite(timing)
+            or timing < 0):
+        _fail("CANDIDATE_LATENCY_INVALID")
     baseline_digest = sha256(json.dumps(
         baseline_evidence, ensure_ascii=False,
         separators=(",", ":"),
