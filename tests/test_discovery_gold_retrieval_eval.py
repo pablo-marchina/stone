@@ -156,3 +156,14 @@ def test_cli_refuses_files_outside_fixture_tree(monkeypatch, tmp_path, capsys):
     output = capsys.readouterr().out
     assert "private data" not in output
     assert json.loads(output)["code"] == "GOLD_FTS_FIXTURE_INVALID_OR_DENIED"
+
+
+def test_synthetic_ranked_evidence_digest_is_stable_without_exposing_ids():
+    first = _eval()
+    second = _eval()
+    digest = first["ranked_evidence_sha256"]
+    assert isinstance(digest, str)
+    assert len(digest) == 64
+    assert digest == second["ranked_evidence_sha256"]
+    assert "validation-content-1" not in str(first)
+    assert "sealed_test-content-1" not in str(first)
