@@ -334,3 +334,20 @@ Atualizar este registro somente com outputs do operador e SHA real. Para cada av
 - **Status novo HEAD: PENDENTE de Windows.** Projeção das suítes já existentes: Python CDP **13 PASS**, Node frontend combinado **19 PASS** (4 da fixture + 11 de exportação + 4 timeline), Chrome real **7/7 se corrigidos todos os casos**, verify_zero_spend **PASS**. São expectativas, não provas no commit novo. Se browser falhar, registrar a falha exata, nunca aprovar 5/7 como 7/7.
 
 **G0–G6, CT-STUDIO completos e IMP-131 continuam BLOCKED, PR #44 Draft.** Não instalar serviços faturáveis, alterar direitos externos, iniciar worker ou habilitar publicação para sanar um teste local.
+
+## A07.3 Windows 7/7 PASS; A11.1 pacote focal de evidência ainda NÃO testado (21/11/2026)
+
+**Corte do operador no HEAD `0b58c4d2c983b100b7d2bb8e638bbaa13b0755c0`, PowerShell Conda `tapi-s1-recovery`:**
+- `pytest -q -rs tests/test_a07_browser_visual_parity_runner.py tests/test_a07_browser_cdp_driver.py` → **13 PASS, 0 FAIL, 0 SKIP**, 1,03 s.
+- `node --test tests/frontend/test_studio_export_browser_fixture_a07.mjs tests/frontend/test_studio_export_a07.mjs tests/frontend/test_studio_timeline_e8.mjs` → **19 PASS, 0 FAIL, 0 SKIP**, 433,985 ms.
+- `python scripts/a07_browser_visual_parity.py` → **A073_BROWSER_PARITY_PASS 7/7**, Chrome real, com todas as sete verificações concluídas. PNG/Canvas dentro da tolerância do mesmo Chrome, JPEG similaridade com perdas, SVG HTMLImageElement renderizado, XML escapado, watermark, versões e status draft. **Não** prova pixel-perfect entre navegadores, qualidade comercial, licença, gold, A00 total ou CT-STUDIO completo.
+- `python scripts/verify_zero_spend.py` → **PASS** do orçamento zero e bloqueio externo. Nenhum erro ou skip nesses recortes. A07.3 **validado focalmente para esse SHA e o navegador do operador**, sem aceitação global.
+- **Não somar** os 114 PASS da regressão A05/A06/A07 do HEAD histórico `96797a0d746c1bae6cd5dd917ad38e9e4cb74f71` como se fossem executados no SHA de A07.3 acima.
+
+**Novo A11.1 implementado após o corte, PENDENTE de validação Windows:**
+- `scripts/a11_focal_evidence_packet.py` executa por opt-in somente cinco verificações locais: orçamento-zero **primeiro e bloqueante**, regressão A05/A06/A07 de 13 arquivos com oráculo histórico **114 PASS/0 SKIP**, duas suítes CDP Python **13 PASS/0 SKIP**, três Node **19 PASS/0 SKIP**, Chrome real **7/7**. Exige SHA Git completo, nenhuma modificação em arquivos Git rastreados e presença/hashes dos scripts e testes. Relatório JSON inclui SHA, contagens, stdout SHA-256 (sem logs brutos), códigos de erro, durações e limites, arquivo criado sem sobrescrever. `FOCAL_DIAGNOSTICS_VERIFIED_NO_GATE_RELEASE` é o máximo permitido, nunca release.
+- `tests/test_a11_focal_evidence_packet.py`: **7 funções, 10 casos pytest esperados** (parametrização com 4 cenários), em fixtures de comandos mockados, incluindo queda de zero-spend antes de executar browser, dirty tree, SHA divergente, skips, contagens incompletas, inexistência de fontes, recibo imutável e ausência de liberação de gates. **Ainda nenhum PASS Windows no novo HEAD.**
+- `docs/81_A11_DOSSIE_FOCAL_REPRODUCAO_2026-11-21.md` contém runbook, escopo, corte factual e tabela G0–G6 de bloqueios. Fonte normativa continua a Base Atemporal v6.1, matrizes oficiais e regras de IMP-131. `G0`–`G6` e `IMP-131` permanecem **BLOCKED** em todo ramo do pacote.
+- **Próximo teste:** `python -m pytest -q -rs tests/test_a11_focal_evidence_packet.py` (10 previstos) e, se passar, `python scripts/a11_focal_evidence_packet.py --expected-head <SHA_ATUAL> --output artifacts/a11/focal-<SHA_ATUAL>.json` para rerun focal real. Não confundir resultado de mocks com pacote real nem aprovado A00. Arquivo de saída não deve estar previamente criado.
+
+**Sem habilitação externa, publicação, merge/deploy ou alteração de orçamento. PR #44 Draft, G0–G6/IMP-131 BLOCKED.**
