@@ -153,7 +153,9 @@ def test_ineligible_snapshot_after_cutoff_abstains(demo):
         "followers_measured_at": AS_OF + timedelta(hours=1),
     })
     with demo["engine"].begin() as db:
-        db.execute(update(metrics_snapshots).values(payload=snap.model_dump_json()))
+        db.execute(update(metrics_snapshots).values(
+            observed_at=snap.observed_at.isoformat(), payload=snap.model_dump_json(),
+        ))
     result = audit(demo)
     assert result["reason_code"] == "A067_OBSERVATIONAL_SNAPSHOT_REQUIRED"
     assert result["status"] == "ABSTAIN"
@@ -211,6 +213,7 @@ def test_corrupt_snapshot_payload_fails_closed(demo):
 
 def test_missing_reference_in_document_causes_abstention(demo):
     with demo["engine"].begin() as db:
+        db.execute(metrics_snapshots.delete())
         db.execute(content_items.delete())
     result = audit(demo)
     assert result["status"] == "ABSTAIN"
@@ -246,3 +249,23 @@ def test_reference_free_draft_does_not_create_fabricated_citations(demo):
     result = audit(demo, document_id="draft.no-ref")
     assert result["status"] == "ABSTAIN"
     assert result["reason_code"] == "A067_REFERENCES_REQUIRED"
+
+
+def test_snapshot_index_payload_timestamp_disagreement_is_blocked(demo):
+    with demo["engine"].begin() as db:
+        db.execute(update(metrics_snapshots).values(
+            observed_at=(NOW - timedelta(hours=2)).isoformat(),
+        ))
+    result = audit(demo)
+    assert result["status"] == "BLOCKED"
+    assert result["reason_code"] == "A067_SNAPSHOT_BINDING_INVALID"
+
+
+def test_publication_index_payload_timestamp_disagreement_is_blocked(demo):
+    with demo["engine"].begin() as db:
+        db.execute(update(content_items).values(
+            published_at=(NOW - timedelta(days=4)).isoformat(),
+        ))
+    result = audit(demo)
+    assert result["status"] == "BLOCKED"
+    assert result["reason_code"] == "A067_SOURCE_BINDING_INVALID"
