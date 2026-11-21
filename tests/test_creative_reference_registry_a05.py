@@ -159,15 +159,27 @@ def test_auth_requires_persisted_authority_and_grant(registry):
 def test_registration_is_idempotent_with_out_of_band_approval(registry):
     r = registry
     provision(r)
+    # Idempotency means replaying the identical signed document, not issuing
+    # another grant with the same ID and slightly different now_utc() fields.
+    original = r["grant"]()
     with pytest.raises(ReferenceRegistryDenied, match="A054_TRUSTED_APPROVAL_REQUIRED"):
-        r["svc"].register(r["anchor"], r["grant"](),
+        r["svc"].register(r["anchor"], original,
                           verified_approval_digest="b" * 64)
-    assert r["svc"].register(r["anchor"], r["grant"](),
+    assert r["svc"].register(r["anchor"], original,
                              verified_approval_digest="a" * 64) is True
-    assert r["svc"].register(r["anchor"], r["grant"](),
+    assert r["svc"].register(r["anchor"], original,
                              verified_approval_digest="a" * 64) is False
+    # A different, correctly signed payload with the SAME grant ID must not
+    # silently replace the first grant, even with the trusted approval digest.
+    changed = r["grant"](expires_at=original.claims.expires_at + timedelta(minutes=1))
+    assert changed.claims.grant_id == original.claims.grant_id
+    assert changed.model_dump_json() != original.model_dump_json()
+    with pytest.raises(ReferenceRegistryDenied, match="A054_GRANT_ID_CONFLICT"):
+        r["svc"].register(r["anchor"], changed,
+                          verified_approval_digest="a" * 64)
     with r["engine"].connect() as db:
-        assert len(db.execute(select(grants)).all()) == 1
+        persisted = db.execute(select(grants.c.payload)).scalars().all()
+        assert persisted == [original.model_dump_json()]
 
 
 def test_source_grant_revocation_and_content_drift_are_rechecked(registry):
