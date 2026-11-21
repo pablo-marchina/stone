@@ -99,7 +99,13 @@ def _redacted_result(argv: list[str], result, *, kind: str,
     elif kind == "node":
         # Node's TAP output may prefix with Unicode informational marker.
         def metric(name: str):
-            matches = re.findall(rf"(?m)^[^\w\n]*{name}\s+(\d+)\s*$", stdout)
+            # In Python Unicode, the TAP info symbol "ℹ" is a \w character.
+            # Accept only the actual Node summary prefixes, never arbitrary
+            # preceding characters, to avoid a false positive on TAP failure.
+            matches = re.findall(
+                rf"(?m)^[ \t]*(?:ℹ(?:\ufe0f)?[ \t]+|#[ \t]+)"
+                rf"{re.escape(name)}[ \t]+([0-9]+)[ \t]*$", stdout,
+            )
             return int(matches[-1]) if len(matches) == 1 else None
         total, passed, failed, skipped, canceled, todo = (
             metric(name) for name in
@@ -240,7 +246,11 @@ def build_packet(*, root: Path = ROOT, expected_head: str | None = None,
 
     py = sys.executable
     steps = [
-        ("zero_spend", [py, "scripts/verify_zero_spend.py"],
+        # Windows redirected Python stdout may default to cp1252. UTF-8
+        # mode makes the em dash in the exact verification receipt stable.
+        # The exact PASS text and exit=0 remain mandatory; never normalize
+        # undecodable output or reinterpret a failed process as approved.
+        ("zero_spend", [py, "-X", "utf8", "scripts/verify_zero_spend.py"],
          "zero_spend", None, 30),
         ("python_a05_a07", [py, "-m", "pytest", "-q", "-rs", *PY_A05_A07],
          "pytest", EXPECTED["python_a05_a07"], 300),
