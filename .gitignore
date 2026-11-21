@@ -14,6 +14,9 @@ logs/
 *.sqlite
 *.sqlite3
 artifacts/private/
+# A11 receipts are private, SHA-pinned local validation artifacts.
+# Do not commit them; preserve all historical blocked and verified packets.
+artifacts/a11/
 secrets/
 # DEC-017: never commit local benchmark reports containing research aggregates.
 dec017_e1_*_report.json
