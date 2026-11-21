@@ -134,7 +134,7 @@
       const other=synthetic();
       // Prevent HTML parser from terminating this inline script early.
       // The JavaScript runtime still constructs the exact hostile text.
-      other.pages[0].layers[0].text='Teste <script>alert("x")\x3C/script> & texto';
+      other.pages[0].layers[0].text='Teste \x3Cscript>alert("x")\x3C/script> & texto';
       const exported=await StoneExport.exportDocument(other,'page.1',new Map(),'svg');
       const xml=await exported.blob.text();
       assert(!xml.includes('<script>') && xml.includes('&lt;script&gt;') &&
