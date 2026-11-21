@@ -274,9 +274,6 @@ def test_no_schema_auto_provisioning_without_explicit_experimental_setup(tmp_pat
     SqlDomainStore(engine).initialize()
     try:
         with engine.connect() as db:
-            existing = db.execute(select(
-                authorities.c.tenant_id,
-            )).all() if False else None
             # The experimental schema is separate from the domain metadata.
             from sqlalchemy import text
             names = db.execute(text(
