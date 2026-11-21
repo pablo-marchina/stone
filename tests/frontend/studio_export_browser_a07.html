@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>A07.3 — teste local de fidelidade de rascunho sintético</title>
+  <meta name="referrer" content="no-referrer">
+</head>
+<body>
+  <output id="a073-result" data-status="PENDING" data-passed="0" data-total="7">A073_PENDING</output>
+  <script src="../../src/tapi_gate0/web/studio_export_e4.js"></script>
+  <script>
+  'use strict';
+  // Real browser Canvas + real exporter, but only local fictional content.
+  // Not an external-rights PEP; no network/Studio writes or publication.
+  // PNG: compare decoded export pixels with current in-browser Canvas preview.
+  // JPEG: measured lossy similarity; SVG: decoding, escaping, watermark only.
+  const out = document.getElementById('a073-result');
+  const results = [];
+  const failures = [];
+  function assert(condition, label) {
+    if (!condition) throw new Error(label);
+  }
+  function newCanvas(width, height) {
+    const c = document.createElement('canvas');
+    c.width = width; c.height = height;
+    return c;
+  }
+  function synthetic(version=1) {
+    return {
+      schema_version:'design-document.v1',
+      document_id:'draft.a073.synthetic',
+      tenant_id:'fixture.only',
+      spec_id:'spec.a073.synthetic',version,
+      canvas:{width:480,height:600,background:'#FFFFFF'},
+      platform_intent:'instagram_feed',
+      approval_status:'draft',rights_status:'pending_review',
+      reference_status:'unverified',render_status:'not_implemented',
+      reference_content_ids:['fictional.reference'],
+      pages:[{id:'page.1',layers:[
+        {kind:'text',id:'headline',x:22,y:45,w:430,h:150,
+         text: version===1?'Organize o estoque':'Revise o controle de estoque',
+         style:{font_family:'sans-serif',font_size:42,color:'#172B25'},
+         editable:true,origin:version===1?'operator_draft':'operator_edit'},
+        {kind:'text',id:'body',x:22,y:230,w:430,h:150,
+         text:'Rascunho ficticio. Dados de teste, nao reais.',
+         style:{font_family:'sans-serif',font_size:23,color:'#172B25'},
+         editable:true,origin:'operator_draft'},
+        {kind:'text',id:'cta',x:22,y:420,w:430,h:90,
+         text:'Revise o exemplo',
+         style:{font_family:'sans-serif',font_size:24,color:'#172B25'},
+         editable:true,origin:'operator_draft'},
+      ]}],
+    };
+  }
+  function preview(d) {
+    const c=newCanvas(d.canvas.width,d.canvas.height);
+    StoneExport.drawTo(c.getContext('2d'),d,d.pages[0],new Map());
+    return c;
+  }
+  async function decode(blob,width,height) {
+    const bitmap=await createImageBitmap(blob);
+    try {
+      assert(bitmap.width===width && bitmap.height===height,
+             'A073_IMAGE_DIMENSIONS');
+      const c=newCanvas(width,height);
+      c.getContext('2d').drawImage(bitmap,0,0);
+      return c;
+    } finally { bitmap.close(); }
+  }
+  function difference(a,b) {
+    assert(a.width===b.width && a.height===b.height,'A073_DIFFERENT_CANVAS_SIZES');
+    const x=a.getContext('2d').getImageData(0,0,a.width,a.height).data;
+    const y=b.getContext('2d').getImageData(0,0,b.width,b.height).data;
+    let sum=0,max=0;
+    for(let i=0;i<x.length;i+=4) for(let channel=0;channel<3;channel++) {
+      const d=Math.abs(x[i+channel]-y[i+channel]);sum+=d;max=Math.max(max,d);
+    }
+    return {mean:sum/(3*a.width*a.height),max};
+  }
+  function hasDraftWatermark(c) {
+    const width=c.width,height=c.height;
+    const x=c.getContext('2d').getImageData(0,height-60,width,60).data;
+    let red=0;
+    for(let i=0;i<x.length;i+=4) {
+      const r=x[i],g=x[i+1],b=x[i+2];
+      if (r>g*1.3 && r>b*1.3 && r<225) red++;
+    }
+    return red>15;
+  }
+  async function run(label, fn) {
+    try { await fn(); results.push(label); }
+    catch(err) { failures.push(label+':'+String(err?.message||err).slice(0,130)); }
+  }
+  (async()=>{
+    const d=synthetic();
+    const original=JSON.stringify(d);
+    const canvas=preview(d);
+    await run('PNG_REAL_PIXELS_AND_MANIFEST',async()=>{
+      const exported=await StoneExport.exportDocument(d,'page.1',new Map(),'png');
+      assert(exported.blob.type==='image/png','A073_PNG_MIME');
+      assert(exported.manifest.pages[0].bytes===exported.blob.size,'A073_PNG_BYTES');
+      assert(exported.manifest.pages[0].sha256===await StoneExport.sha256(exported.blob),
+             'A073_PNG_MANIFEST_DIGEST');
+      const actual=await decode(exported.blob,480,600);
+      const delta=difference(canvas,actual);
+      assert(delta.mean<=2,'A073_PNG_PIXEL_MEAN_'+delta.mean.toFixed(3));
+      assert(hasDraftWatermark(actual),'A073_PNG_DRAFT_WATERMARK');
+    });
+    await run('JPEG_REAL_PIXELS_AND_MANIFEST',async()=>{
+      const exported=await StoneExport.exportDocument(d,'page.1',new Map(),'jpeg');
+      assert(exported.blob.type==='image/jpeg','A073_JPEG_MIME');
+      assert(exported.manifest.pages[0].sha256===await StoneExport.sha256(exported.blob),
+             'A073_JPEG_MANIFEST_DIGEST');
+      const bitmap=await decode(exported.blob,480,600);
+      const delta=difference(canvas,bitmap);
+      assert(delta.mean<=10,'A073_JPEG_LOSSY_SIMILARITY_'+delta.mean.toFixed(3));
+      assert(hasDraftWatermark(bitmap),'A073_JPEG_DRAFT_WATERMARK');
+    });
+    await run('SVG_REAL_BROWSER_DECODING_AND_ESCAPE',async()=>{
+      const exported=await StoneExport.exportDocument(d,'page.1',new Map(),'svg');
+      const xml=await exported.blob.text();
+      assert(xml.includes('RASCUNHO - NAO PUBLICAR'),'A073_SVG_WATERMARK');
+      assert(xml.includes('Organize o estoque'),'A073_SVG_SOURCE_TEXT');
+      const bitmap=await decode(exported.blob,480,600);
+      assert(hasDraftWatermark(bitmap),'A073_SVG_DRAWN_WATERMARK');
+    });
+    await run('SVG_UNTRUSTED_XML_IS_ESCAPED',async()=>{
+      const other=synthetic();
+      other.pages[0].layers[0].text='Teste <script>alert("x")</script> & texto';
+      const exported=await StoneExport.exportDocument(other,'page.1',new Map(),'svg');
+      const xml=await exported.blob.text();
+      assert(!xml.includes('<script>') && xml.includes('&lt;script&gt;') &&
+             xml.includes('&amp;'),'A073_SVG_XML_ESCAPE');
+    });
+    await run('EDITED_VERSION_CHANGES_VISUAL_AND_RECEIPT',async()=>{
+      const second=synthetic(2);
+      const a=await StoneExport.exportDocument(d,'page.1',new Map(),'png');
+      const b=await StoneExport.exportDocument(second,'page.1',new Map(),'png');
+      assert(a.manifest.version===1 && b.manifest.version===2,'A073_VERSION_PIN');
+      assert(a.manifest.pages[0].sha256!==b.manifest.pages[0].sha256,
+             'A073_EDITED_HASH_UNCHANGED');
+      const bCanvas=await decode(b.blob,480,600);
+      assert(difference(canvas,bCanvas).mean>0.1,'A073_EDITED_PIXELS_UNCHANGED');
+      assert(hasDraftWatermark(bCanvas),'A073_EDITED_WATERMARK');
+      assert(second.rights_status==='pending_review','A073_STATUS_ESCALATION');
+    });
+    await run('SPOOFED_APPROVAL_FAILS_CLOSED',async()=>{
+      const forged=synthetic();
+      forged.approval_status='approved';forged.rights_status='approved';
+      let denied=false;
+      try {await StoneExport.exportDocument(forged,'page.1',new Map(),'png');}
+      catch(e){denied=String(e.message).includes('Estado de rascunho inválido');}
+      assert(denied,'A073_EXPORT_WOULD_TREAT_FORGED_STATUS_AS_APPROVED');
+    });
+    await run('NO_MUTATION_AND_NO_EXTERNAL_RESOURCES',async()=>{
+      assert(original===JSON.stringify(d),'A073_DOC_MUTATED');
+      assert(document.querySelectorAll('img,iframe,link,video,audio').length===0,
+             'A073_EXTERNAL_RESOURCE_ELEMENT');
+      assert(d.reference_content_ids.length===1 &&
+             d.reference_content_ids[0]==='fictional.reference',
+             'A073_NON_SYNTHETIC_REFERENCE');
+    });
+    out.dataset.passed=String(results.length);
+    out.dataset.total='7';
+    out.dataset.status=failures.length?'FAIL':'PASS';
+    out.textContent=failures.length?'A073_FAIL '+failures.join(' | '):'A073_BROWSER_PARITY_PASS';
+  })().catch(err=>{
+    out.dataset.status='FAIL';
+    out.textContent='A073_FATAL '+String(err?.message||err).slice(0,150);
+  });
+  </script>
+</body>
+</html>
