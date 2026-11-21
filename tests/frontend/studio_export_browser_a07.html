@@ -137,7 +137,7 @@
       other.pages[0].layers[0].text='Teste \x3Cscript>alert("x")\x3C/script> & texto';
       const exported=await StoneExport.exportDocument(other,'page.1',new Map(),'svg');
       const xml=await exported.blob.text();
-      assert(!xml.includes('<script>') && xml.includes('&lt;script&gt;') &&
+      assert(!xml.includes('\x3Cscript>') && xml.includes('&lt;script&gt;') &&
              xml.includes('&amp;'),'A073_SVG_XML_ESCAPE');
     });
     await run('EDITED_VERSION_CHANGES_VISUAL_AND_RECEIPT',async()=>{
