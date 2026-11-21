@@ -12,6 +12,7 @@ import argparse
 from collections import Counter
 import json
 from pathlib import Path
+import xml.etree.ElementTree as ET
 
 from scripts.a00_baseline import ROOT, BaselineError, multimodal_coverage
 from scripts.a00_inspect_report import inspect_report, checked_file
@@ -108,7 +109,8 @@ def main(argv=None):
     opts = parser.parse_args(argv)
     try:
         result = analyze_gap(ROOT, opts.report_name)
-    except (BaselineError, OSError, ValueError, KeyError, TypeError) as exc:
+    except (BaselineError, OSError, ValueError, KeyError, TypeError,
+            ET.ParseError) as exc:
         reason = str(exc) if isinstance(exc, BaselineError) else "A00_GAP_REPORT_INVALID"
         print(json.dumps({"status": "BLOCKED", "reason_code": reason}))
         return 2
