@@ -118,3 +118,14 @@ def test_unexpected_skip_identity_remains_unclassified():
     assert gaps._skip_category({
         "class": "tests.unfamiliar", "name": "test_unexpected_skip",
     }) == "UNCLASSIFIED_SKIP_INVESTIGATE"
+
+
+
+def test_falsely_claimed_skip_free_success_is_denied(tmp_path):
+    directory = _fixture(tmp_path, skipped=True)
+    summary = directory / "summary.json"
+    data = json.loads(summary.read_text(encoding="utf-8"))
+    data["full_regression_without_skips"] = True
+    summary.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(BaselineError, match="A00_GAP_SKIP_FREE_CLAIM_CONFLICT"):
+        gaps.analyze_gap(tmp_path, "fixture")
