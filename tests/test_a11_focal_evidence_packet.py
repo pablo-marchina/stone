@@ -1,0 +1,168 @@
+"""A11: fail-closed synthetic tests of the local validation packet builder.
+
+Mocks subprocess returns. A PASS in these unit tests never claims tests on the
+actual operator Windows host or releases G0-G6/IMP-131.
+"""
+from pathlib import Path
+from types import SimpleNamespace
+import json
+
+import pytest
+
+from scripts import a11_focal_evidence_packet as packet
+
+HEAD = "a" * 40
+
+
+def done(stdout="", returncode=0, stderr=""):
+    return SimpleNamespace(stdout=stdout, stderr=stderr, returncode=returncode)
+
+
+def node_report(passed=19, total=19, failed=0, skipped=0):
+    return (f"ℹ tests {total}\nℹ suites 0\nℹ pass {passed}\n"
+            f"ℹ fail {failed}\nℹ cancelled 0\nℹ skipped {skipped}\n"
+            "ℹ todo 0\nℹ duration_ms 400\n")
+
+
+def synthetic_runner(*, pytest_count=114, node_count=19, chrome=True,
+                     financial=True, pytest_skip=0, git_dirty=False):
+    calls = []
+    def run(argv, *, timeout, cwd):
+        calls.append(tuple(argv))
+        if argv[:3] == ["git", "rev-parse", "HEAD"]:
+            return done(HEAD + "\n")
+        if argv[:2] == ["git", "status"]:
+            return done(" M tracked.py\n" if git_dirty else "")
+        if "verify_zero_spend.py" in argv:
+            return done("PASS — invariantes locais de gasto zero e bloqueio externo\n"
+                        if financial else "FAILED\n", 0 if financial else 1)
+        if "pytest" in argv:
+            if "test_studio_synthetic_provenance_a067.py" in argv:
+                return done(
+                    f"{pytest_count} passed"
+                    + (f", {pytest_skip} skipped" if pytest_skip else "")
+                    + " in 1.20s\n"
+                )
+            return done("13 passed in 0.40s\n")
+        if argv[0] == "node":
+            return done(node_report(passed=node_count))
+        if "a07_browser_visual_parity.py" in argv:
+            return done("A073_BROWSER_PARITY_PASS 7/7\n" if chrome
+                        else "A073_BROWSER_INCOMPLETE A073_RUNNING\n",
+                        0 if chrome else 1)
+        raise AssertionError("Unexpected command " + repr(argv))
+    return run, calls
+
+
+@pytest.fixture
+def local_files(tmp_path, monkeypatch):
+    files = (
+        "scripts/a11_focal_evidence_packet.py",
+        "src/tapi_gate0/web/studio_export_e4.js",
+    )
+    for path in files:
+        destination = tmp_path / path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(("fictional fixture for " + path).encode("utf-8"))
+    monkeypatch.setattr(packet, "SOURCE_FILES", files)
+    return tmp_path
+
+
+def test_packet_assembles_exact_local_counts_and_preserves_all_gate_denials(local_files):
+    run, calls = synthetic_runner()
+    receipt = packet.build_packet(root=local_files, expected_head=HEAD, run=run)
+    assert receipt["schema_version"] == "tapi-a11-focal-evidence-packet.v1"
+    assert receipt["git_head"] == HEAD
+    assert receipt["git_status_reason"] == "A11_CLEAN_HEAD_VERIFIED"
+    assert receipt["validation_status"] == "FOCAL_DIAGNOSTICS_VERIFIED_NO_GATE_RELEASE"
+    assert receipt["zero_spend_check_observed"] is True
+    assert len(receipt["checks"]) == 5
+    assert [x["observed_pass_count"] for x in receipt["checks"]] == [1, 114, 13, 19, 7]
+    assert all(x["passed"] and x["observed_skip_count"] == 0
+               for x in receipt["checks"])
+    assert receipt["gate_status"] == {**{f"G{i}": "BLOCKED" for i in range(7)},
+                                      "IMP-131": "BLOCKED"}
+    for forbidden in ("imp131_accepted", "full_a00_validated_on_this_head",
+                      "independent_gold_available", "external_reference_rights_verified",
+                      "science_approved", "production_approved",
+                      "studio_publication_approved"):
+        assert receipt[forbidden] is False
+    assert calls[2][1:3] == ("scripts/verify_zero_spend.py",) or \
+        "verify_zero_spend.py" in calls[2]
+    assert all("http" not in " ".join(argv).lower() for argv in calls)
+
+
+@pytest.mark.parametrize("changes,expected_id", [
+    ({"pytest_count": 113}, "python_a05_a07"),
+    ({"node_count": 18}, "node_a073"),
+    ({"chrome": False}, "chrome_a073"),
+    ({"pytest_skip": 1}, "python_a05_a07"),
+])
+def test_missing_results_and_skips_cannot_create_green_packet(
+        local_files, changes, expected_id):
+    run, _calls = synthetic_runner(**changes)
+    receipt = packet.build_packet(root=local_files, run=run)
+    assert receipt["validation_status"] == "BLOCKED_NOT_VALIDATED"
+    bad = {check["check_id"] for check in receipt["checks"] if not check["passed"]}
+    assert expected_id in bad
+    assert receipt["gate_status"]["IMP-131"] == "BLOCKED"
+
+
+def test_zero_spend_preflight_fails_before_any_tests_or_browser(local_files):
+    run, calls = synthetic_runner(financial=False)
+    receipt = packet.build_packet(root=local_files, run=run)
+    assert receipt["validation_status"] == "BLOCKED_ZERO_SPEND_PREFLIGHT"
+    assert receipt["zero_spend_check_observed"] is False
+    assert len(receipt["checks"]) == 1
+    assert len(calls) == 3  # git SHA, git status, zero-spend only
+
+
+def test_dirty_worktree_and_wrong_head_never_execute_checks(local_files):
+    run, calls = synthetic_runner(git_dirty=True)
+    result = packet.build_packet(root=local_files, run=run)
+    assert result["git_status_reason"] == "A11_TRACKED_WORKTREE_DIRTY"
+    assert not result["checks"]
+    assert len(calls) == 2
+    run, calls = synthetic_runner()
+    result = packet.build_packet(root=local_files, expected_head="b" * 40, run=run)
+    assert result["git_status_reason"] == "A11_EXPECTED_HEAD_MISMATCH"
+    assert not result["checks"]
+    assert len(calls) == 2
+
+
+def test_missing_critical_source_never_executes_any_check(local_files):
+    run, calls = synthetic_runner()
+    (local_files / "src/tapi_gate0/web/studio_export_e4.js").unlink()
+    result = packet.build_packet(root=local_files, run=run)
+    assert result["validation_status"] == "BLOCKED_SOURCE_MISSING"
+    assert not result["checks"]
+    assert len(calls) == 2
+
+
+def test_raw_log_not_written_and_receipt_cannot_be_overwritten(local_files):
+    run, _calls = synthetic_runner()
+    receipt = packet.build_packet(root=local_files, run=run)
+    location = local_files / "artifacts" / "a11-focal.json"
+    digest = packet.write_packet(receipt, location)
+    assert len(digest) == 64
+    file_bytes = location.read_bytes()
+    assert b"PASS \xe2\x80\x94" not in file_bytes
+    assert "A073_BROWSER_PARITY_PASS 7/7" not in file_bytes.decode("utf-8")
+    assert json.loads(file_bytes)["git_head"] == HEAD
+    with pytest.raises(FileExistsError):
+        packet.write_packet(receipt, location)
+
+
+def test_pytest_node_and_chrome_require_complete_counts_and_zero_exit():
+    def parse(output, kind, count, code=0):
+        return packet._redacted_result(
+            ["fixture"], done(output, code), kind=kind, expected_count=count,
+        )
+    assert parse("114 passed\n", "pytest", 114)["passed"] is True
+    assert parse("114 passed, 1 skipped\n", "pytest", 114)["passed"] is False
+    assert parse("114 passed\n", "pytest", 114, code=1)["passed"] is False
+    assert parse(node_report(), "node", 19)["passed"] is True
+    assert parse(node_report(skipped=1), "node", 19)["passed"] is False
+    assert parse("A073_BROWSER_PARITY_PASS 7/7\n", "chrome", 7)["passed"] is True
+    assert parse("A073_RUNNING\n", "chrome", 7)["passed"] is False
+    assert parse("A073_BROWSER_PARITY_PASS 7/7\n", "chrome", 7, 1)["passed"] is False
