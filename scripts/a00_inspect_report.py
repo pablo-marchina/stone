@@ -30,14 +30,21 @@ def inspect_report(root,name):
         raise BaselineError("A00_REPORT_DIRECTORY_INVALID")
     raw=checked_file(directory,"summary.json").read_bytes()
     report=json.loads(raw)
-    if report.get("policy_version")!="a00-local-baseline.v1" or report.get("profile") not in ("full","semantic"):
+    policy = report.get("policy_version")
+    if policy not in ("a00-local-baseline.v1", "a00-local-baseline.v2") or report.get("profile") not in ("full","semantic"):
         raise BaselineError("A00_REPORT_POLICY_INVALID")
     commit=report["inventory"]["commit"]
     tree=report["inventory"]["tree"]
     if not all(re.fullmatch(r"[a-f0-9]{40}",v) for v in (commit,tree)):
         raise BaselineError("A00_REPORT_COMMIT_INVALID")
     steps=report["steps"]
-    expected={"legacy_gate0","zero_spend","pytest"}|({"node"} if report["profile"]=="full" else set())
+    expected = {"legacy_gate0", "zero_spend", "pytest"}
+    if report["profile"] == "full":
+        expected.add("node")
+        # A00 full v2 independently audits the 32-file v6.1 documentary
+        # mirror. Historical v1 has no such step; do not rewrite its proof.
+        if policy == "a00-local-baseline.v2":
+            expected.add("documentary_mirror")
     if len(steps)!=len(expected) or {s["step"] for s in steps}!=expected:
         raise BaselineError("A00_REPORT_STEPS_INVALID")
     for s in steps:
@@ -61,7 +68,8 @@ def inspect_report(root,name):
     identities=[]
     for f in counts["failed_tests"]:
         identities.append({"class":f["class"][:200],"name":f["name"][:200],"kind":f["kind"]})
-    return {"status":"A00_REPORT_INSPECTED","profile":report["profile"],"commit":commit,
+    return {"status":"A00_REPORT_INSPECTED","profile":report["profile"],
+            "policy_version":policy,"commit":commit,
             "tree":tree,"report_name":name,"summary_sha256":sha256(raw).hexdigest(),
             "pytest_xml_sha256":xml_hash,
             "xml_digest_previously_recorded":"pytest_xml_sha256" in report,
