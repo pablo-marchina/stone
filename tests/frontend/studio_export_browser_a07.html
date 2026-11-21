@@ -15,6 +15,9 @@
   // PNG: compare decoded export pixels with current in-browser Canvas preview.
   // JPEG: measured lossy similarity; SVG: decoding, escaping, watermark only.
   const out = document.getElementById('a073-result');
+  // Make a stalled async render distinguishable from a script that never ran.
+  out.dataset.status='RUNNING';
+  out.textContent='A073_RUNNING';
   const results = [];
   const failures = [];
   function assert(condition, label) {
@@ -90,6 +93,9 @@
   async function run(label, fn) {
     try { await fn(); results.push(label); }
     catch(err) { failures.push(label+':'+String(err?.message||err).slice(0,130)); }
+    // Keep partial progress visible to headless dump diagnostics; never PASS.
+    out.dataset.passed=String(results.length);
+    out.textContent='A073_RUNNING_CHECKS '+String(results.length+failures.length)+'/7';
   }
   (async()=>{
     const d=synthetic();
@@ -126,7 +132,9 @@
     });
     await run('SVG_UNTRUSTED_XML_IS_ESCAPED',async()=>{
       const other=synthetic();
-      other.pages[0].layers[0].text='Teste <script>alert("x")</script> & texto';
+      // Prevent HTML parser from terminating this inline script early.
+      // The JavaScript runtime still constructs the exact hostile text.
+      other.pages[0].layers[0].text='Teste <script>alert("x")\x3C/script> & texto';
       const exported=await StoneExport.exportDocument(other,'page.1',new Map(),'svg');
       const xml=await exported.blob.text();
       assert(!xml.includes('<script>') && xml.includes('&lt;script&gt;') &&
