@@ -109,6 +109,5 @@ def inspect_synthetic_creative_handoff(engine, tenant_id: str,
         "gates_released": False,
         "production_approved": False,
         "external_data_accessed": False,
-        "operational_database_accessed": False,
         "database_mutated": False,
     }
