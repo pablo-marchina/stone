@@ -203,3 +203,24 @@ test('no global network access or authorization state is needed for synthetic SV
   // This is a browser export-shape test; it does not authenticate the draft,
   // attest external rights, compare pixels or authorize a render worker.
 });
+
+
+test('status spoofing cannot remove draft watermark or claim approved export',async()=>{
+  const claimedApproved=doc({approval_status:'approved',rights_status:'approved'});
+  await assert.rejects(svgExport(claimedApproved),/Estado de rascunho inválido/);
+  await assert.rejects(svgExport(doc({rights_status:'approved'})),/Estado de rascunho inválido/);
+  await assert.rejects(svgExport(doc({reference_status:'verified'})),/Estado de rascunho inválido/);
+  await assert.rejects(svgExport(doc({render_status:'completed'})),/Estado de rascunho inválido/);
+  await assert.rejects(svgExport(doc({schema_version:'untrusted-document.v1'})),/Estado de rascunho inválido/);
+});
+
+test('unapproved status flags remain unchanged on all valid local draft formats',async()=>{
+  const d=doc();
+  const out=await svgExport(d);
+  assert.equal(d.approval_status,'draft');
+  assert.equal(d.rights_status,'pending_review');
+  assert.equal(out.manifest.approval_status,'draft');
+  assert.equal(out.manifest.rights_status,'pending_review');
+  assert.equal(out.manifest.render_status,'local_preview_only');
+  assert.match(await out.blob.text(),/RASCUNHO - NAO PUBLICAR/);
+});
