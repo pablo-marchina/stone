@@ -33,11 +33,14 @@ def synthetic_runner(*, pytest_count=114, node_count=19, chrome=True,
             return done(HEAD + "\n")
         if argv[:2] == ["git", "status"]:
             return done(" M tracked.py\n" if git_dirty else "")
-        if "verify_zero_spend.py" in argv:
+        if argv[-1] == "scripts/verify_zero_spend.py":
+            assert argv[-4:] == [
+                argv[0], "-X", "utf8", "scripts/verify_zero_spend.py",
+            ], "Zero-spend subprocess must force UTF-8 in redirected Windows IO"
             return done("PASS — invariantes locais de gasto zero e bloqueio externo\n"
                         if financial else "FAILED\n", 0 if financial else 1)
         if "pytest" in argv:
-            if "test_studio_synthetic_provenance_a067.py" in argv:
+            if "tests/test_studio_synthetic_provenance_a067.py" in argv:
                 return done(
                     f"{pytest_count} passed"
                     + (f", {pytest_skip} skipped" if pytest_skip else "")
@@ -46,7 +49,7 @@ def synthetic_runner(*, pytest_count=114, node_count=19, chrome=True,
             return done("13 passed in 0.40s\n")
         if argv[0] == "node":
             return done(node_report(passed=node_count))
-        if "a07_browser_visual_parity.py" in argv:
+        if argv[-1] == "scripts/a07_browser_visual_parity.py":
             return done("A073_BROWSER_PARITY_PASS 7/7\n" if chrome
                         else "A073_BROWSER_INCOMPLETE A073_RUNNING\n",
                         0 if chrome else 1)
@@ -87,8 +90,9 @@ def test_packet_assembles_exact_local_counts_and_preserves_all_gate_denials(loca
                       "science_approved", "production_approved",
                       "studio_publication_approved"):
         assert receipt[forbidden] is False
-    assert calls[2][1:3] == ("scripts/verify_zero_spend.py",) or \
-        "verify_zero_spend.py" in calls[2]
+    assert calls[2][1:] == (
+        "-X", "utf8", "scripts/verify_zero_spend.py",
+    )
     assert all("http" not in " ".join(argv).lower() for argv in calls)
 
 
@@ -166,3 +170,28 @@ def test_pytest_node_and_chrome_require_complete_counts_and_zero_exit():
     assert parse("A073_BROWSER_PARITY_PASS 7/7\n", "chrome", 7)["passed"] is True
     assert parse("A073_RUNNING\n", "chrome", 7)["passed"] is False
     assert parse("A073_BROWSER_PARITY_PASS 7/7\n", "chrome", 7, 1)["passed"] is False
+
+
+
+def test_tap_marker_is_strict_and_non_tap_text_cannot_forge_summary():
+    summary = node_report()
+    assert packet._redacted_result(["node"], done(summary),
+                                   kind="node", expected_count=19)["passed"] is True
+    assert packet._redacted_result(["node"], done(
+        summary.replace("ℹ tests 19", "not-a-tap tests 19")
+    ), kind="node", expected_count=19)["passed"] is False
+    assert packet._redacted_result(["node"], done(
+        summary.replace("ℹ tests 19", "ℹ tests 19\nℹ tests 19")
+    ), kind="node", expected_count=19)["passed"] is False
+
+
+def test_zero_spend_stdout_requires_exact_utf8_receipt_and_success_exit():
+    receipt = "PASS — invariantes locais de gasto zero e bloqueio externo\n"
+    verify = lambda value, code=0: packet._redacted_result(
+        ["python", "-X", "utf8", "scripts/verify_zero_spend.py"],
+        done(value, code), kind="zero_spend",
+    )["passed"]
+    assert verify(receipt) is True
+    assert verify(receipt.replace("—", "�")) is False
+    assert verify(receipt, 1) is False
+    assert verify("PASS") is False
