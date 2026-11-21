@@ -109,6 +109,7 @@ def inspect_synthetic_draft_provenance(engine, *, tenant_id: str,
                 row = db.execute(
                     select(content_items.c.origin,
                            content_items.c.creator_id,
+                           content_items.c.published_at,
                            content_items.c.payload,
                            creators.c.origin.label("creator_origin"),
                            creators.c.payload.label("creator_payload"))
@@ -129,6 +130,7 @@ def inspect_synthetic_draft_provenance(engine, *, tenant_id: str,
                     return _result("BLOCKED", "A067_SOURCE_RECORD_INVALID")
                 if (post.tenant_id != tenant_id or post.content_id != cid
                         or post.creator_id != row["creator_id"]
+                        or post.published_at != datetime.fromisoformat(row["published_at"])
                         or creator.tenant_id != tenant_id
                         or creator.creator_id != post.creator_id):
                     return _result("BLOCKED", "A067_SOURCE_BINDING_INVALID")
@@ -142,7 +144,7 @@ def inspect_synthetic_draft_provenance(engine, *, tenant_id: str,
                 if post.published_at > as_of or post.created_at > as_of:
                     return _result("ABSTAIN", "A067_REFERENCE_NOT_YET_AVAILABLE")
                 rows = db.execute(select(
-                    metrics_snapshots.c.id, metrics_snapshots.c.payload,
+                    metrics_snapshots.c.id, metrics_snapshots.c.observed_at, metrics_snapshots.c.payload,
                 ).where(
                     metrics_snapshots.c.tenant_id == tenant_id,
                     metrics_snapshots.c.content_id == cid,
@@ -150,13 +152,14 @@ def inspect_synthetic_draft_provenance(engine, *, tenant_id: str,
                 if len(rows) > MAX_SNAPSHOTS_PER_REFERENCE:
                     return _result("BLOCKED", "A067_SNAPSHOT_LIMIT")
                 available = []
-                for snapshot_id, snapshot_raw in rows:
+                for snapshot_id, stored_observed_at, snapshot_raw in rows:
                     try:
                         snap = MetricsCreate.model_validate_json(snapshot_raw)
                     except (ValidationError, ValueError, TypeError):
                         return _result("BLOCKED", "A067_SNAPSHOT_INVALID")
                     if (snap.tenant_id != tenant_id or snap.content_id != cid
-                            or snap.snapshot_id != snapshot_id):
+                            or snap.snapshot_id != snapshot_id
+                            or snap.observed_at != datetime.fromisoformat(stored_observed_at)):
                         return _result("BLOCKED", "A067_SNAPSHOT_BINDING_INVALID")
                     if (snap.observed_at <= as_of and snap.followers_measured_at <= as_of
                             and snap.follower_count > 0):
