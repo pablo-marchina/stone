@@ -50,6 +50,12 @@ def analyze_gap(root: Path, report_name: str) -> dict:
     counts = inspected["counts"]
     if counts["passed"] + counts["failed"] + counts["errors"] + counts["skipped"] != counts["tests"]:
         raise BaselineError("A00_GAP_JUNIT_COUNTS_INVALID")
+    # The report's skip-free assertion must never contradict the verified JUnit.
+    # Treat malformed positive claims as tampering, not partial success.
+    if record.get("full_regression_without_skips") is True and (
+        counts["skipped"] != 0 or not inspected["checks_passed"]
+    ):
+        raise BaselineError("A00_GAP_SKIP_FREE_CLAIM_CONFLICT")
 
     categories = dict(sorted(Counter(
         _skip_category(skip) for skip in inspected["skipped_tests"]
