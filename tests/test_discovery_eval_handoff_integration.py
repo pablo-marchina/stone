@@ -100,7 +100,7 @@ def _link(ev, rt, *, eval_pin=None, preview_pin=None, manifest_pin=MANIFEST_PIN)
     rt_raw, rt_digest = _encode(rt)
     return link_private_reports(
         ev_raw, rt_raw,
-        evaluation_report_sha256=eval_digest if eval_pin is None else eval_pin,
+        evaluation_report_sha256=ev_digest if eval_pin is None else eval_pin,
         retrieval_report_sha256=rt_digest if preview_pin is None else preview_pin,
         evaluation_spec_sha256=ev["evaluation_spec_sha256"],
         fixture_sha256=ev["fixture_sha256"],
