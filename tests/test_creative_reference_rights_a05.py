@@ -226,7 +226,9 @@ def test_reject_tampered_schema_duplicate_permissions_and_invalid_times():
     for delta in (
         {"schema_version": "asset-rights.v1"},
         {"operations": (ReferenceOperation.CREATIVE_SPEC_REFERENCE,) * 2},
-        {"expires_at": NOW - timedelta(minutes=1)},
+        # A reversed grant time window is schema-invalid; a well-formed
+        # but expired grant is rejected separately by decide_reference_contract.
+        {"expires_at": NOW - timedelta(minutes=31)},
         {"issued_at": datetime(2026, 11, 21, 16)},
     ):
         with pytest.raises(ValidationError):
