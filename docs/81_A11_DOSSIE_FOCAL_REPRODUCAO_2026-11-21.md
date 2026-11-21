@@ -190,3 +190,17 @@ A00 full no escopo executado tem **zero falhas**, mas a **cobertura obrigatória
 - Se OCR passar, realizar nova admissão de memória com `scripts/a045_native_preflight.py --mode asr` antes de **um** caso ASR isolado, começando por fixture `test_real_asr_fixture_encrypted_result` (caso inventory) com pin e recursos originais do Windows Job; e depois VLM isolado. Os casos historicamente falhos `complementary` e `audio_only` devem ser executados e reportados isoladamente, jamais convertidos em PASS ou contornados por threshold.
 
 **G0–G6/IMP-131 continuam BLOCKED, A00 full 1571 PASS / 46 SKIP em SHA anterior, PR #44 Draft.**
+
+## 13. A04.5 — OCR local protegido 8/8 PASS no Windows; próxima admissão ASR inventory (21/11/2026)
+
+**Log do operador no HEAD `057cc64f651637b4261fbe6befc581857dd21017`, `tapi-asr-recovery`:** `TAPI_OCR_TEST_TESSDATA` apontou ao diretório local existente `C:\\Models\\tapi\\tessdata-fast-4.1.0`. O PowerShell salvou/restaurou no `finally` as variáveis de ambiente, retirou `TAPI_DATABASE_URL` e `TAPI_TENANT_ID` operacionais, `HF_TOKEN`/`HUGGING_FACE_HUB_TOKEN` e `PYTEST_ADDOPTS`, e usou as flags de offline HuggingFace/Transformers/Datasets temporariamente. Quatro seletores pytest:
+- `tests/test_asset_ocr_fixture.py::test_real_tesseract_fixture`: 3 casos Tesseract;
+- `tests/test_multimodal_ocr.py::test_local_ocr_integration_when_installed`: 1 integração OCR;
+- `tests/test_multimodal_ocr_consensus.py::test_local_consensus_when_installed`: 1 consenso;
+- `tests/test_asset_rights_registry.py::test_real_ocr_fixture_encrypted_result`: 3 casos de OCR com payload protegido e SQLite de fixture.
+
+**Total observado: `8 passed in 19.38s`, 0 FAIL/0 SKIP.** Depois, `python scripts/verify_zero_spend.py` → **PASS — invariantes locais de gasto zero e bloqueio externo**. Não declarar A00 Strict aprovado por este recorte: os oito casos são focais, o A00 anterior no SHA `a04a276f` ainda tem 46 skips e 8 grupos multimodais incompletos. Os dados reais externos, modelo ASR/VLM, mídia, banco operacional, publicação e gates permanecem intocados.
+
+**Próxima etapa delimitada e ainda NÃO executada:** apenas uma fixture ASR `inventory` já definida no `tests/test_asset_rights_registry.py::test_real_asr_fixture_encrypted_result`, parametrizada `asr_inventory`, `asr_silence`, `asr_tone`. Usar `-k "test_real_asr_fixture_encrypted_result and inventory"`, com opt-in `TAPI_ASR_TEST_MODEL_DIR` temporário e restantes variáveis operacionais retiradas; ambiente `tapi-asr-recovery` sem rede/HF offline; `a045_native_preflight.py --mode asr` **imediatamente antes** do teste, exigindo `READY_FOR_NATIVE_TEST_ATTEMPT`; recusar caso RAM física <4096 MiB ou commit <7168 MiB. O Windows Job Object fixa 6144 MiB de memória, 240s CPU, 90s wall e um processo. O teste exige `wer<=0.50`, `vad_iou>=0.60`, payload protegida, recibo vinculado e árvore de processos encerrada; imprimir `ASR_FIXTURE_METRICS` somente da fixture autoral. Falha deve ser preservada com motivo original, não virar skip/abstention artificial. Não executar uma suíte inteira nem VLM em paralelo, nem alterar limiares.
+
+**Estado:** OCR focal validado para `057cc64f`, modelos/runtime com hashes verificados no SHA anterior `4bf2e541`, nenhum teste nativo ASR/VLM novo neste corte. G0–G6/IMP-131 BLOCKED e PR #44 Draft.
