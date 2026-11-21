@@ -29,3 +29,22 @@ test('extracted inline checks parse as JavaScript without browser execution',()=
   assert.ok(inline.includes('A073_RUNNING_CHECKS'));
   assert.ok(inline.includes('A073_BROWSER_PARITY_PASS'));
 });
+
+
+test('SVG uses HTMLImageElement decoder and not createImageBitmap on SVG',()=>{
+  assert.match(fixture,/async function decodeSvg\(blob,width,height\)/);
+  assert.match(fixture,/const img=new Image\(\)/);
+  assert.match(fixture,/await img\.decode\(\)/);
+  assert.match(fixture,/URL\.revokeObjectURL\(url\)/);
+  assert.match(fixture,/await decodeSvg\(exported\.blob,480,600\)/);
+  assert.match(fixture,/A073_SVG_DRAWN_WATERMARK/);
+});
+
+test('hostile XML text is fully visible before checking its escaped ampersand',()=>{
+  assert.ok(fixture.includes('other.pages[0].layers[0].style.font_size=16'));
+  assert.ok(fixture.includes('Teste \\x3Cscript>alert("x")\\x3C/script> & texto'));
+  assert.match(fixture,/xml\.includes\('&lt;script&gt;'\)/);
+  assert.match(fixture,/xml\.includes\('&amp;'\)/);
+  assert.match(fixture,/xml\.includes\('&quot;'\)/);
+  assert.equal((fixture.match(/<\/script\s*>/gi)||[]).length,2);
+});
