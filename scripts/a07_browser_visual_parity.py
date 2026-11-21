@@ -1,9 +1,10 @@
 """A07.3: run a local real-browser *synthetic* Studio preview/export check.
 
-No Playwright, Chrome download, network call, service, operational database or
-credential. Only a file:// fixture and the repo's studio_export_e4.js are loaded.
-Browser absence is NOT success. This does not demonstrate rights, publication,
-actual Studio authentication or cross-browser/pixel-fidelity acceptance.
+No Playwright, Chrome download, service, operational database or credentials.
+Uses only a local loopback CDP socket; trusted local fixture and exporter are
+injected into an isolated about:blank browser page. Browser absence is NOT
+success. This does not demonstrate rights, publication, Studio authentication
+or cross-browser/pixel-fidelity acceptance.
 """
 from __future__ import annotations
 
@@ -13,9 +14,12 @@ import os
 from pathlib import Path
 import re
 import shutil
-import subprocess
 import sys
-import tempfile
+
+if __package__:
+    from .a07_browser_cdp import BrowserDiagnostic, run_browser_cdp
+else:
+    from a07_browser_cdp import BrowserDiagnostic, run_browser_cdp
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests" / "frontend" / "studio_export_browser_a07.html"
@@ -100,41 +104,19 @@ def main(argv: list[str] | None = None) -> int:
         print("A073_BROWSER_NOT_INSTALLED — nenhum PASS; forneça --browser")
         return 2
 
-    # Isolate from any signed-in user profile and browser extensions.
-    # The Chromium process is not allowed to resolve public hosts.
-    with tempfile.TemporaryDirectory(prefix="stone-a073-browser-") as profile:
-        flags = [
-            str(browser), "--headless=new", "--no-first-run",
-            "--no-default-browser-check", "--disable-extensions",
-            "--disable-background-networking", "--disable-component-update",
-            "--disable-sync", "--disable-features=MediaRouter",
-            "--host-resolver-rules=MAP * 0.0.0.0, EXCLUDE localhost",
-            "--disable-popup-blocking", "--hide-scrollbars",
-            f"--user-data-dir={profile}", "--virtual-time-budget=12000",
-            "--dump-dom", FIXTURE.as_uri(),
-        ]
-        # Only for a root-owned disposable Linux dev container. Never used
-        # on Windows or with a real user profile.
-        if getattr(os, "geteuid", lambda: -1)() == 0:
-            flags.insert(1, "--no-sandbox")
-        try:
-            result = subprocess.run(
-                flags, capture_output=True, text=True,
-                encoding="utf-8", errors="replace", timeout=45,
-                check=False,
-            )
-        except subprocess.TimeoutExpired:
-            print("A073_BROWSER_TIMEOUT — nenhum PASS")
-            return 1
-        except OSError:
-            print("A073_BROWSER_LAUNCH_FAILED — nenhum PASS")
-            return 2
-        if result.returncode != 0:
-            print("A073_BROWSER_PROCESS_FAILED — nenhum PASS")
-            return 1
-        ok, summary = read_result(result.stdout)
-        print(summary)
-        return 0 if ok else 1
+    # Only the isolated browser process and localhost debugging socket are
+    # contacted. CDP polls actual wall-clock completion of async Canvas jobs.
+    try:
+        html = run_browser_cdp(browser, FIXTURE, ENGINE)
+    except BrowserDiagnostic as exc:
+        print(str(exc) + " — nenhum PASS")
+        return 1
+    except (OSError, ValueError, TimeoutError):
+        print("A073_BROWSER_DRIVER_FAILED — nenhum PASS")
+        return 1
+    ok, summary = read_result(html)
+    print(summary)
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":
