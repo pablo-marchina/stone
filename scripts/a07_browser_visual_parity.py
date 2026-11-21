@@ -75,6 +75,13 @@ def read_result(html: str) -> tuple[bool, str]:
     if (status.group(1) == "PASS" and passed.group(1) == "7"
             and total.group(1) == "7" and detail == "A073_BROWSER_PARITY_PASS"):
         return True, "A073_BROWSER_PARITY_PASS 7/7"
+    # PENDING means inline JavaScript never initialized. RUNNING means Chrome
+    # returned its DOM before all async raster/export checks completed.
+    # Neither state can be accepted as proof of visual parity.
+    if status.group(1) == "PENDING":
+        return False, "A073_SCRIPT_NOT_EXECUTED"
+    if status.group(1) == "RUNNING":
+        return False, "A073_BROWSER_INCOMPLETE " + detail[:120]
     # The fixture contains fictional source text only; still avoid printing
     # raw DOM, browser stderr, user paths or browser profile contents.
     return False, "A073_BROWSER_CHECK_FAILED " + detail[:350]
