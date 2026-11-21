@@ -294,3 +294,116 @@ def test_no_schema_auto_provisioning_without_explicit_experimental_setup(tmp_pat
         assert names == []
     finally:
         engine.dispose()
+
+
+def test_local_inspection_rejects_forged_identity_resolver(registry):
+    r = registry
+    register(r)
+
+    class ForgedIdentity:
+        def resolve(self, _token):
+            # A forged provider must not be invoked to mint an admin principal.
+            raise AssertionError("Untrusted identity provider must never be consulted")
+
+    result = inspect(r, identity_store=ForgedIdentity())
+    assert result["reason_code"] == "A054_TRUSTED_IDENTITY_STORE_REQUIRED"
+    assert result["status"] == "BLOCKED"
+
+
+def test_local_inspection_rejects_different_session_engine(registry, tmp_path):
+    r = registry
+    register(r)
+    other_engine = engine_for("sqlite:///" + str(tmp_path / "different-identity.sqlite"))
+    try:
+        other_identity = IdentityStore(other_engine)
+        result = inspect(r, identity_store=other_identity)
+        assert result["reason_code"] == "A054_TRUSTED_IDENTITY_STORE_REQUIRED"
+        assert result["contract_verified"] is False
+    finally:
+        other_engine.dispose()
+
+
+def test_revocation_snapshot_expiry_blocks_local_inspection(registry, monkeypatch):
+    import tapi_gate0.creative_reference_registry_a05 as reference_registry
+
+    r = registry
+    register(r)
+    assert inspect(r)["contract_verified"] is True
+    # Simulate a trusted host clock advancing beyond the signed revocation TTL.
+    shifted = now_utc() + timedelta(minutes=20)
+    monkeypatch.setattr(reference_registry, "now_utc", lambda: shifted)
+    result = inspect(r)
+    assert result["reason_code"] == "A054_REVOCATION_STALE"
+    assert result["operational_action_allowed"] is False
+
+
+def test_expired_source_grant_blocks_signed_reference_diagnostic(registry):
+    r = registry
+    register(r)
+    with r["engine"].begin() as db:
+        db.execute(update(source_grants).where(
+            source_grants.c.tenant_id == TENANT,
+        ).values(expires_at=(now_utc() - timedelta(seconds=1)).isoformat()))
+    result = inspect(r)
+    assert result["reason_code"] == "A054_LIVE_SOURCE_BINDING_REQUIRED"
+    assert result["creative_spec_allowed"] is False
+
+
+def test_registered_grant_payload_tampering_is_not_reinterpreted_as_rights(registry):
+    r = registry
+    register(r)
+    different_signed_grant = r["grant"](
+        expires_at=now_utc() + timedelta(hours=2),
+    )
+    with r["engine"].begin() as db:
+        db.execute(update(grants).where(
+            grants.c.tenant_id == TENANT,
+        ).values(payload=different_signed_grant.model_dump_json()))
+    result = inspect(r)
+    assert result["reason_code"] == "A054_GRANT_RECORD_CORRUPT"
+    assert result["contract_verified"] is False
+
+
+def test_competing_stale_host_cannot_advance_revocation_or_register_grant(registry):
+    r = registry
+    register(r)
+    upgraded = r["state"](
+        revision=2, revoked_grant_ids=("a054-fixture-grant",),
+    )
+    assert r["svc"].advance(r["anchor"], TENANT, "instagram", upgraded) is True
+    newer = r["state"](
+        revision=3, revoked_grant_ids=("a054-fixture-grant",),
+    )
+    # A second host still pinned to revision 1 cannot overwrite revision 2.
+    with pytest.raises(ReferenceRegistryDenied, match="A054_INDEPENDENT_HOST_PIN_MISMATCH"):
+        r["svc"].advance(r["anchor"], TENANT, "instagram", newer)
+    with pytest.raises(ReferenceRegistryDenied, match="A054_INDEPENDENT_HOST_PIN_MISMATCH"):
+        r["svc"].register(
+            r["anchor"], r["grant"](),
+            verified_approval_digest="a" * 64,
+        )
+    with r["engine"].connect() as db:
+        current = db.execute(select(authorities.c.revision)).scalar_one()
+        persisted = db.execute(select(revocations.c.revision)).scalars().all()
+    assert current == 2
+    assert sorted(persisted) == [1, 2]
+
+
+def test_researcher_may_inspect_creative_but_not_studio_scope(registry):
+    r = registry
+    provision(r)
+    both = r["grant"](operations=(
+        ReferenceOperation.CREATIVE_SPEC_REFERENCE,
+        ReferenceOperation.STUDIO_DRAFT_REFERENCE,
+    ))
+    assert r["svc"].register(
+        r["anchor"], both, verified_approval_digest="a" * 64,
+    )
+    with r["engine"].begin() as db:
+        db.execute(update(memberships).where(
+            memberships.c.tenant_id == TENANT,
+        ).values(role="researcher"))
+    assert inspect(r)["contract_verified"] is True
+    result = inspect(r, operation=ReferenceOperation.STUDIO_DRAFT_REFERENCE)
+    assert result["reason_code"] == "A054_AUTHORIZED_ROLE_AND_TENANT_REQUIRED"
+    assert result["studio_write_allowed"] is False
