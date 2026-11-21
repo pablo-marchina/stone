@@ -91,9 +91,12 @@
     return red>15;
   }
   async function run(label, fn) {
+    // Identify which real browser check is awaiting asynchronous completion;
+    // this intermediate state is never interpreted as PASS.
+    out.dataset.stage=label;
+    out.textContent='A073_RUNNING '+label;
     try { await fn(); results.push(label); }
     catch(err) { failures.push(label+':'+String(err?.message||err).slice(0,130)); }
-    // Keep partial progress visible to headless dump diagnostics; never PASS.
     out.dataset.passed=String(results.length);
     out.textContent='A073_RUNNING_CHECKS '+String(results.length+failures.length)+'/7';
   }
