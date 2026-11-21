@@ -108,10 +108,10 @@ def test_cdp_waits_for_async_completion_and_never_uses_virtual_time(monkeypatch)
 def test_cdp_timeout_returns_incomplete_dom_not_a_fake_pass(monkeypatch):
     processes = _patch_browser(monkeypatch, [
         _output("RUNNING", 0, "A073_RUNNING"),
-    ])
+    ] * 20)
     html = driver.run_browser_cdp(
         Path("fictional-chrome"), runner.FIXTURE, runner.ENGINE,
-        timeout_seconds=0.01,
+        timeout_seconds=0.3,
     )
     ok, reason = runner.read_result(html)
     assert ok is False
