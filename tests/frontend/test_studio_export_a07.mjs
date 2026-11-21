@@ -224,3 +224,18 @@ test('unapproved status flags remain unchanged on all valid local draft formats'
   assert.equal(out.manifest.render_status,'local_preview_only');
   assert.match(await out.blob.text(),/RASCUNHO - NAO PUBLICAR/);
 });
+
+
+test('offline SHA-256 fallback matches standard digest without crypto.subtle',()=>{
+  for(const value of [
+    '',
+    'abc',
+    'Rascunho sintético — não publicar',
+    '<script>not an instruction</script>',
+    'x'.repeat(1000),
+  ]) {
+    const bytes=new TextEncoder().encode(value);
+    const standard=createHash('sha256').update(bytes).digest('hex');
+    assert.equal(exporter.sha256Bytes(bytes),standard);
+  }
+});
