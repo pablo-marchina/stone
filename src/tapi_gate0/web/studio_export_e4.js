@@ -167,6 +167,13 @@
   }
   async function exportDocument(doc, pageId, bitmaps, format, archive=false) {
     if(!['png','jpeg','svg'].includes(format))throw Error('Formato inválido');
+    // The public typed document contract only represents unapproved drafts.
+    // Do not silently omit the watermark for untrusted status overrides.
+    // This local UI check is NOT a substitute for server-side rights decisions.
+    if(doc?.schema_version!=='design-document.v1' ||
+       doc.approval_status!=='draft' || doc.rights_status!=='pending_review' ||
+       doc.reference_status!=='unverified' || doc.render_status!=='not_implemented')
+      throw Error('Estado de rascunho inválido');
     if(!doc?.pages?.length||doc.pages.length>10)throw Error('Documento inválido');
     if(archive && doc.platform_intent!=='instagram_carousel')throw Error('ZIP somente carrossel');
     const pages=archive?doc.pages:[doc.pages.find(p=>p.id===pageId)];
