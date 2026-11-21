@@ -80,3 +80,25 @@ def test_browser_timeout_does_not_fake_success(monkeypatch):
 
     monkeypatch.setattr(runner.subprocess, "run", timeout)
     assert runner.main([]) == 1
+
+
+def test_unexecuted_html_script_and_incomplete_async_are_not_acceptance():
+    assert runner.read_result(_dom(
+        status="PENDING", passed="0", body="A073_PENDING",
+    )) == (False, "A073_SCRIPT_NOT_EXECUTED")
+    ok, reason = runner.read_result(_dom(
+        status="RUNNING", passed="2", body="A073_RUNNING_CHECKS 2/7",
+    ))
+    assert ok is False
+    assert reason == "A073_BROWSER_INCOMPLETE A073_RUNNING_CHECKS 2/7"
+
+
+def test_inline_fixture_contains_no_literal_premature_script_closer():
+    import re
+
+    source = runner.FIXTURE.read_text(encoding="utf-8")
+    # One external <script src> end and one inline script end. A literal
+    # '</script>' inside an inline JS string would end its enclosing element.
+    assert len(re.findall(r"</script\s*>", source, flags=re.IGNORECASE)) == 2
+    assert r"\x3C/script>" in source
+    assert "A073_BROWSER_PARITY_PASS" in source
