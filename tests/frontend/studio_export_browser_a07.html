@@ -70,6 +70,23 @@
       return c;
     } finally { bitmap.close(); }
   }
+  async function decodeSvg(blob,width,height) {
+    // Chrome can decode SVG through HTMLImageElement even when its
+    // createImageBitmap(Blob) decoder rejects image/svg+xml. Keep the SVG
+    // bytes intact and require successful image decode, dimensions and pixels.
+    assert(blob.type==='image/svg+xml','A073_SVG_MIME');
+    const url=URL.createObjectURL(blob);
+    try {
+      const img=new Image();
+      img.src=url;
+      await img.decode();
+      assert(img.naturalWidth===width && img.naturalHeight===height,
+             'A073_SVG_IMAGE_DIMENSIONS');
+      const c=newCanvas(width,height);
+      c.getContext('2d').drawImage(img,0,0);
+      return c;
+    } finally { URL.revokeObjectURL(url); }
+  }
   function difference(a,b) {
     assert(a.width===b.width && a.height===b.height,'A073_DIFFERENT_CANVAS_SIZES');
     const x=a.getContext('2d').getImageData(0,0,a.width,a.height).data;
@@ -130,18 +147,23 @@
       const xml=await exported.blob.text();
       assert(xml.includes('RASCUNHO - NAO PUBLICAR'),'A073_SVG_WATERMARK');
       assert(xml.includes('Organize o estoque'),'A073_SVG_SOURCE_TEXT');
-      const bitmap=await decode(exported.blob,480,600);
-      assert(hasDraftWatermark(bitmap),'A073_SVG_DRAWN_WATERMARK');
+      const svgCanvas=await decodeSvg(exported.blob,480,600);
+      assert(hasDraftWatermark(svgCanvas),'A073_SVG_DRAWN_WATERMARK');
     });
     await run('SVG_UNTRUSTED_XML_IS_ESCAPED',async()=>{
       const other=synthetic();
       // Prevent HTML parser from terminating this inline script early.
       // The JavaScript runtime still constructs the exact hostile text.
+      // Small enough to render every token within the signed draft text
+      // layer. With font_size=42, overflow clipped the trailing '& texto',
+      // so an absent '&amp;' was NOT a failing XML-escape implementation.
+      other.pages[0].layers[0].style.font_size=16;
       other.pages[0].layers[0].text='Teste \x3Cscript>alert("x")\x3C/script> & texto';
       const exported=await StoneExport.exportDocument(other,'page.1',new Map(),'svg');
       const xml=await exported.blob.text();
       assert(!xml.includes('\x3Cscript>') && xml.includes('&lt;script&gt;') &&
-             xml.includes('&amp;'),'A073_SVG_XML_ESCAPE');
+             xml.includes('&lt;/script&gt;') && xml.includes('&amp;') &&
+             xml.includes('&quot;'),'A073_SVG_XML_ESCAPE');
     });
     await run('EDITED_VERSION_CHANGES_VISUAL_AND_RECEIPT',async()=>{
       const second=synthetic(2);
