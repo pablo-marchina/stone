@@ -28,7 +28,7 @@ from .creative_reference_rights_a05 import (
     decide_reference_contract,
 )
 from .domain import ContentItem, Creator
-from .identity import IdentityFailure
+from .identity import IdentityFailure, IdentityStore
 from .ingestion import ingestion_records, source_grants
 from .sa_store import content_items, creators
 from .storage import now_utc
@@ -336,6 +336,15 @@ class ExperimentalReferenceRegistry:
         if not isinstance(target, ReferenceIdentity) or not isinstance(
                 operation, ReferenceOperation):
             return _output(reason="A054_REQUEST_INVALID")
+        # A local caller cannot assert an arbitrary principal provider or
+        # resolve a token against a different tenant/session database.
+        # The host must inject its actual IdentityStore using this engine.
+        # This is a non-actionable diagnostic, NOT an HTTP/MCP permission.
+        if (type(identity_store) is not IdentityStore
+                or identity_store.engine is not self.engine):
+            return _output(reason="A054_TRUSTED_IDENTITY_STORE_REQUIRED")
+        if not isinstance(token, str) or not token or len(token) > 256:
+            return _output(reason="A054_AUTHENTICATED_SESSION_REQUIRED")
         try:
             principal = identity_store.resolve(token)
             accepted = (
