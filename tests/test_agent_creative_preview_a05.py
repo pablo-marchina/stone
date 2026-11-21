@@ -2,6 +2,7 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from pydantic import HttpUrl
 from sqlalchemy import create_engine, insert, update
 
 from tapi_gate0.agent_creative_preview_a05 import (
@@ -95,7 +96,7 @@ def test_denies_real_instagram_reference_even_when_locally_persisted(tmp_path):
     engine, _, content = fixture_data(tmp_path)
     external = content.model_copy(update={
         "origin": Origin.INSTAGRAM, "is_synthetic": False,
-        "source_url": "https://www.instagram.com/p/example/",
+        "source_url": HttpUrl("https://www.instagram.com/p/example/"),
     })
     with engine.begin() as db:
         db.execute(update(content_items).where(
@@ -133,7 +134,7 @@ def test_denies_inconsistent_content_identity_in_payload(tmp_path):
 def test_denies_invalid_synthetic_source_url(tmp_path):
     engine, _, content = fixture_data(tmp_path)
     forged = content.model_copy(update={
-        "source_url": "https://www.instagram.com/p/claim/",
+        "source_url": HttpUrl("https://www.instagram.com/p/claim/"),
     })
     with engine.begin() as db:
         db.execute(update(content_items).where(
