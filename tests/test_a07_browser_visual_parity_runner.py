@@ -1,8 +1,10 @@
 """A07.3 stdlib browser-runner fail-closed contract; no browser required here."""
 from pathlib import Path
-from types import SimpleNamespace
+
+import pytest
 
 from scripts import a07_browser_visual_parity as runner
+from scripts.a07_browser_cdp import BrowserDiagnostic, compose_fixture
 
 
 def _dom(*, status="PASS", passed="7", total="7",
@@ -36,49 +38,43 @@ def test_no_local_browser_is_failure_not_skip_or_pass(monkeypatch, capsys):
     assert "nenhum PASS" in capsys.readouterr().out
 
 
-def test_success_requires_browser_exit_zero_and_completed_real_dom(
-        monkeypatch, capsys):
+def test_success_requires_completed_real_dom_from_cdp(monkeypatch, capsys):
     monkeypatch.setattr(runner, "find_browser", lambda _: Path(__file__))
     called = []
 
-    def fake_run(argv, **kwargs):
-        called.append(argv)
-        assert "--headless=new" in argv
-        assert "--disable-background-networking" in argv
-        assert "--dump-dom" in argv
-        assert any(a.startswith("--host-resolver-rules=") for a in argv)
-        assert any(a.startswith("--user-data-dir=") for a in argv)
-        return SimpleNamespace(returncode=0, stdout=_dom(), stderr="")
+    def fake_cdp(browser, fixture, exporter):
+        called.append((browser, fixture, exporter))
+        assert browser == Path(__file__)
+        assert fixture == runner.FIXTURE
+        assert exporter == runner.ENGINE
+        return _dom()
 
-    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    monkeypatch.setattr(runner, "run_browser_cdp", fake_cdp)
     assert runner.main([]) == 0
     assert len(called) == 1
     assert "7/7" in capsys.readouterr().out
 
 
-def test_browser_process_error_and_incomplete_dom_fail_closed(monkeypatch):
+def test_browser_driver_error_and_incomplete_dom_fail_closed(monkeypatch):
     monkeypatch.setattr(runner, "find_browser", lambda _: Path(__file__))
-    monkeypatch.setattr(
-        runner.subprocess, "run",
-        lambda *_a, **_k: SimpleNamespace(returncode=1, stdout=_dom(), stderr=""),
-    )
+
+    def failed_cdp(*_args, **_kwargs):
+        raise BrowserDiagnostic("A073_CDP_PROCESS_FAILED")
+
+    monkeypatch.setattr(runner, "run_browser_cdp", failed_cdp)
     assert runner.main([]) == 1
-    monkeypatch.setattr(
-        runner.subprocess, "run",
-        lambda *_a, **_k: SimpleNamespace(returncode=0, stdout="<html></html>", stderr=""),
-    )
+    monkeypatch.setattr(runner, "run_browser_cdp",
+                        lambda *_a, **_k: "<html></html>")
     assert runner.main([]) == 1
 
 
 def test_browser_timeout_does_not_fake_success(monkeypatch):
-    from subprocess import TimeoutExpired
-
     monkeypatch.setattr(runner, "find_browser", lambda _: Path(__file__))
 
     def timeout(*_args, **_kwargs):
-        raise TimeoutExpired(cmd=["fixture"], timeout=45)
+        raise BrowserDiagnostic("A073_CDP_COMMAND_TIMEOUT")
 
-    monkeypatch.setattr(runner.subprocess, "run", timeout)
+    monkeypatch.setattr(runner, "run_browser_cdp", timeout)
     assert runner.main([]) == 1
 
 
@@ -102,3 +98,22 @@ def test_inline_fixture_contains_no_literal_premature_script_closer():
     assert len(re.findall(r"</script\s*>", source, flags=re.IGNORECASE)) == 2
     assert r"\x3C/script>" in source
     assert "A073_BROWSER_PARITY_PASS" in source
+
+
+def test_composed_browser_fixture_embeds_only_local_exporter():
+    composed = compose_fixture(runner.FIXTURE, runner.ENGINE)
+    assert '<script src=' not in composed
+    assert composed.count('</script>') == 2
+    assert 'root.StoneExport=' in composed
+    assert 'A073_BROWSER_PARITY_PASS' in composed
+    assert composed.count("await run('") == 7
+
+
+def test_browser_fixture_rejects_new_external_resource(tmp_path):
+    html = runner.FIXTURE.read_text(encoding="utf-8")
+    modified = tmp_path / "untrusted.html"
+    modified.write_text(html.replace(
+        "A073_PENDING", "A073_PENDING https://example.org/escape"
+    ), encoding="utf-8")
+    with pytest.raises(BrowserDiagnostic, match="A073_LOCAL_FIXTURE_NOT_ISOLATED"):
+        compose_fixture(modified, runner.ENGINE)
