@@ -92,7 +92,7 @@ class CreativeReferencePEP:
     def require_for_atomic_draft(self, db, *, token: str, tenant: str,
                                  actor: str, document_id: str,
                                  grant_ids: Mapping[str, str],
-                                 *, audit_event_type: str = "creative_reference.checked_for_draft"):
+                                 audit_event_type: str = "creative_reference.checked_for_draft"):
         """Verify and audit ALL external references before the draft is inserted.
 
         The caller supplies a trusted, active SQL transaction. A failed check
