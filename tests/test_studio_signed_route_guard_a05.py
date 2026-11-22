@@ -4,10 +4,20 @@ FastAPI copies router dependencies when each route is registered; appending a
 guard later does NOT secure previously registered routes. This test inspects
 the REAL constructed application's route dependency graph, not a proxy.
 """
+from pathlib import Path
+
+from tapi_gate0 import secure_api, studio_api
 from tapi_gate0.secure_api import create_secure_app
 
 
 def test_all_legacy_studio_document_post_routes_have_signed_reference_guard():
+    checkout_src = Path(__file__).resolve().parents[1] / "src" / "tapi_gate0"
+    for module, filename in (
+        (secure_api, "secure_api.py"), (studio_api, "studio_api.py"),
+    ):
+        assert Path(module.__file__).resolve() == (checkout_src / filename).resolve(), (
+            "A05_WRONG_WORKTREE_IMPORT:" + filename
+        )
     app = create_secure_app(
         "sqlite:///:memory:", initialize_schema=True,
         allow_http_local=True,
@@ -28,6 +38,7 @@ def test_all_legacy_studio_document_post_routes_have_signed_reference_guard():
         names = {getattr(dep.call, "__name__", "")
                  for dep in dependant.dependencies}
         assert "deny_unchecked_signed_document_mutation" in names, path
+    assert paths, "A05_STUDIO_DOCUMENT_POST_ROUTES_MISSING"
     assert "/v1/studio/documents/{document_id}/text-patches" in paths
     assert "/v1/studio/documents/{document_id}/geometry" in paths
     assert "/v1/studio/documents/{document_id}/pages/duplicate" in paths
