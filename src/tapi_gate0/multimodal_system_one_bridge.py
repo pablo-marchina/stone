@@ -14,7 +14,7 @@ import json
 from . import multimodal_semantic_replay as semantic
 from . import multimodal_shared_fixture as shared
 from .system_one_e1 import (
-    DeterministicTextDecider, EvidenceBundle, ObservedText,
+    DeterministicTextDecider, EvidenceBundle, ObservedText, E1_FIELDS,
 )
 
 VERSION = "tapi-a06-system-one-synthetic-av-bridge.v1"
@@ -33,6 +33,45 @@ def _digest_report(report):
         report, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
         allow_nan=False,
     ).encode("utf-8")).hexdigest()
+
+
+def _case_consensus(observations):
+    """Conservative text-only advisory, never a cross-modal scientific label.
+
+    Conflicting non-abstained text claims veto the case-level field. This
+    cannot certify that an absent CTA/attribute is absent from the video.
+    """
+    result = {}
+    for field in E1_FIELDS:
+        supports = []
+        for item in observations:
+            matches = [d for d in item["decision_bundle"]["decisions"]
+                       if d["field_id"] == field]
+            if len(matches) != 1:
+                _fail()
+            decision = matches[0]
+            if not decision["abstained"]:
+                if item["observation_provenance_sha256"] is None or decision["value"] is None:
+                    _fail()
+                supports.append({
+                    "value": decision["value"],
+                    "modality": item["modality"],
+                    "text_sha256": item["text_sha256"],
+                    "provenance_sha256": item["observation_provenance_sha256"],
+                })
+        different = {json.dumps(x["value"], sort_keys=True) for x in supports}
+        if not supports:
+            state, reason, value = "abstained", "NO_TEXTUAL_CANDIDATE", None
+        elif len(different) != 1:
+            state, reason, value = "abstained", "CONFLICTING_TEXTUAL_CANDIDATES", None
+        else:
+            state, reason, value = "candidate", "AGREED_TEXTUAL_CANDIDATE", supports[0]["value"]
+        result[field] = {
+            "state": state, "reason": reason, "value": value,
+            "supports": supports, "is_canonical_rubric": False,
+            "is_scientific_review": False,
+        }
+    return result
 
 
 def _one_case(row, *, tenant_id: str, creator_id: str):
@@ -94,9 +133,18 @@ def _one_case(row, *, tenant_id: str, creator_id: str):
         decision = DeterministicTextDecider().evaluate(evidence)
         if decision.evidence_fingerprint != evidence.fingerprint():
             _fail()
+        provenance_hash = None
+        if observation is not None:
+            # E1's historical evidence_fingerprint excludes locators. Bind
+            # exact AV time/source here without changing that E1 contract.
+            provenance_hash = sha256("\x00".join((
+                asset_sha, cid, observed_modality,
+                source_text_sha256, observation.locator,
+            )).encode("utf-8")).hexdigest()
         observations.append({
             "modality": observed_modality,
             "text_sha256": source_text_sha256,
+            "observation_provenance_sha256": provenance_hash,
             "evidence_fingerprint": evidence.fingerprint(),
             "decision_bundle": decision.model_dump(mode="json"),
             "is_scientific_review": False,
@@ -106,6 +154,7 @@ def _one_case(row, *, tenant_id: str, creator_id: str):
         "case_id": cid, "content_id": content_id,
         "asset_sha256": asset_sha,
         "observations": observations,
+        "case_text_consensus": _case_consensus(observations),
     }
 
 

@@ -83,6 +83,11 @@ def test_caption_becomes_e1_candidate_with_sha_bound_fingerprint(monkeypatch):
     assert decisions(obs)["tema_principal"]["value"] == "vendas"
     assert decisions(obs)["tipo_cta"]["value"] == "comentar"
     assert decisions(obs)["tipo_hook"]["abstained"] is True
+    consensus = result["cases"][0]["case_text_consensus"]
+    assert consensus["tipo_cta"]["value"] == "comentar"
+    assert consensus["tipo_cta"]["state"] == "candidate"
+    assert consensus["tipo_hook"]["state"] == "abstained"
+    assert len(obs["observation_provenance_sha256"]) == 64
 
 
 def test_audio_segments_never_concatenated_or_mislabeled(monkeypatch):
@@ -111,6 +116,17 @@ def test_caption_and_audio_remain_separate_even_when_conflicting(monkeypatch):
         "comentar", "salvar",
     ]
     assert result["independent_gold"] is False
+    assert result["cases"][0]["case_text_consensus"]["tipo_cta"] == {
+        "state": "abstained", "reason": "CONFLICTING_TEXTUAL_CANDIDATES",
+        "value": None, "supports": [
+            {"value": "comentar", "modality": "caption",
+             "text_sha256": obs[0]["text_sha256"],
+             "provenance_sha256": obs[0]["observation_provenance_sha256"]},
+            {"value": "salvar", "modality": "transcript",
+             "text_sha256": obs[1]["text_sha256"],
+             "provenance_sha256": obs[1]["observation_provenance_sha256"]},
+        ], "is_canonical_rubric": False, "is_scientific_review": False,
+    }
 
 
 def test_ocr_and_vlm_are_never_misrepresented_as_e1_text(monkeypatch):
@@ -124,6 +140,8 @@ def test_ocr_and_vlm_are_never_misrepresented_as_e1_text(monkeypatch):
     assert len(obs) == 1 and obs[0]["modality"] is None
     assert obs[0]["text_sha256"] is None
     assert all(d["abstained"] for d in obs[0]["decision_bundle"]["decisions"])
+    assert all(x["state"] == "abstained" for x in
+               result["cases"][0]["case_text_consensus"].values())
 
 
 @pytest.mark.parametrize("change", [
@@ -180,3 +198,32 @@ def test_untrusted_tenant_identifier_denied_without_leaking_raw_payload(monkeypa
     with pytest.raises(bridge.SystemOneAVBridgeDenied) as exc:
         bridge.bridge_verified_synthetic_report(report, tenant_id="wrong/tenant")
     assert "Salve este post." not in str(exc.value)
+
+
+def test_agreeing_caption_audio_support_same_noncanonical_case_candidate(monkeypatch):
+    report, _ = fixture_report(monkeypatch, [
+        fragment("caption", "Salve este post."),
+        fragment("audio", "Salve este conteúdo."),
+    ])
+    case = bridge.bridge_verified_synthetic_report(report)["cases"][0]
+    selected = case["case_text_consensus"]["tipo_cta"]
+    assert selected["state"] == "candidate"
+    assert selected["value"] == "salvar"
+    assert len(selected["supports"]) == 2
+    assert selected["is_canonical_rubric"] is False
+    assert selected["is_scientific_review"] is False
+
+
+def test_same_audio_text_at_distinct_times_has_distinct_av_provenance(monkeypatch):
+    one = fragment("audio", "Salve este post.")
+    two = deepcopy(one)
+    two["locator"]["start_s"] = 2.0
+    two["locator"]["end_s"] = 3.0
+    report, _ = fixture_report(monkeypatch, [one, two])
+    result = bridge.bridge_verified_synthetic_report(report)
+    obs = result["cases"][0]["observations"]
+    assert len(obs) == 2
+    # E1's fingerprint is content-based, so this bridge adds stronger binding.
+    assert obs[0]["evidence_fingerprint"] == obs[1]["evidence_fingerprint"]
+    assert obs[0]["observation_provenance_sha256"] != obs[1]["observation_provenance_sha256"]
+    assert len(result["cases"][0]["case_text_consensus"]["tipo_cta"]["supports"]) == 2
