@@ -81,3 +81,20 @@ A implementação agora consulta `pipeline.queue.status(tenant_id, job_id)` para
 **Evidência realmente executada:** 34/34 PASS no laboratório Python isolado da coordenação (28 casos anteriores e seis novos: artefatos trocados, ID bem formado alheio e quatro corrupções parametrizadas do recibo persistido). Utilizou a **fórmula original de `_artifact_id`** e uma fila substituta explícita. Os arquivos publicados foram confrontados por comprimento e checksums de conteúdo com as versões testadas. Esta evidência é de contrato isolado, não de fila SQL.
 
 **Integração pendente:** o arquivo `tests/test_asset_fixture_batch_integration.py` agora tem **seis** casos com fixture assinada/SQLite/vault reais; o sexto injeta swap de artefatos no último recibo, exigindo `ARTIFACT_PROVENANCE_MISMATCH` com quatro jobs processados e nenhuma tentativa adicional. Os seis testes continuam **NOT_RUN** no checkout completo neste HEAD. A11 separa **34 testes isolados esperados** e **6 de integração esperados**; qualquer falta bloqueia a sequência antes do A05/A07. Nenhuma alegação de aprovação G0–G6/IMP-131 decorre das contagens.
+
+
+## Revisão transacional do PEP final (2026-11-22)
+
+Foi fechada uma janela na fronteira entre a fusão de candidatos e a resposta pública do executor A02.7. A versão anterior lia cada status de job pela `queue.status()` separadamente, depois de o pipeline ter terminado a checagem de direitos. Uma revogação assinada ou uma alteração de permissões entre a fusão e essas leituras poderia não ser reavaliada no **mesmo snapshot transacional** que os recibos finais.
+
+Agora o estágio terminal é **fail-closed** dentro de uma transação única de `AssetJobQueue._transaction()`:
+- para cada `JobSpec`, reexecuta `_check_rights` e o grant específico `Permission(operation="derive", field="rubric_evidence", purpose=spec.purpose)`;
+- lê o job persistido via `_row` e `_spec`, compara todas as identidades e exige `completed/encrypted_payload`;
+- deriva o `artifact_id` do recibo persistido com a implementação original `_artifact_id`, na mesma ordem das `specs`;
+- exige que **todos** os `supports` e `vetoes` de cada campo `CandidateDecisions` apontem para artefatos da partição terminal aprovada.
+
+Nenhuma destas verificações cria novas permissões, baixa mídia, renova leases, faz retry, publica conteúdo ou eleva candidatos a ciência. O último recheck é uma prova de autorização **no instante de sua transação**, não uma concessão permanente de direito para usar artefatos depois; consumidores posteriores continuam obrigados a revalidar.
+
+**Evidência efetivamente executada nesta rodada:** `40 passed in 0.21s` de `tests/test_asset_fixture_batch.py`, usando o arquivo real e completo `asset_fixture_batch.py` reproduzido localmente a partir do HEAD do GitHub. Arquivo e testes tiveram igualdade verificada de comprimento, soma de codepoints e checksum ponderado; `ast.parse(feature_version=(3,11))` passou nos dois. As dependências exteriores foram **substituídas explicitamente** (classes fila, PEP, grants, SQL, vault, fusion); logo, estes 40 PASS são **unitários**, não prova de integração/execução nativa.
+
+**Evidência integrada preparada e ainda pendente:** `tests/test_asset_fixture_batch_integration.py` ganhou um sétimo cenário que revoga o ativo com assinatura Ed25519 **depois** de quatro resultados criptografados e da fusão, mas **antes** de o batch devolver o candidato. Espera-se `ASSET_RIGHTS_REVOKED` e nenhum novo attempt; o caso precisa rodar no checkout íntegro, com SQLite/rights/vault reais. A11 exige agora **40 casos de componente e 7 de integração** A02.7, e os 10 estágios continuam sem poder liberar G0–G6 ou IMP-131. **NOT_RUN no HEAD**: A11 completo, A00 integral, os 7 testes de integração, modelo nativo e ciência independente. A PR permanece draft e produção NO-GO.
