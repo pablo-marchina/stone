@@ -24,7 +24,7 @@ def node_report(passed=19, total=19, failed=0, skipped=0):
             "ℹ todo 0\nℹ duration_ms 400\n")
 
 
-def synthetic_runner(*, pytest_count=269, a06_count=32, a02_count=91,
+def synthetic_runner(*, pytest_count=269, a06_count=34, a02_count=91,
                      node_count=19, chrome=True,
                      financial=True, syntax_ok=True, pytest_skip=0, git_dirty=False):
     calls = []
@@ -96,7 +96,7 @@ def test_packet_assembles_exact_local_counts_and_preserves_all_gate_denials(loca
     assert receipt["validation_status"] == "FOCAL_DIAGNOSTICS_VERIFIED_NO_GATE_RELEASE"
     assert receipt["zero_spend_check_observed"] is True
     assert len(receipt["checks"]) == 8
-    assert [x["observed_pass_count"] for x in receipt["checks"]] == [1, 1, 91, 269, 32, 13, 19, 7]
+    assert [x["observed_pass_count"] for x in receipt["checks"]] == [1, 1, 91, 269, 34, 13, 19, 7]
     assert all(x["passed"] and x["observed_skip_count"] == 0
                for x in receipt["checks"])
     assert receipt["gate_status"] == {**{f"G{i}": "BLOCKED" for i in range(7)},
@@ -116,7 +116,7 @@ def test_packet_assembles_exact_local_counts_and_preserves_all_gate_denials(loca
 @pytest.mark.parametrize("changes,expected_id", [
     ({"a02_count": 90}, "python_a02_asr_diagnostic"),
     ({"pytest_count": 268}, "python_a05_a07"),
-    ({"a06_count": 31}, "python_a06_e1"),
+    ({"a06_count": 33}, "python_a06_e1"),
     ({"node_count": 18}, "node_a073"),
     ({"chrome": False}, "chrome_a073"),
     ({"pytest_skip": 1}, "python_a05_a07"),
@@ -271,7 +271,7 @@ def test_a06_source_bridge_is_pinned_before_any_focal_execution(local_files):
     a06 = [c for c in receipt["checks"]
            if c["check_id"] == "python_a06_e1"]
     assert len(a06) == 1
-    assert a06[0]["observed_pass_count"] == 32
+    assert a06[0]["observed_pass_count"] == 34
     assert "tests/test_multimodal_system_one_bridge.py" in calls[6]
     assert receipt["independent_gold_available"] is False
     assert receipt["external_reference_rights_verified"] is False
