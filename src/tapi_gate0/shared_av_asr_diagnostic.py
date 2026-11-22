@@ -136,6 +136,24 @@ def diagnose_shared_av_asr(report: dict) -> dict:
                                    and seg["chunk_pcm_sha256"] == c["pcm_sha256"]
                                    for c in chunks)):
                     _fail()
+                # Mirror multimodal_vad_asr.transcribe_regions: raw ASR
+                # timestamps are chunk-relative, and only the end may be
+                # clipped (at most 250 ms) before mapping to decoded PCM.
+                start_sample = seg["region_start_sample"]
+                end_sample = seg["region_end_sample"]
+                duration = (end_sample - start_sample) / asr.SAMPLE_RATE
+                offset = start_sample / asr.SAMPLE_RATE
+                raw_start = seg["chunk_start_s"]
+                raw_end = seg["chunk_end_s"]
+                if (type(raw_start) not in (int, float)
+                        or type(raw_end) not in (int, float)
+                        or not 0 <= raw_start < duration
+                        or not raw_start < raw_end <= duration + 0.25
+                        or type(seg["end_clipped"]) is not bool
+                        or seg["end_clipped"] is not (raw_end > duration)
+                        or abs(seg["start_s"] - (offset + raw_start)) > 1e-8
+                        or abs(seg["end_s"] - (offset + min(raw_end, duration))) > 1e-8):
+                    _fail()
                 expected_audio_fragments.append(fusion.fragment(
                     row["media_sha256"], "audio", seg["text"],
                     {"start_s": seg["start_s"], "end_s": seg["end_s"],

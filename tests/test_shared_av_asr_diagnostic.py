@@ -32,7 +32,9 @@ def make_report(monkeypatch, *, negative_speech=False, blank_positive=False):
         chunks = ([{'start_sample':0,'end_sample':16000,'pcm_sha256':audio_sha,
                     'transcript':hyp}] if has_asr else [])
         segments = ([{'text':hyp,'region_start_sample':0,'region_end_sample':16000,
-                     'start_s':0.1,'end_s':0.9,'text_sha256':sha256(hyp.encode()).hexdigest(),
+                     'start_s':0.1,'end_s':0.9,
+                     'chunk_start_s':0.1,'chunk_end_s':0.9,'end_clipped':False,
+                     'text_sha256':sha256(hyp.encode()).hexdigest(),
                      'source_pcm_sha256':full_hash,'chunk_pcm_sha256':audio_sha}]
                     if has_asr and hyp else [])
         intervals = ([{'start':0,'end':16000}] if has_asr else [])
@@ -227,3 +229,38 @@ def test_vad_source_windows_must_be_ordered_nonoverlapping_and_bounded(monkeypat
     row['audio']['chunks'] = [dict(row['audio']['chunks'][0]) for _ in windows]
     with pytest.raises(diag.SharedAVDiagnosticDenied, match='A02_SHARED_AV_REPORT_INVALID'):
         diag.diagnose_shared_av_asr(report)
+
+
+@pytest.mark.parametrize('corrupt', [
+    lambda s: s.update(chunk_start_s=-0.1),
+    lambda s: s.update(chunk_end_s=1.3),
+    lambda s: s.update(end_clipped=True),
+    lambda s: s.update(start_s=0.2),
+    lambda s: s.update(end_s=1.0),
+    lambda s: s.update(chunk_start_s=1.0),
+])
+def test_asr_segment_chunk_relative_provenance_fails_closed(monkeypatch, corrupt):
+    report, _ = make_report(monkeypatch)
+    corrupt(report['cases'][1]['audio']['segments'][0])
+    with pytest.raises(diag.SharedAVDiagnosticDenied, match='A02_SHARED_AV_REPORT_INVALID'):
+        diag.diagnose_shared_av_asr(report)
+
+
+def test_asr_timestamp_clipping_within_native_tolerance(monkeypatch):
+    report, _ = make_report(monkeypatch)
+    row = report['cases'][1]
+    seg = row['audio']['segments'][0]
+    seg['chunk_end_s'] = 1.2
+    seg['end_s'] = 1.0
+    seg['end_clipped'] = True
+    row['fragments'][-1] = fusion.fragment(row['media_sha256'], 'audio', seg['text'],
+        {'start_s':seg['start_s'], 'end_s':seg['end_s'],
+         'source_pcm_sha256':seg['source_pcm_sha256'],
+         'chunk_pcm_sha256':seg['chunk_pcm_sha256'],
+         'timestamp_kind':row['audio']['timestamp_kind']})
+    row['arms'] = {key:fusion.fuse(row['media_sha256'],row['fragments'],mods)
+                   for key,mods in fusion.ARMS.items()}
+    score = fusion.evaluate(report['cases'])
+    report.update(score)
+    report['engineering_gate_passed'] = bool(score['engineering_gate_passed'])
+    assert diag.diagnose_shared_av_asr(report)['source_case_count'] == 7
