@@ -9,7 +9,8 @@ from __future__ import annotations
 import re
 from .asset_fixture_pipeline import FixturePipeline
 from .asset_candidate_fusion import CandidateDecisions
-from .asset_rights import AssetRightsDenied
+from .asset_rights import AssetRightsDenied, Permission
+from .asset_lineage_index import _grant
 from .asset_jobs import AssetJobQueue, _check_rights, _row, _spec
 from .asset_derived_payloads import _artifact_id
 
@@ -145,7 +146,10 @@ def run_explicit_fixture_batch(pipeline: FixturePipeline, worker: str, *,
             with queue._transaction() as (db, now):
                 expected_ids = []
                 for spec in specs:
-                    _check_rights(db, spec, queue.resolve_anchor, now)
+                    parent = _check_rights(db, spec, queue.resolve_anchor, now)
+                    _grant(db, queue.resolve_anchor(parent), parent, now,
+                           Permission(operation="derive", purpose=spec.purpose,
+                                      field="rubric_evidence"))
                     state = _row(db, spec.tenant_id, spec.job_id)
                     persisted = _spec(state)
                     if (persisted.tenant_id, persisted.job_id,

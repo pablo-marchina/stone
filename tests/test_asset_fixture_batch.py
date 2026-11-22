@@ -34,6 +34,7 @@ class Decisions:
 
 class Queue:
     revoked = False
+    rubric_revoked = False
     @contextmanager
     def _transaction(self):
         yield self, object()
@@ -70,6 +71,10 @@ def patched(monkeypatch):
         if db.revoked:
             raise RightsDenied('ASSET_RIGHTS_REVOKED')
     monkeypatch.setattr(batch,'_check_rights',recheck)
+    def recheck_rubric(db,*args,**kwargs):
+        if db.rubric_revoked:
+            raise RightsDenied('RUBRIC_SCOPE_REVOKED')
+    monkeypatch.setattr(batch,'_grant',recheck_rubric)
 
 def result(status,**kwargs):
     return dict(plan_sha256=PIN,synthetic_fixture=True,
@@ -295,3 +300,17 @@ def test_persisted_queue_error_aborts_no_candidate():
     p.queue._transaction=lambda: fail()
     with pytest.raises(RightsDenied, match='QUEUE_PERSISTENCE_BLOCKED'):
         run(p,ticks=1)
+
+
+def test_final_recheck_rejects_rubric_scope_removed_after_fusion():
+    p=Fixture([done()])
+    original=p.step
+    def remove_rubric(*args, **kwargs):
+        result=original(*args, **kwargs)
+        if result['status']=='candidate_complete':
+            p.queue.rubric_revoked=True
+        return result
+    p.step=remove_rubric
+    with pytest.raises(RightsDenied, match='RUBRIC_SCOPE_REVOKED'):
+        run(p,ticks=1)
+    assert p.calls==[('trusted_worker',False)]
