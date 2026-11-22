@@ -109,11 +109,13 @@ class CreativeReferencePEP:
                         or not isinstance(grant_id, str) or not grant_id
                         or len(content_id) > 128 or len(grant_id) > 128):
                     _deny()
+                # Lock the signed grant row as well as the authority head:
+                # concurrent replacement must not race an approved draft.
                 rows = db.execute(select(registered_grants).where(
                     registered_grants.c.tenant_id == tenant,
                     registered_grants.c.content_id == content_id,
                     registered_grants.c.grant_id == grant_id,
-                )).mappings().all()
+                ).with_for_update()).mappings().all()
                 if len(rows) != 1:
                     _deny()
                 row = rows[0]
