@@ -10,7 +10,7 @@ import re
 from .asset_fixture_pipeline import FixturePipeline
 from .asset_candidate_fusion import CandidateDecisions
 from .asset_rights import AssetRightsDenied
-from .asset_jobs import AssetJobQueue
+from .asset_jobs import AssetJobQueue, _check_rights, _row, _spec
 from .asset_derived_payloads import _artifact_id
 
 _SHA = re.compile(r"[a-f0-9]{64}\Z")
@@ -139,20 +139,34 @@ def run_explicit_fixture_batch(pipeline: FixturePipeline, worker: str, *,
             queue = pipeline.queue
             if type(queue) is not AssetJobQueue:
                 _deny("QUEUE_REQUIRED")
-            expected_ids = []
-            for spec in specs:
-                state = queue.status(spec.tenant_id, spec.job_id)
-                receipt = state.get("receipt_sha256") if type(state) is dict else None
-                if (type(state) is not dict or state.get("tenant_id") != spec.tenant_id
-                        or state.get("object_id") != spec.object_id
-                        or state.get("job_id") != spec.job_id
-                        or state.get("state") != "completed"
-                        or state.get("reason") != "encrypted_payload"
-                        or type(receipt) is not str or not _SHA.fullmatch(receipt)):
-                    _deny("PERSISTED_RECEIPT_INVALID")
-                expected_ids.append(_artifact_id(spec, receipt))
-            if tuple(ids) != tuple(expected_ids):
-                _deny("ARTIFACT_PROVENANCE_MISMATCH")
+            # Check final authorization and every persisted queue receipt in
+            # ONE authoritative transaction, not separate status() reads.
+            # If rights are revoked after fusion, no terminal candidate escapes.
+            with queue._transaction() as (db, now):
+                expected_ids = []
+                for spec in specs:
+                    _check_rights(db, spec, queue.resolve_anchor, now)
+                    state = _row(db, spec.tenant_id, spec.job_id)
+                    persisted = _spec(state)
+                    if (persisted.tenant_id, persisted.job_id,
+                            persisted.object_id, persisted.purpose,
+                            persisted.processor, persisted.method_version,
+                            persisted.configuration_sha256) != (
+                            spec.tenant_id, spec.job_id, spec.object_id,
+                            spec.purpose, spec.processor, spec.method_version,
+                            spec.configuration_sha256):
+                        _deny("PERSISTED_SPEC_MISMATCH")
+                    receipt = state.get("receipt_sha256")
+                    if (state.get("tenant_id") != spec.tenant_id
+                            or state.get("object_id") != spec.object_id
+                            or state.get("job_id") != spec.job_id
+                            or state.get("state") != "completed"
+                            or state.get("reason") != "encrypted_payload"
+                            or type(receipt) is not str or not _SHA.fullmatch(receipt)):
+                        _deny("PERSISTED_RECEIPT_INVALID")
+                    expected_ids.append(_artifact_id(spec, receipt))
+                if tuple(ids) != tuple(expected_ids):
+                    _deny("ARTIFACT_PROVENANCE_MISMATCH")
             rejected = ()
             if plan.mode == "shared_av_partial":
                 rejection = result.get("quality_rejections")

@@ -1,6 +1,7 @@
 """Bounded pipeline coordinator tests with no IO, network or model execution."""
 import pytest
 from hashlib import sha256
+from contextlib import contextmanager
 from tapi_gate0 import asset_fixture_batch as batch
 
 PIN='a'*64
@@ -32,11 +33,18 @@ class Decisions:
     evidence_fingerprint='e'*64
 
 class Queue:
+    revoked = False
+    @contextmanager
+    def _transaction(self):
+        yield self, object()
+    def resolve_anchor(self, ref):
+        return ref
     def status(self, tenant, job_id):
         receipt = 'b'*64 if job_id == JOB_A else 'c'*64
         return {'tenant_id': tenant, 'job_id': job_id,
-                'object_id': 'd'*64, 'state': 'completed',
-                'reason': 'encrypted_payload', 'receipt_sha256': receipt}
+                'object_id': 'd'*64, 'processor': 'ocr' if job_id == JOB_A else 'vlm',
+                'state': 'completed', 'reason': 'encrypted_payload',
+                'receipt_sha256': receipt}
 
 class Fixture:
     def __init__(self, outcomes):
@@ -56,6 +64,12 @@ def patched(monkeypatch):
     monkeypatch.setattr(batch,'CandidateDecisions',Decisions)
     monkeypatch.setattr(batch,'AssetRightsDenied',RightsDenied)
     monkeypatch.setattr(batch,'AssetJobQueue',Queue)
+    monkeypatch.setattr(batch,'_row',lambda db,tenant,jid: db.status(tenant,jid))
+    monkeypatch.setattr(batch,'_spec',lambda row: Spec(row['job_id'],row['processor']))
+    def recheck(db,spec,resolve_anchor,now):
+        if db.revoked:
+            raise RightsDenied('ASSET_RIGHTS_REVOKED')
+    monkeypatch.setattr(batch,'_check_rights',recheck)
 
 def result(status,**kwargs):
     return dict(plan_sha256=PIN,synthetic_fixture=True,
@@ -244,4 +258,40 @@ def test_nonpersisted_candidate_receipt_denied(key,value):
         return row
     p.queue.status=wrong
     with pytest.raises(RightsDenied,match='PERSISTED_RECEIPT_INVALID'):
+        run(p,ticks=1)
+
+
+def test_final_reauthorization_rejects_rights_revoked_after_fusion():
+    p=Fixture([done()])
+    original=p.step
+    def revoke_on_final(*args, **kwargs):
+        result=original(*args, **kwargs)
+        if result['status']=='candidate_complete':
+            p.queue.revoked=True
+        return result
+    p.step=revoke_on_final
+    with pytest.raises(RightsDenied, match='ASSET_RIGHTS_REVOKED'):
+        run(p,ticks=1)
+    assert p.calls==[('trusted_worker',False)]
+
+
+def test_final_recheck_is_not_bypassed_by_forged_persisted_spec():
+    p=Fixture([done()])
+    original=p.queue.status
+    def corrupt(tenant, job_id):
+        row=original(tenant,job_id)
+        if job_id==JOB_A:
+            row['processor']='vlm'
+        return row
+    p.queue.status=corrupt
+    with pytest.raises(RightsDenied,match='PERSISTED_SPEC_MISMATCH'):
+        run(p,ticks=1)
+
+
+def test_persisted_queue_error_aborts_no_candidate():
+    p=Fixture([done()])
+    def fail(*args,**kwargs):
+        raise RightsDenied('QUEUE_PERSISTENCE_BLOCKED')
+    p.queue._transaction=lambda: fail()
+    with pytest.raises(RightsDenied, match='QUEUE_PERSISTENCE_BLOCKED'):
         run(p,ticks=1)
