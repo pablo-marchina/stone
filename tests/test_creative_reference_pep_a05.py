@@ -543,3 +543,48 @@ def test_without_runtime_pep_signed_edit_is_denied(registry):
                   "layer_id": "headline", "text": "Falha fechada"},
         )
         assert denied.status_code == 422
+
+
+def test_failed_signed_edit_rolls_back_recheck_audit(registry):
+    r = registry
+    signed_fixture(r)
+    with TestClient(app_for(r)) as client:
+        h = headers(client)
+        created = client.post("/v1/agent/creative-drafts",
+                              headers=h, json=spec_body(r))
+        assert created.status_code == 201
+        failed = client.post(
+            "/v1/agent/creative-drafts/draft.with-signed-ref/text-patches",
+            headers={**h, "If-Match": created.headers["etag"]},
+            json={"expected_version": 1, "page_id": "page.1",
+                  "layer_id": "no-such-layer", "text": "Não aplicar"},
+        )
+        assert failed.status_code == 404
+        assert client.get(
+            "/v1/studio/documents/draft.with-signed-ref", headers=h,
+        ).json()["version"] == 1
+    with r["engine"].connect() as db:
+        assert db.execute(select(domain_events.c.seq).where(
+            domain_events.c.event_type == "creative_reference.rechecked_for_draft",
+        )).all() == []
+
+
+def test_old_studio_page_mutation_denied_for_signed_draft(registry):
+    r = registry
+    signed_fixture(r)
+    with TestClient(app_for(r)) as client:
+        h = headers(client)
+        created = client.post("/v1/agent/creative-drafts",
+                              headers=h, json=spec_body(r))
+        assert created.status_code == 201
+        # The router-level deny applies to every legacy POST carrying a
+        # document_id, before route handler side effects.
+        denied = client.post(
+            "/v1/studio/documents/draft.with-signed-ref/pages/duplicate",
+            headers={**h, "If-Match": created.headers["etag"]},
+            json={"expected_version": 1, "page_id": "page.1"},
+        )
+        assert denied.status_code == 403
+        assert denied.json()["detail"] == (
+            "STUDIO_SIGNED_REFERENCE_ACTION_RECHECK_REQUIRED"
+        )
