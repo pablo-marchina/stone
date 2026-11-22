@@ -194,7 +194,7 @@ class StudioEvidenceEditService:
             'source_url':evidence['source_url'],
             'snapshot_sha256':evidence['snapshot_sha256'],
             'source_scope_sha256':evidence['source_scope_sha256'],
-            'snapshot_observed_at:evidence['snapshot_observed_at'],
+            'snapshot_observed_at':evidence['snapshot_observed_at'],
             'descriptive_evidence_only':True,'scientifically_validated':False,
             'production_approved':False,'requires_operator_confirmation':True,
             'changes':[{'path':k,'before':before.get(k),'after':proposed.get(k)}
