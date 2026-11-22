@@ -222,7 +222,10 @@ def bridge_verified_synthetic_report(
                 or report.get("database_mutated") is not False
                 or report.get("external_data_accessed") is not False
                 or report.get("production_approved") is not False
-                or report.get("real_media_processed") != 0):
+                or type(report.get("real_media_processed")) is not int
+                or report["real_media_processed"] != 0
+                or any(type(report.get(k)) is not int or report[k] != 0
+                       for k in ("scientific_admissions", "rubric_assessments_written"))):
             _fail()
         semantic.validate_report(report)
         if _digest_report(report) != initial:

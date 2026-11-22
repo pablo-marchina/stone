@@ -265,3 +265,19 @@ def test_quoted_cta_never_becomes_positive_consensus(monkeypatch):
     assert cta["state"] == "abstained"
     assert cta["value"] is None
     assert cta["reason"] == "CONTEXT_VETO"
+
+
+@pytest.mark.parametrize("field,value", [
+    ("real_media_processed", False),
+    ("scientific_admissions", 1),
+    ("rubric_assessments_written", True),
+])
+def test_bridge_denies_invalid_native_safety_receipt_before_e1(monkeypatch, field, value):
+    report, checks = fixture_report(monkeypatch, [fragment("caption", "Salve este post.")])
+    report.update(real_media_processed=0, scientific_admissions=0,
+                  rubric_assessments_written=0)
+    report[field] = value
+    with pytest.raises(bridge.SystemOneAVBridgeDenied,
+                       match="A06_SYSTEM_ONE_SYNTHETIC_REPORT_REQUIRED"):
+        bridge.bridge_verified_synthetic_report(report)
+    assert checks == {"report": 0, "asset": 0}
