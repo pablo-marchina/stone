@@ -25,7 +25,7 @@ def node_report(passed=19, total=19, failed=0, skipped=0):
 
 
 def synthetic_runner(*, pytest_count=265, node_count=19, chrome=True,
-                     financial=True, pytest_skip=0, git_dirty=False):
+                     financial=True, syntax_ok=True, pytest_skip=0, git_dirty=False):
     calls = []
     def run(argv, *, timeout, cwd):
         calls.append(tuple(argv))
@@ -39,6 +39,17 @@ def synthetic_runner(*, pytest_count=265, node_count=19, chrome=True,
             ], "Zero-spend subprocess must force UTF-8 in redirected Windows IO"
             return done("PASS — invariantes locais de gasto zero e bloqueio externo\n"
                         if financial else "FAILED\n", 0 if financial else 1)
+        if argv[-1] == "scripts.a05_python_source_preflight":
+            return done(json.dumps({
+                "schema_version": "stone-python-source-preflight.v1",
+                "status": "PASS" if syntax_ok else "BLOCKED",
+                "python_grammar": "3.11",
+                "files_checked": 364,
+                "errors": [] if syntax_ok else [
+                    {"path": "src/tapi_gate0/pep.py", "code": "SOURCE_SYNTAX_INVALID"}
+                ],
+                "deployment_authorized": False,
+            }) + "\n", 0 if syntax_ok else 2)
         if "pytest" in argv:
             if "tests/test_studio_synthetic_provenance_a067.py" in argv:
                 return done(
@@ -79,8 +90,8 @@ def test_packet_assembles_exact_local_counts_and_preserves_all_gate_denials(loca
     assert receipt["git_status_reason"] == "A11_CLEAN_HEAD_VERIFIED"
     assert receipt["validation_status"] == "FOCAL_DIAGNOSTICS_VERIFIED_NO_GATE_RELEASE"
     assert receipt["zero_spend_check_observed"] is True
-    assert len(receipt["checks"]) == 5
-    assert [x["observed_pass_count"] for x in receipt["checks"]] == [1, 265, 13, 19, 7]
+    assert len(receipt["checks"]) == 6
+    assert [x["observed_pass_count"] for x in receipt["checks"]] == [1, 1, 265, 13, 19, 7]
     assert all(x["passed"] and x["observed_skip_count"] == 0
                for x in receipt["checks"])
     assert receipt["gate_status"] == {**{f"G{i}": "BLOCKED" for i in range(7)},
@@ -93,6 +104,7 @@ def test_packet_assembles_exact_local_counts_and_preserves_all_gate_denials(loca
     assert calls[2][1:] == (
         "-X", "utf8", "scripts/verify_zero_spend.py",
     )
+    assert calls[3][-1] == "scripts.a05_python_source_preflight"
     assert all("http" not in " ".join(argv).lower() for argv in calls)
 
 
@@ -195,3 +207,48 @@ def test_zero_spend_stdout_requires_exact_utf8_receipt_and_success_exit():
     assert verify(receipt.replace("—", "�")) is False
     assert verify(receipt, 1) is False
     assert verify("PASS") is False
+
+
+def test_mandatory_python_syntax_preflight_stops_before_any_pytest_or_browser(
+        local_files):
+    run, calls = synthetic_runner(syntax_ok=False)
+    receipt = packet.build_packet(root=local_files, run=run)
+    assert receipt["validation_status"] == "BLOCKED_PYTHON_SYNTAX_PREFLIGHT"
+    assert receipt["zero_spend_check_observed"] is True
+    assert [c["check_id"] for c in receipt["checks"]] == [
+        "zero_spend", "syntax_preflight",
+    ]
+    assert receipt["checks"][-1]["reason_code"] == (
+        "A11_PYTHON_SYNTAX_PREFLIGHT_BLOCKED"
+    )
+    assert len(calls) == 4  # git SHA, git status, zero-spend, syntax only
+    assert receipt["gate_status"]["IMP-131"] == "BLOCKED"
+    assert receipt["production_approved"] is False
+
+
+@pytest.mark.parametrize("data,rc", [
+    ("PASS\n", 0),
+    ('{"schema_version":"stone-python-source-preflight.v1","status":"PASS"}', 0),
+    (json.dumps({
+        "schema_version": "stone-python-source-preflight.v1",
+        "status": "PASS", "python_grammar": "3.11",
+        "files_checked": 299, "errors": [], "deployment_authorized": False,
+    }), 0),
+    (json.dumps({
+        "schema_version": "stone-python-source-preflight.v1",
+        "status": "PASS", "python_grammar": "3.11",
+        "files_checked": 365, "errors": [], "deployment_authorized": True,
+    }), 0),
+    (json.dumps({
+        "schema_version": "stone-python-source-preflight.v1",
+        "status": "PASS", "python_grammar": "3.11",
+        "files_checked": 365, "errors": [], "deployment_authorized": False,
+    }), 1),
+])
+def test_syntax_preflight_rejects_incomplete_forged_or_failed_receipts(data, rc):
+    receipt = packet._redacted_result(
+        ["python", "-m", "scripts.a05_python_source_preflight"],
+        done(data, rc), kind="syntax_preflight", expected_count=1,
+    )
+    assert receipt["passed"] is False
+    assert receipt["reason_code"] == "A11_PYTHON_SYNTAX_PREFLIGHT_BLOCKED"
