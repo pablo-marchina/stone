@@ -15,6 +15,7 @@ import stat
 
 from .a00_baseline import check_checkout
 from tapi_gate0.asr_strict_diagnostic import diagnose_asr_report
+from tapi_gate0.shared_av_asr_diagnostic import diagnose_shared_av_asr
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_BYTES = 2_000_000
@@ -80,6 +81,7 @@ def _write_new(path: Path, report: dict) -> str:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--expected-head", required=True)
+    parser.add_argument("--report-kind", choices=("asr_fixture", "shared_av"), default="asr_fixture")
     parser.add_argument("--input-name", required=True)
     parser.add_argument("--input-sha256", required=True)
     parser.add_argument("--output-name", required=True)
@@ -93,24 +95,37 @@ def main(argv=None) -> int:
         if input_path == output_path or output_path.exists():
             raise ValueError("A02_OUTPUT_EXISTS")
         report = _read_pinned(input_path, args.input_sha256)
-        diagnostic = diagnose_asr_report(report)
+        diagnostic = (diagnose_asr_report(report) if args.report_kind == "asr_fixture"
+                      else diagnose_shared_av_asr(report))
         # Re-read and reject changing input bytes, as well as repository drift,
         # immediately before creating output; no approval on any path.
         if _read_pinned(input_path, args.input_sha256) != report:
             raise ValueError("A02_INPUT_CHANGED")
         check_checkout(ROOT, args.expected_head)
         result_sha = _write_new(output_path, diagnostic)
-        print(json.dumps({
+        summary = {
             "status": diagnostic["status"],
             "schema_version": diagnostic["schema_version"],
-            "suite": diagnostic["suite"], "candidate": diagnostic["candidate"],
+            "report_kind": args.report_kind,
             "case_count": len(diagnostic["cases"]),
-            "strict_failure_case_count": len(diagnostic["strict_failure_cases"]),
-            "strict_gate_failure_reasons": diagnostic["strict_gate_failure_reasons"],
-            "engineering_gate_passed_in_report": diagnostic["engineering_gate_passed_in_source_report"],
             "output_name": args.output_name, "output_sha256": result_sha,
             "production_approved": False, "global_gates_released": False,
-        }, sort_keys=True))
+        }
+        if args.report_kind == "asr_fixture":
+            summary.update({
+                "suite": diagnostic["suite"], "candidate": diagnostic["candidate"],
+                "strict_failure_case_count": len(diagnostic["strict_failure_cases"]),
+                "strict_gate_failure_reasons": diagnostic["strict_gate_failure_reasons"],
+                "engineering_gate_passed_in_report": diagnostic["engineering_gate_passed_in_source_report"],
+            })
+        else:
+            summary.update({
+                "suite": "shared_av", "candidate": "medium",
+                "shared_gate_passed_in_report": diagnostic["source_shared_engineering_gate_passed"],
+                "diagnostic_observation_reasons": diagnostic["failure_and_observation_reasons"],
+                "strict_thresholds_are_informational_only": True,
+            })
+        print(json.dumps(summary, sort_keys=True))
         return 0
     except Exception:
         # Never echo a report's transcript, filesystem location, checkpoint
