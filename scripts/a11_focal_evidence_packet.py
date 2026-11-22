@@ -15,6 +15,7 @@ import argparse
 from datetime import datetime, timezone
 from hashlib import sha256
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -227,10 +228,15 @@ def _redacted_result(argv: list[str], result, *, kind: str,
 
 
 def _execute(argv: list[str], *, timeout: int, cwd: Path):
+    # Python subprocesses must import THIS checkout, not a prior editable
+    # install (e.g. the parent stone clone when checking a Git worktree).
+    # Do not inherit arbitrary PYTHONPATH entries for focal validation.
+    child_env = os.environ.copy()
+    child_env["PYTHONPATH"] = str((Path(cwd).resolve() / "src"))
     return subprocess.run(
         argv, cwd=cwd, capture_output=True, text=True,
         encoding="utf-8", errors="replace", timeout=timeout,
-        check=False, shell=False,
+        check=False, shell=False, env=child_env,
     )
 
 
