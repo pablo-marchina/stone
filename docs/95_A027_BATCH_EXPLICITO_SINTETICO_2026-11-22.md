@@ -105,11 +105,12 @@ Nenhuma destas verificações cria novas permissões, baixa mídia, renova lease
 Branch isolada `integration/a027-a06-a11-convergence-20261122`, derivada exatamente de `2a97a55e06ab82e98b0d745eecdcae922f33870b` (PR #69) e importando quatro arquivos pinados do PR #70 no SHA `85817452bc6a458d5dd0a628818cebae0657e02b`. O runner e os testes A11 foram reconciliados **sem retroceder** os limites do PR #69:
 
 - `python_a02_asr_diagnostic`: **91 casos esperados** (não 62);
-- `python_a06_e1`: **34 casos esperados** (não 29);
+- `python_a06_e1`: **35 casos esperados** (34 do PR #69 + 1 teste lateral do PR #58; não 29);
+- `python_a05_a07`: **270 casos esperados** (269 do PR #69 + 1 teste lateral do PR #49);
 - `python_a027_fixture_batch`: **40 casos esperados**;
 - `python_a027_integrated`: **7 casos esperados**;
 - dez estágios focais, zero-spend e preflight de sintaxe obrigatórios; nenhum estágio muda G0–G6/IMP-131.
 
-Os dois PRs permanecem em draft. Esta convergência **não** inclui automaticamente os incrementos laterais #49 e #58; devem ser auditados antes da integração global. O código novo de A02.7 teve somente a evidência isolada histórica 40 PASS da PR #70; os 7 testes reais de SQLite/assinatura/vault, o runner A11 focal, A00 integral e os controles multimodais nativos estão **NOT_RUN nesta branch de convergência**. A presença de novas contagens na suite não é execução. Nenhum deploy, merge à main, migração operacional, mídia externa, chamada paga ou liberação de direito foi realizado.
+Os PRs de origem permanecem em draft. Nesta branch de convergência também foram portadas seletivamente as correções laterais #49 (lock do grant criativo e teste negativo de grant ausente) e #58 (remoção do recibo incompleto em falha de fsync e respectivo teste), sem promover os PRs de origem a aceitos. Os demais limites de integração e homologação permanecem. O código novo de A02.7 teve somente a evidência isolada histórica 40 PASS da PR #70; os 7 testes reais de SQLite/assinatura/vault, o runner A11 focal, A00 integral e os controles multimodais nativos estão **NOT_RUN nesta branch de convergência**. A presença de novas contagens na suite não é execução. Nenhum deploy, merge à main, migração operacional, mídia externa, chamada paga ou liberação de direito foi realizado.
 
 A próxima ação obrigatória é executar a suite no **HEAD exato e checkout limpo** desta branch, validar o espelho documental e gasto zero, diagnosticar qualquer falha com logs locais redigidos e só então preparar a reconciliação dos PRs laterais. Não alterar o Plano Único ou tratar esta nota como aceite de IMP.
