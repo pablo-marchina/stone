@@ -338,3 +338,25 @@ def test_malformed_signed_sqlite_batch_stage_cannot_be_misreported_as_pass(local
     assert len(calls) == 7  # git SHA/status; zero-spend; syntax; A02; two A02.7 suites
     assert receipt["production_approved"] is False
     assert receipt["gate_status"]["IMP-131"] == "BLOCKED"
+
+
+def test_runner_subprocesses_use_checkout_src_not_stale_editable_install(tmp_path, monkeypatch):
+    # Tests can otherwise appear to execute the PR checkout while importing
+    # a different editable Stone installation from site-packages.
+    seen = {}
+    monkeypatch.setenv("PYTHONPATH", "C:/unrelated/stone/src")
+
+    def fake_subprocess(argv, **kwargs):
+        seen["argv"] = argv
+        seen.update(kwargs)
+        return done("fixture subprocess")
+
+    monkeypatch.setattr(packet.subprocess, "run", fake_subprocess)
+    observed = packet._execute(["python", "-m", "pytest"], timeout=10, cwd=tmp_path)
+    assert observed.stdout == "fixture subprocess"
+    assert seen["argv"] == ["python", "-m", "pytest"]
+    assert seen["cwd"] == tmp_path
+    assert seen["env"]["PYTHONPATH"] == str(tmp_path.resolve() / "src")
+    assert seen["env"]["PYTHONPATH"] != "C:/unrelated/stone/src"
+    assert seen["shell"] is False
+    assert seen["check"] is False
