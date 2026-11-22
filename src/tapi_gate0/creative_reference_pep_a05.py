@@ -100,7 +100,8 @@ class CreativeReferencePEP:
         Revocation authority, source grant and content rows are locked to
         serialize approval against concurrent changes on PostgreSQL.
         """
-        if (db.engine is not self.engine or not isinstance(grant_ids, Mapping)
+        if (db.engine is not self.engine or not db.in_transaction()
+                or not isinstance(grant_ids, Mapping)
                 or not 1 <= len(grant_ids) <= 10
                 or audit_event_type not in {
                     "creative_reference.checked_for_draft",
