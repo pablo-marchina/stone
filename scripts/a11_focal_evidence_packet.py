@@ -79,7 +79,7 @@ NODE_A073 = (
 # required gate acceptance counts or a promise about all future code changes.
 EXPECTED = {"python_a05_a07": 269, "python_a06_e1": 29,
             "python_a02_asr_diagnostic": 62,
-            "python_a027_fixture_batch": 38,
+            "python_a027_fixture_batch": 40,
             "python_a027_integrated": 7,
             "python_a073_cdp": 13, "node_a073": 19}
 SOURCE_FILES = (
