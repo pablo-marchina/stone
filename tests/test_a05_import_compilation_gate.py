@@ -52,7 +52,23 @@ def test_signed_pep_import_and_public_action_contract():
 
 
 def test_secure_api_imports_and_mounts_creative_routes(tmp_path):
+    import tapi_gate0
+    from tapi_gate0 import secure_api, agent_api_e1, studio_api
     from tapi_gate0.secure_api import create_secure_app
+
+    # A global editable install of the parent Stone checkout can be cached
+    # before pytest applies its pythonpath config. Reject mixed-source
+    # validation rather than silently checking a different revision.
+    source = (ROOT / "src" / "tapi_gate0").resolve()
+    for module, filename in (
+        (tapi_gate0, "__init__.py"),
+        (secure_api, "secure_api.py"),
+        (agent_api_e1, "agent_api_e1.py"),
+        (studio_api, "studio_api.py"),
+    ):
+        assert Path(module.__file__).resolve() == source / filename, (
+            "A05_WRONG_WORKTREE_IMPORT:" + filename
+        )
 
     app = create_secure_app(
         "sqlite:///" + str(tmp_path / "import-smoke.sqlite"),
@@ -68,9 +84,17 @@ def test_secure_api_imports_and_mounts_creative_routes(tmp_path):
         if isinstance(getattr(route, "path", None), str)
         for method in (getattr(route, "methods", None) or ())
     }
-    assert {
+    required = {
         ("POST", "/v1/agent/creative-drafts"),
         ("POST", "/v1/agent/creative-drafts/{document_id}/text-patches"),
         ("POST", "/v1/agent/creative-drafts/{document_id}/geometry"),
         ("POST", "/v1/agent/creative-drafts/{document_id}/reference-recheck"),
-    } <= paths
+    }
+    missing = sorted(required - paths)
+    assert not missing, (
+        "A05_CREATIVE_ROUTES_MISSING:"
+        + repr(missing)
+        + "; observed_agent_posts="
+        + repr(sorted(path for method, path in paths
+                      if method == "POST" and path.startswith("/v1/agent/")))
+    )
