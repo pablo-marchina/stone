@@ -138,3 +138,26 @@ def test_invalidation_during_batch_blocks_further_processing(queue_fixture, monk
         _batch(pipe, ticks=1)
     with f.q.f.engine.connect() as db:
         assert db.scalar(select(func.count()).select_from(attempts)) == 1
+
+
+@pytest.mark.parametrize("discard_fixture", [("retain", "process", "all_processors", "bundle_rubric")], indirect=True)
+def test_signed_sqlite_batch_rejects_swapped_terminal_artifact_receipts(queue_fixture, monkeypatch):
+    # Drive all four authorized jobs through the real SQLite/vault/queue path.
+    # Then simulate a compromised or buggy result serializer swapping two
+    # correctly shaped IDs. The boundary must reject that terminal candidate.
+    f = queue_fixture
+    _synthetic_dispatch(f, monkeypatch)
+    pipe = _pipeline(f, mode="header", case="header")
+    original_step = pipe.step
+    def swapped(worker, *, retry_stopped=False):
+        out = original_step(worker, retry_stopped=retry_stopped)
+        if out["status"] == "candidate_complete":
+            return {**out, "artifact_ids": tuple(reversed(out["artifact_ids"]))}
+        return out
+    monkeypatch.setattr(pipe, "step", swapped)
+    with pytest.raises(AssetRightsDenied, match="ARTIFACT_PROVENANCE_MISMATCH"):
+        _batch(pipe)
+    # Detection does not modify persistence or initiate a second attempt.
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(attempts)) == 4
+        assert db.scalar(select(func.count()).select_from(payloads)) == 4
