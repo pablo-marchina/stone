@@ -76,7 +76,12 @@ def inventory() -> dict:
         studio = [r for r in routes if r["path"].startswith("/v1/studio")]
         # If a different version exposes route paths under a different
         # prefix, this bounded names-only sample helps locate the mismatch.
-        sample = routes[:30] if not agent or not studio else []
+        sample = routes[:20] if not agent or not studio else []
+        suspicious = [
+            r for r in routes
+            if any(marker in r["path"]
+                   for marker in ("studio", "creative", "agent"))
+        ][:60]
         return {
             "schema_version": SCHEMA,
             "status": "DIAGNOSTIC_ONLY",
@@ -89,6 +94,7 @@ def inventory() -> dict:
             "agent_routes": agent,
             "studio_routes": studio,
             "other_route_sample": sample,
+            "suspected_routes_all_prefixes": suspicious,
             "production_approved": False,
         }
 
