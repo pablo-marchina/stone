@@ -47,9 +47,9 @@ NODE_A073 = (
     "tests/frontend/test_studio_export_a07.mjs",
     "tests/frontend/test_studio_timeline_e8.mjs",
 )
-# These are observable results for the 21/11/2026 focal test scope, NOT
+# These are expected collection counts after the A05 B2 hardening tests, NOT
 # required gate acceptance counts or a promise about all future code changes.
-EXPECTED = {"python_a05_a07": 114, "python_a073_cdp": 13, "node_a073": 19}
+EXPECTED = {"python_a05_a07": 132, "python_a073_cdp": 13, "node_a073": 19}
 SOURCE_FILES = (
     "scripts/a11_focal_evidence_packet.py",
     "scripts/a07_browser_visual_parity.py",
