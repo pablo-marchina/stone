@@ -8,7 +8,7 @@ from datetime import timedelta
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 
 from test_creative_reference_registry_a05 import (
     registry, provision, TENANT, PASSWORD,
@@ -298,3 +298,25 @@ def test_pep_rejects_corrupted_signed_grant_payload(registry):
                 document_id="draft.test", grant_ids=grant_ids(r),
             )
     assert "must_not_leak" not in str(exc.value)
+
+
+def test_pep_denies_removed_grant_without_audit(registry):
+    """A missing signed grant must not create approval events or an outbox item."""
+    from tapi_gate0.creative_reference_registry_a05 import grants
+    r = registry
+    pep = signed_fixture(r)
+    with r["engine"].begin() as con:
+        con.execute(delete(grants).where(
+            grants.c.tenant_id == TENANT,
+            grants.c.grant_id == "a054-fixture-grant",
+        ))
+    with r["engine"].begin() as con:
+        with pytest.raises(CreativeReferencePermissionDenied):
+            pep.require_for_atomic_draft(
+                con, token=r["token"], tenant=TENANT, actor="founder",
+                document_id="draft.deleted-grant", grant_ids=grant_ids(r),
+            )
+    with r["engine"].connect() as con:
+        assert con.execute(select(domain_events.c.seq).where(
+            domain_events.c.aggregate_type == "creative_reference_use",
+        )).scalars().all() == []
