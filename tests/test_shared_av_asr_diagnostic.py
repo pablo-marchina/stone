@@ -70,6 +70,7 @@ def make_report(monkeypatch, *, negative_speech=False, blank_positive=False):
                'temporal_passed':True,'asset_binding_verified':True,
                'media_sha256':media_sha,'decoded_pcm_sha256':full_hash,
                'vad':{'intervals':intervals,'pcm_sha256':full_hash,
+                      'duration_s':shared.DURATION,
                       'timestamp_kind':'decoded_pcm_sample_indices',
                       'vad_inference_attempted':True,'guard_reason':None},
                'audio':{'chunks':chunks,'segments':segments,'asr_calls':len(chunks),
@@ -310,6 +311,19 @@ def test_native_shared_benchmark_emits_scientific_write_denials():
 def test_vad_asr_guard_receipts_fail_closed(monkeypatch, mutate):
     report, _ = make_report(monkeypatch)
     mutate(report)
+    with pytest.raises(diag.SharedAVDiagnosticDenied,
+                       match='A02_SHARED_AV_REPORT_INVALID'):
+        diag.diagnose_shared_av_asr(report)
+
+
+@pytest.mark.parametrize('mutate', [
+    lambda vad: vad.pop('duration_s'),
+    lambda vad: vad.update(duration_s=shared.DURATION - 1),
+    lambda vad: vad.update(duration_s=True),
+])
+def test_vad_decoded_pcm_duration_receipt_fail_closed(monkeypatch, mutate):
+    report, _ = make_report(monkeypatch)
+    mutate(report['cases'][1]['vad'])
     with pytest.raises(diag.SharedAVDiagnosticDenied,
                        match='A02_SHARED_AV_REPORT_INVALID'):
         diag.diagnose_shared_av_asr(report)

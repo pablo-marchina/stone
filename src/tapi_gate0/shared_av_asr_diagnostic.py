@@ -103,6 +103,10 @@ def diagnose_shared_av_asr(report: dict) -> dict:
                     or audio["inference_attempted"] is not bool(intervals)
                     or audio["pcm_sha256"] != row["decoded_pcm_sha256"]
                     or row["vad"]["pcm_sha256"] != row["decoded_pcm_sha256"]
+                    # The native VAD producer records decoded PCM duration.
+                    # Reject a contradictory receipt even when windows fit.
+                    or type(row["vad"].get("duration_s")) not in (int, float)
+                    or row["vad"]["duration_s"] != shared.DURATION
                     or audio["duration_s"] != shared.DURATION
                     or audio["timestamp_kind"] != "model_estimate_mapped_to_decoded_pcm_not_original_pts"):
                 _fail()
