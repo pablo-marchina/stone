@@ -15,6 +15,7 @@ from .agent_evidence_b2 import CreativeBriefRequest, EvidenceRetriever, Evidence
 from .creative_reference_pep_a05 import CreativeReferencePEP, CreativeReferencePermissionDenied
 from .domain import Id
 from .studio_e1 import CreativeSpec, DesignDocument, StudioStore
+from .studio_reference_bindings_a05 import persist_reference_bindings
 
 
 class CreateAgentDraft(BaseModel):
@@ -99,7 +100,16 @@ def create_agent_draft(engine, *, tenant_id: str, actor_id: str,
                 platform_intent=payload.brief.platform_intent,
                 reference_content_ids=payload.brief.reference_content_ids,
             )
-        return StudioStore(engine).create(
+        doc = StudioStore(engine).create(
             tenant_id, actor_id, spec, payload.document_id,
             connection=connection,
         )
+        if payload.reference_grant_ids:
+            # Durable grant pointers must commit or roll back WITH the draft
+            # and PEP audit, never as an independent later operation.
+            persist_reference_bindings(
+                connection, tenant=tenant_id, document_id=payload.document_id,
+                reference_content_ids=doc.reference_content_ids,
+                external_grant_ids=payload.reference_grant_ids,
+            )
+        return doc

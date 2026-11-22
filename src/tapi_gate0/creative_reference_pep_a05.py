@@ -91,7 +91,8 @@ class CreativeReferencePEP:
 
     def require_for_atomic_draft(self, db, *, token: str, tenant: str,
                                  actor: str, document_id: str,
-                                 grant_ids: Mapping[str, str]):
+                                 grant_ids: Mapping[str, str],
+                                 *, audit_event_type: str = "creative_reference.checked_for_draft"):
         """Verify and audit ALL external references before the draft is inserted.
 
         The caller supplies a trusted, active SQL transaction. A failed check
@@ -100,7 +101,11 @@ class CreativeReferencePEP:
         serialize approval against concurrent changes on PostgreSQL.
         """
         if (db.engine is not self.engine or not isinstance(grant_ids, Mapping)
-                or not 1 <= len(grant_ids) <= 10):
+                or not 1 <= len(grant_ids) <= 10
+                or audit_event_type not in {
+                    "creative_reference.checked_for_draft",
+                    "creative_reference.rechecked_for_draft",
+                }):
             _deny()
         try:
             self._session_active(db, token, tenant, actor)
@@ -169,7 +174,7 @@ class CreativeReferencePEP:
                     aggregate_type="creative_reference_use",
                     aggregate_id=str(uuid4()),
                     aggregate_version=1,
-                    event_type="creative_reference.checked_for_draft",
+                    event_type=audit_event_type,
                     occurred_at=now.isoformat(),
                     payload=json.dumps({
                         "document_sha256": sha256(document_id.encode()).hexdigest(),
