@@ -98,3 +98,18 @@ Nenhuma destas verificações cria novas permissões, baixa mídia, renova lease
 **Evidência efetivamente executada nesta rodada:** `40 passed in 0.21s` de `tests/test_asset_fixture_batch.py`, usando o arquivo real e completo `asset_fixture_batch.py` reproduzido localmente a partir do HEAD do GitHub. Arquivo e testes tiveram igualdade verificada de comprimento, soma de codepoints e checksum ponderado; `ast.parse(feature_version=(3,11))` passou nos dois. As dependências exteriores foram **substituídas explicitamente** (classes fila, PEP, grants, SQL, vault, fusion); logo, estes 40 PASS são **unitários**, não prova de integração/execução nativa.
 
 **Evidência integrada preparada e ainda pendente:** `tests/test_asset_fixture_batch_integration.py` ganhou um sétimo cenário que revoga o ativo com assinatura Ed25519 **depois** de quatro resultados criptografados e da fusão, mas **antes** de o batch devolver o candidato. Espera-se `ASSET_RIGHTS_REVOKED` e nenhum novo attempt; o caso precisa rodar no checkout íntegro, com SQLite/rights/vault reais. A11 exige agora **40 casos de componente e 7 de integração** A02.7, e os 10 estágios continuam sem poder liberar G0–G6 ou IMP-131. **NOT_RUN no HEAD**: A11 completo, A00 integral, os 7 testes de integração, modelo nativo e ciência independente. A PR permanece draft e produção NO-GO.
+
+
+## Convergência experimental A02.7 + A02/A06/A11 (22/11/2026)
+
+Branch isolada `integration/a027-a06-a11-convergence-20261122`, derivada exatamente de `2a97a55e06ab82e98b0d745eecdcae922f33870b` (PR #69) e importando quatro arquivos pinados do PR #70 no SHA `85817452bc6a458d5dd0a628818cebae0657e02b`. O runner e os testes A11 foram reconciliados **sem retroceder** os limites do PR #69:
+
+- `python_a02_asr_diagnostic`: **91 casos esperados** (não 62);
+- `python_a06_e1`: **34 casos esperados** (não 29);
+- `python_a027_fixture_batch`: **40 casos esperados**;
+- `python_a027_integrated`: **7 casos esperados**;
+- dez estágios focais, zero-spend e preflight de sintaxe obrigatórios; nenhum estágio muda G0–G6/IMP-131.
+
+Os dois PRs permanecem em draft. Esta convergência **não** inclui automaticamente os incrementos laterais #49 e #58; devem ser auditados antes da integração global. O código novo de A02.7 teve somente a evidência isolada histórica 40 PASS da PR #70; os 7 testes reais de SQLite/assinatura/vault, o runner A11 focal, A00 integral e os controles multimodais nativos estão **NOT_RUN nesta branch de convergência**. A presença de novas contagens na suite não é execução. Nenhum deploy, merge à main, migração operacional, mídia externa, chamada paga ou liberação de direito foi realizado.
+
+A próxima ação obrigatória é executar a suite no **HEAD exato e checkout limpo** desta branch, validar o espelho documental e gasto zero, diagnosticar qualquer falha com logs locais redigidos e só então preparar a reconciliação dos PRs laterais. Não alterar o Plano Único ou tratar esta nota como aceite de IMP.
