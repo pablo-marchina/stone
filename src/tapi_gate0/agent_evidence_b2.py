@@ -155,15 +155,28 @@ class EvidenceRetriever:
         )
 
     def handoff(self, tenant_id: str, request: CreativeBriefRequest, *, connection=None) -> CreativeSpecHandoff:
-        # Reading metadata and reusing a post for creative generation are
-        # different rights. Until an authenticated per-operation creative PEP
-        # is wired to this boundary, permit only source-free local fixtures.
-        # This does not authorize publishing even those draft CreativeSpecs.
+        # Research metadata and creative-use rights are distinct. This default
+        # interface *only* permits truly synthetic, local, source-free fixtures.
+        # No optional policy/grant parameter can weaken this B2 boundary.
+        if connection is None:
+            with self.engine.connect() as conn:
+                return self.handoff(tenant_id, request, connection=conn)
         for content_id in request.reference_content_ids:
             evidence = self.get(tenant_id, content_id, connection=connection)
-            if (evidence.origin != "synthetic_local"
-                    or evidence.source_url is not None):
-                raise EvidenceNotFound("CREATIVE_REFERENCE_RIGHTS_PEP_REQUIRED")
+            row = connection.execute(select(content_items.c.payload).where(
+                content_items.c.tenant_id == tenant_id,
+                content_items.c.id == content_id,
+            )).scalar_one_or_none()
+            try:
+                content = ContentItem.model_validate_json(row)
+                if (evidence.origin != "synthetic_local"
+                        or content.origin.value != "synthetic_local"
+                        or content.is_synthetic is not True
+                        or content.source_url is not None
+                        or evidence.source_url is not None):
+                    raise EvidenceNotFound("CREATIVE_REFERENCE_RIGHTS_PEP_REQUIRED")
+            except (ValueError, TypeError, AttributeError):
+                raise EvidenceNotFound("CREATIVE_REFERENCE_NOT_VERIFIED") from None
         return CreativeSpecHandoff(
             spec_id=request.spec_id, tenant_id=tenant_id,
             objective=request.objective, headline=request.headline,

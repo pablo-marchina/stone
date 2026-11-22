@@ -349,3 +349,29 @@ def test_mcp_does_not_propose_spec_from_external_reference(tmp_path):
        ranking_tool=SqlDomainStore(engine))
     assert reply["result"]["isError"] is True
     assert "external_post" not in reply["result"]["content"][0]["text"]
+
+
+@pytest.mark.parametrize("tamper", [
+    {"is_synthetic": False},
+    {"source_url": "https://example.com/external-ref"},
+])
+def test_handoff_requires_actual_synthetic_flag_not_just_origin(tmp_path, tamper):
+    app = _setup(tmp_path)
+    engine = app.state.identity_store.engine
+    with engine.begin() as db:
+        old = db.execute(select(content_items.c.payload).where(
+            content_items.c.tenant_id == "tenantA",
+            content_items.c.id == "post1",
+        )).scalar_one()
+        item = json.loads(old)
+        item.update(tamper)
+        db.execute(update(content_items).where(
+            content_items.c.tenant_id == "tenantA",
+            content_items.c.id == "post1",
+        ).values(payload=json.dumps(item)))
+    # Read-only metadata remains accessible; creative reuse is a separate PEP.
+    assert EvidenceRetriever(engine).get("tenantA", "post1").content_id == "post1"
+    with pytest.raises(EvidenceNotFound, match="CREATIVE_REFERENCE_RIGHTS_PEP_REQUIRED"):
+        EvidenceRetriever(engine).handoff(
+            "tenantA", CreativeBriefRequest.model_validate(_brief()),
+        )
