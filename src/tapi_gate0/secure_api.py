@@ -30,6 +30,7 @@ from . import asset_rights_registry, asset_lineage_index, asset_jobs, asset_deri
 from .corpus_caption_replay import CaptionReplay, config_from_env as replay_config_from_env
 from .ui import router_for_authenticated_view
 from .agent_api_e1 import router_for_evidence_agent
+from .creative_reference_pep_a05 import CreativeReferencePEP
 from .studio_e1 import StudioStore  # registers studio tables before schema initialization
 from .studio_api import router_for_studio
 from .evidence_lab import EvidenceLab, config_from_env, router_for_lab
@@ -43,7 +44,7 @@ def _token(request:Request):
     return token
 
 
-def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_http_local:bool=False, evidence_lab:EvidenceLab|None=None, caption_replay_config=None) -> FastAPI:
+def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_http_local:bool=False, evidence_lab:EvidenceLab|None=None, caption_replay_config=None, creative_reference_authorities=None) -> FastAPI:
     engine=engine_for(database_url)
     domain=SqlDomainStore(engine)
     if initialize_schema:
@@ -120,7 +121,11 @@ def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_ht
         raise ValueError('CAPTION_REPLAY_LOOPBACK_MODE_REQUIRED')
     caption_replay=CaptionReplay(engine,caption_replay_config) if caption_replay_config is not None else None
     app.include_router(router_for_inventory(current_principal,engine,caption_replay))
-    app.include_router(router_for_evidence_agent(identity,domain))
+    app.include_router(router_for_evidence_agent(
+        identity, domain,
+        creative_pep=(CreativeReferencePEP(engine, creative_reference_authorities)
+                      if creative_reference_authorities is not None else None),
+    ))
     app.include_router(router_for_studio(identity,StudioStore(engine)))
     app.include_router(router_for_lab(current_principal,evidence_lab))
 

@@ -27,7 +27,7 @@ class AnalyzeRequest(BaseModel):
     min_age_days: int = Field(default=14, ge=14, le=3650)
 
 
-def router_for_evidence_agent(identity, domain_store):
+def router_for_evidence_agent(identity, domain_store, *, creative_pep=None):
     router = APIRouter(prefix="/v1/agent", tags=["Evidence-first agent E1"])
 
     def principal(request: Request) -> Principal:
@@ -65,6 +65,7 @@ def router_for_evidence_agent(identity, domain_store):
 
     @router.post("/creative-drafts", response_model=DesignDocument, status_code=201)
     def create_draft(payload: CreateAgentDraft, response: Response,
+                     request: Request,
                      p: Principal = Depends(principal)):
         # Only editor/admin can mutate Studio. The verified session, not JSON,
         # supplies the tenant and actor. All source checks + writes are atomic.
@@ -74,6 +75,8 @@ def router_for_evidence_agent(identity, domain_store):
             doc = create_agent_draft(
                 domain_store.engine, tenant_id=p.tenant_id,
                 actor_id=p.actor_id, payload=payload,
+                token=request.headers.get("Authorization", "").partition(" ")[2],
+                creative_pep=creative_pep,
             )
         except EvidenceNotFound:
             raise HTTPException(status_code=422, detail="CREATIVE_REFERENCE_NOT_VERIFIED")
