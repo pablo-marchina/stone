@@ -122,6 +122,27 @@ def _redacted_result(argv: list[str], result, *, kind: str,
                     and count == expected_count and skips == 0 and fails == 0)
         code = "A11_PYTEST_COUNTS_MATCH" if verified else "A11_PYTEST_INCOMPLETE"
 
+    elif kind == "syntax_preflight":
+        # Parse one exact JSON receipt from our offline parser; stdout text,
+        # a zero exit code alone or fabricated PASS substrings never suffice.
+        try:
+            report = json.loads(stdout)
+            verified = (
+                rc == 0 and isinstance(report, dict)
+                and report.get("schema_version") == "stone-python-source-preflight.v1"
+                and report.get("status") == "PASS"
+                and report.get("python_grammar") == "3.11"
+                and type(report.get("files_checked")) is int
+                and report["files_checked"] >= 300
+                and report.get("errors") == []
+                and report.get("deployment_authorized") is False
+            )
+        except (ValueError, TypeError, KeyError):
+            verified = False
+        count = 1 if verified else 0
+        code = ("A11_PYTHON_SYNTAX_PREFLIGHT_VERIFIED" if verified
+                else "A11_PYTHON_SYNTAX_PREFLIGHT_BLOCKED")
+
     elif kind == "node":
         # Node's TAP output may prefix with Unicode informational marker.
         def metric(name: str):
@@ -278,6 +299,8 @@ def build_packet(*, root: Path = ROOT, expected_head: str | None = None,
         # undecodable output or reinterpret a failed process as approved.
         ("zero_spend", [py, "-X", "utf8", "scripts/verify_zero_spend.py"],
          "zero_spend", None, 30),
+        ("syntax_preflight", [py, "-m", "scripts.a05_python_source_preflight"],
+         "syntax_preflight", 1, 30),
         ("python_a05_a07", [py, "-m", "pytest", "-q", "-rs", *PY_A05_A07],
          "pytest", EXPECTED["python_a05_a07"], 300),
         ("python_a073_cdp", [py, "-m", "pytest", "-q", "-rs", *PY_A073],
@@ -298,8 +321,11 @@ def build_packet(*, root: Path = ROOT, expected_head: str | None = None,
             if not result["passed"]:
                 packet["validation_status"] = "BLOCKED_ZERO_SPEND_PREFLIGHT"
                 return packet  # Fail before ANY further execution.
+        if name == "syntax_preflight" and not result["passed"]:
+            packet["validation_status"] = "BLOCKED_PYTHON_SYNTAX_PREFLIGHT"
+            return packet  # Never run pytest/Node/Chrome on malformed source.
 
-    if len(packet["checks"]) == 5 and all(c["passed"] for c in packet["checks"]):
+    if len(packet["checks"]) == 6 and all(c["passed"] for c in packet["checks"]):
         packet["validation_status"] = "FOCAL_DIAGNOSTICS_VERIFIED_NO_GATE_RELEASE"
     return packet
 
