@@ -169,14 +169,18 @@ def test_denies_mutation_between_two_checks(tmp_path, monkeypatch):
     engine, _, content = fixture_data(tmp_path)
     original = EvidenceRetriever.handoff
 
-    def midflight_change(self, tenant_id, request):
-        returned = original(self, tenant_id, request)
-        changed = content.model_copy(update={"caption": "Changed after initial inspection."})
-        with engine.begin() as db:
-            db.execute(update(content_items).where(
-                content_items.c.tenant_id == "tenantA",
-                content_items.c.id == content.content_id,
-            ).values(payload=changed.model_dump_json()))
+    def midflight_change(self, tenant_id, request, *, connection=None):
+        # B2 recursively re-enters its public handoff with an explicit SQL
+        # connection. Preserve that contract and mutate only AFTER the outer
+        # handoff has completed, i.e. between the two preview bindings.
+        returned = original(self, tenant_id, request, connection=connection)
+        if connection is None:
+            changed = content.model_copy(update={"caption": "Changed after initial inspection."})
+            with engine.begin() as db:
+                db.execute(update(content_items).where(
+                    content_items.c.tenant_id == "tenantA",
+                    content_items.c.id == content.content_id,
+                ).values(payload=changed.model_dump_json()))
         return returned
 
     monkeypatch.setattr(EvidenceRetriever, "handoff", midflight_change)
