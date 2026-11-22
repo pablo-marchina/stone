@@ -36,8 +36,8 @@ A requisição usa os grants vinculados à própria versão do documento e a ân
 
 ## Testes e estado de evidência
 
-- **8 novos casos** em `tests/test_creative_reference_pep_a05.py` e `tests/test_agent_atomic_draft_a05.py`: edição assinada positiva, rollback após revogação, bloqueio da rota antiga de texto e páginas, ETag obrigatória e inválida, PEP host ausente, rollback de auditoria após erro de camada e compatibilidade sintética.
-- O pacote A11 Python A05/A07 passou de 240 para **248 casos esperados**. **248 NÃO É resultado de execução.** O check de hashes inclui agora `studio_e1.py`, `studio_api.py` e os novos limites do agente.
+- **9 novos casos** em `tests/test_creative_reference_pep_a05.py` e `tests/test_agent_atomic_draft_a05.py`: edição assinada positiva, rollback após revogação, bloqueio da rota antiga de texto e páginas, ETag obrigatória e inválida, PEP host ausente, rollback de auditoria após erro de camada e compatibilidade sintética e registro da tabela de vínculos no `StudioStore` independente.
+- O pacote A11 Python A05/A07 passou de 240 para **249 casos esperados**. **249 NÃO É resultado de execução.** O check de hashes inclui agora `studio_e1.py`, `studio_api.py` e os novos limites do agente.
 - Foi executado **um ensaio isolado de 3 casos FastAPI** demonstrando que dependências adicionadas ao `APIRouter` antes dos decorators bloqueiam mutações com `document_id` e preservam GETs e documentos sintéticos. Não é prova E2E da aplicação.
 - No checkout integral do HEAD atual, a nova suíte focal, A11 e A00 ainda estão **NOT_RUN**. Não usar testes de commits anteriores como PASS para este SHA.
 
@@ -50,4 +50,4 @@ python scripts/verify_zero_spend.py
 python docs/base_atemporal/ferramentas/validar_espelho.py
 ```
 
-Depois executar A11 focal 248, A00 full no **mesmo SHA** e testes nativos PostgreSQL/Windows sem relaxar direitos, skips, ASR Strict ou G0–G6. Sem merge, migrations reais, deploy ou gasto nesta PR.
+Depois executar A11 focal 249, A00 full no **mesmo SHA** e testes nativos PostgreSQL/Windows sem relaxar direitos, skips, ASR Strict ou G0–G6. Sem merge, migrations reais, deploy ou gasto nesta PR.
