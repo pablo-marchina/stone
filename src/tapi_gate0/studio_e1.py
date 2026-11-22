@@ -250,47 +250,68 @@ class StudioStore:
         return DesignDocument.model_validate_json(payload)
 
     def patch_text_layer(self, tenant: str, actor: str, document_id: str,
-                         patch: TextLayerPatch):
-        with self.engine.begin() as conn:
-            current = conn.execute(select(studio_documents.c.current_version).where(
-                studio_documents.c.tenant_id == tenant,
-                studio_documents.c.document_id == document_id,
-            )).scalar_one_or_none()
-            if current is None:
-                raise StudioError("STUDIO_DOCUMENT_NOT_FOUND", 404)
-            if current != patch.expected_version:
-                raise StudioError("STUDIO_VERSION_CONFLICT", 409)
-            payload = conn.execute(select(studio_versions.c.payload).where(
-                studio_versions.c.tenant_id == tenant,
-                studio_versions.c.document_id == document_id,
-                studio_versions.c.version == current,
-            )).scalar_one()
-            original = DesignDocument.model_validate_json(payload)
-            raw = original.model_dump()
-            found = False
-            for page in raw["pages"]:
-                if page["id"] != patch.page_id:
+                         patch: TextLayerPatch, *, connection=None,
+                         reference_authorizer=None):
+        if connection is None:
+            with self.engine.begin() as conn:
+                return self.patch_text_layer(
+                    tenant, actor, document_id, patch, connection=conn,
+                    reference_authorizer=reference_authorizer,
+                )
+        conn = connection
+        if conn.engine is not self.engine or not conn.in_transaction():
+            raise StudioError("STUDIO_TRANSACTION_REQUIRED", 409)
+        # A legacy text patch can never silently reuse a signed reference.
+        # Only a trusted per-action callback that revalidates grants inside
+        # THIS write transaction may update a draft carrying external grants.
+        from .studio_reference_bindings_a05 import studio_reference_bindings
+        linked = conn.execute(select(studio_reference_bindings.c.content_id).where(
+            studio_reference_bindings.c.tenant_id == tenant,
+            studio_reference_bindings.c.document_id == document_id,
+        ).limit(1)).first()
+        if linked is not None:
+            if reference_authorizer is None:
+                raise StudioError("STUDIO_SIGNED_REFERENCE_RECHECK_REQUIRED", 403)
+            reference_authorizer(conn)
+        current = conn.execute(select(studio_documents.c.current_version).where(
+            studio_documents.c.tenant_id == tenant,
+            studio_documents.c.document_id == document_id,
+        )).scalar_one_or_none()
+        if current is None:
+            raise StudioError("STUDIO_DOCUMENT_NOT_FOUND", 404)
+        if current != patch.expected_version:
+            raise StudioError("STUDIO_VERSION_CONFLICT", 409)
+        payload = conn.execute(select(studio_versions.c.payload).where(
+            studio_versions.c.tenant_id == tenant,
+            studio_versions.c.document_id == document_id,
+            studio_versions.c.version == current,
+        )).scalar_one()
+        original = DesignDocument.model_validate_json(payload)
+        raw = original.model_dump()
+        found = False
+        for page in raw["pages"]:
+            if page["id"] != patch.page_id:
+                continue
+            for layer in page["layers"]:
+                if layer["id"] != patch.layer_id:
                     continue
-                for layer in page["layers"]:
-                    if layer["id"] != patch.layer_id:
-                        continue
-                    found = True
-                    for attr in ("text", "x", "y", "w", "h"):
-                        value = getattr(patch, attr)
-                        if value is not None:
-                            layer[attr] = value
-                    layer["origin"] = "operator_edit"
-            if not found:
-                raise StudioError("STUDIO_LAYER_NOT_FOUND", 404)
-            raw["version"] = current + 1
-            # Revalidate the entire document after every edit, not just the layer.
-            next_doc = DesignDocument.model_validate(raw)
-            changed = conn.execute(update(studio_documents).where(
-                studio_documents.c.tenant_id == tenant,
-                studio_documents.c.document_id == document_id,
-                studio_documents.c.current_version == current,
-            ).values(current_version=current + 1))
-            if changed.rowcount != 1:
-                raise StudioError("STUDIO_VERSION_CONFLICT", 409)
-            self._insert_version(conn, next_doc, actor)
+                found = True
+                for attr in ("text", "x", "y", "w", "h"):
+                    value = getattr(patch, attr)
+                    if value is not None:
+                        layer[attr] = value
+                layer["origin"] = "operator_edit"
+        if not found:
+            raise StudioError("STUDIO_LAYER_NOT_FOUND", 404)
+        raw["version"] = current + 1
+        # Revalidate the entire document after every edit, not just the layer.
+        next_doc = DesignDocument.model_validate(raw)
+        changed = conn.execute(update(studio_documents).where(
+            studio_documents.c.tenant_id == tenant,
+            studio_documents.c.document_id == document_id,
+            studio_documents.c.current_version == current,
+        ).values(current_version=current + 1))
+        if changed.rowcount != 1:
+            raise StudioError("STUDIO_VERSION_CONFLICT", 409)
+        self._insert_version(conn, next_doc, actor)
         return next_doc
