@@ -83,6 +83,7 @@ def local_files(tmp_path, monkeypatch):
     # Keep mocked source inventory aligned with A02.7 pinning assertions.
     # Test-only bytes are not evidence of software execution or signed grants.
     files = (
+        "pyproject.toml",
         "scripts/a11_focal_evidence_packet.py",
         "src/tapi_gate0/web/studio_export_e4.js",
         "src/tapi_gate0/asset_fixture_batch.py",
@@ -378,3 +379,14 @@ def test_runner_subprocesses_use_checkout_src_not_stale_editable_install(tmp_pat
     assert seen["env"]["PYTHONPATH"] != "C:/unrelated/stone/src"
     assert seen["shell"] is False
     assert seen["check"] is False
+
+
+def test_pytest_imports_repo_src_before_editable_package():
+    # Python 3.11 pyproject option is honored by pytest, including Git worktrees.
+    # Avoid importing the parent editable Stone installation by accident.
+    import tomllib
+    root = Path(__file__).resolve().parents[1]
+    configuration = tomllib.loads(
+        (root / "pyproject.toml").read_text(encoding="utf-8"))
+    assert configuration["tool"]["pytest"]["ini_options"]["pythonpath"] == ["src"]
+    assert "pyproject.toml" in packet.SOURCE_FILES
