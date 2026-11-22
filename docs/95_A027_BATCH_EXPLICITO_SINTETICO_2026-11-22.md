@@ -38,3 +38,35 @@ Depois, executar no host nativo com as fixtures e chaves locais **já autorizada
 ### Resultado da revisão do contrato da fila
 
 O `AssetJobQueue.claim` devolve também `quota`, `rights_blocked` e `empty`. O executor passou a tratá-los como **paradas sem retry**, sem categorização de sucesso ou promoção de candidatos. Três testes parametrizados adicionais elevaram a suíte isolada de 25 para **28 PASS**. A suite integrada do novo SHA continua **NOT_RUN**.
+
+
+## Integração com os componentes reais do Stone — incremento posterior
+
+Para evitar confundir testes de interface com autorização real, foi adicionado
+`tests/test_asset_fixture_batch_integration.py`, aproveitando as fixtures
+assinadas **já existentes** em `tests/test_asset_rights_registry.py`
+(`registry`, `discard_fixture`, `queue_fixture`, `_pipeline`).
+
+**Cinco testes de integração preparados para execução nativa no checkout integral:**
+
+1. Quatro jobs de header sintético avançam por **fila SQLite verdadeira**, grant assinado Ed25519, índice de linhagem, vault, armazenamento criptografado de derivados e fusão do `CandidateDecisions` real. Reexecução da mesma seleção não deve aumentar os quatro attempts registrados.
+2. Orçamento de dois ticks interrompe sem avaliação; reconstrução explícita do plano com fingerprint pinado conclui os jobs restantes sem duplicar attempts ou ciphertexts.
+3. Revogação assinada após construir o plano bloqueia a execução antes de qualquer attempt ou escrita de payload derivado.
+4. Lease previamente reivindicado por outro worker retorna `HALTED/busy`, sem roubar o lease, reiniciar job ou disparar nova tentativa.
+5. Invalidação da linhagem após o primeiro resultado criptografado bloqueia qualquer processamento adicional e preserva o total de tentativas.
+
+**Escopo exato:** a execução do child adapter Windows é substituída por **uma observação de cabeçalho sintético já definida no projeto**, gravada por `DerivedPayloadStore.finish`. **Não são** substituídos a fila, o banco, o verificador de rights, a criptografia dos derivados nem a fusão. Nenhum conteúdo de terceiros, inferência externa ou autorização de publicação é habilitado.
+
+A11 separa os resultados para evitar falso positivo: `python_a027_fixture_batch` continua com **28 casos de componente esperados**; novo `python_a027_integrated` exige **5 testes reais de SQLite/rights/vault**, e o runner passa a exigir **10 etapas**. Os cinco testes foram **compilados estaticamente**, mas permanecem **NOT_RUN contra o repositório completo**, porque o checkout privado íntegro não está montado neste ambiente. A11 completo e A00 full também permanecem NOT_RUN neste HEAD.
+
+### Comandos para validar a integração no checkout íntegro
+
+```powershell
+git rev-parse HEAD
+python -m scripts.a05_python_source_preflight
+python -m pytest -q -rs tests/test_asset_fixture_batch.py tests/test_asset_fixture_batch_integration.py tests/test_a11_focal_evidence_packet.py
+python scripts/verify_zero_spend.py
+python docs/base_atemporal/ferramentas/validar_espelho.py
+```
+
+Nenhum teste isolado deve ser interpretado como aceite G0–G6, IMP-131 ou autorização de deploy.
