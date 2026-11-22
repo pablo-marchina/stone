@@ -114,3 +114,20 @@ Branch isolada `integration/a027-a06-a11-convergence-20261122`, derivada exatame
 Os PRs de origem permanecem em draft. Nesta branch de convergência também foram portadas seletivamente as correções laterais #49 (lock do grant criativo e teste negativo de grant ausente) e #58 (remoção do recibo incompleto em falha de fsync e respectivo teste), sem promover os PRs de origem a aceitos. Os demais limites de integração e homologação permanecem. O código novo de A02.7 teve somente a evidência isolada histórica 40 PASS da PR #70; os 7 testes reais de SQLite/assinatura/vault, o runner A11 focal, A00 integral e os controles multimodais nativos estão **NOT_RUN nesta branch de convergência**. A presença de novas contagens na suite não é execução. Nenhum deploy, merge à main, migração operacional, mídia externa, chamada paga ou liberação de direito foi realizado.
 
 A próxima ação obrigatória é executar a suite no **HEAD exato e checkout limpo** desta branch, validar o espelho documental e gasto zero, diagnosticar qualquer falha com logs locais redigidos e só então preparar a reconciliação dos PRs laterais. Não alterar o Plano Único ou tratar esta nota como aceite de IMP.
+
+
+## Regressão focal do A11: 140 PASS, 3 FAIL (operador Windows, 22/11)
+
+No HEAD anterior `6f80a22f48efb5422009893d3a7ced04b9eb886d`, após o operador fixar explicitamente a importação ao worktree, o preflight Python 3.11 observou **380 fontes, status PASS**, sem autorização de deploy, e a seleção focal reportou **140 PASS, 3 FAIL** (75,23 segundos; warning não bloqueante do Starlette). Os três FAIL estavam restritos a `tests/test_a11_focal_evidence_packet.py`:
+
+- duas asserções exigiam o SHA de `asset_fixture_batch.py` e do teste integrado no pacote A11; a fixture de teste havia substituído `SOURCE_FILES` por um conjunto de apenas dois arquivos sintéticos, sem esses caminhos;
+- o teste de A02.7 SQL incompleto esperava que o runner interrompesse a cadeia, mas `build_packet` continuava depois do diagnóstico negativo, chegando até Chrome.
+
+Correção posterior no PR de integração:
+
+1. A fixture passou a criar todos os arquivos sintéticos de que as asserções de A02.7 precisam, preservando o inventário mockado deliberadamente pequeno;
+2. A11 interrompe após o primeiro estágio não aprovado, conservando `BLOCKED_NOT_VALIDATED` e o recibo do estágio falho (os reason codes exclusivos de zero-spend/preflight permanecem);
+3. foi acrescentado teste para ASR incompleto interromper antes da fila/Studio;
+4. `pyproject.toml` fixa `pytest.pythonpath=["src"]` para isolamento entre checkout do worktree e pacote editável em outro clone; A11 agora calcula também seu hash de fonte, e um teste verifica a configuração.
+
+**Evidência:** verificação de conteúdo do HEAD GitHub, não execução. Os 140 PASS pertencem **somente ao SHA anterior** e não podem ser transferidos à revisão atual. Executar `tests/test_a11_focal_evidence_packet.py` no HEAD exato antes de tentar A11 full. Nenhum gate, dado externo ou produção foi liberado.
