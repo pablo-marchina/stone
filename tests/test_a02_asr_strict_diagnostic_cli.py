@@ -1,6 +1,7 @@
 from hashlib import sha256
 import json
 import os
+from pathlib import Path
 import pytest
 
 from scripts import a02_asr_strict_diagnostic as cli
@@ -85,14 +86,40 @@ def test_stale_checkout_blocks_analysis(setup,monkeypatch):
     assert not (folder/'new.json').exists()
 
 
-def test_source_symlink_is_rejected(setup):
+def test_source_symlink_is_rejected(setup, monkeypatch):
     folder,args,checks=setup
     orig=folder/'input.json'
     destination=folder/'source.json'
     orig.rename(destination)
     try:
         orig.symlink_to(destination)
-    except OSError:
-        pytest.skip('symlink not permitted on this host')
+    except (OSError, NotImplementedError):
+        # Windows may deny user-created symlinks. Still exercise the
+        # explicit rejection path, never silently skip this guard.
+        actual_is_symlink = Path.is_symlink
+        monkeypatch.setattr(Path, "is_symlink",
+                            lambda candidate: (candidate == orig
+                                               or actual_is_symlink(candidate)))
     assert cli.main(args)==2
     assert not (folder/'new.json').exists()
+
+
+def test_private_directory_symlink_is_rejected_without_external_access(setup, monkeypatch):
+    folder,args,_=setup
+    actual_is_symlink = Path.is_symlink
+    monkeypatch.setattr(Path, "is_symlink",
+                        lambda candidate: (candidate == folder
+                                           or actual_is_symlink(candidate)))
+    assert cli.main(args)==2
+    assert not (folder/'new.json').exists()
+
+
+def test_output_symlink_is_rejected_before_creating_diagnostic(setup, monkeypatch):
+    folder,args,_=setup
+    output = folder/'new.json'
+    actual_is_symlink = Path.is_symlink
+    monkeypatch.setattr(Path, "is_symlink",
+                        lambda candidate: (candidate == output
+                                           or actual_is_symlink(candidate)))
+    assert cli.main(args)==2
+    assert not output.exists()
