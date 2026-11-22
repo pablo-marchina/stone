@@ -139,8 +139,25 @@ def diagnose_shared_av_asr(report: dict) -> dict:
                                 and seg["region_end_sample"] == chunk["end_sample"]]
                 if chunk["transcript"] != " ".join(segment_text):
                     _fail()
+            # The native transcriber emits segments in chronological order
+            # within each ordered VAD region. A reordered list can otherwise
+            # pass fragment/arm recomputation and misrepresent the transcript.
+            previous_region = -1
+            previous_end = 0.0
+            region_positions = {(c["start_sample"], c["end_sample"]): i
+                                for i, c in enumerate(chunks)}
             expected_audio_fragments = []
             for seg in segments:
+                region_index = region_positions.get(
+                    (seg["region_start_sample"], seg["region_end_sample"]))
+                if region_index is None or region_index < previous_region:
+                    _fail()
+                if region_index != previous_region:
+                    previous_end = 0.0
+                if seg["chunk_start_s"] < previous_end - 0.001:
+                    _fail()
+                previous_region = region_index
+                previous_end = seg["chunk_end_s"]
                 if (not isinstance(seg["text"], str) or not seg["text"].strip()
                         or seg["text_sha256"] != fusion.digest(seg["text"])
                         or seg["source_pcm_sha256"] != row["decoded_pcm_sha256"]

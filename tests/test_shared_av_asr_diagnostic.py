@@ -327,3 +327,58 @@ def test_vad_decoded_pcm_duration_receipt_fail_closed(monkeypatch, mutate):
     with pytest.raises(diag.SharedAVDiagnosticDenied,
                        match='A02_SHARED_AV_REPORT_INVALID'):
         diag.diagnose_shared_av_asr(report)
+
+
+def test_reordered_asr_segments_rejected_even_with_recomputed_fusion(monkeypatch):
+    report, _ = make_report(monkeypatch)
+    row = next(r for r in report['cases'] if r['case_id'] == 'audio_only')
+    original = row['audio']['segments'][0]
+    # Two nonoverlapping segments in one VAD chunk, deliberately reversed.
+    first = {**original, 'text':'Primeiro', 'text_sha256':fusion.digest('Primeiro'),
+             'start_s':0.1, 'end_s':0.3, 'chunk_start_s':0.1, 'chunk_end_s':0.3}
+    second = {**original, 'text':'Segundo', 'text_sha256':fusion.digest('Segundo'),
+              'start_s':0.5, 'end_s':0.9, 'chunk_start_s':0.5, 'chunk_end_s':0.9}
+    def refresh(segments):
+        row['audio']['segments'] = segments
+        transcript = ' '.join(x['text'] for x in segments)
+        row['audio']['chunks'][0]['transcript'] = transcript
+        row['audio']['transcript'] = transcript
+        row['fragments'] = [fusion.fragment(row['media_sha256'], 'audio', x['text'],
+            {'start_s':x['start_s'], 'end_s':x['end_s'],
+             'source_pcm_sha256':x['source_pcm_sha256'],
+             'chunk_pcm_sha256':x['chunk_pcm_sha256'],
+             'timestamp_kind':row['audio']['timestamp_kind']}) for x in segments]
+        row['arms'] = {name:fusion.fuse(row['media_sha256'], row['fragments'], mods)
+                       for name, mods in fusion.ARMS.items()}
+        score = fusion.evaluate(report['cases'])
+        report.update(score)
+        report['engineering_gate_passed'] = bool(score['engineering_gate_passed']
+                                                  and report['negative_asr_calls'] == 0)
+    refresh([first, second])
+    assert diag.diagnose_shared_av_asr(report)['source_case_count'] == 7
+    refresh([second, first])
+    with pytest.raises(diag.SharedAVDiagnosticDenied):
+        diag.diagnose_shared_av_asr(report)
+
+
+def test_overlapping_asr_segments_rejected_with_consistent_fragments(monkeypatch):
+    report, _ = make_report(monkeypatch)
+    row = next(r for r in report['cases'] if r['case_id'] == 'audio_only')
+    seg = row['audio']['segments'][0]
+    duplicate = {**seg, 'text':'Depois', 'text_sha256':fusion.digest('Depois'),
+                 'start_s':0.8, 'end_s':0.95,
+                 'chunk_start_s':0.8, 'chunk_end_s':0.95}
+    row['audio']['segments'].append(duplicate)
+    row['audio']['chunks'][0]['transcript'] += ' Depois'
+    row['audio']['transcript'] += ' Depois'
+    row['fragments'].append(fusion.fragment(row['media_sha256'], 'audio', 'Depois',
+        {'start_s':0.8, 'end_s':0.95, 'source_pcm_sha256':seg['source_pcm_sha256'],
+         'chunk_pcm_sha256':seg['chunk_pcm_sha256'],
+         'timestamp_kind':row['audio']['timestamp_kind']}))
+    row['arms'] = {name:fusion.fuse(row['media_sha256'], row['fragments'], mods)
+                   for name, mods in fusion.ARMS.items()}
+    score = fusion.evaluate(report['cases'])
+    report.update(score)
+    report['engineering_gate_passed'] = bool(score['engineering_gate_passed'])
+    with pytest.raises(diag.SharedAVDiagnosticDenied):
+        diag.diagnose_shared_av_asr(report)
