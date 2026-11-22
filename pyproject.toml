@@ -26,6 +26,7 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 addopts = "-ra"
 markers = ["media_integration: requires local audiovisual runtime (Pillow, FFmpeg)"]
 
