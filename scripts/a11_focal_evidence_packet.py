@@ -30,6 +30,8 @@ PY_A05_A07 = (
     "tests/test_creative_reference_pep_migration_a05.py",
     "tests/test_creative_reference_trust_a05.py",
     "tests/test_creative_reference_trust_startup_a05.py",
+    "tests/test_studio_reference_bindings_a05.py",
+    "tests/test_studio_reference_bindings_migration_a05.py",
     "tests/test_creative_reference_rights_a05.py",
     "tests/test_agent_creative_preview_a05.py",
     "tests/test_agent_creative_studio_synthetic_a05.py",
@@ -56,7 +58,7 @@ NODE_A073 = (
 )
 # These are expected collection counts after the A05 B2 hardening tests, NOT
 # required gate acceptance counts or a promise about all future code changes.
-EXPECTED = {"python_a05_a07": 225, "python_a073_cdp": 13, "node_a073": 19}
+EXPECTED = {"python_a05_a07": 240, "python_a073_cdp": 13, "node_a073": 19}
 SOURCE_FILES = (
     "scripts/a11_focal_evidence_packet.py",
     "scripts/a07_browser_visual_parity.py",
@@ -68,6 +70,9 @@ SOURCE_FILES = (
     "src/tapi_gate0/creative_reference_registry_a05.py",
     "src/tapi_gate0/creative_reference_pep_a05.py",
     "src/tapi_gate0/creative_reference_trust_a05.py",
+    "src/tapi_gate0/studio_reference_bindings_a05.py",
+    "src/tapi_gate0/studio_reference_lifecycle_a05.py",
+    "migrations/versions/0018_studio_reference_bindings.py",
     "src/tapi_gate0/secure_api.py",
     "src/tapi_gate0/agent_draft_a05.py",
     "src/tapi_gate0/agent_evidence_b2.py",
