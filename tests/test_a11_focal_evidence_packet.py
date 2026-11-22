@@ -24,7 +24,7 @@ def node_report(passed=19, total=19, failed=0, skipped=0):
             "ℹ todo 0\nℹ duration_ms 400\n")
 
 
-def synthetic_runner(*, pytest_count=269, a06_count=24, node_count=19, chrome=True,
+def synthetic_runner(*, pytest_count=269, a06_count=26, node_count=19, chrome=True,
                      financial=True, syntax_ok=True, pytest_skip=0, git_dirty=False):
     calls = []
     def run(argv, *, timeout, cwd):
@@ -93,7 +93,7 @@ def test_packet_assembles_exact_local_counts_and_preserves_all_gate_denials(loca
     assert receipt["validation_status"] == "FOCAL_DIAGNOSTICS_VERIFIED_NO_GATE_RELEASE"
     assert receipt["zero_spend_check_observed"] is True
     assert len(receipt["checks"]) == 7
-    assert [x["observed_pass_count"] for x in receipt["checks"]] == [1, 1, 269, 24, 13, 19, 7]
+    assert [x["observed_pass_count"] for x in receipt["checks"]] == [1, 1, 269, 26, 13, 19, 7]
     assert all(x["passed"] and x["observed_skip_count"] == 0
                for x in receipt["checks"])
     assert receipt["gate_status"] == {**{f"G{i}": "BLOCKED" for i in range(7)},
@@ -112,7 +112,7 @@ def test_packet_assembles_exact_local_counts_and_preserves_all_gate_denials(loca
 
 @pytest.mark.parametrize("changes,expected_id", [
     ({"pytest_count": 268}, "python_a05_a07"),
-    ({"a06_count": 23}, "python_a06_e1"),
+    ({"a06_count": 25}, "python_a06_e1"),
     ({"node_count": 18}, "node_a073"),
     ({"chrome": False}, "chrome_a073"),
     ({"pytest_skip": 1}, "python_a05_a07"),
@@ -178,8 +178,8 @@ def test_pytest_node_and_chrome_require_complete_counts_and_zero_exit():
             ["fixture"], done(output, code), kind=kind, expected_count=count,
         )
     assert parse("269 passed\n", "pytest", 269)["passed"] is True
-    assert parse("24 passed\n", "pytest", 24)["passed"] is True
-    assert parse("23 passed\n", "pytest", 24)["passed"] is False
+    assert parse("26 passed\n", "pytest", 26)["passed"] is True
+    assert parse("25 passed\n", "pytest", 26)["passed"] is False
     assert parse("269 passed, 1 skipped\n", "pytest", 269)["passed"] is False
     assert parse("269 passed\n", "pytest", 269, code=1)["passed"] is False
     assert parse(node_report(), "node", 19)["passed"] is True
@@ -267,7 +267,7 @@ def test_a06_source_bridge_is_pinned_before_any_focal_execution(local_files):
     a06 = [c for c in receipt["checks"]
            if c["check_id"] == "python_a06_e1"]
     assert len(a06) == 1
-    assert a06[0]["observed_pass_count"] == 24
+    assert a06[0]["observed_pass_count"] == 26
     assert "tests/test_multimodal_system_one_bridge.py" in calls[5]
     assert receipt["independent_gold_available"] is False
     assert receipt["external_reference_rights_verified"] is False
