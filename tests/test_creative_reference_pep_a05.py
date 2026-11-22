@@ -588,3 +588,112 @@ def test_old_studio_page_mutation_denied_for_signed_draft(registry):
         assert denied.json()["detail"] == (
             "STUDIO_SIGNED_REFERENCE_ACTION_RECHECK_REQUIRED"
         )
+
+
+def test_signed_draft_geometry_edit_revalidates_rights_and_versions(registry):
+    r = registry
+    signed_fixture(r)
+    with TestClient(app_for(r)) as client:
+        h = headers(client)
+        made = client.post("/v1/agent/creative-drafts", headers=h, json=spec_body(r))
+        assert made.status_code == 201, made.text
+        moved = client.post(
+            "/v1/agent/creative-drafts/draft.with-signed-ref/geometry",
+            headers={**h, "If-Match": made.headers["etag"]},
+            json={"expected_version": 1, "page_id": "page.1",
+                  "layer_id": "headline", "x": 30},
+        )
+        assert moved.status_code == 200, moved.text
+        doc = moved.json()
+        assert doc["version"] == 2
+        assert doc["pages"][0]["layers"][0]["x"] == 30
+        assert moved.headers["etag"] != made.headers["etag"]
+        assert doc["rights_status"] == "pending_review"
+        assert doc["approval_status"] == "draft"
+    with r["engine"].connect() as db:
+        kinds = db.execute(select(domain_events.c.event_type).where(
+            domain_events.c.aggregate_type == "creative_reference_use",
+        )).scalars().all()
+    assert kinds.count("creative_reference.rechecked_for_draft") == 1
+
+
+def test_signed_geometry_fails_closed_after_source_revocation(registry):
+    r = registry
+    signed_fixture(r)
+    with TestClient(app_for(r)) as client:
+        h = headers(client)
+        made = client.post("/v1/agent/creative-drafts", headers=h, json=spec_body(r))
+        assert made.status_code == 201
+        with r["engine"].begin() as db:
+            db.execute(update(source_grants).where(
+                source_grants.c.tenant_id == TENANT,
+            ).values(enabled=0))
+        denied = client.post(
+            "/v1/agent/creative-drafts/draft.with-signed-ref/geometry",
+            headers={**h, "If-Match": made.headers["etag"]},
+            json={"expected_version": 1, "page_id": "page.1",
+                  "layer_id": "headline", "y": 15},
+        )
+        assert denied.status_code == 422
+        assert client.get(
+            "/v1/studio/documents/draft.with-signed-ref", headers=h,
+        ).json()["version"] == 1
+    with r["engine"].connect() as db:
+        assert db.execute(select(domain_events.c.seq).where(
+            domain_events.c.event_type == "creative_reference.rechecked_for_draft",
+        )).all() == []
+
+
+def test_signed_geometry_requires_if_match_and_exact_etag(registry):
+    r = registry
+    signed_fixture(r)
+    with TestClient(app_for(r)) as client:
+        h = headers(client)
+        made = client.post("/v1/agent/creative-drafts", headers=h, json=spec_body(r))
+        assert made.status_code == 201
+        url = "/v1/agent/creative-drafts/draft.with-signed-ref/geometry"
+        patch = {"expected_version": 1, "page_id": "page.1",
+                 "layer_id": "headline", "x": 25}
+        assert client.post(url, headers=h, json=patch).status_code == 428
+        assert client.post(url, headers={**h, "If-Match": '"wrong"'},
+                           json=patch).status_code == 412
+        assert client.get(
+            "/v1/studio/documents/draft.with-signed-ref", headers=h,
+        ).json()["version"] == 1
+
+
+def test_signed_geometry_rolls_back_audit_when_layer_missing(registry):
+    r = registry
+    signed_fixture(r)
+    with TestClient(app_for(r)) as client:
+        h = headers(client)
+        made = client.post("/v1/agent/creative-drafts", headers=h, json=spec_body(r))
+        assert made.status_code == 201
+        result = client.post(
+            "/v1/agent/creative-drafts/draft.with-signed-ref/geometry",
+            headers={**h, "If-Match": made.headers["etag"]},
+            json={"expected_version": 1, "page_id": "page.1",
+                  "layer_id": "absent.layer", "x": 25},
+        )
+        assert result.status_code == 404
+    with r["engine"].connect() as db:
+        assert db.execute(select(domain_events.c.seq).where(
+            domain_events.c.event_type == "creative_reference.rechecked_for_draft",
+        )).all() == []
+
+
+def test_direct_canvas_mutation_cannot_skip_pep_on_signed_draft(registry):
+    from tapi_gate0.studio_canvas_c2 import StudioCanvasStore, MoveLayer
+    from tapi_gate0.studio_e1 import StudioError
+    r = registry
+    signed_fixture(r)
+    with TestClient(app_for(r)) as client:
+        h = headers(client)
+        made = client.post("/v1/agent/creative-drafts", headers=h, json=spec_body(r))
+        assert made.status_code == 201
+    with pytest.raises(StudioError, match="STUDIO_SIGNED_REFERENCE_RECHECK_REQUIRED"):
+        StudioCanvasStore(r["engine"]).move(
+            TENANT, "founder", "draft.with-signed-ref",
+            MoveLayer(expected_version=1, page_id="page.1",
+                      layer_id="headline", x=40),
+        )

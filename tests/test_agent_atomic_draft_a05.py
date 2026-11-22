@@ -257,3 +257,20 @@ def test_atomic_edit_path_keeps_synthetic_drafts_editable(api):
     assert amended.json()["version"] == 2
     assert amended.json()["rights_status"] == "pending_review"
     assert amended.json()["approval_status"] == "draft"
+
+
+def test_synthetic_geometry_stays_editable_without_external_pep(api):
+    _app, client, headers = api
+    created = client.post("/v1/agent/creative-drafts",
+                          headers=headers, json=request())
+    assert created.status_code == 201
+    moved = client.post(
+        "/v1/agent/creative-drafts/design.atomic/geometry",
+        headers={**headers, "If-Match": created.headers["etag"]},
+        json={"expected_version": 1, "page_id": "page.1",
+              "layer_id": "headline", "x": 31},
+    )
+    assert moved.status_code == 200, moved.text
+    assert moved.json()["version"] == 2
+    assert moved.json()["pages"][0]["layers"][0]["x"] == 31
+    assert moved.json()["rights_status"] == "pending_review"
