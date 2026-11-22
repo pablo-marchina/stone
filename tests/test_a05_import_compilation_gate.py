@@ -52,17 +52,21 @@ def test_signed_pep_import_and_public_action_contract():
 
 
 def test_secure_api_imports_and_mounts_creative_routes(tmp_path):
-    from fastapi.routing import APIRoute
     from tapi_gate0.secure_api import create_secure_app
 
     app = create_secure_app(
         "sqlite:///" + str(tmp_path / "import-smoke.sqlite"),
         initialize_schema=True, allow_http_local=True,
     )
+    # Check the mounted ASGI routes, not the identity of one FastAPI
+    # APIRoute class. Reloads/compatible wrappers may provide different
+    # route subclasses while the application still exposes the endpoints.
+    # The exact required method/path pairs must remain present.
     paths = {
         (method, route.path)
-        for route in app.routes if isinstance(route, APIRoute)
-        for method in route.methods or ()
+        for route in app.routes
+        if isinstance(getattr(route, "path", None), str)
+        for method in (getattr(route, "methods", None) or ())
     }
     assert {
         ("POST", "/v1/agent/creative-drafts"),
