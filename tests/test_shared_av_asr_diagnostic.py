@@ -264,3 +264,35 @@ def test_asr_timestamp_clipping_within_native_tolerance(monkeypatch):
     report.update(score)
     report['engineering_gate_passed'] = bool(score['engineering_gate_passed'])
     assert diag.diagnose_shared_av_asr(report)['source_case_count'] == 7
+
+
+@pytest.mark.parametrize('key', ['scientific_admissions', 'rubric_assessments_written'])
+def test_missing_or_nonzero_scientific_write_receipt_denied(monkeypatch, key):
+    report, _ = make_report(monkeypatch)
+    del report[key]
+    with pytest.raises(diag.SharedAVDiagnosticDenied, match='A02_SHARED_AV_REPORT_INVALID'):
+        diag.diagnose_shared_av_asr(report)
+    report[key] = 1
+    with pytest.raises(diag.SharedAVDiagnosticDenied, match='A02_SHARED_AV_REPORT_INVALID'):
+        diag.diagnose_shared_av_asr(report)
+
+
+def test_native_shared_benchmark_emits_scientific_write_denials():
+    """Check the actual producer return schema without running Whisper/FFmpeg."""
+    import ast
+    import inspect
+    import textwrap
+
+    source = textwrap.dedent(inspect.getsource(shared.run_shared_fixture_benchmark))
+    tree = ast.parse(source)
+    returns = [node.value for node in ast.walk(tree)
+               if isinstance(node, ast.Return)]
+    assert len(returns) == 1
+    result = returns[0]
+    assert isinstance(result, ast.Dict)
+    literal = {key.value: value for key, value in zip(result.keys, result.values)
+               if isinstance(key, ast.Constant) and isinstance(key.value, str)}
+    for key in ('scientific_admissions', 'rubric_assessments_written'):
+        assert key in literal
+        assert isinstance(literal[key], ast.Constant)
+        assert type(literal[key].value) is int and literal[key].value == 0

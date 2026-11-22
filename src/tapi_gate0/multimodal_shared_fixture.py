@@ -261,5 +261,7 @@ def run_shared_fixture_benchmark(model_dir,tessdata_dir):
             "cases":prepared,**scores,"engineering_gate_passed":bool(gate),
             "temporal_integrity_passed":integrity,"negative_asr_calls":negative_calls,
             "case_count":len(prepared),"synthetic_only":True,"vlm_evaluated":False,
-            "semantic_scores_calibrated":False,"real_media_processed":0,"real_media_processing_allowed":False,
+            "semantic_scores_calibrated":False,"real_media_processed":0,
+            "scientific_admissions":0,"rubric_assessments_written":0,
+            "real_media_processing_allowed":False,
             "external_data_accessed":False,"database_mutated":False,"production_approved":False}
