@@ -84,6 +84,7 @@ EXPECTED = {"python_a05_a07": 270, "python_a06_e1": 35,
             "python_a027_integrated": 7,
             "python_a073_cdp": 13, "node_a073": 19}
 SOURCE_FILES = (
+    "pyproject.toml",
     "scripts/a11_focal_evidence_packet.py",
     "scripts/a05_python_source_preflight.py",
     "scripts/a06_system_one_bridge.py",
