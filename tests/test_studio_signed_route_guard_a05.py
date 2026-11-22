@@ -38,7 +38,14 @@ def test_all_legacy_studio_document_post_routes_have_signed_reference_guard():
         names = {getattr(dep.call, "__name__", "")
                  for dep in dependant.dependencies}
         assert "deny_unchecked_signed_document_mutation" in names, path
-    assert paths, "A05_STUDIO_DOCUMENT_POST_ROUTES_MISSING"
+    observed = sorted(
+        (route.path, sorted(getattr(route, "methods", None) or ()))
+        for route in app.routes
+        if isinstance(getattr(route, "path", None), str)
+        and route.path.startswith("/v1/studio/")
+    )
+    assert paths, ("A05_STUDIO_DOCUMENT_POST_ROUTES_MISSING:"
+                   + repr(observed[:45]))
     assert "/v1/studio/documents/{document_id}/text-patches" in paths
     assert "/v1/studio/documents/{document_id}/geometry" in paths
     assert "/v1/studio/documents/{document_id}/pages/duplicate" in paths
