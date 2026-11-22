@@ -298,3 +298,129 @@ def test_pep_rejects_corrupted_signed_grant_payload(registry):
                 document_id="draft.test", grant_ids=grant_ids(r),
             )
     assert "must_not_leak" not in str(exc.value)
+
+
+# A05 reference lifecycle: persisted grant IDs and current rights must match.
+from tapi_gate0.studio_reference_bindings_a05 import studio_reference_bindings
+from tapi_gate0.studio_e1 import CreativeSpec
+
+
+def test_signed_draft_persists_grants_and_rechecks_current_state(registry):
+    r = registry
+    signed_fixture(r)
+    app = app_for(r)
+    with TestClient(app) as client:
+        h = headers(client)
+        created = client.post("/v1/agent/creative-drafts",
+                              headers=h, json=spec_body(r))
+        assert created.status_code == 201, created.text
+        with r["engine"].connect() as db:
+            saved = db.execute(select(studio_reference_bindings).where(
+                studio_reference_bindings.c.tenant_id == TENANT,
+                studio_reference_bindings.c.document_id == "draft.with-signed-ref",
+            )).mappings().all()
+        assert len(saved) == 1
+        assert saved[0]["content_id"] == r["content_id"]
+        assert saved[0]["grant_id"] == "a054-fixture-grant"
+        reply = client.post(
+            "/v1/agent/creative-drafts/draft.with-signed-ref/reference-recheck",
+            headers=h,
+        )
+        assert reply.status_code == 200, reply.text
+        data = reply.json()
+        assert data["status"] == "SIGNED_REFERENCES_CURRENT_FOR_DRAFT_REVIEW_ONLY"
+        assert data["verified_external_reference_count"] == 1
+        assert data["publication_allowed"] is False
+        assert data["production_approved"] is False
+    with r["engine"].connect() as db:
+        events = db.execute(select(domain_events.c.event_type).where(
+            domain_events.c.tenant_id == TENANT,
+            domain_events.c.aggregate_type == "creative_reference_use",
+        )).scalars().all()
+    assert "creative_reference.checked_for_draft" in events
+    assert "creative_reference.rechecked_for_draft" in events
+
+
+def test_recheck_denied_after_source_revocation_no_new_audit(registry):
+    r = registry
+    signed_fixture(r)
+    app = app_for(r)
+    with TestClient(app) as client:
+        h = headers(client)
+        assert client.post("/v1/agent/creative-drafts",
+                           headers=h, json=spec_body(r)).status_code == 201
+        with r["engine"].begin() as db:
+            db.execute(update(source_grants).where(
+                source_grants.c.tenant_id == TENANT,
+            ).values(enabled=0))
+        denied = client.post(
+            "/v1/agent/creative-drafts/draft.with-signed-ref/reference-recheck",
+            headers=h,
+        )
+        assert denied.status_code == 422
+        assert denied.json()["detail"] == "CREATIVE_REFERENCE_NOT_VERIFIED"
+    with r["engine"].connect() as db:
+        assert db.execute(select(domain_events.c.seq).where(
+            domain_events.c.event_type == "creative_reference.rechecked_for_draft",
+        )).all() == []
+        assert db.execute(select(studio_documents.c.current_version).where(
+            studio_documents.c.tenant_id == TENANT,
+            studio_documents.c.document_id == "draft.with-signed-ref",
+        )).scalar_one() == 1
+
+
+def test_tampered_reference_set_digest_denies_recheck(registry):
+    r = registry
+    signed_fixture(r)
+    app = app_for(r)
+    with TestClient(app) as client:
+        h = headers(client)
+        assert client.post("/v1/agent/creative-drafts",
+                           headers=h, json=spec_body(r)).status_code == 201
+        with r["engine"].begin() as db:
+            db.execute(update(studio_reference_bindings).where(
+                studio_reference_bindings.c.tenant_id == TENANT,
+            ).values(reference_set_sha256="0" * 64))
+        denied = client.post(
+            "/v1/agent/creative-drafts/draft.with-signed-ref/reference-recheck",
+            headers=h,
+        )
+        assert denied.status_code == 422
+
+
+def test_existing_signed_draft_recheck_requires_host_pinned_pep(registry):
+    r = registry
+    signed_fixture(r)
+    with TestClient(app_for(r)) as client:
+        h = headers(client)
+        assert client.post("/v1/agent/creative-drafts",
+                           headers=h, json=spec_body(r)).status_code == 201
+    with TestClient(app_for(r, authorities=False)) as client:
+        h = headers(client)
+        denied = client.post(
+            "/v1/agent/creative-drafts/draft.with-signed-ref/reference-recheck",
+            headers=h,
+        )
+        assert denied.status_code == 422
+
+
+def test_manually_created_external_reference_has_no_inferred_grant(registry):
+    r = registry
+    signed_fixture(r)
+    doc_id = "manual.no-signed-binding"
+    StudioStore(r["engine"]).create(
+        TENANT, "founder",
+        CreativeSpec(
+            spec_id="spec.manual.unverified", tenant_id=TENANT,
+            objective="Rascunho descritivo para revisão humana",
+            headline="Uso não autorizado", body="Metadados não dão licença",
+            cta="Revisar material", reference_content_ids=[r["content_id"]],
+        ), doc_id,
+    )
+    with TestClient(app_for(r)) as client:
+        h = headers(client)
+        denied = client.post(
+            f"/v1/agent/creative-drafts/{doc_id}/reference-recheck",
+            headers=h,
+        )
+        assert denied.status_code == 422
