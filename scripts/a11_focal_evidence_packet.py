@@ -74,6 +74,7 @@ SOURCE_FILES = (
     "src/tapi_gate0/studio_reference_lifecycle_a05.py",
     "migrations/versions/0018_studio_reference_bindings.py",
     "src/tapi_gate0/secure_api.py",
+    "src/tapi_gate0/agent_api_e1.py",
     "src/tapi_gate0/agent_draft_a05.py",
     "src/tapi_gate0/agent_evidence_b2.py",
     "migrations/versions/0017_creative_reference_pep.py",
