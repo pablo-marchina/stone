@@ -1,7 +1,7 @@
 """Offline A05/Studio route inventory for a pinned local Git checkout.
 
 This is diagnostic only, NOT acceptance evidence or a gate release. It creates
-one temporary synthetic SQLite schema, never reads operational databases,
+one in-memory synthetic SQLite schema, never reads operational databases,
 starts a server, makes an HTTP request, installs dependencies or contacts
 external providers. Emits only module filenames and public route names.
 """
@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = "stone-a05-route-inventory-diagnostic.v1"
@@ -42,14 +41,16 @@ def inventory() -> dict:
             "production_approved": False,
         }
 
-    with TemporaryDirectory(prefix="stone-a05-route-inventory-") as folder:
-        database = Path(folder) / "fixture.sqlite"
-        app = secure_api.create_secure_app(
-            "sqlite:///" + database.as_posix(),
-            initialize_schema=True,
-            allow_http_local=True,
-        )
-
+    # An in-memory SQLite StaticPool is already the supported local adapter
+    # for Studio route tests. It avoids Windows PermissionError when a named
+    # temporary .sqlite file is removed while pooled handles are still open.
+    # No operational DB URLs or environment variables are consulted.
+    app = secure_api.create_secure_app(
+        "sqlite:///:memory:",
+        initialize_schema=True,
+        allow_http_local=True,
+    )
+    try:
         def entries(routes):
             rows = []
             for route in routes:
@@ -97,7 +98,9 @@ def inventory() -> dict:
             "suspected_routes_all_prefixes": suspicious,
             "production_approved": False,
         }
-
+    finally:
+        # Explicitly close SQLAlchemy's in-memory connection even on failure.
+        app.state.identity_store.engine.dispose()
 
 def main() -> int:
     try:
