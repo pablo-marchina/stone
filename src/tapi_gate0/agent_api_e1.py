@@ -18,6 +18,8 @@ from .agent_evidence_b2 import (EvidenceRetriever, EvidenceNotFound, CreativeBri
 from .agent_draft_a05 import CreateAgentDraft, create_agent_draft
 from .studio_e1 import DesignDocument, StudioError
 from .studio_e4 import studio_etag
+from .studio_reference_bindings_a05 import ReferenceBindingDenied
+from .studio_reference_lifecycle_a05 import ReferenceRecheckResult, recheck_document_references
 
 
 class AnalyzeRequest(BaseModel):
@@ -85,5 +87,24 @@ def router_for_evidence_agent(identity, domain_store, *, creative_pep=None):
         response.headers["ETag"] = studio_etag(doc)
         response.headers["Cache-Control"] = "private, no-store"
         return doc
+
+    @router.post("/creative-drafts/{document_id}/reference-recheck",
+                 response_model=ReferenceRecheckResult)
+    def recheck_draft_references(document_id: str, request: Request,
+                                 p: Principal = Depends(principal)):
+        # Explicit POST: a successful external check appends an audit event.
+        # The result NEVER authorizes publication, media use or final export.
+        if p.role not in {"admin", "editor"}:
+            raise IdentityFailure("FORBIDDEN", 403)
+        try:
+            return recheck_document_references(
+                domain_store.engine, tenant=p.tenant_id, actor=p.actor_id,
+                token=request.headers.get("Authorization", "").partition(" ")[2],
+                document_id=document_id, creative_pep=creative_pep,
+            )
+        except ReferenceBindingDenied:
+            raise HTTPException(status_code=422, detail="CREATIVE_REFERENCE_NOT_VERIFIED")
+        except StudioError as exc:
+            raise HTTPException(status_code=exc.status, detail=exc.code) from exc
 
     return router
