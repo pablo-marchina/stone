@@ -45,3 +45,12 @@ Até lá, a ponte fica estritamente **sintética, textual, experimental e offlin
 ## Incremento de consenso textual e identidade temporal
 
 Esta revisão adicionou dois casos focais: concordância entre legenda e áudio sem promoção a avaliação científica; e texto idêntico em dois intervalos de áudio com provenance hashes distintos, apesar de fingerprints E1 legados iguais. Também reforçou os testes já existentes de conflito e abstenção OCR-only. **26/26 testes isolados PASS** e parse Python 3.11 PASS nos dois arquivos alterados. Isso não resolve A02 Strict nem verifica os modelos verdadeiros ou as licenças de terceiros. O pacote A11 foi atualizado para **26 casos esperados** no grupo A06/E1, mantendo 269 A05/A07 e todos os gates bloqueados.
+
+
+## Revisão de semântica contextual — não promover CTAs negadas
+
+A camada histórica `DeterministicTextDecider` usa correspondência textual básica e pode produzir uma hipótese `tipo_cta=salvar` para a frase **«Não salve este post»**. Essa hipótese bruta E1 permanece visível no `decision_bundle` para diagnóstico, mas **não** autoriza uma classificação agregada positiva.
+
+A ponte agora executa `rule_evidence` do contrato de grounding textual existente para os campos `tema_principal` e `tipo_cta` (também vinculado a `tem_cta`). As regras contextuais de negação, citação, relato e âncoras múltiplas são avaliadas por **cada** observação, com hash do texto validado contra o fragmento já verificado. O agregador `case_text_consensus` só promove um candidato experimental quando o valor E1 é sustentado pela regra e **nenhuma** observação elegível apresenta veto contextual ou candidato sem grounding. A presença de um veto em uma modalidade é conservada mesmo se outra modalidade possuir CTA positiva. São registrados apenas tipos de veto e hashes de proveniência, sem conteúdo bruto. `tem_cta` não é inferido como `false` por falta de CTA.
+
+Foram acrescentados **3 testes**: CTA negada isolada, CTA negada concorrente com áudio positivo e CTA citada em texto reportado. No laboratório isolado, os **29 testes** da ponte e CLI passaram com substitutos locais de dependências (não é execução do System One nem do validador multimodal reais). O pacote A11 agora exige **29 casos A06/E1** no lugar de 26, preservando **269 A05/A07**. Os gates, ciência independente e produção continuam bloqueados.
