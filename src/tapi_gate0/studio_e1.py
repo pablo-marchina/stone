@@ -315,3 +315,10 @@ class StudioStore:
             raise StudioError("STUDIO_VERSION_CONFLICT", 409)
         self._insert_version(conn, next_doc, actor)
         return next_doc
+
+
+# The standalone StudioStore module can be used without importing secure_api.
+# Register its signed-reference binding schema eagerly in the shared metadata
+# before a local `metadata.create_all()`. This import creates NO tables, grants,
+# permissions, migrations or external side effects.
+from . import studio_reference_bindings_a05 as _studio_reference_bindings_a05
