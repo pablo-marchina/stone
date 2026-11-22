@@ -77,7 +77,7 @@ NODE_A073 = (
 )
 # These are expected collection counts after the A05 B2 hardening tests, NOT
 # required gate acceptance counts or a promise about all future code changes.
-EXPECTED = {"python_a05_a07": 269, "python_a06_e1": 34,
+EXPECTED = {"python_a05_a07": 270, "python_a06_e1": 35,
             "python_a02_asr_diagnostic": 91,
             "python_a027_fixture_batch": 40,
             "python_a027_integrated": 7,
