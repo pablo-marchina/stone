@@ -63,7 +63,13 @@ def diagnose_shared_av_asr(report: dict) -> dict:
                 or checkpoint.get("model_id") != asr.MEDIUM_MODEL_ID
                 or checkpoint.get("model_revision") != asr.MEDIUM_REVISION
                 or checkpoint.get("weights_sha256") != asr.MEDIUM_SHA256
-                or checkpoint.get("weights_digest_verified") is not True):
+                or checkpoint.get("weights_digest_verified") is not True
+                or checkpoint.get("supporting_files_independently_verified") is not False
+                or not isinstance(checkpoint.get("file_sha256"), dict)
+                or set(checkpoint["file_sha256"]) != set(asr.REQUIRED_FILES)
+                or any(not isinstance(digest, str) or not SHA256.fullmatch(digest)
+                       for digest in checkpoint["file_sha256"].values())
+                or checkpoint["file_sha256"]["model.bin"] != checkpoint["weights_sha256"]):
             _fail()
         cases = report["cases"]
         if (not isinstance(cases, list) or len(cases) != len(shared.CASES)

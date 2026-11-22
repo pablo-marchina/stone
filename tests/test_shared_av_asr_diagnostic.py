@@ -96,7 +96,11 @@ def make_report(monkeypatch, *, negative_speech=False, blank_positive=False):
         'database_mutated':False,'production_approved':False,
         'real_media_processed':0,'scientific_admissions':0,'rubric_assessments_written':0,
         'checkpoint':{'model_id':asr.MEDIUM_MODEL_ID,'model_revision':asr.MEDIUM_REVISION,
-                      'weights_sha256':asr.MEDIUM_SHA256,'weights_digest_verified':True},
+                      'weights_sha256':asr.MEDIUM_SHA256,'weights_digest_verified':True,
+                      'supporting_files_independently_verified':False,
+                      'file_sha256':{name:(asr.MEDIUM_SHA256 if name == 'model.bin'
+                                          else sha256(name.encode()).hexdigest())
+                                     for name in asr.REQUIRED_FILES}},
         'case_count':len(rows),'cases':rows,'negative_asr_calls':negative_calls,
         **scores, 'engineering_gate_passed':bool(scores['engineering_gate_passed'] and negative_calls == 0)
     }, checked
@@ -381,4 +385,19 @@ def test_overlapping_asr_segments_rejected_with_consistent_fragments(monkeypatch
     report.update(score)
     report['engineering_gate_passed'] = bool(score['engineering_gate_passed'])
     with pytest.raises(diag.SharedAVDiagnosticDenied):
+        diag.diagnose_shared_av_asr(report)
+
+
+@pytest.mark.parametrize('mutate', [
+    lambda c: c.pop('file_sha256'),
+    lambda c: c['file_sha256'].update({'model.bin':'0'*64}),
+    lambda c: c['file_sha256'].update({'unexpected.json':'1'*64}),
+    lambda c: c.update(supporting_files_independently_verified=True),
+    lambda c: c['file_sha256'].update({'tokenizer.json':'invalid'}),
+])
+def test_checkpoint_manifest_receipt_fail_closed(monkeypatch, mutate):
+    report, _ = make_report(monkeypatch)
+    mutate(report['checkpoint'])
+    with pytest.raises(diag.SharedAVDiagnosticDenied,
+                       match='A02_SHARED_AV_REPORT_INVALID'):
         diag.diagnose_shared_av_asr(report)
