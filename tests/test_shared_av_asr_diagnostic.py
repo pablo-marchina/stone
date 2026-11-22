@@ -32,18 +32,21 @@ def make_report(monkeypatch, *, negative_speech=False, blank_positive=False):
         chunks = ([{'start_sample':0,'end_sample':16000,'pcm_sha256':audio_sha,
                     'transcript':hyp}] if has_asr else [])
         segments = ([{'text':hyp,'region_start_sample':0,'region_end_sample':16000,
-                     'start_s':0.1,'end_s':0.9,'text_sha256':sha256(hyp.encode()).hexdigest()}]
+                     'start_s':0.1,'end_s':0.9,'text_sha256':sha256(hyp.encode()).hexdigest(),
+                     'source_pcm_sha256':full_hash,'chunk_pcm_sha256':audio_sha}]
                     if has_asr and hyp else [])
         intervals = ([{'start':0,'end':16000}] if has_asr else [])
         fragments=[]
         if caption:
-            fragments.append({'asset_sha256':media_sha, 'modality':'caption',
-                              'text':caption, 'text_sha256':fusion.digest(caption),
-                              'locator':{}, 'semantic_eligible':True})
+            fragments.append(fusion.fragment(media_sha,'caption',caption,
+                              {'caption_sha256':fusion.digest(caption),
+                               'source':'authored_fixture_caption'}))
         if hyp:
-            fragments.append({'asset_sha256':media_sha, 'modality':'audio',
-                              'text':hyp, 'text_sha256':fusion.digest(hyp),
-                              'locator':{}, 'semantic_eligible':True})
+            fragments.append(fusion.fragment(media_sha,'audio',hyp,
+                              {'start_s':0.1,'end_s':0.9,
+                               'source_pcm_sha256':full_hash,
+                               'chunk_pcm_sha256':audio_sha,
+                               'timestamp_kind':'model_estimate_mapped_to_decoded_pcm_not_original_pts'}))
         row = {'case_id':cid,'caption':caption,'caption_sha256':fusion.digest(caption),
                'expected':{'tema_principal':topic,'tipo_cta':cta,'texto_na_tela':has_text},
                'duration_s':shared.DURATION, 'source_pixels_and_pcm_verified':True,
@@ -126,6 +129,8 @@ def test_negative_asr_calls_exposed_without_gate_override(monkeypatch):
     lambda r:r['cases'][1]['audio']['chunks'][0].update(transcript='changed'),
     lambda r:r['cases'][1]['vad'].update(pcm_sha256='changed'),
     lambda r:r['cases'][1].update(arms={}),
+    lambda r:r['cases'][1]['audio']['segments'][0].update(text_sha256='0'*64),
+    lambda r:r['cases'][1].update(fragments=[]),
     lambda r:r.update(negative_asr_calls=2),
     lambda r:r['checkpoint'].update(weights_sha256='f'*64),
     lambda r:r['cases'].reverse(),
