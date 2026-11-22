@@ -10,6 +10,8 @@ import re
 from .asset_fixture_pipeline import FixturePipeline
 from .asset_candidate_fusion import CandidateDecisions
 from .asset_rights import AssetRightsDenied
+from .asset_jobs import AssetJobQueue
+from .asset_derived_payloads import _artifact_id
 
 _SHA = re.compile(r"[a-f0-9]{64}\Z")
 _ARTIFACT = re.compile(r"artifact\.[a-f0-9]{64}\Z")
@@ -131,6 +133,26 @@ def run_explicit_fixture_batch(pipeline: FixturePipeline, worker: str, *,
                     or type(decision.evidence_fingerprint) is not str
                     or not _SHA.fullmatch(decision.evidence_fingerprint)):
                 _deny("CANDIDATE_BINDING_INVALID")
+            # The pipeline internally validates results; verify the persisted
+            # receipt identity again at the batch boundary. A same-shape but
+            # foreign artifact ID cannot be represented as this plan's output.
+            queue = pipeline.queue
+            if type(queue) is not AssetJobQueue:
+                _deny("QUEUE_REQUIRED")
+            expected_ids = []
+            for spec in specs:
+                state = queue.status(spec.tenant_id, spec.job_id)
+                receipt = state.get("receipt_sha256") if type(state) is dict else None
+                if (type(state) is not dict or state.get("tenant_id") != spec.tenant_id
+                        or state.get("object_id") != spec.object_id
+                        or state.get("job_id") != spec.job_id
+                        or state.get("state") != "completed"
+                        or state.get("reason") != "encrypted_payload"
+                        or type(receipt) is not str or not _SHA.fullmatch(receipt)):
+                    _deny("PERSISTED_RECEIPT_INVALID")
+                expected_ids.append(_artifact_id(spec, receipt))
+            if tuple(ids) != tuple(expected_ids):
+                _deny("ARTIFACT_PROVENANCE_MISMATCH")
             rejected = ()
             if plan.mode == "shared_av_partial":
                 rejection = result.get("quality_rejections")

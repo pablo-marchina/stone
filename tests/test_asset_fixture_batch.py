@@ -1,9 +1,11 @@
 """Bounded pipeline coordinator tests with no IO, network or model execution."""
 import pytest
+from hashlib import sha256
 from tapi_gate0 import asset_fixture_batch as batch
 
 PIN='a'*64
-ART=('artifact.'+'b'*64, 'artifact.'+'c'*64)
+ART=('artifact.'+sha256(('job.'+'1'*64+':'+'b'*64).encode()).hexdigest(),
+     'artifact.'+sha256(('job.'+'2'*64+':'+'c'*64).encode()).hexdigest())
 JOB_A='job.'+'1'*64
 JOB_B='job.'+'2'*64
 
@@ -29,12 +31,20 @@ class Decisions:
     canonical_rubric=False
     evidence_fingerprint='e'*64
 
+class Queue:
+    def status(self, tenant, job_id):
+        receipt = 'b'*64 if job_id == JOB_A else 'c'*64
+        return {'tenant_id': tenant, 'job_id': job_id,
+                'object_id': 'd'*64, 'state': 'completed',
+                'reason': 'encrypted_payload', 'receipt_sha256': receipt}
+
 class Fixture:
     def __init__(self, outcomes):
         self.plan=Plan()
         self.plan.mode='image_pair'
         self.plan.specs=(Spec(JOB_A,'ocr'),Spec(JOB_B,'vlm'))
         self.outcomes=list(outcomes)
+        self.queue=Queue()
         self.calls=[]
     def step(self,worker,*,retry_stopped):
         self.calls.append((worker,retry_stopped))
@@ -45,6 +55,7 @@ def patched(monkeypatch):
     monkeypatch.setattr(batch,'FixturePipeline',Fixture)
     monkeypatch.setattr(batch,'CandidateDecisions',Decisions)
     monkeypatch.setattr(batch,'AssetRightsDenied',RightsDenied)
+    monkeypatch.setattr(batch,'AssetJobQueue',Queue)
 
 def result(status,**kwargs):
     return dict(plan_sha256=PIN,synthetic_fixture=True,
@@ -203,3 +214,34 @@ def test_queue_denial_halts_without_automatic_retry(halt):
     assert receipt['reason']==halt
     assert receipt['auto_retry_enabled'] is False
     assert p.calls==[('trusted_worker',False)]
+
+
+def test_swapped_plausible_artifact_ids_are_denied():
+    p=Fixture([result('candidate_complete',artifact_ids=ART[::-1], decisions=Decisions())])
+    with pytest.raises(RightsDenied,match='ARTIFACT_PROVENANCE_MISMATCH'):
+        run(p,ticks=1)
+
+
+def test_valid_shaped_artifact_from_foreign_job_denied():
+    fake='artifact.'+'e'*64
+    p=Fixture([result('candidate_complete',artifact_ids=(fake,ART[1]),decisions=Decisions())])
+    with pytest.raises(RightsDenied,match='ARTIFACT_PROVENANCE_MISMATCH'):
+        run(p,ticks=1)
+
+
+@pytest.mark.parametrize('key,value',[
+    ('reason','receipt_only'),
+    ('state','running'),
+    ('receipt_sha256',None),
+    ('object_id','not-the-input'),
+])
+def test_nonpersisted_candidate_receipt_denied(key,value):
+    p=Fixture([done()])
+    original=p.queue.status
+    def wrong(tenant,job_id):
+        row=original(tenant,job_id)
+        row[key]=value
+        return row
+    p.queue.status=wrong
+    with pytest.raises(RightsDenied,match='PERSISTED_RECEIPT_INVALID'):
+        run(p,ticks=1)
