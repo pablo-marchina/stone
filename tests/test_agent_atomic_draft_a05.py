@@ -11,7 +11,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy import insert, select, update
 
 from tapi_gate0.identity import memberships
-from tapi_gate0.sa_store import tenants, metrics_snapshots
+from tapi_gate0.domain import Creator, ContentItem, Origin, MediaType
+from tapi_gate0.agent_evidence_b2 import EvidenceRetriever
+from tapi_gate0.sa_store import tenants, metrics_snapshots, creators, content_items
 from tapi_gate0.secure_api import create_secure_app
 from tapi_gate0.studio_e1 import studio_versions
 
@@ -68,18 +70,40 @@ def request(document="design.atomic", references=None):
     }
 
 
-def external_fixture(client, headers):
+def external_fixture(client, headers, engine):
+    # The ordinary /v1/creators endpoint MUST deny ungranted external
+    # ingestion. Seed only disposable, fictitious SQL test rows so the
+    # creative-draft PEP is tested against an actual external reference.
     assert client.post("/v1/creators", headers=headers, json={
         "creator_id": "external.creator", "tenant_id": "tenantA",
         "origin": "instagram", "handle": "external",
-    }).status_code == 201
-    assert client.post("/v1/content", headers=headers, json={
-        "content_id": "external.post", "tenant_id": "tenantA",
-        "creator_id": "external.creator", "origin": "instagram",
-        "media_type": "imagem", "published_at": "2026-10-01T12:00:00+00:00",
-        "source_url": "https://www.instagram.com/p/Example123/",
-        "is_synthetic": False, "caption": "Third-party metadata only",
-    }).status_code == 201
+    }).status_code == 403
+    observed_at = datetime(2026, 10, 1, 12, tzinfo=timezone.utc)
+    creator = Creator(
+        creator_id="external.creator", tenant_id="tenantA",
+        origin=Origin.INSTAGRAM, handle="external", created_at=observed_at,
+    )
+    content = ContentItem(
+        content_id="external.post", tenant_id="tenantA",
+        creator_id=creator.creator_id, origin=Origin.INSTAGRAM,
+        media_type=MediaType.IMAGE, published_at=observed_at,
+        created_at=observed_at,
+        source_url="https://www.instagram.com/p/Example123/",
+        is_synthetic=False, caption="Third-party metadata only",
+    )
+    with engine.begin() as db:
+        db.execute(insert(creators).values(
+            tenant_id="tenantA", id=creator.creator_id,
+            origin=creator.origin.value, payload=creator.model_dump_json(),
+        ))
+        db.execute(insert(content_items).values(
+            tenant_id="tenantA", id=content.content_id,
+            creator_id=creator.creator_id, origin=content.origin.value,
+            published_at=content.published_at.isoformat(),
+            payload=content.model_dump_json(),
+        ))
+    # Denial below must not pass simply because the external row is absent.
+    assert EvidenceRetriever(engine).get("tenantA", "external.post").content_id == "external.post"
 
 
 def test_single_call_creates_editable_draft_with_no_approvals(api):
@@ -112,8 +136,8 @@ def test_single_call_creates_editable_draft_with_no_approvals(api):
 
 
 def test_external_reference_denied_and_no_document_created(api):
-    _app, client, headers = api
-    external_fixture(client, headers)
+    app, client, headers = api
+    external_fixture(client, headers, app.state.identity_store.engine)
     response = client.post("/v1/agent/creative-drafts", headers=headers,
                            json=request(references=["external.post"]))
     assert response.status_code == 422
@@ -122,8 +146,8 @@ def test_external_reference_denied_and_no_document_created(api):
 
 
 def test_mixed_references_fail_atomically(api):
-    _app, client, headers = api
-    external_fixture(client, headers)
+    app, client, headers = api
+    external_fixture(client, headers, app.state.identity_store.engine)
     response = client.post("/v1/agent/creative-drafts", headers=headers,
                            json=request(references=["synthetic.post", "external.post"]))
     assert response.status_code == 422
