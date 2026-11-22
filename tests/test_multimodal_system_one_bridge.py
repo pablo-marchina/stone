@@ -55,6 +55,7 @@ def fixture_report(monkeypatch, fragments=None):
         "synthetic_only": True, "engineering_gate_passed": True,
         "database_mutated": False, "external_data_accessed": False,
         "production_approved": False, "real_media_processed": 0,
+        "scientific_admissions": 0, "rubric_assessments_written": 0,
         "cases": [row],
     }
     return report, checks
@@ -277,6 +278,18 @@ def test_bridge_denies_invalid_native_safety_receipt_before_e1(monkeypatch, fiel
     report.update(real_media_processed=0, scientific_admissions=0,
                   rubric_assessments_written=0)
     report[field] = value
+    with pytest.raises(bridge.SystemOneAVBridgeDenied,
+                       match="A06_SYSTEM_ONE_SYNTHETIC_REPORT_REQUIRED"):
+        bridge.bridge_verified_synthetic_report(report)
+    assert checks == {"report": 0, "asset": 0}
+
+
+@pytest.mark.parametrize("field", [
+    "scientific_admissions", "rubric_assessments_written",
+])
+def test_bridge_denies_missing_native_safety_receipt_before_e1(monkeypatch, field):
+    report, checks = fixture_report(monkeypatch, [fragment("caption", "Salve este post.")])
+    del report[field]
     with pytest.raises(bridge.SystemOneAVBridgeDenied,
                        match="A06_SYSTEM_ONE_SYNTHETIC_REPORT_REQUIRED"):
         bridge.bridge_verified_synthetic_report(report)
