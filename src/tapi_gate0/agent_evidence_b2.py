@@ -150,9 +150,15 @@ class EvidenceRetriever:
         )
 
     def handoff(self, tenant_id: str, request: CreativeBriefRequest) -> CreativeSpecHandoff:
+        # Reading metadata and reusing a post for creative generation are
+        # different rights. Until an authenticated per-operation creative PEP
+        # is wired to this boundary, permit only source-free local fixtures.
+        # This does not authorize publishing even those draft CreativeSpecs.
         for content_id in request.reference_content_ids:
-            # Do not trust references simply because a client supplied them.
-            self.get(tenant_id, content_id)
+            evidence = self.get(tenant_id, content_id)
+            if (evidence.origin != "synthetic_local"
+                    or evidence.source_url is not None):
+                raise EvidenceNotFound("CREATIVE_REFERENCE_RIGHTS_PEP_REQUIRED")
         return CreativeSpecHandoff(
             spec_id=request.spec_id, tenant_id=tenant_id,
             objective=request.objective, headline=request.headline,

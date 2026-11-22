@@ -288,3 +288,64 @@ def test_evidence_rejects_creator_index_drift(tmp_path):
         ).values(origin="stone_internal"))
     with pytest.raises(EvidenceNotFound, match="EVIDENCE_CREATOR_BINDING_INVALID"):
         EvidenceRetriever(engine).get("tenantA", "post1")
+
+
+def test_synthetic_content_with_external_source_url_does_not_enter_handoff(tmp_path):
+    """An origin label alone is not sufficient proof of creative rights."""
+    app = _setup(tmp_path)
+    engine = app.state.identity_store.engine
+    with engine.begin() as db:
+        old = db.execute(select(content_items.c.payload).where(
+            content_items.c.tenant_id == "tenantA",
+            content_items.c.id == "post1",
+        )).scalar_one()
+        payload = json.loads(old)
+        payload["source_url"] = "https://example.com/unlicensed-source"
+        db.execute(update(content_items).where(
+            content_items.c.tenant_id == "tenantA",
+            content_items.c.id == "post1",
+        ).values(payload=json.dumps(payload)))
+    with pytest.raises(EvidenceNotFound, match="CREATIVE_REFERENCE_RIGHTS_PEP_REQUIRED"):
+        EvidenceRetriever(engine).handoff(
+            "tenantA", CreativeBriefRequest.model_validate(_brief()),
+        )
+
+
+def test_mcp_does_not_propose_spec_from_external_reference(tmp_path):
+    """MCP has the same fail-closed handoff boundary as REST/Python."""
+    from tapi_gate0.domain import ContentItem, Creator, Origin, MediaType
+    from sqlalchemy import insert
+    from tapi_gate0.sa_store import SqlDomainStore
+    app = _setup(tmp_path)
+    engine = app.state.identity_store.engine
+    now = datetime(2026, 11, 4, tzinfo=timezone.utc)
+    cr = Creator(
+        tenant_id="tenantA", creator_id="external_creator",
+        origin=Origin.INSTAGRAM, handle="test", created_at=now,
+    )
+    post = ContentItem(
+        tenant_id="tenantA", content_id="external_post",
+        creator_id=cr.creator_id, origin=Origin.INSTAGRAM,
+        media_type=MediaType.IMAGE, published_at=now,
+        source_url="https://www.instagram.com/p/Example123/",
+        caption="External source", is_synthetic=False, created_at=now,
+    )
+    with engine.begin() as db:
+        db.execute(insert(creators).values(
+            tenant_id="tenantA", id=cr.creator_id,
+            origin=cr.origin.value, payload=cr.model_dump_json(),
+        ))
+        db.execute(insert(content_items).values(
+            tenant_id="tenantA", id=post.content_id,
+            creator_id=post.creator_id, origin=post.origin.value,
+            published_at=post.published_at.isoformat(),
+            payload=post.model_dump_json(),
+        ))
+    args = _brief(reference_content_ids=["external_post"])
+    reply = handle_mcp({
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {"name": "tapi.propose_creative_spec", "arguments": args},
+    }, tenant="tenantA", retriever=EvidenceRetriever(engine),
+       ranking_tool=SqlDomainStore(engine))
+    assert reply["result"]["isError"] is True
+    assert "external_post" not in reply["result"]["content"][0]["text"]
