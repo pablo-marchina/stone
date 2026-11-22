@@ -24,7 +24,11 @@ CREATE = datetime(2026, 11, 5, tzinfo=timezone.utc)
 
 
 @pytest.fixture
-def scenario(tmp_path):
+def scenario(tmp_path, monkeypatch):
+    # Isolate SQL/payload integrity tests from the separately guarded metadata
+    # permission preflight. This test double is NOT a real-world grant.
+    monkeypatch.setattr(StudioEvidenceEditService, "_metadata_source_scope",
+                        staticmethod(lambda *_: "f" * 64))
     engine = engine_for(f"sqlite:///{tmp_path / 'studio-evidence-integrity.sqlite'}")
     SqlDomainStore(engine).initialize()
     creator = Creator(

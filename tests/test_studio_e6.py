@@ -18,7 +18,7 @@ from tapi_gate0.identity import memberships
 from tapi_gate0.studio_render_e6 import (
     LocalDraftRenderer, studio_render_rights_events, studio_render_events,
     studio_render_artifacts, studio_render_jobs)
-from tapi_gate0.studio_evidence_edits_e6 import studio_evidence_edit_events
+from tapi_gate0.studio_evidence_edits_e6 import studio_evidence_edit_events, StudioEvidenceEditService
 
 PASSWORD = 'Local-Testing-Password-2026'
 
@@ -200,7 +200,11 @@ def test_canceled_job_cannot_run_and_audio_rejects_bad_data(tmp_path,monkeypatch
     c.__exit__(None,None,None)
 
 
-def test_evidence_bound_edit_requires_persisted_snapshot_and_explicit_confirmation(tmp_path):
+def test_evidence_bound_edit_requires_persisted_snapshot_and_explicit_confirmation(tmp_path, monkeypatch):
+    # E6 edit-flow unit test: mock the independent metadata policy only here.
+    # It must NOT be interpreted as an operational source grant.
+    monkeypatch.setattr(StudioEvidenceEditService, "_metadata_source_scope",
+                        staticmethod(lambda *_: "f" * 64))
     app,c,h=setup(tmp_path)
     auth=app.state.identity_store
     published=datetime(2026,10,1,tzinfo=timezone.utc)
