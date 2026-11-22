@@ -55,6 +55,7 @@ def test_secure_api_imports_and_mounts_creative_routes(tmp_path):
     import tapi_gate0
     from tapi_gate0 import secure_api, agent_api_e1, studio_api
     from tapi_gate0.secure_api import create_secure_app
+    from starlette.routing import Match
 
     # A global editable install of the parent Stone checkout can be cached
     # before pytest applies its pythonpath config. Reject mixed-source
@@ -74,27 +75,32 @@ def test_secure_api_imports_and_mounts_creative_routes(tmp_path):
         "sqlite:///" + str(tmp_path / "import-smoke.sqlite"),
         initialize_schema=True, allow_http_local=True,
     )
-    # Check the mounted ASGI routes, not the identity of one FastAPI
-    # APIRoute class. Reloads/compatible wrappers may provide different
-    # route subclasses while the application still exposes the endpoints.
-    # The exact required method/path pairs must remain present.
-    paths = {
-        (method, route.path)
-        for route in app.routes
-        if isinstance(getattr(route, "path", None), str)
-        for method in (getattr(route, "methods", None) or ())
-    }
-    required = {
-        ("POST", "/v1/agent/creative-drafts"),
-        ("POST", "/v1/agent/creative-drafts/{document_id}/text-patches"),
-        ("POST", "/v1/agent/creative-drafts/{document_id}/geometry"),
-        ("POST", "/v1/agent/creative-drafts/{document_id}/reference-recheck"),
-    }
-    missing = sorted(required - paths)
+    # Match real ASGI routes for sample requests, not a textual path
+    # template that may include a Starlette converter ("{id:str}").
+    # Missing actual POST handlers must still fail, never be ignored.
+    required = (
+        "/v1/agent/creative-drafts",
+        "/v1/agent/creative-drafts/diagnostic/text-patches",
+        "/v1/agent/creative-drafts/diagnostic/geometry",
+        "/v1/agent/creative-drafts/diagnostic/reference-recheck",
+    )
+    matching = []
+    for route in app.routes:
+        methods = getattr(route, "methods", None) or ()
+        path = getattr(route, "path", None)
+        if ("POST" not in methods or not isinstance(path, str)
+                or not path.startswith("/v1/agent/creative-drafts")):
+            continue
+        matching.append(route)
+
+    def serves(concrete):
+        scope = {"type": "http", "path": concrete, "method": "POST",
+                 "root_path": ""}
+        return any(route.matches(scope)[0] == Match.FULL for route in matching)
+
+    missing = [target for target in required if not serves(target)]
     assert not missing, (
-        "A05_CREATIVE_ROUTES_MISSING:"
-        + repr(missing)
+        "A05_CREATIVE_ROUTES_MISSING:" + repr(missing)
         + "; observed_agent_posts="
-        + repr(sorted(path for method, path in paths
-                      if method == "POST" and path.startswith("/v1/agent/")))
+        + repr(sorted(route.path for route in matching))
     )
