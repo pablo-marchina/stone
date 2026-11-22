@@ -210,3 +210,17 @@ def test_reader_cannot_create_agent_studio_draft(api):
     assert denied.status_code == 403
     assert client.post("/v1/agent/creative-drafts", json=request()).status_code == 401
     assert client.get("/v1/studio/documents/design.atomic", headers=headers).status_code == 404
+
+
+def test_failed_first_version_insert_rolls_back_document_header(api, monkeypatch):
+    from tapi_gate0.studio_e1 import StudioStore
+    _app, client, headers = api
+
+    def fail_version_insert(_db, _doc, _actor):
+        raise RuntimeError("synthetic first-version write failure")
+
+    monkeypatch.setattr(StudioStore, "_insert_version", staticmethod(fail_version_insert))
+    with pytest.raises(RuntimeError, match="synthetic first-version write failure"):
+        client.post("/v1/agent/creative-drafts", headers=headers, json=request())
+    # The shared transaction MUST roll back the previously inserted header.
+    assert client.get("/v1/studio/documents/design.atomic", headers=headers).status_code == 404
