@@ -70,3 +70,14 @@ python docs/base_atemporal/ferramentas/validar_espelho.py
 ```
 
 Nenhum teste isolado deve ser interpretado como aceite G0–G6, IMP-131 ou autorização de deploy.
+
+
+## Revisão de proveniência durável do candidato terminal (2026-11-22)
+
+A análise cruzada do contrato `FixturePipeline.step` e das tabelas reais `AssetJobQueue` revelou uma fronteira adicional: o coordenador validava formato e quantidade de `artifact_ids`, mas não reconciliava os IDs terminais com os **recibos persistidos de cada JobSpec**. Um ID de artefato bem formado, porém trocado ou de outro job, podia passar pela validação independente do batch.
+
+A implementação agora consulta `pipeline.queue.status(tenant_id, job_id)` para **cada spec** antes de aceitar o terminal e exige `state=completed`, `reason=encrypted_payload`, mesma identidade tenant/object/job, `receipt_sha256` hexadecimal exato. Recalcula então o ID usando a função original `asset_derived_payloads._artifact_id(spec, receipt_sha256)` e exige a **mesma sequência e valores** devolvidos no candidato final. Nenhum acesso externo, retry, gravação ou concessão de direitos é realizado pela checagem. A validação da fila e do fusion original permanece obrigatória.
+
+**Evidência realmente executada:** 34/34 PASS no laboratório Python isolado da coordenação (28 casos anteriores e seis novos: artefatos trocados, ID bem formado alheio e quatro corrupções parametrizadas do recibo persistido). Utilizou a **fórmula original de `_artifact_id`** e uma fila substituta explícita. Os arquivos publicados foram confrontados por comprimento e checksums de conteúdo com as versões testadas. Esta evidência é de contrato isolado, não de fila SQL.
+
+**Integração pendente:** o arquivo `tests/test_asset_fixture_batch_integration.py` agora tem **seis** casos com fixture assinada/SQLite/vault reais; o sexto injeta swap de artefatos no último recibo, exigindo `ARTIFACT_PROVENANCE_MISMATCH` com quatro jobs processados e nenhuma tentativa adicional. Os seis testes continuam **NOT_RUN** no checkout completo neste HEAD. A11 separa **34 testes isolados esperados** e **6 de integração esperados**; qualquer falta bloqueia a sequência antes do A05/A07. Nenhuma alegação de aprovação G0–G6/IMP-131 decorre das contagens.
