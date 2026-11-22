@@ -153,3 +153,20 @@ Análise do inventário de fontes do próprio `PY_A05_A07` com 25 arquivos: os *
 **Incremento de diagnóstico posterior:** A11 agora registra `observed_error_count` numérico e redigido de `pytest`, juntamente com `observed_fail_count` preexistente, sem guardar logs brutos. Dois testes sintéticos verificam que os perfis hipotéticos `264 passed, 6 failed` e `264 passed, 6 errors` provocam `BLOCKED_NOT_VALIDATED` e interrompem a cadeia ANTES do A06. Os números desses dois novos testes são **fixtures de regressão**, não a causa verificada da falha do operador. Necessário revalidar a suite unitária A11 no novo HEAD.
 
 **Para identificar a causa real, executar a mesma seleção de `PY_A05_A07` diretamente pelo pytest** no HEAD de integração atualizado e checkout limpo, com logs guardados localmente e sem colocar credenciais, payloads privados ou reportes não redigidos no GitHub. Nenhum resultado anterior é transferível a um novo commit. Sem alteração de direitos, dados externos, baseline, políticas de ciência, custo zero, deploy ou aceites globais.
+
+
+## Diagnóstico A05/A07: seis FAILs reais no Windows
+
+**Log do operador no SHA `a832caf82312caef2467ff69ef7fc9baa3da655a`:** `tests/test_a11_focal_evidence_packet.py` **32 PASS**; execução direta dos 25 arquivos `PY_A05_A07`: **264 PASS, 6 FAIL, zero SKIP, 1 warning (Starlette)**, em ~254 s.
+
+As falhas identificadas e o tratamento planejado, preservando direitos:
+
+1. `test_secure_api_imports_and_mounts_creative_routes`: a checagem filtrava rotas por `isinstance(..., APIRoute)`, omitindo rotas do aplicativo montado. A asserção passa a inspecionar `path` e `methods` das rotas registradas, **sem remover nenhum dos quatro endpoints obrigatórios**.
+2. `test_all_legacy_studio_document_post_routes_have_signed_reference_guard`: mesmo filtro ocultava todos os POSTs da verificação. Agora inspeciona todos os `POST /v1/studio/documents/{document_id}...` e **bloqueia se faltar a árvore de dependências ou o guard `deny_unchecked_signed_document_mutation`**.
+3. `test_denies_mutation_between_two_checks`: mock do `EvidenceRetriever.handoff` não aceitava `connection=`, usado pela reentrada do método real. Teste corrigido para preservar o argumento e modificar uma única vez o payload após a chamada externa do handoff, exigindo ainda `A05_REFERENCE_DRIFT`.
+4. `test_handoff_requires_actual_synthetic_flag_not_just_origin[tamper0]`: payload com `origin=synthetic_local` e `is_synthetic=False` é inválido no modelo e deve negar até leitura de metadados com `EVIDENCE_STORED_PAYLOAD_INVALID`; URL externa válida sem direito de uso continua negada no handoff com `CREATIVE_REFERENCE_RIGHTS_PEP_REQUIRED`. Teste atualizado sem relaxar a validação.
+5–6. `test_external_reference_denied_and_no_document_created` e `test_mixed_references_fail_atomically`: os fixtures tentavam criar `instagram` por `POST /v1/creators`, mas esta entrada deve retornar **403** sem grant. Agora confirmam o 403 e criam registros de terceiros **fictícios, somente no banco SQLite descartável de teste**, garantindo que `EvidenceRetriever.get` localiza a referência; em seguida exigem que o endpoint de criativos negue a criação e não grave documentos.
+
+**Status:** seis correções publicadas e seus diffs inspecionados, **NOT_RUN no novo SHA**. Manter A05/A07 **270 PASS** como requisito do A11. Os resultados do SHA antigo não podem ser transferidos. Conferir primeiro os seis testes focais, depois os 25 módulos completos A05/A07 e a cadeia A11 no mesmo HEAD. Garantir que o texto do traceback ou logs a compartilhar sejam redigidos, sem payloads privados nem tokens de sessão.
+
+Nenhum aumento de direitos, bypass no runtime, alteração normativa, gasto, inferência externa, merge à main, G0–G6/IMP-131 ou deploy autorizado.
