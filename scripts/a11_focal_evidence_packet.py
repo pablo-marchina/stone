@@ -373,6 +373,11 @@ def build_packet(*, root: Path = ROOT, expected_head: str | None = None,
         if name == "syntax_preflight" and not result["passed"]:
             packet["validation_status"] = "BLOCKED_PYTHON_SYNTAX_PREFLIGHT"
             return packet  # Never run pytest/Node/Chrome on malformed source.
+        if not result["passed"]:
+            # Fail closed at the first incomplete focal stage: no dependent
+            # A05/A06/Studio after a failed signed SQLite/rights/vault check.
+            # The redacted failing stage is retained in packet["checks"].
+            return packet
 
     if len(packet["checks"]) == 10 and all(c["passed"] for c in packet["checks"]):
         packet["validation_status"] = "FOCAL_DIAGNOSTICS_VERIFIED_NO_GATE_RELEASE"
