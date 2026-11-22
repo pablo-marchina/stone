@@ -31,6 +31,7 @@ from .corpus_caption_replay import CaptionReplay, config_from_env as replay_conf
 from .ui import router_for_authenticated_view
 from .agent_api_e1 import router_for_evidence_agent
 from .creative_reference_pep_a05 import CreativeReferencePEP
+from .creative_reference_trust_a05 import load_reference_trust
 from .studio_e1 import StudioStore  # registers studio tables before schema initialization
 from .studio_api import router_for_studio
 from .evidence_lab import EvidenceLab, config_from_env, router_for_lab
@@ -210,6 +211,13 @@ def from_environment():
     if lab_config is not None and os.environ.get("TAPI_ALLOW_HTTP_LOOPBACK")!="1":
         raise ValueError("EVIDENCE_LAB_LOOPBACK_MODE_REQUIRED")
     lab=EvidenceLab(lab_config) if lab_config is not None else None
+    # A trusted host may explicitly enable externally pinned PUBLIC anchors.
+    # No trust vars: None -> all external creative references stay denied.
+    # Partial/malformed settings fail application startup, never downgrade.
+    reference_anchors=load_reference_trust(
+        os.environ,repository_root=Path(__file__).resolve().parents[2],
+    )
     return create_secure_app(url,initialize_schema=False,
         allow_http_local=os.environ.get("TAPI_ALLOW_HTTP_LOOPBACK")=="1",evidence_lab=lab,
-        caption_replay_config=replay_config_from_env(os.environ))
+        caption_replay_config=replay_config_from_env(os.environ),
+        creative_reference_authorities=reference_anchors)
