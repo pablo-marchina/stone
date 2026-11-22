@@ -160,7 +160,10 @@ def bridge_verified_synthetic_report(
             "source_report_content_sha256": initial,
             "cases": mapped,
             "source_case_count": len(mapped),
-            "text_observation_count": sum(len(c["observations"]) for c in mapped),
+            "text_observation_count": sum(
+                1 for c in mapped for item in c["observations"]
+                if item["modality"] is not None
+            ),
             "source_kind": "synthetic",
             "e1_text_only": True,
             "ocr_vlm_promoted_to_e1": False,

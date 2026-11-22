@@ -119,6 +119,7 @@ def test_ocr_and_vlm_are_never_misrepresented_as_e1_text(monkeypatch):
     ])
     result = bridge.bridge_verified_synthetic_report(report)
     assert result["ocr_vlm_promoted_to_e1"] is False
+    assert result["text_observation_count"] == 0
     obs = result["cases"][0]["observations"]
     assert len(obs) == 1 and obs[0]["modality"] is None
     assert obs[0]["text_sha256"] is None
