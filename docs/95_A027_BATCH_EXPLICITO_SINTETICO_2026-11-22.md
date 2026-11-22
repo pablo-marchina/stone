@@ -131,3 +131,14 @@ Correção posterior no PR de integração:
 4. `pyproject.toml` fixa `pytest.pythonpath=["src"]` para isolamento entre checkout do worktree e pacote editável em outro clone; A11 agora calcula também seu hash de fonte, e um teste verifica a configuração.
 
 **Evidência:** verificação de conteúdo do HEAD GitHub, não execução. Os 140 PASS pertencem **somente ao SHA anterior** e não podem ser transferidos à revisão atual. Executar `tests/test_a11_focal_evidence_packet.py` no HEAD exato antes de tentar A11 full. Nenhum gate, dado externo ou produção foi liberado.
+
+
+## A11 / A02 ASR — divergência da coleta Windows no HEAD `3237796fb...`
+
+**Resultado real do operador:** `scripts.a05_python_source_preflight` PASS em 380 arquivos e `pytest tests/test_a11_focal_evidence_packet.py` **30 PASS**. A execução focal `scripts.a11_focal_evidence_packet --expected-head 3237796...` retornou `BLOCKED_NOT_VALIDATED` após `zero_spend` PASS, `syntax_preflight` PASS e `python_a02_asr_diagnostic` **88 PASS observados / 91 exigidos**. Este bloqueio é correto e não concede aceite de gate.
+
+**Diagnóstico por inspeção da suite pinada:** quatro módulos ASR continham **89 casos coletáveis estimados estaticamente** (19 + 9 + 53 + 8). O módulo CLI continha um `pytest.skip` condicional se o Windows não permitisse criar symlink, compatível com observar 88 casos aprovados; o usuário não forneceu a linha de total de skips, portanto **não se afirma que 1 skip foi confirmado**.
+
+**Incremento de segurança:** preservar o requisito de **91 PASS**, sem alterar thresholds científicos. O teste de symlink da origem agora usa um substituto do verificador `Path.is_symlink` quando o sistema recusa criar um symlink real; mantém a mesma negação de `cli.main`. Dois casos de segurança independentes foram adicionados: diretório privado marcado symlink e caminho de output marcado symlink, ambos devem retornar negação sem criar artefatos. Os 4 módulos passaram a conter **91 casos estimados pela inspeção do código parametrizado** (19 + 11 + 53 + 8) e **nenhum `pytest.skip` explícito** nesses módulos. Em host que suporte symlink, o teste existente ainda usa a criação real.
+
+**Limite de evidência:** `91` é ainda apenas um inventário estático dos casos e não 91 novos PASS. Para verificar, rodar `python -m pytest -q -rs tests/test_asr_strict_diagnostic.py tests/test_a02_asr_strict_diagnostic_cli.py tests/test_shared_av_asr_diagnostic.py tests/test_shared_av_asr_cli.py` em worktree limpo e no HEAD exato. Continuar a exigir `91 passed, 0 skipped, 0 failed` para a entrada A11. Outras etapas A11, A00 integral e aceitação G0–G6/IMP-131 continuam NOT_RUN/BLOCKED neste HEAD. Sem mídia externa, ASR real, licença de terceiros ou production deploy.
