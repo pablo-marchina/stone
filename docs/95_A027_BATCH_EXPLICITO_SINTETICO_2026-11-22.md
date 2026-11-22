@@ -170,3 +170,14 @@ As falhas identificadas e o tratamento planejado, preservando direitos:
 **Status:** seis correções publicadas e seus diffs inspecionados, **NOT_RUN no novo SHA**. Manter A05/A07 **270 PASS** como requisito do A11. Os resultados do SHA antigo não podem ser transferidos. Conferir primeiro os seis testes focais, depois os 25 módulos completos A05/A07 e a cadeia A11 no mesmo HEAD. Garantir que o texto do traceback ou logs a compartilhar sejam redigidos, sem payloads privados nem tokens de sessão.
 
 Nenhum aumento de direitos, bypass no runtime, alteração normativa, gasto, inferência externa, merge à main, G0–G6/IMP-131 ou deploy autorizado.
+
+
+## A05/A07 268/270 — rotas no aplicativo vs origem dos módulos
+
+O operador executou em `c72096997bda6f219fd56eea96bbacfd580e3fdd` os seis testes A05/A07 previamente falhos: **4 PASS e 2 FAIL**, ambos limitados a **enumeração de rotas**, sem indício de falha dos quatro testes corrigidos de evidências/rights. A11 focal chegou novamente a **ASR 91/91, A02.7 40/40 e integração A02.7 7/7 PASS**, mas `python_a05_a07` reportou **268/270 PASS, 2 FAIL, zero ERROR** e bloqueou por `A11_PYTEST_INCOMPLETE`, corretamente sem prosseguir para A06/Node/Chrome.
+
+Os dois testes restantes exigem os quatro POSTs de `/v1/agent/creative-drafts...` e o guard `deny_unchecked_signed_document_mutation` em todos os POSTs legados `/v1/studio/documents/{document_id}...`. Inspeção no commit demonstrou que os módulos da branch atual **definem** essas rotas, porém os objetos retornados ao pytest anterior não continham as rotas dinâmicas esperadas. Isto **não demonstra ainda** se a origem é uma importação de outra revisão ou divergência de montagem em runtime.
+
+**Incremento de diagnóstico:** as duas verificações exigem, antes da enumeração, que `tapi_gate0`, `secure_api`, `agent_api_e1` e `studio_api` tenham `__file__` exatamente em `stone-pr71/src/tapi_gate0` (relativamente à própria origem dos arquivos de teste). Erros são fixos `A05_WRONG_WORKTREE_IMPORT:<nome do módulo>`, sem divulgar caminhos absolutos. Se as origens baterem mas faltarem rotas, o teste A05 lista apenas nomes/métodos públicos do agente; o teste Studio lista nomes/métodos públicos do Studio, mantendo negação se o guard ou a árvore de dependências não forem encontrados.
+
+**Ação seguinte:** executar só os dois testes em ambiente isolado, confirmando o `PYTHONPATH` para `stone-pr71/src`, sem reproduzir a suite de 270 testes antes de identificar a causa. Se houver import de revisão errada, corrigir a resolução de módulos e repetir. Se as origens forem corretas, tratar a divergência de rotas no próprio runtime. Critérios originais inalterados: os 4 POSTs, todos os guards, 270 PASS e G0–G6/IMP-131 bloqueados até aceite. Atualizações no novo SHA **NOT_RUN** no operador; nenhuma produção ou chamada externa.
