@@ -5,6 +5,7 @@ guard later does NOT secure previously registered routes. This test inspects
 the REAL constructed application's route dependency graph, not a proxy.
 """
 from pathlib import Path
+from starlette.routing import Match
 
 from tapi_gate0 import secure_api, studio_api
 from tapi_gate0.secure_api import create_secure_app
@@ -22,31 +23,39 @@ def test_all_legacy_studio_document_post_routes_have_signed_reference_guard():
         "sqlite:///:memory:", initialize_schema=True,
         allow_http_local=True,
     )
-    paths = []
+    # Inspect ALL POST routes under this base path, even if a framework
+    # spells a dynamic parameter as "{document_id:str}" instead of
+    # "{document_id}". A route without a security dependency tree is denied.
+    document_posts = []
     for route in app.routes:
-        path = getattr(route, "path", "")
-        methods = getattr(route, "methods", None) or set()
+        path = getattr(route, "path", None)
+        methods = getattr(route, "methods", None) or ()
         if (not isinstance(path, str)
-                or not path.startswith("/v1/studio/documents/{document_id}")
+                or not path.startswith("/v1/studio/documents/")
                 or "POST" not in methods):
             continue
-        paths.append(path)
-        # A POST route without a FastAPI dependency graph cannot silently
-        # escape the reference guard: fail closed instead of filtering it out.
+        document_posts.append(route)
         dependant = getattr(route, "dependant", None)
         assert dependant is not None, path
         names = {getattr(dep.call, "__name__", "")
                  for dep in dependant.dependencies}
         assert "deny_unchecked_signed_document_mutation" in names, path
-    observed = sorted(
-        (route.path, sorted(getattr(route, "methods", None) or ()))
-        for route in app.routes
-        if isinstance(getattr(route, "path", None), str)
-        and route.path.startswith("/v1/studio/")
+
+    required = (
+        "/v1/studio/documents/diagnostic/text-patches",
+        "/v1/studio/documents/diagnostic/geometry",
+        "/v1/studio/documents/diagnostic/pages/duplicate",
+        "/v1/studio/documents/diagnostic/versions/restore",
     )
-    assert paths, ("A05_STUDIO_DOCUMENT_POST_ROUTES_MISSING:"
-                   + repr(observed[:45]))
-    assert "/v1/studio/documents/{document_id}/text-patches" in paths
-    assert "/v1/studio/documents/{document_id}/geometry" in paths
-    assert "/v1/studio/documents/{document_id}/pages/duplicate" in paths
-    assert "/v1/studio/documents/{document_id}/versions/restore" in paths
+    def serves(concrete):
+        scope = {"type": "http", "path": concrete,
+                 "method": "POST", "root_path": ""}
+        return any(route.matches(scope)[0] == Match.FULL
+                   for route in document_posts)
+
+    missing = [target for target in required if not serves(target)]
+    assert not missing, (
+        "A05_STUDIO_DOCUMENT_POST_ROUTES_MISSING:" + repr(missing)
+        + "; observed_studio_posts="
+        + repr(sorted(route.path for route in document_posts)[:45])
+    )
