@@ -58,7 +58,7 @@ NODE_A073 = (
 )
 # These are expected collection counts after the A05 B2 hardening tests, NOT
 # required gate acceptance counts or a promise about all future code changes.
-EXPECTED = {"python_a05_a07": 249, "python_a073_cdp": 13, "node_a073": 19}
+EXPECTED = {"python_a05_a07": 255, "python_a073_cdp": 13, "node_a073": 19}
 SOURCE_FILES = (
     "scripts/a11_focal_evidence_packet.py",
     "scripts/a07_browser_visual_parity.py",
@@ -76,6 +76,7 @@ SOURCE_FILES = (
     "src/tapi_gate0/secure_api.py",
     "src/tapi_gate0/studio_api.py",
     "src/tapi_gate0/studio_e1.py",
+    "src/tapi_gate0/studio_canvas_c2.py",
     "src/tapi_gate0/agent_api_e1.py",
     "src/tapi_gate0/agent_draft_a05.py",
     "src/tapi_gate0/agent_evidence_b2.py",
