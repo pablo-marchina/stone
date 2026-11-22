@@ -52,6 +52,7 @@ PY_A05_A07 = (
 )
 PY_A06_E1 = (
     "tests/test_multimodal_system_one_bridge.py",
+    "tests/test_a06_system_one_bridge_cli.py",
 )
 PY_A073 = (
     "tests/test_a07_browser_visual_parity_runner.py",
@@ -64,11 +65,12 @@ NODE_A073 = (
 )
 # These are expected collection counts after the A05 B2 hardening tests, NOT
 # required gate acceptance counts or a promise about all future code changes.
-EXPECTED = {"python_a05_a07": 269, "python_a06_e1": 16,
+EXPECTED = {"python_a05_a07": 269, "python_a06_e1": 24,
             "python_a073_cdp": 13, "node_a073": 19}
 SOURCE_FILES = (
     "scripts/a11_focal_evidence_packet.py",
     "scripts/a05_python_source_preflight.py",
+    "scripts/a06_system_one_bridge.py",
     "scripts/a07_browser_visual_parity.py",
     "scripts/a07_browser_cdp.py",
     "scripts/verify_zero_spend.py",
