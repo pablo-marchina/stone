@@ -80,9 +80,14 @@ def synthetic_runner(*, pytest_count=270, a06_count=35, a02_count=91,
 
 @pytest.fixture
 def local_files(tmp_path, monkeypatch):
+    # Keep mocked source inventory aligned with A02.7 pinning assertions.
+    # Test-only bytes are not evidence of software execution or signed grants.
     files = (
         "scripts/a11_focal_evidence_packet.py",
         "src/tapi_gate0/web/studio_export_e4.js",
+        "src/tapi_gate0/asset_fixture_batch.py",
+        "src/tapi_gate0/asset_fixture_pipeline.py",
+        "tests/test_asset_fixture_batch_integration.py",
     )
     for path in files:
         destination = tmp_path / path
@@ -327,6 +332,19 @@ def test_true_sqlite_signed_rights_batch_is_a_separate_blocking_a11_stage(local_
     assert "tests/test_asset_fixture_batch_integration.py" in receipt["source_sha256"]
     assert receipt["production_approved"] is False
     assert receipt["gate_status"]["IMP-131"] == "BLOCKED"
+
+
+def test_failed_asr_diagnostic_stops_before_sqlite_and_studio(local_files):
+    run, calls = synthetic_runner(a02_count=90)
+    receipt = packet.build_packet(root=local_files, run=run)
+    assert receipt["validation_status"] == "BLOCKED_NOT_VALIDATED"
+    assert [c["check_id"] for c in receipt["checks"]] == [
+        "zero_spend", "syntax_preflight", "python_a02_asr_diagnostic",
+    ]
+    assert receipt["checks"][-1]["reason_code"] == "A11_PYTEST_INCOMPLETE"
+    assert len(calls) == 5  # Git SHA/status, two preflights, ASR only
+    assert receipt["gate_status"]["IMP-131"] == "BLOCKED"
+    assert receipt["production_approved"] is False
 
 
 def test_malformed_signed_sqlite_batch_stage_cannot_be_misreported_as_pass(local_files):
