@@ -188,5 +188,6 @@ class CreativeReferencePEP:
         except CreativeReferencePermissionDenied:
             raise
         except (SQLAlchemyError, ReferenceRegistryDenied, ValidationError,
-                ValueError, TypeError, AttributeError):
+                ValueError, TypeError, AttributeError, KeyError, IndexError):
+            # All untrusted state/corruption failures are a typed denial.
             _deny()
