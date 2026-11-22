@@ -20,6 +20,7 @@ from .agent_draft_a05 import CreateAgentDraft, create_agent_draft
 from .studio_e1 import (DesignDocument, StudioError, StudioStore,
                         TextLayerPatch, studio_versions)
 from .studio_e4 import studio_etag, assert_etag
+from .studio_canvas_c2 import StudioCanvasStore, MoveLayer
 from .studio_reference_bindings_a05 import ReferenceBindingDenied
 from .studio_reference_lifecycle_a05 import ReferenceRecheckResult, recheck_document_references
 
@@ -158,6 +159,61 @@ def router_for_evidence_agent(identity, domain_store, *, creative_pep=None):
                 doc = StudioStore(domain_store.engine).patch_text_layer(
                     p.tenant_id, p.actor_id, document_id, patch,
                     connection=db, reference_authorizer=authorize_refs,
+                )
+        except ReferenceBindingDenied:
+            raise HTTPException(status_code=422, detail="CREATIVE_REFERENCE_NOT_VERIFIED")
+        except StudioError as exc:
+            raise HTTPException(status_code=exc.status, detail=exc.code) from exc
+        response.headers["ETag"] = studio_etag(doc)
+        response.headers["Cache-Control"] = "private, no-store"
+        return doc
+
+    @router.post("/creative-drafts/{document_id}/geometry",
+                 response_model=DesignDocument)
+    def move_signed_draft_geometry(document_id: str, payload: MoveLayer,
+                                   response: Response, request: Request,
+                                   if_match: str | None = Header(default=None, alias="If-Match"),
+                                   p: Principal = Depends(principal)):
+        """Rights-rechecked geometry change with one atomic Studio transaction.
+
+        A prior reference-recheck receipt is not reusable. The revocation and
+        source-grant state is re-read inside this exact version-write txn.
+        """
+        if p.role not in {"admin", "editor"}:
+            raise IdentityFailure("FORBIDDEN", 403)
+        if if_match is None:
+            raise HTTPException(status_code=428, detail="STUDIO_IF_MATCH_REQUIRED")
+        try:
+            with domain_store.engine.begin() as db:
+                row = db.execute(select(studio_versions.c.payload).where(
+                    studio_versions.c.tenant_id == p.tenant_id,
+                    studio_versions.c.document_id == document_id,
+                    studio_versions.c.version == payload.expected_version,
+                )).scalar_one_or_none()
+                if row is None:
+                    raise StudioError("STUDIO_VERSION_CONFLICT", 409)
+                current = DesignDocument.model_validate_json(row)
+                if current.tenant_id != p.tenant_id or current.document_id != document_id:
+                    raise StudioError("STUDIO_DOCUMENT_BINDING_INVALID", 409)
+                assert_etag(current, if_match, payload.expected_version)
+                checked = False
+
+                def authorize(connection):
+                    nonlocal checked
+                    if not checked:
+                        recheck_document_references(
+                            domain_store.engine, tenant=p.tenant_id,
+                            actor=p.actor_id,
+                            token=request.headers.get("Authorization", "").partition(" ")[2],
+                            document_id=document_id, creative_pep=creative_pep,
+                            connection=connection,
+                        )
+                        checked = True
+
+                authorize(db)
+                doc = StudioCanvasStore(domain_store.engine).move(
+                    p.tenant_id, p.actor_id, document_id, payload,
+                    connection=db, reference_authorizer=authorize,
                 )
         except ReferenceBindingDenied:
             raise HTTPException(status_code=422, detail="CREATIVE_REFERENCE_NOT_VERIFIED")
