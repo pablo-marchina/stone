@@ -8,7 +8,7 @@ from datetime import timedelta
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select, update
+from sqlalchemy import select, update, insert
 
 from test_creative_reference_registry_a05 import (
     registry, provision, TENANT, PASSWORD,
@@ -19,7 +19,7 @@ from tapi_gate0.creative_reference_pep_a05 import (
 )
 from tapi_gate0.identity import memberships
 from tapi_gate0.ingestion import source_grants
-from tapi_gate0.sa_store import domain_events, outbox
+from tapi_gate0.sa_store import domain_events, outbox, content_items, creators
 from tapi_gate0.secure_api import create_secure_app
 from tapi_gate0.studio_e1 import StudioStore, studio_documents
 
@@ -710,6 +710,59 @@ def test_signed_pep_requires_caller_owned_active_transaction(registry):
             pep.require_for_atomic_draft(
                 db, token=r["token"], tenant=TENANT, actor="founder",
                 document_id="fixture.no.transaction", grant_ids=grant_ids(r),
+            )
+    with r["engine"].connect() as db:
+        assert db.execute(select(domain_events.c.seq).where(
+            domain_events.c.aggregate_type == "creative_reference_use",
+        )).all() == []
+
+
+def test_pep_denies_indexed_publication_date_drift_not_covered_by_signature(registry):
+    # The signed content payload remains intact, but the SQL indexed date
+    # silently diverges. The standalone PEP must not accept this corruption.
+    r = registry
+    pep = signed_fixture(r)
+    with r["engine"].begin() as db:
+        db.execute(update(content_items).where(
+            content_items.c.tenant_id == TENANT,
+            content_items.c.id == r["content_id"],
+        ).values(published_at="2000-01-01T00:00:00+00:00"))
+    with pytest.raises(CreativeReferencePermissionDenied):
+        with r["engine"].begin() as db:
+            pep.require_for_atomic_draft(
+                db, token=r["token"], tenant=TENANT, actor="founder",
+                document_id="fixture.indexed.published.at",
+                grant_ids=grant_ids(r),
+            )
+    with r["engine"].connect() as db:
+        assert db.execute(select(domain_events.c.seq).where(
+            domain_events.c.aggregate_type == "creative_reference_use",
+        )).all() == []
+
+
+def test_pep_denies_indexed_creator_id_drift_even_if_payload_is_unchanged(registry):
+    # Construct a valid foreign-key target with an intentionally wrong SQL
+    # index while copying the original signed creator's serialized payload.
+    # The previous source-bound logic joined it and compared only payload IDs.
+    r = registry
+    pep = signed_fixture(r)
+    with r["engine"].begin() as db:
+        original = db.execute(select(creators).where(
+            creators.c.tenant_id == TENANT,
+        )).mappings().one()
+        db.execute(insert(creators).values(
+            **(dict(original) | {"id": "shadow.creator"}),
+        ))
+        db.execute(update(content_items).where(
+            content_items.c.tenant_id == TENANT,
+            content_items.c.id == r["content_id"],
+        ).values(creator_id="shadow.creator"))
+    with pytest.raises(CreativeReferencePermissionDenied):
+        with r["engine"].begin() as db:
+            pep.require_for_atomic_draft(
+                db, token=r["token"], tenant=TENANT, actor="founder",
+                document_id="fixture.indexed.creator.id",
+                grant_ids=grant_ids(r),
             )
     with r["engine"].connect() as db:
         assert db.execute(select(domain_events.c.seq).where(

@@ -8,7 +8,7 @@ from datetime import timedelta
 from hashlib import sha256
 
 import pytest
-from sqlalchemy import select, update
+from sqlalchemy import select, update, insert
 
 from tapi_gate0.asset_rights import signed_bytes
 from tapi_gate0.connectors import NormalizedItem, Platform
@@ -26,7 +26,7 @@ from tapi_gate0.identity import IdentityStore, memberships
 from tapi_gate0.ingestion import (
     GrantCreate, IngestionStore, ingestion_records, source_grants,
 )
-from tapi_gate0.sa_store import SqlDomainStore, content_items, engine_for
+from tapi_gate0.sa_store import SqlDomainStore, content_items, creators, engine_for
 from tapi_gate0.storage import now_utc
 
 TENANT = "a054-local"
@@ -407,3 +407,33 @@ def test_researcher_may_inspect_creative_but_not_studio_scope(registry):
     result = inspect(r, operation=ReferenceOperation.STUDIO_DRAFT_REFERENCE)
     assert result["reason_code"] == "A054_AUTHORIZED_ROLE_AND_TENANT_REQUIRED"
     assert result["studio_write_allowed"] is False
+
+
+def test_signed_registry_diagnostic_rejects_sql_publication_drift(registry):
+    r = registry
+    register(r)
+    assert inspect(r)["contract_verified"] is True
+    with r["engine"].begin() as db:
+        db.execute(update(content_items).where(
+            content_items.c.tenant_id == TENANT,
+            content_items.c.id == r["content_id"],
+        ).values(published_at="2000-01-01T00:00:00+00:00"))
+    assert inspect(r)["reason_code"] == "A054_LIVE_SOURCE_BINDING_REQUIRED"
+
+
+def test_signed_registry_diagnostic_rejects_sql_creator_index_drift(registry):
+    r = registry
+    register(r)
+    assert inspect(r)["contract_verified"] is True
+    with r["engine"].begin() as db:
+        indexed = db.execute(select(creators).where(
+            creators.c.tenant_id == TENANT,
+        )).mappings().one()
+        db.execute(insert(creators).values(
+            **(dict(indexed) | {"id": "shadow.creator"}),
+        ))
+        db.execute(update(content_items).where(
+            content_items.c.tenant_id == TENANT,
+            content_items.c.id == r["content_id"],
+        ).values(creator_id="shadow.creator"))
+    assert inspect(r)["reason_code"] == "A054_LIVE_SOURCE_BINDING_REQUIRED"
