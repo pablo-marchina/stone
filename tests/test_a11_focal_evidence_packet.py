@@ -26,6 +26,7 @@ def node_report(passed=19, total=19, failed=0, skipped=0):
 
 def synthetic_runner(*, pytest_count=270, a06_count=35, a02_count=91,
                      a027_count=40, a027_integrated_count=7,
+                     a05_fail_count=0, a05_error_count=0,
                      node_count=19, chrome=True,
                      financial=True, syntax_ok=True, pytest_skip=0, git_dirty=False):
     calls = []
@@ -63,7 +64,10 @@ def synthetic_runner(*, pytest_count=270, a06_count=35, a02_count=91,
                 return done(
                     f"{pytest_count} passed"
                     + (f", {pytest_skip} skipped" if pytest_skip else "")
-                    + " in 1.20s\n"
+                    + (f", {a05_fail_count} failed" if a05_fail_count else "")
+                    + (f", {a05_error_count} errors" if a05_error_count else "")
+                    + " in 1.20s\n",
+                    1 if (a05_fail_count or a05_error_count) else 0,
                 )
             if "tests/test_multimodal_system_one_bridge.py" in argv:
                 return done(f"{a06_count} passed in 0.40s\n")
@@ -142,6 +146,36 @@ def test_missing_results_and_skips_cannot_create_green_packet(
     bad = {check["check_id"] for check in receipt["checks"] if not check["passed"]}
     assert expected_id in bad
     assert receipt["gate_status"]["IMP-131"] == "BLOCKED"
+
+
+def test_incomplete_a05_a07_stops_before_a06_and_preserves_redacted_counts(local_files):
+    # Reproduces the OPERATOR'S INCOMPLETE COUNT SHAPE only. Values are
+    # synthetic, not independent evidence of which six tests actually failed.
+    run, calls = synthetic_runner(pytest_count=264, a05_fail_count=6)
+    receipt = packet.build_packet(root=local_files, run=run)
+    assert receipt["validation_status"] == "BLOCKED_NOT_VALIDATED"
+    assert receipt["checks"][-1]["check_id"] == "python_a05_a07"
+    assert receipt["checks"][-1]["observed_pass_count"] == 264
+    assert receipt["checks"][-1]["observed_fail_count"] == 6
+    assert receipt["checks"][-1]["observed_error_count"] == 0
+    assert receipt["checks"][-1]["reason_code"] == "A11_PYTEST_INCOMPLETE"
+    assert "python_a06_e1" not in {c["check_id"] for c in receipt["checks"]}
+    assert len(calls) == 8  # Git state, preflights, ASR, A02.7x2, A05/A07
+    assert receipt["gate_status"]["IMP-131"] == "BLOCKED"
+
+
+def test_a05_a07_pytest_error_count_is_redacted_and_denied(local_files):
+    run, calls = synthetic_runner(pytest_count=264, a05_error_count=6)
+    receipt = packet.build_packet(root=local_files, run=run)
+    assert receipt["validation_status"] == "BLOCKED_NOT_VALIDATED"
+    stage = receipt["checks"][-1]
+    assert stage["check_id"] == "python_a05_a07"
+    assert stage["observed_pass_count"] == 264
+    assert stage["observed_error_count"] == 6
+    assert stage["observed_fail_count"] == 0
+    assert stage["passed"] is False
+    assert len(calls) == 8
+    assert receipt["production_approved"] is False
 
 
 def test_zero_spend_preflight_fails_before_any_tests_or_browser(local_files):
