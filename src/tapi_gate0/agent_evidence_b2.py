@@ -11,8 +11,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import select
 
-from .domain import Id, ContentItem, MetricsCreate
-from .sa_store import content_items, metrics_snapshots
+from .domain import Id, ContentItem, Creator, MetricsCreate
+from .sa_store import content_items, creators, metrics_snapshots
 
 
 class EvidenceNotFound(Exception):
@@ -87,6 +87,12 @@ class EvidenceRetriever:
                 content_items.c.tenant_id == tenant_id,
                 content_items.c.id == content_id,
             )).one_or_none()
+            creator_row = con.execute(select(
+                creators.c.origin, creators.c.payload,
+            ).where(
+                creators.c.tenant_id == tenant_id,
+                creators.c.id == record[0],
+            )).one_or_none() if record is not None else None
             snapshot_rows = con.execute(select(
                 metrics_snapshots.c.id, metrics_snapshots.c.observed_at,
                 metrics_snapshots.c.payload,
@@ -96,6 +102,8 @@ class EvidenceRetriever:
             )).all() if record is not None else []
         if record is None:
             raise EvidenceNotFound("EVIDENCE_CONTENT_NOT_FOUND_IN_TENANT")
+        if creator_row is None:
+            raise EvidenceNotFound("EVIDENCE_CREATOR_NOT_FOUND_IN_TENANT")
         try:
             creator_id, origin, published_at, payload = record
             content = ContentItem.model_validate_json(payload)
@@ -105,6 +113,12 @@ class EvidenceRetriever:
                     or content.origin.value != origin
                     or content.published_at != datetime.fromisoformat(published_at)):
                 raise EvidenceNotFound("EVIDENCE_CONTENT_BINDING_INVALID")
+            creator = Creator.model_validate_json(creator_row[1])
+            if (creator.tenant_id != tenant_id
+                    or creator.creator_id != creator_id
+                    or creator.origin.value != origin
+                    or creator_row[0] != origin):
+                raise EvidenceNotFound("EVIDENCE_CREATOR_BINDING_INVALID")
             snapshots = []
             for indexed_id, indexed_time, blob in snapshot_rows:
                 snap = MetricsCreate.model_validate_json(blob)

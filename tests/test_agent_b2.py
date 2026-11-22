@@ -156,7 +156,7 @@ def test_mcp_tools_list_and_call_are_bounded_to_operator_tenant(tmp_path):
 # These tests are deliberately local; no provider calls or live rights grants.
 import json
 from sqlalchemy import select, update
-from tapi_gate0.sa_store import content_items, metrics_snapshots
+from tapi_gate0.sa_store import content_items, creators, metrics_snapshots
 
 
 @pytest.mark.parametrize("changes", [
@@ -256,3 +256,35 @@ def test_api_does_not_create_spec_from_corrupt_reference(tmp_path):
         answer = client.post("/v1/agent/creative-spec", headers=hdr, json=_brief())
         assert answer.status_code == 422
         assert answer.json()["detail"] == "CREATIVE_REFERENCE_NOT_VERIFIED"
+
+
+@pytest.mark.parametrize("changes", [
+    {"tenant_id": "otherTenant"},
+    {"creator_id": "otherCreator"},
+    {"origin": "stone_internal"},
+])
+def test_evidence_rejects_corrupt_creator_identity(tmp_path, changes):
+    app = _setup(tmp_path)
+    engine = app.state.identity_store.engine
+    with engine.begin() as db:
+        old = db.execute(select(creators.c.payload).where(
+            creators.c.tenant_id == "tenantA", creators.c.id == "creator1",
+        )).scalar_one()
+        payload = json.loads(old)
+        payload.update(changes)
+        db.execute(update(creators).where(
+            creators.c.tenant_id == "tenantA", creators.c.id == "creator1",
+        ).values(payload=json.dumps(payload)))
+    with pytest.raises(EvidenceNotFound):
+        EvidenceRetriever(engine).get("tenantA", "post1")
+
+
+def test_evidence_rejects_creator_index_drift(tmp_path):
+    app = _setup(tmp_path)
+    engine = app.state.identity_store.engine
+    with engine.begin() as db:
+        db.execute(update(creators).where(
+            creators.c.tenant_id == "tenantA", creators.c.id == "creator1",
+        ).values(origin="stone_internal"))
+    with pytest.raises(EvidenceNotFound, match="EVIDENCE_CREATOR_BINDING_INVALID"):
+        EvidenceRetriever(engine).get("tenantA", "post1")
