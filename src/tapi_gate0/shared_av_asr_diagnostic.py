@@ -108,6 +108,9 @@ def diagnose_shared_av_asr(report: dict) -> dict:
             for chunk, region in zip(chunks, intervals):
                 if (chunk["start_sample"] != region["start"]
                         or chunk["end_sample"] != region["end"]
+                        or type(chunk["start_sample"]) is not int
+                        or type(chunk["end_sample"]) is not int
+                        or not 0 <= chunk["start_sample"] < chunk["end_sample"] <= shared.DURATION * asr.SAMPLE_RATE
                         or not isinstance(chunk["pcm_sha256"], str)
                         or not SHA256.fullmatch(chunk["pcm_sha256"])):
                     _fail()
@@ -116,6 +119,35 @@ def diagnose_shared_av_asr(report: dict) -> dict:
                                 and seg["region_end_sample"] == chunk["end_sample"]]
                 if chunk["transcript"] != " ".join(segment_text):
                     _fail()
+            expected_audio_fragments = []
+            for seg in segments:
+                if (not isinstance(seg["text"], str) or not seg["text"].strip()
+                        or seg["text_sha256"] != fusion.digest(seg["text"])
+                        or seg["source_pcm_sha256"] != row["decoded_pcm_sha256"]
+                        or type(seg["start_s"]) not in (int, float)
+                        or type(seg["end_s"]) not in (int, float)
+                        or not 0 <= seg["start_s"] < seg["end_s"] <= shared.DURATION
+                        or not any(seg["region_start_sample"] == c["start_sample"]
+                                   and seg["region_end_sample"] == c["end_sample"]
+                                   and seg["chunk_pcm_sha256"] == c["pcm_sha256"]
+                                   for c in chunks)):
+                    _fail()
+                expected_audio_fragments.append(fusion.fragment(
+                    row["media_sha256"], "audio", seg["text"],
+                    {"start_s": seg["start_s"], "end_s": seg["end_s"],
+                     "source_pcm_sha256": seg["source_pcm_sha256"],
+                     "chunk_pcm_sha256": seg["chunk_pcm_sha256"],
+                     "timestamp_kind": audio["timestamp_kind"]},
+                ))
+            if [f for f in row["fragments"] if f["modality"] == "audio"] != expected_audio_fragments:
+                _fail()
+            caption_fragments = [f for f in row["fragments"] if f["modality"] == "caption"]
+            expected_caption = ([fusion.fragment(
+                row["media_sha256"], "caption", caption,
+                {"caption_sha256": row["caption_sha256"], "source": "authored_fixture_caption"},
+            )] if caption else [])
+            if caption_fragments != expected_caption:
+                _fail()
             hypothesis = audio["transcript"]
             if (not isinstance(hypothesis, str) or len(hypothesis) > 4000
                     or hypothesis != " ".join(c["transcript"] for c in chunks
