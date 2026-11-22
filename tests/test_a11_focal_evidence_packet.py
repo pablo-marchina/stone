@@ -24,7 +24,7 @@ def node_report(passed=19, total=19, failed=0, skipped=0):
             "ℹ todo 0\nℹ duration_ms 400\n")
 
 
-def synthetic_runner(*, pytest_count=269, a06_count=29, a02_count=72,
+def synthetic_runner(*, pytest_count=269, a06_count=29, a02_count=77,
                      node_count=19, chrome=True,
                      financial=True, syntax_ok=True, pytest_skip=0, git_dirty=False):
     calls = []
@@ -96,7 +96,7 @@ def test_packet_assembles_exact_local_counts_and_preserves_all_gate_denials(loca
     assert receipt["validation_status"] == "FOCAL_DIAGNOSTICS_VERIFIED_NO_GATE_RELEASE"
     assert receipt["zero_spend_check_observed"] is True
     assert len(receipt["checks"]) == 8
-    assert [x["observed_pass_count"] for x in receipt["checks"]] == [1, 1, 72, 269, 29, 13, 19, 7]
+    assert [x["observed_pass_count"] for x in receipt["checks"]] == [1, 1, 77, 269, 29, 13, 19, 7]
     assert all(x["passed"] and x["observed_skip_count"] == 0
                for x in receipt["checks"])
     assert receipt["gate_status"] == {**{f"G{i}": "BLOCKED" for i in range(7)},
@@ -114,7 +114,7 @@ def test_packet_assembles_exact_local_counts_and_preserves_all_gate_denials(loca
 
 
 @pytest.mark.parametrize("changes,expected_id", [
-    ({"a02_count": 71}, "python_a02_asr_diagnostic"),
+    ({"a02_count": 76}, "python_a02_asr_diagnostic"),
     ({"pytest_count": 268}, "python_a05_a07"),
     ({"a06_count": 28}, "python_a06_e1"),
     ({"node_count": 18}, "node_a073"),
