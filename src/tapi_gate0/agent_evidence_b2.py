@@ -77,22 +77,47 @@ class EvidenceRetriever:
         as_of = as_of or datetime.now(timezone.utc)
         if as_of.tzinfo is None or as_of.utcoffset() is None:
             raise ValueError("EVIDENCE_AS_OF_TIMEZONE_REQUIRED")
+        # The SQL index and the serialized payload are independent trust inputs.
+        # Reject drift before returning captions/metrics or creating a spec.
         with self.engine.connect() as con:
-            payload = con.execute(select(content_items.c.payload).where(
+            record = con.execute(select(
+                content_items.c.creator_id, content_items.c.origin,
+                content_items.c.published_at, content_items.c.payload,
+            ).where(
                 content_items.c.tenant_id == tenant_id,
                 content_items.c.id == content_id,
-            )).scalar_one_or_none()
-            snaps = con.execute(select(metrics_snapshots.c.payload).where(
+            )).one_or_none()
+            snapshot_rows = con.execute(select(
+                metrics_snapshots.c.id, metrics_snapshots.c.observed_at,
+                metrics_snapshots.c.payload,
+            ).where(
                 metrics_snapshots.c.tenant_id == tenant_id,
                 metrics_snapshots.c.content_id == content_id,
-            )).scalars().all() if payload else []
-        if payload is None:
+            )).all() if record is not None else []
+        if record is None:
             raise EvidenceNotFound("EVIDENCE_CONTENT_NOT_FOUND_IN_TENANT")
-        content = ContentItem.model_validate_json(payload)
-        if content.published_at > as_of:
-            raise EvidenceNotFound("EVIDENCE_NOT_PUBLISHED_AT_AS_OF")
-        snapshots = [m for blob in snaps
-                     if (m := MetricsCreate.model_validate_json(blob)).observed_at <= as_of]
+        try:
+            creator_id, origin, published_at, payload = record
+            content = ContentItem.model_validate_json(payload)
+            if (content.tenant_id != tenant_id
+                    or content.content_id != content_id
+                    or content.creator_id != creator_id
+                    or content.origin.value != origin
+                    or content.published_at != datetime.fromisoformat(published_at)):
+                raise EvidenceNotFound("EVIDENCE_CONTENT_BINDING_INVALID")
+            snapshots = []
+            for indexed_id, indexed_time, blob in snapshot_rows:
+                snap = MetricsCreate.model_validate_json(blob)
+                if (snap.tenant_id != tenant_id
+                        or snap.content_id != content_id
+                        or snap.snapshot_id != indexed_id
+                        or snap.observed_at != datetime.fromisoformat(indexed_time)):
+                    raise EvidenceNotFound("EVIDENCE_SNAPSHOT_BINDING_INVALID")
+                if snap.observed_at <= as_of:
+                    snapshots.append(snap)
+        except (ValueError, TypeError, AttributeError):
+            # Never surface malformed tenant payloads or decoder details.
+            raise EvidenceNotFound("EVIDENCE_STORED_PAYLOAD_INVALID") from None
         latest = max(snapshots, key=lambda m: (m.observed_at, m.snapshot_id),
                      default=None)
         caption = content.caption

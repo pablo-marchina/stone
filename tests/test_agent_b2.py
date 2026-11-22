@@ -150,3 +150,109 @@ def test_mcp_tools_list_and_call_are_bounded_to_operator_tenant(tmp_path):
     assert unknown["result"]["isError"]
     assert handle_mcp({"jsonrpc":"2.0","method":"notifications/initialized"},
                       tenant="tenantA",retriever=retriever,ranking_tool=tool) is None
+
+
+# A05 production-hardening: fail-closed evidence row/payload integrity.
+# These tests are deliberately local; no provider calls or live rights grants.
+import json
+from sqlalchemy import select, update
+from tapi_gate0.sa_store import content_items, metrics_snapshots
+
+
+@pytest.mark.parametrize("changes", [
+    {"tenant_id": "otherTenant"},
+    {"content_id": "foreignPost"},
+    {"creator_id": "foreignCreator"},
+    {"published_at": "2026-09-01T12:00:00+00:00"},
+])
+def test_evidence_rejects_corrupted_content_payload_identity(tmp_path, changes):
+    app = _setup(tmp_path)
+    engine = app.state.identity_store.engine
+    with engine.begin() as db:
+        old = db.execute(select(content_items.c.payload).where(
+            content_items.c.tenant_id == "tenantA",
+            content_items.c.id == "post1",
+        )).scalar_one()
+        payload = json.loads(old)
+        payload.update(changes)
+        db.execute(update(content_items).where(
+            content_items.c.tenant_id == "tenantA",
+            content_items.c.id == "post1",
+        ).values(payload=json.dumps(payload)))
+    with pytest.raises(EvidenceNotFound, match="EVIDENCE_CONTENT_BINDING_INVALID"):
+        EvidenceRetriever(engine).get("tenantA", "post1")
+
+
+@pytest.mark.parametrize("changes", [
+    {"tenant_id": "otherTenant"},
+    {"content_id": "foreignPost"},
+    {"snapshot_id": "foreignSnapshot"},
+    {"observed_at": "2026-10-01T12:00:00+00:00"},
+])
+def test_evidence_rejects_corrupted_snapshot_payload_identity(tmp_path, changes):
+    app = _setup(tmp_path)
+    engine = app.state.identity_store.engine
+    with engine.begin() as db:
+        old = db.execute(select(metrics_snapshots.c.payload).where(
+            metrics_snapshots.c.tenant_id == "tenantA",
+            metrics_snapshots.c.id == "snapshot1",
+        )).scalar_one()
+        payload = json.loads(old)
+        payload.update(changes)
+        db.execute(update(metrics_snapshots).where(
+            metrics_snapshots.c.tenant_id == "tenantA",
+            metrics_snapshots.c.id == "snapshot1",
+        ).values(payload=json.dumps(payload)))
+    with pytest.raises(EvidenceNotFound, match="EVIDENCE_SNAPSHOT_BINDING_INVALID"):
+        EvidenceRetriever(engine).get("tenantA", "post1")
+
+
+@pytest.mark.parametrize("table", [content_items, metrics_snapshots], ids=["content", "snapshot"])
+def test_evidence_rejects_malformed_payload_without_leaking_it(tmp_path, table):
+    app = _setup(tmp_path)
+    engine = app.state.identity_store.engine
+    record_id = "post1" if table is content_items else "snapshot1"
+    with engine.begin() as db:
+        db.execute(update(table).where(
+            table.c.tenant_id == "tenantA", table.c.id == record_id,
+        ).values(payload='{"private_secret": "must_not_leak",'))
+    with pytest.raises(EvidenceNotFound, match="EVIDENCE_STORED_PAYLOAD_INVALID") as err:
+        EvidenceRetriever(engine).get("tenantA", "post1")
+    assert "must_not_leak" not in str(err.value)
+
+
+def test_evidence_rejects_corrupted_indexed_timestamp(tmp_path):
+    app = _setup(tmp_path)
+    engine = app.state.identity_store.engine
+    with engine.begin() as db:
+        db.execute(update(metrics_snapshots).where(
+            metrics_snapshots.c.tenant_id == "tenantA",
+            metrics_snapshots.c.id == "snapshot1",
+        ).values(observed_at="2026-10-01T12:00:00+00:00"))
+    with pytest.raises(EvidenceNotFound, match="EVIDENCE_SNAPSHOT_BINDING_INVALID"):
+        EvidenceRetriever(engine).get("tenantA", "post1")
+
+
+def test_api_does_not_create_spec_from_corrupt_reference(tmp_path):
+    app = _setup(tmp_path)
+    engine = app.state.identity_store.engine
+    with engine.begin() as db:
+        old = db.execute(select(content_items.c.payload).where(
+            content_items.c.tenant_id == "tenantA",
+            content_items.c.id == "post1",
+        )).scalar_one()
+        payload = json.loads(old)
+        payload["tenant_id"] = "otherTenant"
+        db.execute(update(content_items).where(
+            content_items.c.tenant_id == "tenantA",
+            content_items.c.id == "post1",
+        ).values(payload=json.dumps(payload)))
+    with TestClient(app) as client:
+        login = client.post("/v1/auth/sessions", json={
+            "username": "founder", "password": PASSWORD, "tenant_id": "tenantA",
+        })
+        assert login.status_code == 200
+        hdr = {"Authorization": "Bearer " + login.json()["access_token"]}
+        answer = client.post("/v1/agent/creative-spec", headers=hdr, json=_brief())
+        assert answer.status_code == 422
+        assert answer.json()["detail"] == "CREATIVE_REFERENCE_NOT_VERIFIED"
