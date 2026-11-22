@@ -53,6 +53,8 @@ PY_A05_A07 = (
 PY_A02_ASR_DIAGNOSTIC = (
     "tests/test_asr_strict_diagnostic.py",
     "tests/test_a02_asr_strict_diagnostic_cli.py",
+    "tests/test_shared_av_asr_diagnostic.py",
+    "tests/test_shared_av_asr_cli.py",
 )
 PY_A06_E1 = (
     "tests/test_multimodal_system_one_bridge.py",
@@ -70,7 +72,7 @@ NODE_A073 = (
 # These are expected collection counts after the A05 B2 hardening tests, NOT
 # required gate acceptance counts or a promise about all future code changes.
 EXPECTED = {"python_a05_a07": 269, "python_a06_e1": 29,
-            "python_a02_asr_diagnostic": 28,
+            "python_a02_asr_diagnostic": 56,
             "python_a073_cdp": 13, "node_a073": 19}
 SOURCE_FILES = (
     "scripts/a11_focal_evidence_packet.py",
@@ -78,6 +80,7 @@ SOURCE_FILES = (
     "scripts/a06_system_one_bridge.py",
     "scripts/a02_asr_strict_diagnostic.py",
     "src/tapi_gate0/asr_strict_diagnostic.py",
+    "src/tapi_gate0/shared_av_asr_diagnostic.py",
     "src/tapi_gate0/multimodal_asr.py",
     "scripts/a07_browser_visual_parity.py",
     "scripts/a07_browser_cdp.py",
