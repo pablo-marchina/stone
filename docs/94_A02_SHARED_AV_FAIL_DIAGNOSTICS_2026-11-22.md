@@ -35,12 +35,21 @@ Fonte e saída são limitadas à pasta ignorada `artifacts/private/`, com hash o
 
 ## Testes realmente executados nesta execução
 
-**56/56 PASS** com Python 3.13 em ambiente local isolado, com sintaxe do novo código também analisada sob gramática **Python 3.11**. São 28 testes do diagnóstico ASR original e 28 novos casos shared-AV (incluindo 16 mutações parametrizadas de report, áudio, métricas e hash, além de entradas privadas da CLI). O código publicado foi comparado por comprimento e checksums com a versão executada.
+**62/62 PASS** com Python 3.13 em ambiente local isolado, com sintaxe do novo código também analisada sob gramática **Python 3.11**. São 28 testes do diagnóstico ASR original e 28 novos casos shared-AV (incluindo 16 mutações parametrizadas de report, áudio, métricas e hash, além de entradas privadas da CLI). O código publicado foi comparado por comprimento e checksums com a versão executada.
 
 **Limite da evidência:** os testes locais usam funções de WER/fixtures copiadas do código do repositório e substitutos explícitos de `shared.validate_asset_binding` e `fusion.evaluate`. Eles não executaram o pipeline FFmpeg/VAD/Whisper/OCR real, a suíte completa no checkout, PostgreSQL, licença externa nem o benchmark multimodal com um relatório autenticado. A suíte integrada no HEAD continua NOT_RUN.
 
-No A11, `python_a02_asr_diagnostic` passa de **28 para 56 casos esperados**; os grupos A05/A07 (**269**) e A06/E1 (**29**) permanecem independentes. Nenhum desses números é aprovação do A11 completo.
+No A11, `python_a02_asr_diagnostic` passa de **28 para 62 casos esperados**; os grupos A05/A07 (**269**) e A06/E1 (**29**) permanecem independentes. Nenhum desses números é aprovação do A11 completo.
 
 ## Próxima dependência crítica
 
 Executar este modo com relatório **realmente gerado** pelo shared-AV no ambiente nativo, confirmar integridade/consistência da origem, examinar exatamente os erros que persistem na ASR Strict, corrigir perfis ou qualidade de forma controlada e repetir os oráculos congelados sem afrouxar thresholds. Concluir A02.7, evidência operacional, avaliação científica independente, agentes, Studio, A00/A11 full e todos os gates antes de deploy. Custo absoluto R$0 e DEC-018 permanecem invariantes.
+
+
+## Revisão adicional — completude OCR (2026-11-22)
+
+A inspeção do código revelou que validar somente os fragmentos **presentes** não garante que o conjunto seja completo: uma leitura OCR válida poderia ser omitida do array `fragments` e o array `arms` recalculado, mantendo a aparência de um relatório coerente. Esta versão reconstrói obrigatoriamente os dois quadros de origem nos timestamps [0, 3] usando a função congelada `shared.consensus.consensus_words`, exige a exatidão de `words`, `complete_primary_and_supporting_sequence_retained`, status da observação, hashes e locator, e compara a sequência integral **OCR → legenda → áudio** (sem entradas extras, omissões ou reordenações). A validação permanece *read-only* e vale inclusive para relatórios com engenharia reprovada.
+
+**Seis novos casos:** (1) reintrodução de fragmento OCR válido e posterior exclusão deliberada, ainda que as métricas sejam recalculadas, e (2–6) alteração de timestamp, hash do frame, status, bit de completude e SHA de mídia. **62/62 PASS** localmente (28 diagnósticos standalone + 34 shared-AV/CLI), inclusive ao trocar o substituto OCR simplificado pela lógica real copiada de `multimodal_ocr_consensus.consensus_words` para o laboratório isolado. **Ainda não é validação do pipeline nativo** ou dos módulos integrados completos.
+
+No A11, `python_a02_asr_diagnostic` agora espera **62 casos**, mantendo `python_a05_a07=269` e `python_a06_e1=29`. Não há liberação de gates, direitos, gold, CI ou produção por esta correção.
