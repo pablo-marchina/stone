@@ -33,6 +33,7 @@ class ReferenceRecheckResult(BaseModel):
 def recheck_document_references(
     engine, *, tenant: str, actor: str, token: str | None,
     document_id: str, creative_pep: CreativeReferencePEP | None,
+    connection=None,
 ) -> ReferenceRecheckResult:
     """Re-evaluate stored grants; never infer permission from a stored receipt.
 
@@ -40,54 +41,73 @@ def recheck_document_references(
     transaction as the signed grant and revocation checks. A result is *only*
     evidence that the particular draft reference check passed at that instant.
     """
-    with engine.begin() as db:
-        payload = db.execute(select(studio_versions.c.payload).select_from(
-            studio_versions.join(
-                studio_documents,
-                (studio_documents.c.tenant_id == studio_versions.c.tenant_id)
-                & (studio_documents.c.document_id == studio_versions.c.document_id)
-                & (studio_documents.c.current_version == studio_versions.c.version),
+    if connection is None:
+        with engine.begin() as db:
+            return recheck_document_references(
+                engine, tenant=tenant, actor=actor, token=token,
+                document_id=document_id, creative_pep=creative_pep,
+                connection=db,
             )
-        ).where(
-            studio_versions.c.tenant_id == tenant,
-            studio_versions.c.document_id == document_id,
-        )).scalar_one_or_none()
-        if payload is None:
-            raise StudioError("STUDIO_DOCUMENT_NOT_FOUND", 404)
-        try:
-            doc = DesignDocument.model_validate_json(payload)
-            if doc.tenant_id != tenant or doc.document_id != document_id:
-                raise ReferenceBindingDenied()
-            bindings = load_reference_bindings(
-                db, tenant=tenant, document_id=document_id,
-                reference_content_ids=doc.reference_content_ids,
-            )
-            retriever = EvidenceRetriever(engine)
-            for content_id in doc.reference_content_ids:
-                # Reject missing, corrupt, foreign-tenant or relabeled records,
-                # including those not covered by a signed external grant.
-                evidence = retriever.get(tenant, content_id, connection=db)
-                if content_id not in bindings:
-                    row = db.execute(select(content_items.c.payload).where(
-                        content_items.c.tenant_id == tenant,
-                        content_items.c.id == content_id,
-                    )).scalar_one_or_none()
-                    item = ContentItem.model_validate_json(row)
-                    if (evidence.origin != "synthetic_local"
-                            or item.is_synthetic is not True
-                            or item.source_url is not None):
-                        raise ReferenceBindingDenied()
-            if bindings:
-                if creative_pep is None or token is None:
+    db = connection
+    if db.engine is not engine or not db.in_transaction():
+        raise ReferenceBindingDenied()
+    # Keep this document's current-version pointer stable while checking
+    # signed reference rights and (optionally) applying an edit.
+    locked = db.execute(select(
+        studio_documents.c.current_version,
+    ).where(
+        studio_documents.c.tenant_id == tenant,
+        studio_documents.c.document_id == document_id,
+    ).with_for_update()).scalar_one_or_none()
+    if locked is None:
+        raise StudioError("STUDIO_DOCUMENT_NOT_FOUND", 404)
+    payload = db.execute(select(studio_versions.c.payload).select_from(
+        studio_versions.join(
+            studio_documents,
+            (studio_documents.c.tenant_id == studio_versions.c.tenant_id)
+            & (studio_documents.c.document_id == studio_versions.c.document_id)
+            & (studio_documents.c.current_version == studio_versions.c.version),
+        )
+    ).where(
+        studio_versions.c.tenant_id == tenant,
+        studio_versions.c.document_id == document_id,
+    )).scalar_one_or_none()
+    if payload is None:
+        raise StudioError("STUDIO_DOCUMENT_NOT_FOUND", 404)
+    try:
+        doc = DesignDocument.model_validate_json(payload)
+        if doc.tenant_id != tenant or doc.document_id != document_id:
+            raise ReferenceBindingDenied()
+        bindings = load_reference_bindings(
+            db, tenant=tenant, document_id=document_id,
+            reference_content_ids=doc.reference_content_ids,
+        )
+        retriever = EvidenceRetriever(engine)
+        for content_id in doc.reference_content_ids:
+            # Reject missing, corrupt, foreign-tenant or relabeled records,
+            # including those not covered by a signed external grant.
+            evidence = retriever.get(tenant, content_id, connection=db)
+            if content_id not in bindings:
+                row = db.execute(select(content_items.c.payload).where(
+                    content_items.c.tenant_id == tenant,
+                    content_items.c.id == content_id,
+                )).scalar_one_or_none()
+                item = ContentItem.model_validate_json(row)
+                if (evidence.origin != "synthetic_local"
+                        or item.is_synthetic is not True
+                        or item.source_url is not None):
                     raise ReferenceBindingDenied()
-                creative_pep.require_for_atomic_draft(
-                    db, token=token, tenant=tenant, actor=actor,
-                    document_id=document_id, grant_ids=bindings,
-                    audit_event_type="creative_reference.rechecked_for_draft",
-                )
-        except (EvidenceNotFound, CreativeReferencePermissionDenied,
-                ReferenceBindingDenied, ValueError, TypeError, AttributeError):
-            raise ReferenceBindingDenied() from None
+        if bindings:
+            if creative_pep is None or token is None:
+                raise ReferenceBindingDenied()
+            creative_pep.require_for_atomic_draft(
+                db, token=token, tenant=tenant, actor=actor,
+                document_id=document_id, grant_ids=bindings,
+                audit_event_type="creative_reference.rechecked_for_draft",
+            )
+    except (EvidenceNotFound, CreativeReferencePermissionDenied,
+            ReferenceBindingDenied, ValueError, TypeError, AttributeError):
+        raise ReferenceBindingDenied() from None
     return ReferenceRecheckResult(
         document_id=document_id,
         status=("SIGNED_REFERENCES_CURRENT_FOR_DRAFT_REVIEW_ONLY"
