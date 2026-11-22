@@ -224,3 +224,19 @@ def test_failed_first_version_insert_rolls_back_document_header(api, monkeypatch
         client.post("/v1/agent/creative-drafts", headers=headers, json=request())
     # The shared transaction MUST roll back the previously inserted header.
     assert client.get("/v1/studio/documents/design.atomic", headers=headers).status_code == 404
+
+
+def test_local_synthetic_draft_recheck_never_claims_publish_rights(api):
+    _app, client, headers = api
+    made = client.post("/v1/agent/creative-drafts",
+                       headers=headers, json=request())
+    assert made.status_code == 201, made.text
+    check = client.post(
+        "/v1/agent/creative-drafts/design.atomic/reference-recheck",
+        headers=headers,
+    )
+    assert check.status_code == 200, check.text
+    assert check.json()["status"] == "LOCAL_SYNTHETIC_REFERENCES_ONLY"
+    assert check.json()["verified_external_reference_count"] == 0
+    assert check.json()["publication_allowed"] is False
+    assert check.json()["production_approved"] is False
