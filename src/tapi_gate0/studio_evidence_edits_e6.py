@@ -13,10 +13,11 @@ from datetime import datetime, timezone
 
 from typing import Literal
 from pydantic import ConfigDict, Field
-from sqlalchemy import Table, Column, String, Integer, ForeignKeyConstraint, select, insert, update
+from sqlalchemy import Table, Column, String, Integer, ForeignKeyConstraint, select, insert, update, and_
 
 from .domain import Id, ContentItem, Creator, MetricsCreate
 from .sa_store import metadata, content_items, creators, metrics_snapshots
+from .ingestion import ingestion_records, source_grants
 from .studio_e1 import StudioError, DesignDocument, StudioStore, studio_documents, studio_versions
 from .studio_e4 import ProposedTextEdit, _proposed_patch, studio_etag, assert_etag
 
@@ -50,6 +51,56 @@ studio_evidence_edit_events=Table('studio_evidence_edit_events',metadata,
 class StudioEvidenceEditService:
     def __init__(self,engine):
         self.engine=engine;self.docs=StudioStore(engine)
+
+    @staticmethod
+    def _metadata_source_scope(db, tenant, content, creator) -> str:
+        """Recheck official metadata provenance; never grant creative reuse.
+
+        Must be called inside the same DB transaction as the edit. A research
+        source grant cannot authorize media copying, publication or assets.
+        """
+        if content.origin.value not in ("instagram", "youtube"):
+            raise StudioError("STUDIO_EVIDENCE_EXTERNAL_SOURCE_REQUIRED", 403)
+        ir, sg = ingestion_records, source_grants
+        rows = db.execute(select(
+            ir.c.source_item_id, ir.c.platform, ir.c.source_account_id,
+            ir.c.metadata_only, ir.c.denominator_quality, ir.c.processed_at,
+            sg.c.enabled, sg.c.approval_reference, sg.c.approved_by,
+            sg.c.approved_at, sg.c.technical_verified_at, sg.c.expires_at,
+        ).select_from(ir.join(sg, and_(
+            ir.c.tenant_id == sg.c.tenant_id,
+            ir.c.platform == sg.c.platform,
+            ir.c.source_account_id == sg.c.source_account_id,
+        ))).where(ir.c.tenant_id == tenant,
+                  ir.c.content_id == content.content_id)).mappings().all()
+        if len(rows) != 1:
+            raise StudioError("STUDIO_EVIDENCE_LIVE_METADATA_GRANT_REQUIRED", 403)
+        row = rows[0]
+        try:
+            now = datetime.now(timezone.utc)
+            approved = datetime.fromisoformat(row["approved_at"])
+            verified = datetime.fromisoformat(row["technical_verified_at"])
+            expires = datetime.fromisoformat(row["expires_at"])
+            processed = datetime.fromisoformat(row["processed_at"])
+            if not (
+                row["enabled"] == 1
+                and row["metadata_only"] == 1
+                and row["platform"] == content.origin.value
+                and creator.source_profile_id == row["source_account_id"]
+                and all(t.tzinfo is not None and t.utcoffset() is not None
+                        for t in (approved, verified, expires, processed))
+                and approved <= verified <= now < expires
+                and processed <= now
+                and content.created_at <= now
+            ):
+                raise StudioError("STUDIO_EVIDENCE_LIVE_METADATA_GRANT_REQUIRED", 403)
+            # Binding approval/provenance fields into the preview digest forces
+            # a fresh operator review whenever source state changes.
+            pinned = {key: row[key] for key in row.keys()}
+            return sha256(json.dumps(pinned, sort_keys=True,
+                                     separators=(",", ":")).encode("utf-8")).hexdigest()
+        except (ValueError, TypeError, KeyError, AttributeError):
+            raise StudioError("STUDIO_EVIDENCE_LIVE_METADATA_GRANT_REQUIRED", 403) from None
 
     @staticmethod
     def _evidence(db, tenant, doc, proposal):
@@ -101,6 +152,8 @@ class StudioEvidenceEditService:
 
         if content.is_synthetic:
             raise StudioError('STUDIO_EVIDENCE_SYNTHETIC_NOT_ALLOWED', 403)
+        source_scope_sha256 = StudioEvidenceEditService._metadata_source_scope(
+            db, tenant, content, creator)
         snap_row = db.execute(select(
             metrics_snapshots.c.observed_at, metrics_snapshots.c.payload,
         ).where(
@@ -126,6 +179,7 @@ class StudioEvidenceEditService:
             'snapshot_sha256': sha256(snap_row.payload.encode()).hexdigest(),
             'content_sha256': sha256(row.payload.encode()).hexdigest(),
             'creator_sha256': sha256(creator_row.payload.encode()).hexdigest(),
+            'source_scope_sha256': source_scope_sha256,
         }
 
     @staticmethod
@@ -135,6 +189,7 @@ class StudioEvidenceEditService:
             'patch_sha256':patch_digest,'snapshot_sha256':evidence['snapshot_sha256'],
             'content_sha256':evidence['content_sha256'],
             'creator_sha256':evidence['creator_sha256'],
+            'source_scope_sha256':evidence['source_scope_sha256'],
             'content_id':proposal.reference_content_id,
             'snapshot_id':proposal.reference_snapshot_id},
             sort_keys=True,separators=(',',':')).encode()).hexdigest()
@@ -153,7 +208,8 @@ class StudioEvidenceEditService:
             'reference_snapshot_id':proposal.reference_snapshot_id,
             'source_url':evidence['source_url'],
             'snapshot_sha256':evidence['snapshot_sha256'],
-            'snapshot_observed_at':evidence['snapshot_observed_at'],
+            'source_scope_sha256':evidence['source_scope_sha256'],
+            'snapshot_observed_at:evidence['snapshot_observed_at'],
             'descriptive_evidence_only':True,'scientifically_validated':False,
             'production_approved':False,'requires_operator_confirmation':True,
             'changes':[{'path':k,'before':before.get(k),'after':proposed.get(k)}
