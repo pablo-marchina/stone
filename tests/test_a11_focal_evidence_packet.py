@@ -25,7 +25,7 @@ def node_report(passed=19, total=19, failed=0, skipped=0):
 
 
 def synthetic_runner(*, pytest_count=269, a06_count=29, a02_count=62,
-                     a027_count=28,
+                     a027_count=28, a027_integrated_count=5,
                      node_count=19, chrome=True,
                      financial=True, syntax_ok=True, pytest_skip=0, git_dirty=False):
     calls = []
@@ -57,6 +57,8 @@ def synthetic_runner(*, pytest_count=269, a06_count=29, a02_count=62,
                 return done(f"{a02_count} passed in 0.30s\n")
             if "tests/test_asset_fixture_batch.py" in argv:
                 return done(f"{a027_count} passed in 0.25s\n")
+            if "tests/test_asset_fixture_batch_integration.py" in argv:
+                return done(f"{a027_integrated_count} passed in 1.50s\n")
             if "tests/test_studio_synthetic_provenance_a067.py" in argv:
                 return done(
                     f"{pytest_count} passed"
@@ -98,8 +100,8 @@ def test_packet_assembles_exact_local_counts_and_preserves_all_gate_denials(loca
     assert receipt["git_status_reason"] == "A11_CLEAN_HEAD_VERIFIED"
     assert receipt["validation_status"] == "FOCAL_DIAGNOSTICS_VERIFIED_NO_GATE_RELEASE"
     assert receipt["zero_spend_check_observed"] is True
-    assert len(receipt["checks"]) == 9
-    assert [x["observed_pass_count"] for x in receipt["checks"]] == [1, 1, 62, 28, 269, 29, 13, 19, 7]
+    assert len(receipt["checks"]) == 10
+    assert [x["observed_pass_count"] for x in receipt["checks"]] == [1, 1, 62, 28, 5, 269, 29, 13, 19, 7]
     assert all(x["passed"] and x["observed_skip_count"] == 0
                for x in receipt["checks"])
     assert receipt["gate_status"] == {**{f"G{i}": "BLOCKED" for i in range(7)},
@@ -119,6 +121,7 @@ def test_packet_assembles_exact_local_counts_and_preserves_all_gate_denials(loca
 @pytest.mark.parametrize("changes,expected_id", [
     ({"a02_count": 61}, "python_a02_asr_diagnostic"),
     ({"a027_count": 27}, "python_a027_fixture_batch"),
+    ({"a027_integrated_count": 4}, "python_a027_integrated"),
     ({"pytest_count": 268}, "python_a05_a07"),
     ({"a06_count": 28}, "python_a06_e1"),
     ({"node_count": 18}, "node_a073"),
@@ -276,7 +279,7 @@ def test_a06_source_bridge_is_pinned_before_any_focal_execution(local_files):
            if c["check_id"] == "python_a06_e1"]
     assert len(a06) == 1
     assert a06[0]["observed_pass_count"] == 29
-    assert "tests/test_multimodal_system_one_bridge.py" in calls[7]
+    assert "tests/test_multimodal_system_one_bridge.py" in calls[8]
     assert receipt["independent_gold_available"] is False
     assert receipt["external_reference_rights_verified"] is False
     assert receipt["production_approved"] is False
@@ -311,3 +314,16 @@ def test_bounded_a027_fixture_driver_is_pinned_and_cannot_release_gates(local_fi
     assert "src/tapi_gate0/asset_fixture_pipeline.py" in receipt["source_sha256"]
     assert receipt["gate_status"]["IMP-131"] == "BLOCKED"
     assert receipt["production_approved"] is False
+
+
+def test_true_sqlite_signed_rights_batch_is_a_separate_blocking_a11_stage(local_files):
+    run, calls = synthetic_runner()
+    receipt = packet.build_packet(root=local_files, run=run)
+    assert receipt["validation_status"] == "FOCAL_DIAGNOSTICS_VERIFIED_NO_GATE_RELEASE"
+    stages = [c for c in receipt["checks"] if c["check_id"] == "python_a027_integrated"]
+    assert len(stages) == 1
+    assert stages[0]["observed_pass_count"] == 5
+    assert "tests/test_asset_fixture_batch_integration.py" in calls[6]
+    assert "tests/test_asset_fixture_batch_integration.py" in receipt["source_sha256"]
+    assert receipt["production_approved"] is False
+    assert receipt["gate_status"]["IMP-131"] == "BLOCKED"

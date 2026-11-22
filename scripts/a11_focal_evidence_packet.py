@@ -59,6 +59,9 @@ PY_A02_ASR_DIAGNOSTIC = (
 PY_A027_FIXTURE_BATCH = (
     "tests/test_asset_fixture_batch.py",
 )
+PY_A027_INTEGRATED = (
+    "tests/test_asset_fixture_batch_integration.py",
+)
 PY_A06_E1 = (
     "tests/test_multimodal_system_one_bridge.py",
     "tests/test_a06_system_one_bridge_cli.py",
@@ -77,6 +80,7 @@ NODE_A073 = (
 EXPECTED = {"python_a05_a07": 269, "python_a06_e1": 29,
             "python_a02_asr_diagnostic": 62,
             "python_a027_fixture_batch": 28,
+            "python_a027_integrated": 5,
             "python_a073_cdp": 13, "node_a073": 19}
 SOURCE_FILES = (
     "scripts/a11_focal_evidence_packet.py",
@@ -114,7 +118,7 @@ SOURCE_FILES = (
     "src/tapi_gate0/agent_evidence_b2.py",
     "migrations/versions/0017_creative_reference_pep.py",
     "tests/frontend/studio_export_browser_a07.html",
-) + PY_A05_A07 + PY_A02_ASR_DIAGNOSTIC + PY_A027_FIXTURE_BATCH + PY_A06_E1 + PY_A073 + NODE_A073
+) + PY_A05_A07 + PY_A02_ASR_DIAGNOSTIC + PY_A027_FIXTURE_BATCH + PY_A027_INTEGRATED + PY_A06_E1 + PY_A073 + NODE_A073
 
 GATES = {f"G{i}": "BLOCKED" for i in range(7)}
 GATES["IMP-131"] = "BLOCKED"
@@ -335,6 +339,9 @@ def build_packet(*, root: Path = ROOT, expected_head: str | None = None,
         ("python_a027_fixture_batch", [py, "-m", "pytest", "-q", "-rs",
                                        *PY_A027_FIXTURE_BATCH],
          "pytest", EXPECTED["python_a027_fixture_batch"], 90),
+        ("python_a027_integrated", [py, "-m", "pytest", "-q", "-rs",
+                                    *PY_A027_INTEGRATED],
+         "pytest", EXPECTED["python_a027_integrated"], 180),
         ("python_a05_a07", [py, "-m", "pytest", "-q", "-rs", *PY_A05_A07],
          "pytest", EXPECTED["python_a05_a07"], 300),
         ("python_a06_e1", [py, "-m", "pytest", "-q", "-rs", *PY_A06_E1],
@@ -361,7 +368,7 @@ def build_packet(*, root: Path = ROOT, expected_head: str | None = None,
             packet["validation_status"] = "BLOCKED_PYTHON_SYNTAX_PREFLIGHT"
             return packet  # Never run pytest/Node/Chrome on malformed source.
 
-    if len(packet["checks"]) == 9 and all(c["passed"] for c in packet["checks"]):
+    if len(packet["checks"]) == 10 and all(c["passed"] for c in packet["checks"]):
         packet["validation_status"] = "FOCAL_DIAGNOSTICS_VERIFIED_NO_GATE_RELEASE"
     return packet
 
