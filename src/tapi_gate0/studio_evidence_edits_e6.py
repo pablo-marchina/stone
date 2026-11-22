@@ -124,6 +124,8 @@ class StudioEvidenceEditService:
             'source_url': str(content.source_url) if content.source_url else None,
             'snapshot_observed_at': snap.observed_at.isoformat(),
             'snapshot_sha256': sha256(snap_row.payload.encode()).hexdigest(),
+            'content_sha256': sha256(row.payload.encode()).hexdigest(),
+            'creator_sha256': sha256(creator_row.payload.encode()).hexdigest(),
         }
 
     @staticmethod
@@ -131,6 +133,8 @@ class StudioEvidenceEditService:
         _,patch_digest=_proposed_patch(doc,proposal)
         return sha256(json.dumps({
             'patch_sha256':patch_digest,'snapshot_sha256':evidence['snapshot_sha256'],
+            'content_sha256':evidence['content_sha256'],
+            'creator_sha256':evidence['creator_sha256'],
             'content_id':proposal.reference_content_id,
             'snapshot_id':proposal.reference_snapshot_id},
             sort_keys=True,separators=(',',':')).encode()).hexdigest()
