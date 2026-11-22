@@ -50,6 +50,10 @@ PY_A05_A07 = (
     "tests/test_studio_evidence_integrity_e6.py",
     "tests/test_studio_metadata_scope_e6.py",
 )
+PY_A02_ASR_DIAGNOSTIC = (
+    "tests/test_asr_strict_diagnostic.py",
+    "tests/test_a02_asr_strict_diagnostic_cli.py",
+)
 PY_A06_E1 = (
     "tests/test_multimodal_system_one_bridge.py",
     "tests/test_a06_system_one_bridge_cli.py",
@@ -66,11 +70,15 @@ NODE_A073 = (
 # These are expected collection counts after the A05 B2 hardening tests, NOT
 # required gate acceptance counts or a promise about all future code changes.
 EXPECTED = {"python_a05_a07": 269, "python_a06_e1": 29,
+            "python_a02_asr_diagnostic": 27,
             "python_a073_cdp": 13, "node_a073": 19}
 SOURCE_FILES = (
     "scripts/a11_focal_evidence_packet.py",
     "scripts/a05_python_source_preflight.py",
     "scripts/a06_system_one_bridge.py",
+    "scripts/a02_asr_strict_diagnostic.py",
+    "src/tapi_gate0/asr_strict_diagnostic.py",
+    "src/tapi_gate0/multimodal_asr.py",
     "scripts/a07_browser_visual_parity.py",
     "scripts/a07_browser_cdp.py",
     "scripts/verify_zero_spend.py",
@@ -96,7 +104,7 @@ SOURCE_FILES = (
     "src/tapi_gate0/agent_evidence_b2.py",
     "migrations/versions/0017_creative_reference_pep.py",
     "tests/frontend/studio_export_browser_a07.html",
-) + PY_A05_A07 + PY_A06_E1 + PY_A073 + NODE_A073
+) + PY_A05_A07 + PY_A02_ASR_DIAGNOSTIC + PY_A06_E1 + PY_A073 + NODE_A073
 
 GATES = {f"G{i}": "BLOCKED" for i in range(7)}
 GATES["IMP-131"] = "BLOCKED"
@@ -311,6 +319,9 @@ def build_packet(*, root: Path = ROOT, expected_head: str | None = None,
          "zero_spend", None, 30),
         ("syntax_preflight", [py, "-m", "scripts.a05_python_source_preflight"],
          "syntax_preflight", 1, 30),
+        ("python_a02_asr_diagnostic", [py, "-m", "pytest", "-q", "-rs",
+                                        *PY_A02_ASR_DIAGNOSTIC],
+         "pytest", EXPECTED["python_a02_asr_diagnostic"], 90),
         ("python_a05_a07", [py, "-m", "pytest", "-q", "-rs", *PY_A05_A07],
          "pytest", EXPECTED["python_a05_a07"], 300),
         ("python_a06_e1", [py, "-m", "pytest", "-q", "-rs", *PY_A06_E1],
@@ -337,7 +348,7 @@ def build_packet(*, root: Path = ROOT, expected_head: str | None = None,
             packet["validation_status"] = "BLOCKED_PYTHON_SYNTAX_PREFLIGHT"
             return packet  # Never run pytest/Node/Chrome on malformed source.
 
-    if len(packet["checks"]) == 7 and all(c["passed"] for c in packet["checks"]):
+    if len(packet["checks"]) == 8 and all(c["passed"] for c in packet["checks"]):
         packet["validation_status"] = "FOCAL_DIAGNOSTICS_VERIFIED_NO_GATE_RELEASE"
     return packet
 
