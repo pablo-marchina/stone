@@ -47,7 +47,22 @@ def make_report(monkeypatch, *, negative_speech=False, blank_positive=False):
                                'source_pcm_sha256':full_hash,
                                'chunk_pcm_sha256':audio_sha,
                                'timestamp_kind':'model_estimate_mapped_to_decoded_pcm_not_original_pts'}))
+        ocr_frames = []
+        for timestamp in (0, 3):
+            ocr_frames.append({
+                'timestamp_s': timestamp,
+                'timestamp_kind': 'decoded_uniform_frame_index',
+                'frame_sha256': sha256(f'{cid}:frame:{timestamp}'.encode()).hexdigest(),
+                'frame_png_sha256': sha256(f'{cid}:png:{timestamp}'.encode()).hexdigest(),
+                'view_sha256': sha256(f'{cid}:view:{timestamp}'.encode()).hexdigest(),
+                'media_sha256': media_sha,
+                'complete_text_verified': False,
+                'primary_words': [], 'supporting_words': [], 'words': [],
+                'complete_primary_and_supporting_sequence_retained': False,
+                'observation_status': 'abstained',
+            })
         row = {'case_id':cid,'caption':caption,'caption_sha256':fusion.digest(caption),
+               'ocr_frames': ocr_frames,
                'expected':{'tema_principal':topic,'tipo_cta':cta,'texto_na_tela':has_text},
                'duration_s':shared.DURATION, 'source_pixels_and_pcm_verified':True,
                'temporal_passed':True,'asset_binding_verified':True,
@@ -145,5 +160,55 @@ def test_tampered_report_fail_closed(monkeypatch,corrupt):
 def test_source_validator_failure_fails_closed(monkeypatch):
     report,_=make_report(monkeypatch)
     monkeypatch.setattr(shared,'validate_asset_binding',lambda row:False)
+    with pytest.raises(diag.SharedAVDiagnosticDenied):
+        diag.diagnose_shared_av_asr(report)
+
+
+def test_ocr_source_evidence_cannot_be_silently_dropped(monkeypatch):
+    report, _ = make_report(monkeypatch)
+    row = next(r for r in report['cases'] if r['case_id'] == 'ocr_only')
+    frame = row['ocr_frames'][1]
+    word = {'text':'Siga', 'confidence_raw':95.0,'box_px':[20,30,90,40]}
+    frame['primary_words'] = [word]
+    frame['supporting_words'] = [dict(word)]
+    frame['words'] = shared.consensus.consensus_words(
+        frame['primary_words'], frame['supporting_words'])
+    assert len(frame['words']) == 1
+    frame['complete_primary_and_supporting_sequence_retained'] = True
+    frame['observation_status'] = 'candidate'
+    locator = {key:frame[key] for key in (
+        'timestamp_s','timestamp_kind','frame_sha256','frame_png_sha256',
+        'view_sha256','words','complete_text_verified')}
+    fragment = fusion.fragment(row['media_sha256'], 'ocr', 'Siga', locator,
+                               semantic_eligible=True)
+    row['fragments'].insert(0, fragment)
+    row['arms'] = {key:fusion.fuse(row['media_sha256'], row['fragments'], mods)
+                   for key, mods in fusion.ARMS.items()}
+    score = fusion.evaluate(report['cases'])
+    report.update(score)
+    report['engineering_gate_passed'] = bool(score['engineering_gate_passed'])
+    assert diag.diagnose_shared_av_asr(report)['source_case_count'] == 7
+    # Even if all fusion arm metrics were recalculated after the drop, the
+    # underlying source observation must still be represented.
+    row['fragments'].remove(fragment)
+    row['arms'] = {key:fusion.fuse(row['media_sha256'], row['fragments'], mods)
+                   for key, mods in fusion.ARMS.items()}
+    score = fusion.evaluate(report['cases'])
+    report.update(score)
+    report['engineering_gate_passed'] = bool(score['engineering_gate_passed'])
+    with pytest.raises(diag.SharedAVDiagnosticDenied):
+        diag.diagnose_shared_av_asr(report)
+
+
+@pytest.mark.parametrize('mutate', [
+    lambda f: f.update(timestamp_s=2),
+    lambda f: f.update(frame_sha256='no_hash'),
+    lambda f: f.update(observation_status='candidate'),
+    lambda f: f.update(complete_primary_and_supporting_sequence_retained=True),
+    lambda f: f.update(media_sha256='f'*64),
+])
+def test_corrupted_ocr_source_frame_is_denied(monkeypatch, mutate):
+    report, _ = make_report(monkeypatch)
+    mutate(report['cases'][2]['ocr_frames'][0])
     with pytest.raises(diag.SharedAVDiagnosticDenied):
         diag.diagnose_shared_av_asr(report)

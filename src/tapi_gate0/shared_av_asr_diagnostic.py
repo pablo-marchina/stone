@@ -141,6 +141,37 @@ def diagnose_shared_av_asr(report: dict) -> dict:
                 ))
             if [f for f in row["fragments"] if f["modality"] == "audio"] != expected_audio_fragments:
                 _fail()
+            # A source binding check over PRESENT fragments is insufficient:
+            # a dropped OCR observation could make a failed report appear to
+            # have an internally valid (but incomplete) evidence partition.
+            frames = row["ocr_frames"]
+            if (not isinstance(frames, list) or len(frames) != 2
+                    or [frame["timestamp_s"] for frame in frames] != [0, 3]):
+                _fail()
+            expected_ocr_fragments = []
+            for frame in frames:
+                if (frame["media_sha256"] != row["media_sha256"]
+                        or frame["timestamp_kind"] != "decoded_uniform_frame_index"
+                        or frame["complete_text_verified"] is not False
+                        or any(not isinstance(frame[k], str) or not SHA256.fullmatch(frame[k])
+                               for k in ("frame_sha256", "frame_png_sha256", "view_sha256"))):
+                    _fail()
+                words = shared.consensus.consensus_words(
+                    frame["primary_words"], frame["supporting_words"])
+                complete = (bool(words)
+                    and len(words) == len(frame["primary_words"]) == len(frame["supporting_words"])
+                    and [w["supporting_index"] for w in words] == list(range(len(words))))
+                if (frame["words"] != words
+                        or frame["complete_primary_and_supporting_sequence_retained"] is not complete
+                        or frame["observation_status"] != ("candidate" if words else "abstained")):
+                    _fail()
+                if words:
+                    locator = {k: frame[k] for k in (
+                        "timestamp_s", "timestamp_kind", "frame_sha256",
+                        "frame_png_sha256", "view_sha256", "words", "complete_text_verified")}
+                    expected_ocr_fragments.append(fusion.fragment(
+                        row["media_sha256"], "ocr", " ".join(w["text"] for w in words),
+                        locator, semantic_eligible=complete))
             caption_fragments = [f for f in row["fragments"] if f["modality"] == "caption"]
             expected_caption = ([fusion.fragment(
                 row["media_sha256"], "caption", caption,
@@ -148,6 +179,9 @@ def diagnose_shared_av_asr(report: dict) -> dict:
             )] if caption else [])
             if caption_fragments != expected_caption:
                 _fail()
+            if row["fragments"] != (expected_ocr_fragments + expected_caption
+                                     + expected_audio_fragments):
+                _fail()  # Exact order, no omissions, duplicates or reordering.
             hypothesis = audio["transcript"]
             if (not isinstance(hypothesis, str) or len(hypothesis) > 4000
                     or hypothesis != " ".join(c["transcript"] for c in chunks
