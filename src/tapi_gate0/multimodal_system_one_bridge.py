@@ -13,6 +13,7 @@ import json
 
 from . import multimodal_semantic_replay as semantic
 from . import multimodal_shared_fixture as shared
+from . import multimodal_fusion as fusion
 from .system_one_e1 import (
     DeterministicTextDecider, EvidenceBundle, ObservedText, E1_FIELDS,
 )
@@ -44,15 +45,42 @@ def _case_consensus(observations):
     result = {}
     for field in E1_FIELDS:
         supports = []
+        vetoes = []
+        guard_field = (
+            "tipo_cta" if field in ("tipo_cta", "tem_cta") else
+            "tema_principal" if field == "tema_principal" else None
+        )
         for item in observations:
             matches = [d for d in item["decision_bundle"]["decisions"]
                        if d["field_id"] == field]
             if len(matches) != 1:
                 _fail()
             decision = matches[0]
+            grounding = (item["lexical_grounding"].get(guard_field)
+                         if guard_field else None)
+            if guard_field and item["modality"] is not None:
+                if grounding is None:
+                    _fail()
+                if grounding["reason"] in ("CONTEXT_GUARD", "MULTIPLE_ANCHORS"):
+                    vetoes.append({
+                        "reason": grounding["reason"],
+                        "modality": item["modality"],
+                        "provenance_sha256": item["observation_provenance_sha256"],
+                    })
             if not decision["abstained"]:
                 if item["observation_provenance_sha256"] is None or decision["value"] is None:
                     _fail()
+                if guard_field and (
+                    grounding["value"] is None
+                    or (field == "tem_cta" and decision["value"] is not True)
+                    or (field != "tem_cta" and grounding["value"] != decision["value"])
+                ):
+                    vetoes.append({
+                        "reason": "UNGROUNDED_E1_CANDIDATE",
+                        "modality": item["modality"],
+                        "provenance_sha256": item["observation_provenance_sha256"],
+                    })
+                    continue
                 supports.append({
                     "value": decision["value"],
                     "modality": item["modality"],
@@ -60,7 +88,9 @@ def _case_consensus(observations):
                     "provenance_sha256": item["observation_provenance_sha256"],
                 })
         different = {json.dumps(x["value"], sort_keys=True) for x in supports}
-        if not supports:
+        if vetoes:
+            state, reason, value = "abstained", "CONTEXT_VETO", None
+        elif not supports:
             state, reason, value = "abstained", "NO_TEXTUAL_CANDIDATE", None
         elif len(different) != 1:
             state, reason, value = "abstained", "CONFLICTING_TEXTUAL_CANDIDATES", None
@@ -68,7 +98,8 @@ def _case_consensus(observations):
             state, reason, value = "candidate", "AGREED_TEXTUAL_CANDIDATE", supports[0]["value"]
         result[field] = {
             "state": state, "reason": reason, "value": value,
-            "supports": supports, "is_canonical_rubric": False,
+            "supports": supports, "vetoes": vetoes,
+            "is_canonical_rubric": False,
             "is_scientific_review": False,
         }
     return result
@@ -141,8 +172,20 @@ def _one_case(row, *, tenant_id: str, creator_id: str):
                 asset_sha, cid, observed_modality,
                 source_text_sha256, observation.locator,
             )).encode("utf-8")).hexdigest()
+        lexical_grounding = {}
+        if observation is not None:
+            for field_id in ("tema_principal", "tipo_cta"):
+                rule = fusion.rule_evidence(field_id, observation.text)
+                if rule["caption_sha256"] != source_text_sha256:
+                    _fail()
+                lexical_grounding[field_id] = {
+                    "value": (None if rule["rule_value"] == fusion.UNKNOWN
+                              else rule["rule_value"]),
+                    "reason": rule["reason"],
+                }
         observations.append({
             "modality": observed_modality,
+            "lexical_grounding": lexical_grounding,
             "text_sha256": source_text_sha256,
             "observation_provenance_sha256": provenance_hash,
             "evidence_fingerprint": evidence.fingerprint(),

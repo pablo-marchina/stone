@@ -125,7 +125,7 @@ def test_caption_and_audio_remain_separate_even_when_conflicting(monkeypatch):
             {"value": "salvar", "modality": "transcript",
              "text_sha256": obs[1]["text_sha256"],
              "provenance_sha256": obs[1]["observation_provenance_sha256"]},
-        ], "is_canonical_rubric": False, "is_scientific_review": False,
+        ], "vetoes": [], "is_canonical_rubric": False, "is_scientific_review": False,
     }
 
 
@@ -227,3 +227,41 @@ def test_same_audio_text_at_distinct_times_has_distinct_av_provenance(monkeypatc
     assert obs[0]["evidence_fingerprint"] == obs[1]["evidence_fingerprint"]
     assert obs[0]["observation_provenance_sha256"] != obs[1]["observation_provenance_sha256"]
     assert len(result["cases"][0]["case_text_consensus"]["tipo_cta"]["supports"]) == 2
+
+
+def test_negated_caption_cta_cannot_become_positive_consensus(monkeypatch):
+    report, _ = fixture_report(monkeypatch, [
+        fragment("caption", "Não salve este post."),
+    ])
+    case = bridge.bridge_verified_synthetic_report(report)["cases"][0]
+    raw = decisions(case["observations"][0])
+    assert raw["tipo_cta"]["value"] == "salvar"  # E1 raw hypothesis remains
+    consensus = case["case_text_consensus"]["tipo_cta"]
+    assert consensus["state"] == "abstained"
+    assert consensus["reason"] == "CONTEXT_VETO"
+    assert consensus["value"] is None
+    assert consensus["vetoes"]
+    assert case["case_text_consensus"]["tem_cta"]["state"] == "abstained"
+
+
+def test_context_veto_dominates_other_positive_text_evidence(monkeypatch):
+    report, _ = fixture_report(monkeypatch, [
+        fragment("caption", "Não salve este post."),
+        fragment("audio", "Salve este post."),
+    ])
+    result = bridge.bridge_verified_synthetic_report(report)
+    cta = result["cases"][0]["case_text_consensus"]["tipo_cta"]
+    assert cta["state"] == "abstained"
+    assert cta["reason"] == "CONTEXT_VETO"
+    assert cta["supports"][0]["value"] == "salvar"
+    assert all("text" not in item for item in cta["vetoes"])
+
+
+def test_quoted_cta_never_becomes_positive_consensus(monkeypatch):
+    report, _ = fixture_report(monkeypatch, [
+        fragment("caption", 'O artigo cita "Comente" como exemplo.'),
+    ])
+    cta = bridge.bridge_verified_synthetic_report(report)["cases"][0]["case_text_consensus"]["tipo_cta"]
+    assert cta["state"] == "abstained"
+    assert cta["value"] is None
+    assert cta["reason"] == "CONTEXT_VETO"
