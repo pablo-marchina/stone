@@ -181,3 +181,25 @@ def test_invalid_evidence_at_apply_leaves_document_unmodified(scenario):
         service.apply("tenantA", "operator", "document.test", confirmed,
                       preview["base_etag"])
     assert service.docs.get("tenantA", "document.test").version == 1
+
+
+@pytest.mark.parametrize("table,record_id,change", [
+    (content_items, "content.real", {
+        "caption": "Fonte alterada depois da prévia",
+    }),
+    (creators, "creator.real", {"handle": "changed_author_after_preview"}),
+])
+def test_content_or_creator_drift_invalidates_operator_confirmation(
+        scenario, table, record_id, change):
+    engine, service, proposal = scenario
+    preview = service.preview("tenantA", "document.test", proposal)
+    _payload_change(engine, table, record_id, change)
+    confirmed = ConfirmEvidenceEdit(
+        **proposal.model_dump(),
+        preview_sha256=preview["preview_sha256"],
+        operator_confirmed=True,
+    )
+    with pytest.raises(StudioError, match="STUDIO_EVIDENCE_PREVIEW_CHANGED"):
+        service.apply("tenantA", "operator", "document.test", confirmed,
+                      preview["base_etag"])
+    assert service.docs.get("tenantA", "document.test").version == 1

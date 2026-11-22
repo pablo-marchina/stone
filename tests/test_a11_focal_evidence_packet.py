@@ -24,7 +24,7 @@ def node_report(passed=19, total=19, failed=0, skipped=0):
             "ℹ todo 0\nℹ duration_ms 400\n")
 
 
-def synthetic_runner(*, pytest_count=153, node_count=19, chrome=True,
+def synthetic_runner(*, pytest_count=155, node_count=19, chrome=True,
                      financial=True, pytest_skip=0, git_dirty=False):
     calls = []
     def run(argv, *, timeout, cwd):
@@ -80,7 +80,7 @@ def test_packet_assembles_exact_local_counts_and_preserves_all_gate_denials(loca
     assert receipt["validation_status"] == "FOCAL_DIAGNOSTICS_VERIFIED_NO_GATE_RELEASE"
     assert receipt["zero_spend_check_observed"] is True
     assert len(receipt["checks"]) == 5
-    assert [x["observed_pass_count"] for x in receipt["checks"]] == [1, 153, 13, 19, 7]
+    assert [x["observed_pass_count"] for x in receipt["checks"]] == [1, 155, 13, 19, 7]
     assert all(x["passed"] and x["observed_skip_count"] == 0
                for x in receipt["checks"])
     assert receipt["gate_status"] == {**{f"G{i}": "BLOCKED" for i in range(7)},
@@ -97,7 +97,7 @@ def test_packet_assembles_exact_local_counts_and_preserves_all_gate_denials(loca
 
 
 @pytest.mark.parametrize("changes,expected_id", [
-    ({"pytest_count": 152}, "python_a05_a07"),
+    ({"pytest_count": 154}, "python_a05_a07"),
     ({"node_count": 18}, "node_a073"),
     ({"chrome": False}, "chrome_a073"),
     ({"pytest_skip": 1}, "python_a05_a07"),
@@ -162,9 +162,9 @@ def test_pytest_node_and_chrome_require_complete_counts_and_zero_exit():
         return packet._redacted_result(
             ["fixture"], done(output, code), kind=kind, expected_count=count,
         )
-    assert parse("153 passed\n", "pytest", 153)["passed"] is True
-    assert parse("153 passed, 1 skipped\n", "pytest", 153)["passed"] is False
-    assert parse("153 passed\n", "pytest", 153, code=1)["passed"] is False
+    assert parse("155 passed\n", "pytest", 155)["passed"] is True
+    assert parse("155 passed, 1 skipped\n", "pytest", 155)["passed"] is False
+    assert parse("155 passed\n", "pytest", 155, code=1)["passed"] is False
     assert parse(node_report(), "node", 19)["passed"] is True
     assert parse(node_report(skipped=1), "node", 19)["passed"] is False
     assert parse("A073_BROWSER_PARITY_PASS 7/7\n", "chrome", 7)["passed"] is True
