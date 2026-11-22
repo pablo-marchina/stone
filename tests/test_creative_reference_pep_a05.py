@@ -424,3 +424,122 @@ def test_manually_created_external_reference_has_no_inferred_grant(registry):
             headers=h,
         )
         assert denied.status_code == 422
+
+
+def test_signed_draft_text_edit_rechecks_rights_in_same_transaction(registry):
+    r = registry
+    signed_fixture(r)
+    with TestClient(app_for(r)) as client:
+        h = headers(client)
+        created = client.post("/v1/agent/creative-drafts",
+                              headers=h, json=spec_body(r))
+        assert created.status_code == 201, created.text
+        before = created.headers["etag"]
+        amended = client.post(
+            "/v1/agent/creative-drafts/draft.with-signed-ref/text-patches",
+            headers={**h, "If-Match": before},
+            json={"expected_version": 1, "page_id": "page.1",
+                  "layer_id": "headline", "text": "Revisão humana do rascunho"},
+        )
+        assert amended.status_code == 200, amended.text
+        doc = amended.json()
+        assert doc["version"] == 2
+        assert doc["rights_status"] == "pending_review"
+        assert doc["approval_status"] == "draft"
+        assert amended.headers["etag"] != before
+        with r["engine"].connect() as db:
+            kinds = db.execute(select(domain_events.c.event_type).where(
+                domain_events.c.aggregate_type == "creative_reference_use",
+            )).scalars().all()
+        assert kinds.count("creative_reference.rechecked_for_draft") == 1
+
+
+def test_revoked_signed_reference_blocks_text_edit_and_rolls_back_audit(registry):
+    r = registry
+    signed_fixture(r)
+    with TestClient(app_for(r)) as client:
+        h = headers(client)
+        created = client.post("/v1/agent/creative-drafts",
+                              headers=h, json=spec_body(r))
+        assert created.status_code == 201
+        with r["engine"].begin() as db:
+            db.execute(update(source_grants).where(
+                source_grants.c.tenant_id == TENANT,
+            ).values(enabled=0))
+        denied = client.post(
+            "/v1/agent/creative-drafts/draft.with-signed-ref/text-patches",
+            headers={**h, "If-Match": created.headers["etag"]},
+            json={"expected_version": 1, "page_id": "page.1",
+                  "layer_id": "headline", "text": "Não aplicar"},
+        )
+        assert denied.status_code == 422
+        assert client.get(
+            "/v1/studio/documents/draft.with-signed-ref", headers=h,
+        ).json()["version"] == 1
+    with r["engine"].connect() as db:
+        assert db.execute(select(domain_events.c.seq).where(
+            domain_events.c.event_type == "creative_reference.rechecked_for_draft",
+        )).all() == []
+
+
+def test_legacy_studio_text_edit_denied_for_signed_external_draft(registry):
+    r = registry
+    signed_fixture(r)
+    with TestClient(app_for(r)) as client:
+        h = headers(client)
+        made = client.post("/v1/agent/creative-drafts",
+                           headers=h, json=spec_body(r))
+        assert made.status_code == 201
+        denied = client.post(
+            "/v1/studio/documents/draft.with-signed-ref/text-patches",
+            headers={**h, "If-Match": made.headers["etag"]},
+            json={"expected_version": 1, "page_id": "page.1",
+                  "layer_id": "headline", "text": "Não autorizado"},
+        )
+        assert denied.status_code == 403
+        assert denied.json()["detail"] == (
+            "STUDIO_SIGNED_REFERENCE_ACTION_RECHECK_REQUIRED"
+        )
+        assert client.get(
+            "/v1/studio/documents/draft.with-signed-ref", headers=h,
+        ).json()["version"] == 1
+
+
+def test_signed_edit_requires_if_match_and_unchanged_version(registry):
+    r = registry
+    signed_fixture(r)
+    with TestClient(app_for(r)) as client:
+        h = headers(client)
+        made = client.post("/v1/agent/creative-drafts",
+                           headers=h, json=spec_body(r))
+        assert made.status_code == 201
+        path = "/v1/agent/creative-drafts/draft.with-signed-ref/text-patches"
+        patch = {"expected_version": 1, "page_id": "page.1",
+                 "layer_id": "headline", "text": "Sem condição"}
+        missing = client.post(path, headers=h, json=patch)
+        assert missing.status_code == 428
+        invalid = client.post(path, headers={**h, "If-Match": '"wrong"'},
+                              json=patch)
+        assert invalid.status_code == 412
+        assert client.get(
+            "/v1/studio/documents/draft.with-signed-ref", headers=h,
+        ).json()["version"] == 1
+
+
+def test_without_runtime_pep_signed_edit_is_denied(registry):
+    r = registry
+    signed_fixture(r)
+    with TestClient(app_for(r)) as client:
+        h = headers(client)
+        made = client.post("/v1/agent/creative-drafts",
+                           headers=h, json=spec_body(r))
+        assert made.status_code == 201
+    with TestClient(app_for(r, authorities=False)) as client:
+        h = headers(client)
+        denied = client.post(
+            "/v1/agent/creative-drafts/draft.with-signed-ref/text-patches",
+            headers={**h, "If-Match": made.headers["etag"]},
+            json={"expected_version": 1, "page_id": "page.1",
+                  "layer_id": "headline", "text": "Falha fechada"},
+        )
+        assert denied.status_code == 422

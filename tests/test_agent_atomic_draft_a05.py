@@ -240,3 +240,20 @@ def test_local_synthetic_draft_recheck_never_claims_publish_rights(api):
     assert check.json()["verified_external_reference_count"] == 0
     assert check.json()["publication_allowed"] is False
     assert check.json()["production_approved"] is False
+
+
+def test_atomic_edit_path_keeps_synthetic_drafts_editable(api):
+    _app, client, headers = api
+    created = client.post("/v1/agent/creative-drafts",
+                          headers=headers, json=request())
+    assert created.status_code == 201
+    amended = client.post(
+        "/v1/agent/creative-drafts/design.atomic/text-patches",
+        headers={**headers, "If-Match": created.headers["etag"]},
+        json={"expected_version": 1, "page_id": "page.1",
+              "layer_id": "headline", "text": "Mudança sintética local"},
+    )
+    assert amended.status_code == 200, amended.text
+    assert amended.json()["version"] == 2
+    assert amended.json()["rights_status"] == "pending_review"
+    assert amended.json()["approval_status"] == "draft"
