@@ -50,6 +50,9 @@ PY_A05_A07 = (
     "tests/test_studio_evidence_integrity_e6.py",
     "tests/test_studio_metadata_scope_e6.py",
 )
+PY_A06_E1 = (
+    "tests/test_multimodal_system_one_bridge.py",
+)
 PY_A073 = (
     "tests/test_a07_browser_visual_parity_runner.py",
     "tests/test_a07_browser_cdp_driver.py",
@@ -61,7 +64,8 @@ NODE_A073 = (
 )
 # These are expected collection counts after the A05 B2 hardening tests, NOT
 # required gate acceptance counts or a promise about all future code changes.
-EXPECTED = {"python_a05_a07": 269, "python_a073_cdp": 13, "node_a073": 19}
+EXPECTED = {"python_a05_a07": 269, "python_a06_e1": 16,
+            "python_a073_cdp": 13, "node_a073": 19}
 SOURCE_FILES = (
     "scripts/a11_focal_evidence_packet.py",
     "scripts/a05_python_source_preflight.py",
@@ -81,12 +85,16 @@ SOURCE_FILES = (
     "src/tapi_gate0/studio_api.py",
     "src/tapi_gate0/studio_e1.py",
     "src/tapi_gate0/studio_canvas_c2.py",
+    "src/tapi_gate0/multimodal_system_one_bridge.py",
+    "src/tapi_gate0/system_one_e1.py",
+    "src/tapi_gate0/multimodal_semantic_replay.py",
+    "src/tapi_gate0/multimodal_shared_fixture.py",
     "src/tapi_gate0/agent_api_e1.py",
     "src/tapi_gate0/agent_draft_a05.py",
     "src/tapi_gate0/agent_evidence_b2.py",
     "migrations/versions/0017_creative_reference_pep.py",
     "tests/frontend/studio_export_browser_a07.html",
-) + PY_A05_A07 + PY_A073 + NODE_A073
+) + PY_A05_A07 + PY_A06_E1 + PY_A073 + NODE_A073
 
 GATES = {f"G{i}": "BLOCKED" for i in range(7)}
 GATES["IMP-131"] = "BLOCKED"
@@ -303,6 +311,8 @@ def build_packet(*, root: Path = ROOT, expected_head: str | None = None,
          "syntax_preflight", 1, 30),
         ("python_a05_a07", [py, "-m", "pytest", "-q", "-rs", *PY_A05_A07],
          "pytest", EXPECTED["python_a05_a07"], 300),
+        ("python_a06_e1", [py, "-m", "pytest", "-q", "-rs", *PY_A06_E1],
+         "pytest", EXPECTED["python_a06_e1"], 90),
         ("python_a073_cdp", [py, "-m", "pytest", "-q", "-rs", *PY_A073],
          "pytest", EXPECTED["python_a073_cdp"], 90),
         ("node_a073", ["node", "--test", *NODE_A073],
@@ -325,7 +335,7 @@ def build_packet(*, root: Path = ROOT, expected_head: str | None = None,
             packet["validation_status"] = "BLOCKED_PYTHON_SYNTAX_PREFLIGHT"
             return packet  # Never run pytest/Node/Chrome on malformed source.
 
-    if len(packet["checks"]) == 6 and all(c["passed"] for c in packet["checks"]):
+    if len(packet["checks"]) == 7 and all(c["passed"] for c in packet["checks"]):
         packet["validation_status"] = "FOCAL_DIAGNOSTICS_VERIFIED_NO_GATE_RELEASE"
     return packet
 
