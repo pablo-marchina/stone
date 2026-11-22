@@ -19,7 +19,8 @@ _MODES = frozenset(("header", "temporal", "asr", "ocr", "vlm",
                     "image_pair", "shared_av", "shared_av_partial"))
 _TERMINALS = frozenset(("candidate_complete", "candidate_complete_guarded",
                         "candidate_partial"))
-_HALTS = frozenset(("blocked", "busy", "recovery_required"))
+_HALTS = frozenset(("blocked", "busy", "recovery_required",
+                    "quota", "rights_blocked", "empty"))
 
 
 def _deny(reason: str):
@@ -129,7 +130,6 @@ def run_explicit_fixture_batch(pipeline: FixturePipeline, worker: str, *,
                     or decision.canonical_rubric is not False
                     or type(decision.evidence_fingerprint) is not str
                     or not _SHA.fullmatch(decision.evidence_fingerprint)):
-
                 _deny("CANDIDATE_BINDING_INVALID")
             rejected = ()
             if plan.mode == "shared_av_partial":

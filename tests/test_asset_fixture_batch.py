@@ -193,3 +193,13 @@ def test_rejected_cross_tenant_plan_is_refused():
     p.plan.specs[1].tenant_id='other'
     with pytest.raises(RightsDenied,match='JOB_BINDING_INVALID'):
         run(p,ticks=1)
+
+
+@pytest.mark.parametrize('halt', ('quota', 'rights_blocked', 'empty'))
+def test_queue_denial_halts_without_automatic_retry(halt):
+    p=Fixture([result(halt,job_id=JOB_A,processor='ocr'),done()])
+    receipt=run(p)
+    assert receipt['status']=='HALTED'
+    assert receipt['reason']==halt
+    assert receipt['auto_retry_enabled'] is False
+    assert p.calls==[('trusted_worker',False)]
