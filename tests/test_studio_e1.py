@@ -179,3 +179,9 @@ def test_alembic_upgrade_head_contains_studio_tables(tmp_path, monkeypatch):
     command.upgrade(config, "head")
     assert "studio_document_versions" in inspect(engine).get_table_names()
     engine.dispose()
+
+
+def test_signed_reference_table_registered_with_standalone_studio_model():
+    # No implicit grants or schema creation: this checks that SQLite local
+    # initialization sees the table even without the HTTP router.
+    assert "studio_reference_bindings" in metadata.tables
