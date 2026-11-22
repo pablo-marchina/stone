@@ -29,7 +29,7 @@ def test_failed_benchmark_is_diagnosed_without_release(setup,capsys):
     assert cli.main(args)==0
     summary=json.loads(capsys.readouterr().out)
     assert summary['strict_failure_case_count']==1
-    assert summary['engineered_gate_passed_in_report'] is False
+    assert summary['engineering_gate_passed_in_report'] is False
     assert summary['production_approved'] is False
     assert summary['global_gates_released'] is False
     output=json.loads((folder/'new.json').read_text())

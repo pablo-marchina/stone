@@ -128,3 +128,17 @@ def test_one_invalid_type_fails_before_constructing_output():
     report["cases"][1]["transcript"] = None
     with pytest.raises(diagnostic.ASRDiagnosticDenied):
         diagnostic.diagnose_asr_report(report)
+
+
+def test_pooled_only_failure_is_explicit_even_when_no_single_case_exceeds_limit():
+    report = report_for()
+    for cid, reference, _ in asr.SPEECH_FIXTURES:
+        tokens = asr.normalize_words(reference)
+        change_case(report, cid, " ".join(tokens[:int(len(tokens) * 0.60)]))
+    assert all(case["wer"] <= asr.MAX_CASE_WER for case in report["cases"]
+               if case["wer"] is not None)
+    result = diagnostic.diagnose_asr_report(report)
+    assert result["engineering_gate_passed_in_source_report"] is False
+    assert result["strict_failure_cases"] == []
+    assert result["strict_gate_failure_reasons"] == ["POOLED_WER_EXCEEDED"]
+    assert result["production_approved"] is False

@@ -106,7 +106,8 @@ def main(argv=None) -> int:
             "suite": diagnostic["suite"], "candidate": diagnostic["candidate"],
             "case_count": len(diagnostic["cases"]),
             "strict_failure_case_count": len(diagnostic["strict_failure_cases"]),
-            "engineered_gate_passed_in_report": diagnostic["engineering_gate_passed_in_source_report"],
+            "strict_gate_failure_reasons": diagnostic["strict_gate_failure_reasons"],
+            "engineering_gate_passed_in_report": diagnostic["engineering_gate_passed_in_source_report"],
             "output_name": args.output_name, "output_sha256": result_sha,
             "production_approved": False, "global_gates_released": False,
         }, sort_keys=True))

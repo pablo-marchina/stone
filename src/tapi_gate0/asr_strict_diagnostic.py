@@ -161,6 +161,15 @@ def diagnose_asr_report(report: dict) -> dict:
         if (any(report.get(k) != gate[k] or type(report.get(k)) is not type(gate[k])
                 for k in gate)):
             _fail()
+        failure_reasons = []
+        if gate["pooled_wer"] is not None and gate["pooled_wer"] > asr.MAX_POOLED_WER:
+            failure_reasons.append("POOLED_WER_EXCEEDED")
+        if any(r["strict_case_wer_exceeded"] for r in detailed):
+            failure_reasons.append("CASE_WER_EXCEEDED")
+        if gate["non_speech_inserted_words"]:
+            failure_reasons.append("NEGATIVE_HALLUCINATION")
+        if gate["engineering_gate_passed"] is bool(failure_reasons):
+            _fail()  # Never silently omit an actual gate-failure reason.
         canonical = json.dumps(report, sort_keys=True, ensure_ascii=False,
                                separators=(",", ":"), allow_nan=False)
         return {
@@ -174,6 +183,7 @@ def diagnose_asr_report(report: dict) -> dict:
             "strict_failure_cases": [row["case_id"] for row in detailed
                                      if row["strict_case_wer_exceeded"]
                                      or row["hallucinated_negative_words"]],
+            "strict_gate_failure_reasons": failure_reasons,
             "strict_thresholds_unchanged": True,
             "independently_attested_model": False,
             "independent_gold": False, "scientific_admissions": 0,
