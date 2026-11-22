@@ -18,6 +18,7 @@ from sqlalchemy import Table, Column, String, Integer, ForeignKeyConstraint, sel
 from .domain import Id, ContentItem, Creator, MetricsCreate
 from .sa_store import metadata, content_items, creators, metrics_snapshots
 from .ingestion import ingestion_records, source_grants
+from .studio_metadata_scope_e6 import metadata_source_scope_digest
 from .studio_e1 import StudioError, DesignDocument, StudioStore, studio_documents, studio_versions
 from .studio_e4 import ProposedTextEdit, _proposed_patch, studio_etag, assert_etag
 
@@ -76,31 +77,15 @@ class StudioEvidenceEditService:
         if len(rows) != 1:
             raise StudioError("STUDIO_EVIDENCE_LIVE_METADATA_GRANT_REQUIRED", 403)
         row = rows[0]
-        try:
-            now = datetime.now(timezone.utc)
-            approved = datetime.fromisoformat(row["approved_at"])
-            verified = datetime.fromisoformat(row["technical_verified_at"])
-            expires = datetime.fromisoformat(row["expires_at"])
-            processed = datetime.fromisoformat(row["processed_at"])
-            if not (
-                row["enabled"] == 1
-                and row["metadata_only"] == 1
-                and row["platform"] == content.origin.value
-                and creator.source_profile_id == row["source_account_id"]
-                and all(t.tzinfo is not None and t.utcoffset() is not None
-                        for t in (approved, verified, expires, processed))
-                and approved <= verified <= now < expires
-                and processed <= now
-                and content.created_at <= now
-            ):
-                raise StudioError("STUDIO_EVIDENCE_LIVE_METADATA_GRANT_REQUIRED", 403)
-            # Binding approval/provenance fields into the preview digest forces
-            # a fresh operator review whenever source state changes.
-            pinned = {key: row[key] for key in row.keys()}
-            return sha256(json.dumps(pinned, sort_keys=True,
-                                     separators=(",", ":")).encode("utf-8")).hexdigest()
-        except (ValueError, TypeError, KeyError, AttributeError):
-            raise StudioError("STUDIO_EVIDENCE_LIVE_METADATA_GRANT_REQUIRED", 403) from None
+        digest = metadata_source_scope_digest(
+            row, platform=content.origin.value,
+            source_profile_id=creator.source_profile_id,
+            content_created_at=content.created_at,
+            now=datetime.now(timezone.utc),
+        )
+        if digest is None:
+            raise StudioError("STUDIO_EVIDENCE_LIVE_METADATA_GRANT_REQUIRED", 403)
+        return digest
 
     @staticmethod
     def _evidence(db, tenant, doc, proposal):
