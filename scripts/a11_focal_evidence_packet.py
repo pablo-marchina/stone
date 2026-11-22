@@ -43,6 +43,7 @@ PY_A05_A07 = (
     "tests/test_discovery_editorial_agent.py",
     "tests/test_discovery_studio_handoff.py",
     "tests/test_studio_e1.py",
+    "tests/test_studio_signed_route_guard_a05.py",
     "tests/test_studio_e4.py",
     "tests/test_studio_evidence_integrity_e6.py",
     "tests/test_studio_metadata_scope_e6.py",
@@ -58,7 +59,7 @@ NODE_A073 = (
 )
 # These are expected collection counts after the A05 B2 hardening tests, NOT
 # required gate acceptance counts or a promise about all future code changes.
-EXPECTED = {"python_a05_a07": 255, "python_a073_cdp": 13, "node_a073": 19}
+EXPECTED = {"python_a05_a07": 256, "python_a073_cdp": 13, "node_a073": 19}
 SOURCE_FILES = (
     "scripts/a11_focal_evidence_packet.py",
     "scripts/a07_browser_visual_parity.py",
