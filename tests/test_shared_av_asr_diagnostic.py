@@ -212,3 +212,18 @@ def test_corrupted_ocr_source_frame_is_denied(monkeypatch, mutate):
     mutate(report['cases'][2]['ocr_frames'][0])
     with pytest.raises(diag.SharedAVDiagnosticDenied):
         diag.diagnose_shared_av_asr(report)
+
+
+@pytest.mark.parametrize('windows', [
+    [{'start': 0, 'end': 16000}, {'start': 8000, 'end': 24000}],
+    [{'start': 0, 'end': 16000}, {'start': 32000, 'end': 24000}],
+    [{'start': 0, 'end': 16000}, {'start': 32000, 'end': shared.DURATION * asr.SAMPLE_RATE + 1}],
+])
+def test_vad_source_windows_must_be_ordered_nonoverlapping_and_bounded(monkeypatch, windows):
+    report, _ = make_report(monkeypatch)
+    row = report['cases'][1]
+    row['vad']['intervals'] = windows
+    row['audio']['asr_calls'] = len(windows)
+    row['audio']['chunks'] = [dict(row['audio']['chunks'][0]) for _ in windows]
+    with pytest.raises(diag.SharedAVDiagnosticDenied, match='A02_SHARED_AV_REPORT_INVALID'):
+        diag.diagnose_shared_av_asr(report)

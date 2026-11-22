@@ -11,6 +11,7 @@ import re
 
 from . import multimodal_asr as asr
 from . import multimodal_fusion as fusion
+from . import multimodal_vad as vad
 from . import multimodal_shared_fixture as shared
 from .asr_strict_diagnostic import _alignment
 
@@ -104,6 +105,9 @@ def diagnose_shared_av_asr(report: dict) -> dict:
                     or row["vad"]["pcm_sha256"] != row["decoded_pcm_sha256"]
                     or audio["duration_s"] != shared.DURATION
                     or audio["timestamp_kind"] != "model_estimate_mapped_to_decoded_pcm_not_original_pts"):
+                _fail()
+            # Native VAD requires ordered, nonoverlapping decoded-PCM windows.
+            if vad.validate_intervals(intervals, shared.DURATION * asr.SAMPLE_RATE) != intervals:
                 _fail()
             for chunk, region in zip(chunks, intervals):
                 if (chunk["start_sample"] != region["start"]
