@@ -101,3 +101,18 @@ def test_missing_private_folder_is_not_created_implicitly(sandbox):
     assert cli.main(args) == 2
     assert not folder.exists()
     assert calls == []
+
+
+def test_failed_fsync_removes_partial_receipt(sandbox, monkeypatch, capsys):
+    folder, calls, args = sandbox
+
+    def fail_fsync(_fd):
+        raise OSError("sensitive filesystem detail")
+
+    monkeypatch.setattr(cli.os, "fsync", fail_fsync)
+    assert cli.main(args) == 2
+    assert len(calls) == 1
+    assert not (folder / "output.json").exists()
+    response = capsys.readouterr().out
+    assert "sensitive filesystem detail" not in response
+    assert json.loads(response)["production_approved"] is False
