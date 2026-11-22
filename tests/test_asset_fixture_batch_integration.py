@@ -161,3 +161,31 @@ def test_signed_sqlite_batch_rejects_swapped_terminal_artifact_receipts(queue_fi
     with f.q.f.engine.connect() as db:
         assert db.scalar(select(func.count()).select_from(attempts)) == 4
         assert db.scalar(select(func.count()).select_from(payloads)) == 4
+
+
+@pytest.mark.parametrize("discard_fixture", [("retain", "process", "all_processors", "bundle_rubric")], indirect=True)
+def test_revocation_after_fusion_before_final_atomic_receipt_blocks_candidate(queue_fixture, monkeypatch):
+    # The original pipeline has successfully committed four typed encrypted
+    # derivatives and fused them. An operator revokes the signed authority
+    # between its terminal response and the batch's final verification.
+    # That last boundary must use rights and receipts in one transaction.
+    f=queue_fixture
+    _synthetic_dispatch(f, monkeypatch)
+    pipe=_pipeline(f, mode="header", case="header")
+    old_step=pipe.step
+    invalidations=[]
+    def revoke_after_fusion(worker, *, retry_stopped=False):
+        result=old_step(worker, retry_stopped=retry_stopped)
+        if result["status"] == "candidate_complete":
+            new_state=f.q.f.state(2, revoked_asset_ids=(f.q.ref.target.asset_id,))
+            assert f.q.f.svc.advance(f.q.f.anchor, TENANT, "instagram", new_state)
+            f.queue.resolve_anchor=lambda ref:f.q.f.pin(new_state)
+            invalidations.append(result["status"])
+        return result
+    monkeypatch.setattr(pipe,"step",revoke_after_fusion)
+    with pytest.raises(AssetRightsDenied, match="ASSET_RIGHTS_REVOKED"):
+        _batch(pipe)
+    assert invalidations==["candidate_complete"]
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(attempts))==4
+        assert db.scalar(select(func.count()).select_from(payloads))==4
