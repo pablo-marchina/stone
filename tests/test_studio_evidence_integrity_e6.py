@@ -165,6 +165,7 @@ def test_valid_evidence_preview_remains_descriptive_and_draft(scenario):
     preview = service.preview("tenantA", "document.test", proposal)
     assert preview["reference_content_id"] == "content.real"
     assert preview["reference_snapshot_id"] == "snapshot.real"
+    assert preview["snapshot_observed_at"] == OBSERVED.isoformat()
     assert preview["descriptive_evidence_only"] is True
     assert preview["production_approved"] is False
     assert preview["requires_operator_confirmation"] is True
