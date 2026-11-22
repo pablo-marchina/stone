@@ -31,6 +31,7 @@ class Decisions:
     scientific_evidence=False
     canonical_rubric=False
     evidence_fingerprint='e'*64
+    fields=()
 
 class Queue:
     revoked = False
@@ -314,3 +315,29 @@ def test_final_recheck_rejects_rubric_scope_removed_after_fusion():
     with pytest.raises(RightsDenied, match='RUBRIC_SCOPE_REVOKED'):
         run(p,ticks=1)
     assert p.calls==[('trusted_worker',False)]
+
+
+def test_field_support_from_unlisted_artifact_denied_at_final_boundary():
+    class Support:
+        artifact_id = 'artifact.' + 'f'*64
+    class Field:
+        supports = (Support(),)
+        vetoes = ()
+    bogus=Decisions()
+    bogus.fields=(Field(),)
+    p=Fixture([result('candidate_complete',artifact_ids=ART,decisions=bogus)])
+    with pytest.raises(RightsDenied, match='FIELD_EVIDENCE_OUTSIDE_BUNDLE'):
+        run(p,ticks=1)
+
+
+def test_field_veto_from_unlisted_artifact_denied_at_final_boundary():
+    class Support:
+        artifact_id = 'artifact.' + 'f'*64
+    class Field:
+        supports = ()
+        vetoes = (Support(),)
+    bogus=Decisions()
+    bogus.fields=(Field(),)
+    p=Fixture([result('candidate_complete',artifact_ids=ART,decisions=bogus)])
+    with pytest.raises(RightsDenied, match='FIELD_EVIDENCE_OUTSIDE_BUNDLE'):
+        run(p,ticks=1)

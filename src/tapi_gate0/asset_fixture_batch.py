@@ -171,6 +171,14 @@ def run_explicit_fixture_batch(pipeline: FixturePipeline, worker: str, *,
                     expected_ids.append(_artifact_id(spec, receipt))
                 if tuple(ids) != tuple(expected_ids):
                     _deny("ARTIFACT_PROVENANCE_MISMATCH")
+                # A field-level proof is not trustworthy merely because the
+                # enclosing decision names the correct artifact list.
+                # Every supporting or vetoing locator must bind to that list.
+                bound_ids = set(expected_ids)
+                if any(support.artifact_id not in bound_ids
+                       for field in decision.fields
+                       for support in (*field.supports, *field.vetoes)):
+                    _deny("FIELD_EVIDENCE_OUTSIDE_BUNDLE")
             rejected = ()
             if plan.mode == "shared_av_partial":
                 rejection = result.get("quality_rejections")
