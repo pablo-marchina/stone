@@ -697,3 +697,21 @@ def test_direct_canvas_mutation_cannot_skip_pep_on_signed_draft(registry):
             MoveLayer(expected_version=1, page_id="page.1",
                       layer_id="headline", x=40),
         )
+
+
+def test_signed_pep_requires_caller_owned_active_transaction(registry):
+    # A read-only connection without a begun transaction must not approve
+    # creative-reference reuse or leave an audit/outbox event.
+    r = registry
+    pep = signed_fixture(r)
+    with r["engine"].connect() as db:
+        assert not db.in_transaction()
+        with pytest.raises(CreativeReferencePermissionDenied):
+            pep.require_for_atomic_draft(
+                db, token=r["token"], tenant=TENANT, actor="founder",
+                document_id="fixture.no.transaction", grant_ids=grant_ids(r),
+            )
+    with r["engine"].connect() as db:
+        assert db.execute(select(domain_events.c.seq).where(
+            domain_events.c.aggregate_type == "creative_reference_use",
+        )).all() == []
