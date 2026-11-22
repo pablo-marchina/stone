@@ -106,6 +106,18 @@ def diagnose_shared_av_asr(report: dict) -> dict:
                     or audio["duration_s"] != shared.DURATION
                     or audio["timestamp_kind"] != "model_estimate_mapped_to_decoded_pcm_not_original_pts"):
                 _fail()
+            # Guard receipts are native VAD/ASR observations, not inferred
+            # from call counts. Reject inconsistent abstention provenance.
+            if (row["vad"].get("timestamp_kind") != "decoded_pcm_sample_indices"
+                    or type(row["vad"].get("vad_inference_attempted")) is not bool
+                    or row["vad"].get("guard_reason") not in (None, "EXACT_DIGITAL_SILENCE")
+                    or (row["vad"]["guard_reason"] == "EXACT_DIGITAL_SILENCE"
+                        and (row["vad"]["vad_inference_attempted"] or intervals))
+                    or (row["vad"]["guard_reason"] is None
+                        and not row["vad"]["vad_inference_attempted"])
+                    or audio.get("abstention_reason") != (
+                        None if intervals else "NO_VAD_SPEECH_REGION")):
+                _fail()
             # Native VAD requires ordered, nonoverlapping decoded-PCM windows.
             if vad.validate_intervals(intervals, shared.DURATION * asr.SAMPLE_RATE) != intervals:
                 _fail()

@@ -69,11 +69,14 @@ def make_report(monkeypatch, *, negative_speech=False, blank_positive=False):
                'duration_s':shared.DURATION, 'source_pixels_and_pcm_verified':True,
                'temporal_passed':True,'asset_binding_verified':True,
                'media_sha256':media_sha,'decoded_pcm_sha256':full_hash,
-               'vad':{'intervals':intervals,'pcm_sha256':full_hash},
+               'vad':{'intervals':intervals,'pcm_sha256':full_hash,
+                      'timestamp_kind':'decoded_pcm_sample_indices',
+                      'vad_inference_attempted':True,'guard_reason':None},
                'audio':{'chunks':chunks,'segments':segments,'asr_calls':len(chunks),
                         'inference_attempted':has_asr, 'pcm_sha256':full_hash,
                         'duration_s':shared.DURATION,'timestamp_kind':'model_estimate_mapped_to_decoded_pcm_not_original_pts',
-                        'transcript':hyp},
+                        'transcript':hyp,
+                        'abstention_reason':None if intervals else 'NO_VAD_SPEECH_REGION'},
                'fragments':fragments}
         row['arms']={key:fusion.fuse(media_sha,fragments,mods) for key,mods in fusion.ARMS.items()}
         rows.append(row)
@@ -296,3 +299,17 @@ def test_native_shared_benchmark_emits_scientific_write_denials():
         assert key in literal
         assert isinstance(literal[key], ast.Constant)
         assert type(literal[key].value) is int and literal[key].value == 0
+
+
+@pytest.mark.parametrize('mutate', [
+    lambda r: r['cases'][1]['vad'].update(timestamp_kind='original_media_pts'),
+    lambda r: r['cases'][1]['vad'].update(vad_inference_attempted=False),
+    lambda r: r['cases'][1]['vad'].update(guard_reason='EXACT_DIGITAL_SILENCE'),
+    lambda r: r['cases'][2]['audio'].update(abstention_reason=None),
+])
+def test_vad_asr_guard_receipts_fail_closed(monkeypatch, mutate):
+    report, _ = make_report(monkeypatch)
+    mutate(report)
+    with pytest.raises(diag.SharedAVDiagnosticDenied,
+                       match='A02_SHARED_AV_REPORT_INVALID'):
+        diag.diagnose_shared_av_asr(report)
