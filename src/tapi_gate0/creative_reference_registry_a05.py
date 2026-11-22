@@ -155,7 +155,10 @@ def _source_bound(db, target, now):
     matches = db.execute(
         select(sg.c.enabled, sg.c.approved_at, sg.c.expires_at,
                sg.c.technical_verified_at, ci.c.origin,
+               ci.c.creator_id.label("indexed_creator_id"),
+               ci.c.published_at.label("indexed_published_at"),
                ci.c.payload.label("content_payload"),
+               cr.c.id.label("indexed_creator_row_id"),
                cr.c.origin.label("creator_origin"),
                cr.c.payload.label("creator_payload"))
         .select_from(joined)
@@ -180,9 +183,15 @@ def _source_bound(db, target, now):
         )
         content = ContentItem.model_validate_json(row["content_payload"])
         creator = Creator.model_validate_json(row["creator_payload"])
+        indexed_published = datetime.fromisoformat(row["indexed_published_at"])
         return bool(
-            a.tzinfo and v.tzinfo and e.tzinfo
+            a.tzinfo and v.tzinfo and e.tzinfo and indexed_published.tzinfo
             and a <= v <= now < e
+            and content.published_at == indexed_published
+            and content.published_at <= now
+            and content.creator_id == row["indexed_creator_id"]
+            and creator.creator_id == row["indexed_creator_row_id"]
+            and creator.created_at <= now
             and content.tenant_id == target.tenant_id
             and content.content_id == target.content_id
             and content.origin.value == target.platform
