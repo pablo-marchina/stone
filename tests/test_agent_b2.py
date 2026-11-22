@@ -369,9 +369,22 @@ def test_handoff_requires_actual_synthetic_flag_not_just_origin(tmp_path, tamper
             content_items.c.tenant_id == "tenantA",
             content_items.c.id == "post1",
         ).values(payload=json.dumps(item)))
-    # Read-only metadata remains accessible; creative reuse is a separate PEP.
-    assert EvidenceRetriever(engine).get("tenantA", "post1").content_id == "post1"
-    with pytest.raises(EvidenceNotFound, match="CREATIVE_REFERENCE_RIGHTS_PEP_REQUIRED"):
-        EvidenceRetriever(engine).handoff(
-            "tenantA", CreativeBriefRequest.model_validate(_brief()),
-        )
+    retriever = EvidenceRetriever(engine)
+    if tamper.get("is_synthetic") is False:
+        # The domain schema rejects this contradictory synthetic origin/flag
+        # even for metadata reads. Retain the STRICTER denial; never loosen
+        # payload validation merely to make this creative-rights test green.
+        with pytest.raises(EvidenceNotFound, match="EVIDENCE_STORED_PAYLOAD_INVALID"):
+            retriever.get("tenantA", "post1")
+        with pytest.raises(EvidenceNotFound, match="EVIDENCE_STORED_PAYLOAD_INVALID"):
+            retriever.handoff(
+                "tenantA", CreativeBriefRequest.model_validate(_brief()),
+            )
+    else:
+        # A syntactically valid external URL can be descriptive metadata, but
+        # without a creative-use grant it cannot enter the CreativeSpec.
+        assert retriever.get("tenantA", "post1").content_id == "post1"
+        with pytest.raises(EvidenceNotFound, match="CREATIVE_REFERENCE_RIGHTS_PEP_REQUIRED"):
+            retriever.handoff(
+                "tenantA", CreativeBriefRequest.model_validate(_brief()),
+            )
