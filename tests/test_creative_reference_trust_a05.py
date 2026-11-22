@@ -53,7 +53,13 @@ def test_file_in_repo_denied(config):
 
 def test_symlink_denied(config):
     root,src,body,write=config
-    env=write();other=src.parent/'link.json';other.symlink_to(src)
+    env=write();other=src.parent/'link.json'
+    try:
+        other.symlink_to(src)
+    except (OSError, NotImplementedError):
+        # Symlink creation may require Windows Developer Mode. A directory
+        # still verifies rejection of non-regular trust-file paths.
+        other.mkdir()
     env[TRUST_FILE]=str(other)
     with pytest.raises(RuntimeError):load_reference_trust(env,repository_root=root)
 
