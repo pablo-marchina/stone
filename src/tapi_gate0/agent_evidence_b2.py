@@ -73,33 +73,38 @@ class EvidenceRetriever:
         self.engine = engine
 
     def get(self, tenant_id: str, content_id: str,
-            as_of: datetime | None = None) -> ObservedEvidence:
+            as_of: datetime | None = None, *, connection=None) -> ObservedEvidence:
         as_of = as_of or datetime.now(timezone.utc)
         if as_of.tzinfo is None or as_of.utcoffset() is None:
             raise ValueError("EVIDENCE_AS_OF_TIMEZONE_REQUIRED")
         # The SQL index and the serialized payload are independent trust inputs.
         # Reject drift before returning captions/metrics or creating a spec.
-        with self.engine.connect() as con:
-            record = con.execute(select(
-                content_items.c.creator_id, content_items.c.origin,
-                content_items.c.published_at, content_items.c.payload,
-            ).where(
-                content_items.c.tenant_id == tenant_id,
-                content_items.c.id == content_id,
-            )).one_or_none()
-            creator_row = con.execute(select(
-                creators.c.origin, creators.c.payload,
-            ).where(
-                creators.c.tenant_id == tenant_id,
-                creators.c.id == record[0],
-            )).one_or_none() if record is not None else None
-            snapshot_rows = con.execute(select(
-                metrics_snapshots.c.id, metrics_snapshots.c.observed_at,
-                metrics_snapshots.c.payload,
-            ).where(
-                metrics_snapshots.c.tenant_id == tenant_id,
-                metrics_snapshots.c.content_id == content_id,
-            )).all() if record is not None else []
+        # A caller who owns a DB transaction may pass its trusted connection.
+        # The validation and the subsequent Studio insert then share one view.
+        if connection is None:
+            with self.engine.connect() as con:
+                return self.get(tenant_id, content_id, as_of, connection=con)
+        con = connection
+        record = con.execute(select(
+            content_items.c.creator_id, content_items.c.origin,
+            content_items.c.published_at, content_items.c.payload,
+        ).where(
+            content_items.c.tenant_id == tenant_id,
+            content_items.c.id == content_id,
+        )).one_or_none()
+        creator_row = con.execute(select(
+            creators.c.origin, creators.c.payload,
+        ).where(
+            creators.c.tenant_id == tenant_id,
+            creators.c.id == record[0],
+        )).one_or_none() if record is not None else None
+        snapshot_rows = con.execute(select(
+            metrics_snapshots.c.id, metrics_snapshots.c.observed_at,
+            metrics_snapshots.c.payload,
+        ).where(
+            metrics_snapshots.c.tenant_id == tenant_id,
+            metrics_snapshots.c.content_id == content_id,
+        )).all() if record is not None else []
         if record is None:
             raise EvidenceNotFound("EVIDENCE_CONTENT_NOT_FOUND_IN_TENANT")
         if creator_row is None:
@@ -149,13 +154,13 @@ class EvidenceRetriever:
             observed_at=latest.observed_at if latest else None,
         )
 
-    def handoff(self, tenant_id: str, request: CreativeBriefRequest) -> CreativeSpecHandoff:
+    def handoff(self, tenant_id: str, request: CreativeBriefRequest, *, connection=None) -> CreativeSpecHandoff:
         # Reading metadata and reusing a post for creative generation are
         # different rights. Until an authenticated per-operation creative PEP
         # is wired to this boundary, permit only source-free local fixtures.
         # This does not authorize publishing even those draft CreativeSpecs.
         for content_id in request.reference_content_ids:
-            evidence = self.get(tenant_id, content_id)
+            evidence = self.get(tenant_id, content_id, connection=connection)
             if (evidence.origin != "synthetic_local"
                     or evidence.source_url is not None):
                 raise EvidenceNotFound("CREATIVE_REFERENCE_RIGHTS_PEP_REQUIRED")

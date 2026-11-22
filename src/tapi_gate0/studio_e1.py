@@ -199,20 +199,29 @@ class StudioStore:
     def __init__(self, engine):
         self.engine = engine
 
-    def create(self, tenant: str, actor: str, spec: CreativeSpec, document_id: str):
+    def create(self, tenant: str, actor: str, spec: CreativeSpec,
+               document_id: str, *, connection=None):
         if spec.tenant_id != tenant:
             raise StudioError("STUDIO_TENANT_MISMATCH", 403)
         doc = draft_from_spec(spec, document_id)
         try:
-            with self.engine.begin() as conn:
-                conn.execute(insert(studio_documents).values(
-                    tenant_id=tenant, document_id=doc.document_id,
-                    spec_id=spec.spec_id, current_version=1,
-                ))
-                self._insert_version(conn, doc, actor)
+            if connection is None:
+                with self.engine.begin() as conn:
+                    self._create_on_connection(conn, doc, actor)
+            else:
+                # Shared, caller-owned transaction: do not commit independently.
+                self._create_on_connection(connection, doc, actor)
         except IntegrityError as exc:
             raise StudioError("STUDIO_DOCUMENT_ALREADY_EXISTS_OR_TENANT_MISSING", 409) from exc
         return doc
+
+    @staticmethod
+    def _create_on_connection(conn, doc: DesignDocument, actor: str):
+        conn.execute(insert(studio_documents).values(
+            tenant_id=doc.tenant_id, document_id=doc.document_id,
+            spec_id=doc.spec_id, current_version=1,
+        ))
+        StudioStore._insert_version(conn, doc, actor)
 
     @staticmethod
     def _insert_version(conn, doc: DesignDocument, actor: str):

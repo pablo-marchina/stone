@@ -8,13 +8,16 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Request, HTTPException
+from fastapi import APIRouter, Depends, Request, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from .agent_evidence_e1 import AgentRecommendation, analyze_with_ranking
 from .domain import Origin
 from .identity import IdentityFailure, Principal
 from .agent_evidence_b2 import (EvidenceRetriever, EvidenceNotFound, CreativeBriefRequest, CreativeSpecHandoff, ObservedEvidence)
+from .agent_draft_a05 import CreateAgentDraft, create_agent_draft
+from .studio_e1 import DesignDocument, StudioError
+from .studio_e4 import studio_etag
 
 
 class AnalyzeRequest(BaseModel):
@@ -59,5 +62,25 @@ def router_for_evidence_agent(identity, domain_store):
             return EvidenceRetriever(domain_store.engine).handoff(p.tenant_id, payload)
         except EvidenceNotFound:
             raise HTTPException(status_code=422, detail="CREATIVE_REFERENCE_NOT_VERIFIED")
+
+    @router.post("/creative-drafts", response_model=DesignDocument, status_code=201)
+    def create_draft(payload: CreateAgentDraft, response: Response,
+                     p: Principal = Depends(principal)):
+        # Only editor/admin can mutate Studio. The verified session, not JSON,
+        # supplies the tenant and actor. All source checks + writes are atomic.
+        if p.role not in {"admin", "editor"}:
+            raise IdentityFailure("FORBIDDEN", 403)
+        try:
+            doc = create_agent_draft(
+                domain_store.engine, tenant_id=p.tenant_id,
+                actor_id=p.actor_id, payload=payload,
+            )
+        except EvidenceNotFound:
+            raise HTTPException(status_code=422, detail="CREATIVE_REFERENCE_NOT_VERIFIED")
+        except StudioError as exc:
+            raise HTTPException(status_code=exc.status, detail=exc.code) from exc
+        response.headers["ETag"] = studio_etag(doc)
+        response.headers["Cache-Control"] = "private, no-store"
+        return doc
 
     return router
