@@ -45,11 +45,21 @@ def inventory() -> dict:
     # for Studio route tests. It avoids Windows PermissionError when a named
     # temporary .sqlite file is removed while pooled handles are still open.
     # No operational DB URLs or environment variables are consulted.
-    app = secure_api.create_secure_app(
-        "sqlite:///:memory:",
-        initialize_schema=True,
-        allow_http_local=True,
-    )
+    try:
+        app = secure_api.create_secure_app(
+            "sqlite:///:memory:",
+            initialize_schema=True,
+            allow_http_local=True,
+        )
+    except Exception as exc:
+        # Identify the failing phase without exposing exception details.
+        return {
+            "schema_version": SCHEMA,
+            "status": "BLOCKED_DIAGNOSTIC_EXCEPTION",
+            "phase": "CREATE_IN_MEMORY_APP",
+            "exception_type": type(exc).__name__,
+            "production_approved": False,
+        }
     try:
         def entries(routes):
             rows = []
@@ -112,6 +122,7 @@ def main() -> int:
             "schema_version": SCHEMA,
             "status": "BLOCKED_DIAGNOSTIC_EXCEPTION",
             "exception_type": type(exc).__name__,
+            "phase": "IMPORT_OR_ROUTE_INVENTORY_OR_ENGINE_DISPOSAL",
             "production_approved": False,
         }
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
