@@ -335,6 +335,6 @@ def test_malformed_signed_sqlite_batch_stage_cannot_be_misreported_as_pass(local
     assert receipt["validation_status"] != "FOCAL_DIAGNOSTICS_VERIFIED_NO_GATE_RELEASE"
     assert [c["check_id"] for c in receipt["checks"]][-1] == "python_a027_integrated"
     assert receipt["checks"][-1]["passed"] is False
-    assert not any("tests/test_agent_draft_a05.py" in " ".join(call) for call in calls)
+    assert len(calls) == 7  # git SHA/status; zero-spend; syntax; A02; two A02.7 suites
     assert receipt["production_approved"] is False
     assert receipt["gate_status"]["IMP-131"] == "BLOCKED"
