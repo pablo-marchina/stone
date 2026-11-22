@@ -174,3 +174,15 @@ def test_invalid_normative_gate_count_blocks(signed_case):
     (root / "planning/base_atemporal/MATRIZ_GATE_GLOBAL.csv").write_text(
         "gate_id\nG0-PERMISSIONS\n", encoding="utf-8")
     assert check(signed_case)["status"] == "NO_GO"
+
+
+def test_cli_never_exits_zero_when_signed_receipts_verify(signed_case, monkeypatch, capsys):
+    import sys
+    root, trust, *_ = signed_case
+    monkeypatch.setattr(sys, "argv", ["preflight", "--root", str(root),
+                                      "--expected-head", HEAD,
+                                      "--trust-bundle", str(trust)])
+    assert pre.main() == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "SIGNED_RECEIPTS_COMPLETE_HUMAN_REVIEW_REQUIRED"
+    assert payload["deploy_authorized"] is False

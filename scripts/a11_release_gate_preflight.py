@@ -103,7 +103,9 @@ def _git_state(root: Path, head: str) -> str:
     try:
         rev = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root,
                              text=True, capture_output=True, timeout=10, check=False)
-        dirty = subprocess.run(["git", "status", "--porcelain"], cwd=root,
+        # Private receipts may be untracked; only tracked source modifications
+        # invalidate the SHA-pinned checkout.
+        dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=root,
                                text=True, capture_output=True, timeout=10, check=False)
         if rev.returncode or dirty.returncode or rev.stdout.strip() != head:
             return "GIT_HEAD_MISMATCH"
@@ -115,7 +117,7 @@ def _git_state(root: Path, head: str) -> str:
 
 
 def evaluate(root: Path, *, expected_head: str, trust_bundle: Path,
-             now: datetime | None = None, git_status: str | None = None) -> dict:
+             now: datetime | None = None) -> dict:
     root = root.resolve()
     result = {"schema_version": SCHEMA, "git_head": expected_head,
               "status": "NO_GO", "deploy_authorized": False,
@@ -124,7 +126,7 @@ def evaluate(root: Path, *, expected_head: str, trust_bundle: Path,
     if not isinstance(expected_head, str) or not SHA.fullmatch(expected_head):
         result["reason_codes"].append("INVALID_EXPECTED_SHA")
         return result
-    git_status = git_status or _git_state(root, expected_head)
+    git_status = _git_state(root, expected_head)
     if git_status != "GIT_CLEAN_HEAD_VERIFIED":
         result["reason_codes"].append(git_status)
         return result
@@ -203,7 +205,9 @@ def main() -> int:
     report = evaluate(args.root, expected_head=args.expected_head,
                       trust_bundle=args.trust_bundle)
     print(json.dumps(report, sort_keys=True, ensure_ascii=False))
-    return 0 if report["status"] == "SIGNED_RECEIPTS_COMPLETE_HUMAN_REVIEW_REQUIRED" else 2
+    # Never use a zero exit code as deploy authorization. Human gate review
+    # and a separate release operation remain mandatory even if signatures pass.
+    return 2
 
 
 if __name__ == "__main__":
