@@ -1,8 +1,8 @@
-"""Read-only, authenticated evidence-first analysis over tenant ranking data.
+"""Authenticated evidence-first agent API, including atomic draft creation.
 
-This is a bounded deterministic tool composition, not a hosted LLM/MCP
-endpoint. Its trust boundary is the server-side SqlDomainStore, never raw
-client-supplied ranking rows or citations.
+The deterministic ranking/evidence tools are read-only. The creative-drafts
+route creates only an internal editable draft, protected by the session and
+the transactional reference-rights PEP. No hosted LLM or external publication.
 """
 from __future__ import annotations
 

@@ -1,12 +1,11 @@
-"""A05→CAP-023: atomic, authenticated synthetic-only agent-to-Studio draft.
+"""A05→CAP-023: atomic, authenticated agent-to-Studio draft.
 
-A single server-owned database transaction binds the tenant-local reference
-validation and the initial editable DesignDocument write. This path creates
-only a draft; it neither uses third-party media nor grants editorial approval,
-publishes content, runs a model, or executes an external provider operation.
-
-External creative references remain denied until a separate, operational and
-independently provisioned rights PEP can check them at the action boundary.
+A single server-owned transaction binds evidence checks, action-specific
+creative rights validation when externally pinned, and the initial editable
+DesignDocument write. By default only local synthetic references are allowed.
+External sources require independently provisioned, current signed grants for
+BOTH creative-spec and Studio-draft operations; the normal runtime provides
+no authority or grants. No media copying, publication or scientific approval.
 """
 from __future__ import annotations
 

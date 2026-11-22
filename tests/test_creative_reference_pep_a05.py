@@ -240,3 +240,61 @@ def test_server_supplied_trust_cannot_be_forged_from_json(registry):
         body["creative_reference_authorities"] = {"instagram": "forged"}
         denied = client.post("/v1/agent/creative-drafts", headers=h, json=body)
         assert denied.status_code == 422
+
+
+def test_pep_checks_revocation_head_against_independent_pin(registry):
+    r = registry
+    stale_pep = signed_fixture(r)
+    next_state = r["state"](
+        revision=2, revoked_grant_ids=("a054-fixture-grant",),
+    )
+    assert r["svc"].advance(r["anchor"], TENANT, "instagram", next_state)
+    # Previous host pin cannot silently follow a changed DB head.
+    with r["engine"].begin() as con:
+        with pytest.raises(CreativeReferencePermissionDenied):
+            stale_pep.require_for_atomic_draft(
+                con, token=r["token"], tenant=TENANT, actor="founder",
+                document_id="draft.test", grant_ids=grant_ids(r),
+            )
+    # An independently refreshed host pin also enforces the revocation.
+    active_pep = CreativeReferencePEP(
+        r["engine"], {(TENANT, "instagram"): r["pin"](next_state)},
+    )
+    with r["engine"].begin() as con:
+        with pytest.raises(CreativeReferencePermissionDenied):
+            active_pep.require_for_atomic_draft(
+                con, token=r["token"], tenant=TENANT, actor="founder",
+                document_id="draft.test", grant_ids=grant_ids(r),
+            )
+
+
+def test_pep_denies_role_downgrade_before_creative_write(registry):
+    r = registry
+    pep = signed_fixture(r)
+    with r["engine"].begin() as con:
+        con.execute(update(memberships).where(
+            memberships.c.tenant_id == TENANT,
+        ).values(role="viewer"))
+    with r["engine"].begin() as con:
+        with pytest.raises(CreativeReferencePermissionDenied):
+            pep.require_for_atomic_draft(
+                con, token=r["token"], tenant=TENANT, actor="founder",
+                document_id="draft.test", grant_ids=grant_ids(r),
+            )
+
+
+def test_pep_rejects_corrupted_signed_grant_payload(registry):
+    from tapi_gate0.creative_reference_registry_a05 import grants
+    r = registry
+    pep = signed_fixture(r)
+    with r["engine"].begin() as con:
+        con.execute(update(grants).where(
+            grants.c.tenant_id == TENANT,
+        ).values(payload='{"token":"must_not_leak"'))
+    with r["engine"].begin() as con:
+        with pytest.raises(CreativeReferencePermissionDenied) as exc:
+            pep.require_for_atomic_draft(
+                con, token=r["token"], tenant=TENANT, actor="founder",
+                document_id="draft.test", grant_ids=grant_ids(r),
+            )
+    assert "must_not_leak" not in str(exc.value)
