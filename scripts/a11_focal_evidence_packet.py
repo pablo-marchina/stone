@@ -28,6 +28,7 @@ PY_A05_A07 = (
     "tests/test_creative_reference_registry_a05.py",
     "tests/test_creative_reference_pep_a05.py",
     "tests/test_a05_import_compilation_gate.py",
+    "tests/test_a05_python_source_preflight.py",
     "tests/test_creative_reference_pep_migration_a05.py",
     "tests/test_creative_reference_trust_a05.py",
     "tests/test_creative_reference_trust_startup_a05.py",
@@ -60,9 +61,10 @@ NODE_A073 = (
 )
 # These are expected collection counts after the A05 B2 hardening tests, NOT
 # required gate acceptance counts or a promise about all future code changes.
-EXPECTED = {"python_a05_a07": 261, "python_a073_cdp": 13, "node_a073": 19}
+EXPECTED = {"python_a05_a07": 265, "python_a073_cdp": 13, "node_a073": 19}
 SOURCE_FILES = (
     "scripts/a11_focal_evidence_packet.py",
+    "scripts/a05_python_source_preflight.py",
     "scripts/a07_browser_visual_parity.py",
     "scripts/a07_browser_cdp.py",
     "scripts/verify_zero_spend.py",
