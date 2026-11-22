@@ -56,6 +56,9 @@ PY_A02_ASR_DIAGNOSTIC = (
     "tests/test_shared_av_asr_diagnostic.py",
     "tests/test_shared_av_asr_cli.py",
 )
+PY_A027_FIXTURE_BATCH = (
+    "tests/test_asset_fixture_batch.py",
+)
 PY_A06_E1 = (
     "tests/test_multimodal_system_one_bridge.py",
     "tests/test_a06_system_one_bridge_cli.py",
@@ -73,6 +76,7 @@ NODE_A073 = (
 # required gate acceptance counts or a promise about all future code changes.
 EXPECTED = {"python_a05_a07": 269, "python_a06_e1": 29,
             "python_a02_asr_diagnostic": 62,
+            "python_a027_fixture_batch": 25,
             "python_a073_cdp": 13, "node_a073": 19}
 SOURCE_FILES = (
     "scripts/a11_focal_evidence_packet.py",
@@ -82,6 +86,9 @@ SOURCE_FILES = (
     "src/tapi_gate0/asr_strict_diagnostic.py",
     "src/tapi_gate0/shared_av_asr_diagnostic.py",
     "src/tapi_gate0/multimodal_asr.py",
+    "src/tapi_gate0/asset_fixture_batch.py",
+    "src/tapi_gate0/asset_fixture_pipeline.py",
+    "src/tapi_gate0/asset_candidate_fusion.py",
     "scripts/a07_browser_visual_parity.py",
     "scripts/a07_browser_cdp.py",
     "scripts/verify_zero_spend.py",
@@ -107,7 +114,7 @@ SOURCE_FILES = (
     "src/tapi_gate0/agent_evidence_b2.py",
     "migrations/versions/0017_creative_reference_pep.py",
     "tests/frontend/studio_export_browser_a07.html",
-) + PY_A05_A07 + PY_A02_ASR_DIAGNOSTIC + PY_A06_E1 + PY_A073 + NODE_A073
+) + PY_A05_A07 + PY_A02_ASR_DIAGNOSTIC + PY_A027_FIXTURE_BATCH + PY_A06_E1 + PY_A073 + NODE_A073
 
 GATES = {f"G{i}": "BLOCKED" for i in range(7)}
 GATES["IMP-131"] = "BLOCKED"
@@ -325,6 +332,9 @@ def build_packet(*, root: Path = ROOT, expected_head: str | None = None,
         ("python_a02_asr_diagnostic", [py, "-m", "pytest", "-q", "-rs",
                                         *PY_A02_ASR_DIAGNOSTIC],
          "pytest", EXPECTED["python_a02_asr_diagnostic"], 90),
+        ("python_a027_fixture_batch", [py, "-m", "pytest", "-q", "-rs",
+                                       *PY_A027_FIXTURE_BATCH],
+         "pytest", EXPECTED["python_a027_fixture_batch"], 90),
         ("python_a05_a07", [py, "-m", "pytest", "-q", "-rs", *PY_A05_A07],
          "pytest", EXPECTED["python_a05_a07"], 300),
         ("python_a06_e1", [py, "-m", "pytest", "-q", "-rs", *PY_A06_E1],
@@ -351,7 +361,7 @@ def build_packet(*, root: Path = ROOT, expected_head: str | None = None,
             packet["validation_status"] = "BLOCKED_PYTHON_SYNTAX_PREFLIGHT"
             return packet  # Never run pytest/Node/Chrome on malformed source.
 
-    if len(packet["checks"]) == 8 and all(c["passed"] for c in packet["checks"]):
+    if len(packet["checks"]) == 9 and all(c["passed"] for c in packet["checks"]):
         packet["validation_status"] = "FOCAL_DIAGNOSTICS_VERIFIED_NO_GATE_RELEASE"
     return packet
 
