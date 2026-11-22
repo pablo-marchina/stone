@@ -62,10 +62,15 @@ def _write_new(path: Path, report: dict) -> str:
         raise ValueError("A06_OUTPUT_SIZE_INVALID")
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     fd = os.open(path, flags, 0o600)
-    with os.fdopen(fd, "wb") as out:
-        out.write(raw)
-        out.flush()
-        os.fsync(out.fileno())
+    try:
+        with os.fdopen(fd, "wb") as out:
+            out.write(raw)
+            out.flush()
+            os.fsync(out.fileno())
+    except BaseException:
+        # A failed write must not retain a truncated "completed" receipt.
+        path.unlink(missing_ok=True)
+        raise
     return sha256(raw).hexdigest()
 
 
