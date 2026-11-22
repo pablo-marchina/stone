@@ -18,9 +18,9 @@ O Stone **já possuía** `FixturePipeline` em `src/tapi_gate0/asset_fixture_pipe
 
 ## Evidência
 
-- `tests/test_asset_fixture_batch.py`: **25 PASS** locais com substitutos controlados para `FixturePipeline`, `CandidateDecisions` e `AssetRightsDenied`. Casos: terminal tipado, budget, busy/blocked/recovery, SHA inválido, identidade de worker, job e artefato falsos, fraude de marcação científica, job repetido, mudança de plano durante a execução, cross-tenant, qualidade parcial e negação de classe de pipeline não confiável.
+- `tests/test_asset_fixture_batch.py`: **28 PASS** locais com substitutos controlados para `FixturePipeline`, `CandidateDecisions` e `AssetRightsDenied`. Casos: terminal tipado, budget, busy/blocked/recovery, SHA inválido, identidade de worker, job e artefato falsos, fraude de marcação científica, job repetido, mudança de plano durante a execução, cross-tenant, qualidade parcial e negação de classe de pipeline não confiável.
 - Exatamente os mesmos bytes de módulo/testes publicados foram conferidos por comprimento, soma e checksum ponderado. A sintaxe do novo módulo passou sob Python 3.11; os testes locais rodaram em Python 3.13.
-- **A11 focal** agora inclui `python_a027_fixture_batch` com **25 casos esperados** e hash de `asset_fixture_batch.py`, `asset_fixture_pipeline.py` e `asset_candidate_fusion.py`. O runner possui **9 etapas** (zero-spend, sintaxe, A02 ASR 62, A02.7 batch 25, A05/A07 269, A06/E1 29, A07 CDP 13, Node 19, Chrome 7).
+- **A11 focal** agora inclui `python_a027_fixture_batch` com **28 casos esperados** e hash de `asset_fixture_batch.py`, `asset_fixture_pipeline.py` e `asset_candidate_fusion.py`. O runner possui **9 etapas** (zero-spend, sintaxe, A02 ASR 62, A02.7 batch 28, A05/A07 269, A06/E1 29, A07 CDP 13, Node 19, Chrome 7).
 - **Não foi executada** a suíte integrada do checkout íntegro no HEAD desta PR; logo, não existe prova atual de que `FixturePipeline` e os jobs nativos estejam homologados juntos. O teste local não prova grants, execução de subprocessos, Windows Job Objects, VLM, ASR, migração, PostgreSQL, CI ou os sete gates.
 
 ## Validação no checkout exato da branch
@@ -34,3 +34,7 @@ python docs/base_atemporal/ferramentas/validar_espelho.py
 ```
 
 Depois, executar no host nativo com as fixtures e chaves locais **já autorizadas**, seguindo o Plano Único e a evidência de direitos, e então A00/A11/CT integrais **no mesmo SHA**. Fechamento da arquitetura ainda requer direitos reais e operação A02, gold e avaliação científica independente, retrieval/agentes, Studio e homologação G0–G6/IMP-131 antes de deploy. Sem custos, migração ou publicação nesta PR.
+
+### Resultado da revisão do contrato da fila
+
+O `AssetJobQueue.claim` devolve também `quota`, `rights_blocked` e `empty`. O executor passou a tratá-los como **paradas sem retry**, sem categorização de sucesso ou promoção de candidatos. Três testes parametrizados adicionais elevaram a suíte isolada de 25 para **28 PASS**. A suite integrada do novo SHA continua **NOT_RUN**.
