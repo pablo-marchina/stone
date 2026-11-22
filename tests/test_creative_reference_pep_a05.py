@@ -8,7 +8,7 @@ from datetime import timedelta
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select, update, insert
+from sqlalchemy import delete, select, update, insert
 
 from test_creative_reference_registry_a05 import (
     registry, provision, TENANT, PASSWORD,
@@ -768,3 +768,25 @@ def test_pep_denies_indexed_creator_id_drift_even_if_payload_is_unchanged(regist
         assert db.execute(select(domain_events.c.seq).where(
             domain_events.c.aggregate_type == "creative_reference_use",
         )).all() == []
+
+
+def test_pep_denies_removed_grant_without_audit(registry):
+    """A missing signed grant must not create approval events or an outbox item."""
+    from tapi_gate0.creative_reference_registry_a05 import grants
+    r = registry
+    pep = signed_fixture(r)
+    with r["engine"].begin() as con:
+        con.execute(delete(grants).where(
+            grants.c.tenant_id == TENANT,
+            grants.c.grant_id == "a054-fixture-grant",
+        ))
+    with r["engine"].begin() as con:
+        with pytest.raises(CreativeReferencePermissionDenied):
+            pep.require_for_atomic_draft(
+                con, token=r["token"], tenant=TENANT, actor="founder",
+                document_id="draft.deleted-grant", grant_ids=grant_ids(r),
+            )
+    with r["engine"].connect() as con:
+        assert con.execute(select(domain_events.c.seq).where(
+            domain_events.c.aggregate_type == "creative_reference_use",
+        )).scalars().all() == []
