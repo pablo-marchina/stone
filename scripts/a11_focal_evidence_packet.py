@@ -38,6 +38,7 @@ PY_A05_A07 = (
     "tests/test_studio_e1.py",
     "tests/test_studio_e4.py",
     "tests/test_studio_evidence_integrity_e6.py",
+    "tests/test_studio_metadata_scope_e6.py",
 )
 PY_A073 = (
     "tests/test_a07_browser_visual_parity_runner.py",
@@ -50,7 +51,7 @@ NODE_A073 = (
 )
 # These are expected collection counts after the A05 B2 hardening tests, NOT
 # required gate acceptance counts or a promise about all future code changes.
-EXPECTED = {"python_a05_a07": 155, "python_a073_cdp": 13, "node_a073": 19}
+EXPECTED = {"python_a05_a07": 180, "python_a073_cdp": 13, "node_a073": 19}
 SOURCE_FILES = (
     "scripts/a11_focal_evidence_packet.py",
     "scripts/a07_browser_visual_parity.py",

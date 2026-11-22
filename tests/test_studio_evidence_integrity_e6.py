@@ -207,3 +207,29 @@ def test_content_or_creator_drift_invalidates_operator_confirmation(
         service.apply("tenantA", "operator", "document.test", confirmed,
                       preview["base_etag"])
     assert service.docs.get("tenantA", "document.test").version == 1
+
+
+def test_metadata_edit_without_live_ingestion_scope_is_denied(scenario, monkeypatch):
+    # The main fixture mocks the independent grant policy for edit-integrity
+    # tests only. Here restore the REAL policy and prove missing grants fail.
+    monkeypatch.undo()
+    _engine, service, proposal = scenario
+    with pytest.raises(StudioError, match="STUDIO_EVIDENCE_LIVE_METADATA_GRANT_REQUIRED"):
+        service.preview("tenantA", "document.test", proposal)
+    assert service.docs.get("tenantA", "document.test").version == 1
+
+
+def test_scope_missing_at_apply_blocks_even_after_valid_edit_preview(scenario, monkeypatch):
+    # This is not a positive source grant test: preview uses a local policy
+    # double, then the real missing-grant check must fail at commit time.
+    _engine, service, proposal = scenario
+    preview = service.preview("tenantA", "document.test", proposal)
+    monkeypatch.undo()
+    confirmed = ConfirmEvidenceEdit(
+        **proposal.model_dump(), preview_sha256=preview["preview_sha256"],
+        operator_confirmed=True,
+    )
+    with pytest.raises(StudioError, match="STUDIO_EVIDENCE_LIVE_METADATA_GRANT_REQUIRED"):
+        service.apply("tenantA", "operator", "document.test", confirmed,
+                      preview["base_etag"])
+    assert service.docs.get("tenantA", "document.test").version == 1
