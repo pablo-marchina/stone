@@ -127,6 +127,7 @@ GATES["IMP-131"] = "BLOCKED"
 RE_PY = re.compile(r"\b(\d+)\s+passed\b")
 RE_PY_SKIP = re.compile(r"\b(\d+)\s+skipped\b")
 RE_PY_FAIL = re.compile(r"\b(\d+)\s+failed\b")
+RE_PY_ERROR = re.compile(r"\b(\d+)\s+errors?\b")
 
 
 def _digest(data: bytes) -> str:
@@ -142,6 +143,7 @@ def _redacted_result(argv: list[str], result, *, kind: str,
     count = 0
     skips = 0
     fails = 0
+    errors = 0
     code = "A11_LOCAL_CHECK_FAILED"
     verified = False
 
@@ -149,11 +151,14 @@ def _redacted_result(argv: list[str], result, *, kind: str,
         matched = RE_PY.findall(stdout)
         skip_values = RE_PY_SKIP.findall(stdout)
         fail_values = RE_PY_FAIL.findall(stdout)
+        error_values = RE_PY_ERROR.findall(stdout)
+        errors = int(error_values[-1]) if len(error_values) == 1 else 0
         count = int(matched[-1]) if len(matched) == 1 else 0
         skips = int(skip_values[-1]) if skip_values else 0
         fails = int(fail_values[-1]) if fail_values else 0
         verified = (rc == 0 and len(matched) == 1
-                    and count == expected_count and skips == 0 and fails == 0)
+                    and count == expected_count and skips == 0
+                    and fails == 0 and errors == 0)
         code = "A11_PYTEST_COUNTS_MATCH" if verified else "A11_PYTEST_INCOMPLETE"
 
     elif kind == "syntax_preflight":
@@ -220,6 +225,7 @@ def _redacted_result(argv: list[str], result, *, kind: str,
         "observed_pass_count": count,
         "observed_skip_count": skips,
         "observed_fail_count": fails,
+        "observed_error_count": errors,
         "expected_pass_count": expected_count if expected_count is not None
                                else (7 if kind == "chrome" else 1),
         "output_sha256": _digest(combined.encode("utf-8")),
@@ -251,7 +257,7 @@ def _command_result(run, argv: list[str], *, kind: str,
             "argv": argv, "reason_code": "A11_LOCAL_CHECK_TIMEOUT",
             "passed": False, "process_exit_code": None,
             "observed_pass_count": 0, "observed_skip_count": 0,
-            "observed_fail_count": 0,
+            "observed_fail_count": 0, "observed_error_count": 0,
             "expected_pass_count": expected_count or (7 if kind == "chrome" else 1),
             "output_sha256": None, "elapsed_seconds": round(time.monotonic()-started,3),
             "raw_output_stored": False,
@@ -261,7 +267,7 @@ def _command_result(run, argv: list[str], *, kind: str,
             "argv": argv, "reason_code": "A11_LOCAL_EXECUTABLE_UNAVAILABLE",
             "passed": False, "process_exit_code": None,
             "observed_pass_count": 0, "observed_skip_count": 0,
-            "observed_fail_count": 0,
+            "observed_fail_count": 0, "observed_error_count": 0,
             "expected_pass_count": expected_count or (7 if kind == "chrome" else 1),
             "output_sha256": None, "elapsed_seconds": round(time.monotonic()-started,3),
             "raw_output_stored": False,
