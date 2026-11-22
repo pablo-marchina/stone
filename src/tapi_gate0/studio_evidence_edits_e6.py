@@ -15,8 +15,8 @@ from typing import Literal
 from pydantic import ConfigDict, Field
 from sqlalchemy import Table, Column, String, Integer, ForeignKeyConstraint, select, insert, update
 
-from .domain import Id, ContentItem, MetricsCreate
-from .sa_store import metadata, content_items, metrics_snapshots
+from .domain import Id, ContentItem, Creator, MetricsCreate
+from .sa_store import metadata, content_items, creators, metrics_snapshots
 from .studio_e1 import StudioError, DesignDocument, StudioStore, studio_documents, studio_versions
 from .studio_e4 import ProposedTextEdit, _proposed_patch, studio_etag, assert_etag
 
@@ -52,27 +52,79 @@ class StudioEvidenceEditService:
         self.engine=engine;self.docs=StudioStore(engine)
 
     @staticmethod
-    def _evidence(db,tenant,doc,proposal):
+    def _evidence(db, tenant, doc, proposal):
+        """Validate *both* SQL keys and serialized evidence before an edit.
+
+        A tenant-scoped SELECT alone is insufficient: persisted payloads may
+        be corrupted, relabeled or inconsistent with their indexed rows.
+        Metadata is descriptive evidence, NEVER a creative-use rights grant.
+        """
         if proposal.reference_content_id not in doc.reference_content_ids:
-            raise StudioError('STUDIO_EVIDENCE_NOT_IN_DOCUMENT_REFERENCES',403)
-        raw=db.execute(select(content_items.c.payload).where(
-            content_items.c.tenant_id==tenant,
-            content_items.c.id==proposal.reference_content_id)).scalar_one_or_none()
-        if raw is None:
-            raise StudioError('STUDIO_EVIDENCE_CONTENT_NOT_FOUND',404)
-        content=ContentItem.model_validate_json(raw)
+            raise StudioError('STUDIO_EVIDENCE_NOT_IN_DOCUMENT_REFERENCES', 403)
+        row = db.execute(select(
+            content_items.c.creator_id, content_items.c.origin,
+            content_items.c.published_at, content_items.c.payload,
+        ).where(
+            content_items.c.tenant_id == tenant,
+            content_items.c.id == proposal.reference_content_id,
+        )).one_or_none()
+        if row is None:
+            raise StudioError('STUDIO_EVIDENCE_CONTENT_NOT_FOUND', 404)
+        try:
+            content = ContentItem.model_validate_json(row.payload)
+            if (content.tenant_id != tenant
+                    or content.content_id != proposal.reference_content_id
+                    or content.creator_id != row.creator_id
+                    or content.origin.value != row.origin
+                    or content.published_at != datetime.fromisoformat(row.published_at)):
+                raise StudioError('STUDIO_EVIDENCE_CONTENT_BINDING_INVALID', 409)
+        except (ValueError, TypeError, AttributeError):
+            raise StudioError('STUDIO_EVIDENCE_CONTENT_PAYLOAD_INVALID', 409) from None
+
+        creator_row = db.execute(select(
+            creators.c.origin, creators.c.payload,
+        ).where(
+            creators.c.tenant_id == tenant,
+            creators.c.id == content.creator_id,
+        )).one_or_none()
+        if creator_row is None:
+            raise StudioError('STUDIO_EVIDENCE_CREATOR_NOT_FOUND', 409)
+        try:
+            creator = Creator.model_validate_json(creator_row.payload)
+            if (creator.tenant_id != tenant
+                    or creator.creator_id != content.creator_id
+                    or creator.origin != content.origin
+                    or creator.origin.value != creator_row.origin):
+                raise StudioError('STUDIO_EVIDENCE_CREATOR_BINDING_INVALID', 409)
+        except (ValueError, TypeError, AttributeError):
+            raise StudioError('STUDIO_EVIDENCE_CREATOR_PAYLOAD_INVALID', 409) from None
+
         if content.is_synthetic:
-            raise StudioError('STUDIO_EVIDENCE_SYNTHETIC_NOT_ALLOWED',403)
-        snapshot_raw=db.execute(select(metrics_snapshots.c.payload).where(
-            metrics_snapshots.c.tenant_id==tenant,
-            metrics_snapshots.c.id==proposal.reference_snapshot_id,
-            metrics_snapshots.c.content_id==proposal.reference_content_id)).scalar_one_or_none()
-        if snapshot_raw is None:
-            raise StudioError('STUDIO_EVIDENCE_SNAPSHOT_NOT_FOUND',404)
-        snap=MetricsCreate.model_validate_json(snapshot_raw)
-        return {'source_url':str(content.source_url) if content.source_url else None,
-                'snapshot_observed_at':snap.observed_at.isoformat(),
-                'snapshot_sha256':sha256(snapshot_raw.encode()).hexdigest()}
+            raise StudioError('STUDIO_EVIDENCE_SYNTHETIC_NOT_ALLOWED', 403)
+        snap_row = db.execute(select(
+            metrics_snapshots.c.observed_at, metrics_snapshots.c.payload,
+        ).where(
+            metrics_snapshots.c.tenant_id == tenant,
+            metrics_snapshots.c.id == proposal.reference_snapshot_id,
+            metrics_snapshots.c.content_id == proposal.reference_content_id,
+        )).one_or_none()
+        if snap_row is None:
+            raise StudioError('STUDIO_EVIDENCE_SNAPSHOT_NOT_FOUND', 404)
+        try:
+            snap = MetricsCreate.model_validate_json(snap_row.payload)
+            if (snap.tenant_id != tenant
+                    or snap.content_id != proposal.reference_content_id
+                    or snap.snapshot_id != proposal.reference_snapshot_id
+                    or snap.observed_at != datetime.fromisoformat(snap_row.observed_at)
+                    or snap.observed_at < content.published_at):
+                raise StudioError('STUDIO_EVIDENCE_SNAPSHOT_BINDING_INVALID', 409)
+        except (ValueError, TypeError, AttributeError):
+            raise StudioError('STUDIO_EVIDENCE_SNAPSHOT_PAYLOAD_INVALID', 409) from None
+        return {
+            'source_url': str(content.source_url) if content.source_url else None,
+            'snapshot_observed_at': snap.observed_at.isoformat(),
+            'snapshot_sha256': sha256(snap_row.payload.encode()).hexdigest(),
+        }
 
     @staticmethod
     def _digest(doc,proposal,evidence):
