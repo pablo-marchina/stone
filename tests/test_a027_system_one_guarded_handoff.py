@@ -87,10 +87,11 @@ def test_entrypoint_invokes_protected_fusion_not_supplied_evidence(monkeypatch):
         return report
     monkeypatch.setattr(fusion, "evaluate_shared_av_coverage_guard", authorized)
     ids = tuple("artifact." + str(i)*64 for i in range(4))
+    store = object()
     result = bridge_guarded_av_to_system_one(
-        object(), "tenantA", "b"*64, ids, purpose="research_analysis")
+        store, "tenantA", "b"*64, ids, purpose="research_analysis")
     assert result["status"] == "GUARDED_CANDIDATES_ONLY"
-    assert calls == [((calls[0][0][0], "tenantA", "b"*64, ids),
+    assert calls == [((store, "tenantA", "b"*64, ids),
                       {"purpose": "research_analysis"})]
     assert result["publication_allowed"] is False
 
