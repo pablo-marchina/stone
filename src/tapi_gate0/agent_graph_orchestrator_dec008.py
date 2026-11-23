@@ -108,6 +108,55 @@ def execute_candidate(engine, *, backend: Literal["direct", "langgraph"],
                              actor=actor, run_id=run_id, plan=plan)()
 
 
+class _GuardedNativeReconciledGraph:
+    """Only supported diagnostic invoke/get_state surface for the native saver.
+
+    LangGraph can expose completed pending writes after a failed put(). If the
+    restored snapshot has no runnable node despite the SQL ledger still being
+    OPEN, a new graph invocation is seeded from the validated SQL receipt.
+    This is read-only/synthetic; NEVER copy this replay for external effects.
+    """
+
+    def __init__(self, compiled, *, engine, tenant, actor, run_id, plan):
+        self._compiled = compiled
+        self._engine = engine
+        self._tenant = tenant
+        self._actor = actor
+        self._run_id = run_id
+        self._plan = plan
+
+    def get_state(self, config):
+        return self._compiled.get_state(config)
+
+    def invoke(self, input, config=None, **kwargs):
+        if input is None:
+            from .agent_graph_reconciliation_dec008 import (
+                validate_native_resume,
+            )
+            if not isinstance(config, dict) or not isinstance(
+                    config.get("configurable"), dict) or not config[
+                        "configurable"].get("thread_id"):
+                raise Dec008BackendDenied("DEC008_TRUSTED_THREAD_REQUIRED")
+            snapshot = self._compiled.get_state(config)
+            values = getattr(snapshot, "values", None)
+            if not isinstance(values, dict):
+                raise Dec008BackendDenied("DEC008_NATIVE_STATE_INVALID")
+            native_receipt = values.get("receipt")
+            sql = validate_native_resume(
+                self._engine, tenant=self._tenant, actor=self._actor,
+                run_id=self._run_id, plan=self._plan,
+                native_receipt=native_receipt,
+            )
+            # Native pending writes may have a current receipt but no
+            # scheduled node after a failed checkpoint. Never return that
+            # apparently successful state without rechecking Stone sources.
+            # For OPEN read-only runs, reseed from the *verified SQL receipt*,
+            # not from caller-supplied input; the node revalidates again.
+            if sql["status"] == "OPEN" and not snapshot.next:
+                return self._compiled.invoke({"receipt": sql}, config, **kwargs)
+        return self._compiled.invoke(input, config, **kwargs)
+
+
 def prepare_native_reconciled_graph(engine, *, checkpointer, tenant: str,
                                     actor: str, run_id: str,
                                     plan: LocalGraphPlan):
@@ -147,5 +196,9 @@ def prepare_native_reconciled_graph(engine, *, checkpointer, tenant: str,
     graph.add_edge(START, "atomic_sql_checkpoint_step")
     graph.add_conditional_edges("atomic_sql_checkpoint_step", route,
                                 {"more": "atomic_sql_checkpoint_step", "end": END})
-    return graph.compile(checkpointer=checkpointer,
-                         interrupt_after=["atomic_sql_checkpoint_step"])
+    compiled = graph.compile(checkpointer=checkpointer,
+                             interrupt_after=["atomic_sql_checkpoint_step"])
+    return _GuardedNativeReconciledGraph(
+        compiled, engine=engine, tenant=tenant, actor=actor, run_id=run_id,
+        plan=plan,
+    )
