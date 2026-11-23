@@ -81,6 +81,7 @@ PY_A027_INTEGRATED = (
 PY_A06_E1 = (
     "tests/test_multimodal_system_one_bridge.py",
     "tests/test_a06_system_one_bridge_cli.py",
+    "tests/test_a027_system_one_guarded_handoff.py",
 )
 PY_A073 = (
     "tests/test_a07_browser_visual_parity_runner.py",
@@ -93,7 +94,7 @@ NODE_A073 = (
 )
 # These are expected collection counts after the A05 B2 hardening tests, NOT
 # required gate acceptance counts or a promise about all future code changes.
-EXPECTED = {"python_a05_a07": 407, "python_a06_e1": 35,
+EXPECTED = {"python_a05_a07": 407, "python_a06_e1": 48,
             "python_a02_asr_diagnostic": 91,
             "python_a027_fixture_batch": 40,
             "python_a027_integrated": 16,
@@ -149,6 +150,7 @@ SOURCE_FILES = (
     "src/tapi_gate0/studio_e1.py",
     "src/tapi_gate0/studio_canvas_c2.py",
     "src/tapi_gate0/multimodal_system_one_bridge.py",
+    "src/tapi_gate0/asset_system_one_guarded_handoff.py",
     "src/tapi_gate0/system_one_e1.py",
     "src/tapi_gate0/multimodal_semantic_replay.py",
     "src/tapi_gate0/multimodal_shared_fixture.py",
