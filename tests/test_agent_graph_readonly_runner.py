@@ -240,8 +240,8 @@ def test_forged_citation_is_blocked_before_recommendation(engine, monkeypatch):
     import tapi_gate0.agent_graph_readonly_runner as runtime
     original = runtime._analysis
 
-    def compromised_analysis(db, tenant, request):
-        result = original(db, tenant, request)
+    def compromised_analysis(db, tenant, request, *, connection=None):
+        result = original(db, tenant, request, connection=connection)
         first = result.findings[0]
         corrupt = first.citations[0].model_copy(update={"snapshot_id": "forged"})
         return result.model_copy(update={"findings": [first.model_copy(
@@ -267,8 +267,8 @@ def test_forged_numerical_engagement_rate_is_blocked(engine, monkeypatch):
     import tapi_gate0.agent_graph_readonly_runner as runtime
     original = runtime._analysis
 
-    def fake_rate(db, tenant, request):
-        result = original(db, tenant, request)
+    def fake_rate(db, tenant, request, *, connection=None):
+        result = original(db, tenant, request, connection=connection)
         first = result.findings[0]
         forged = first.citations[0].model_copy(update={"engagement_rate": "999"})
         return result.model_copy(update={"findings": [first.model_copy(
@@ -280,3 +280,164 @@ def test_forged_numerical_engagement_rate_is_blocked(engine, monkeypatch):
     result = next_node(engine)
     assert result["status"] == "BLOCKED" and result["revision"] == 4
     assert result["scientifically_validated"] is False
+
+
+def test_checkpoint_step_uses_one_connection_for_evidence_ranking_and_ledger(engine):
+    """SQLite integration oracle: never open independent tool connections."""
+    from sqlalchemy import event
+    seen = []
+
+    def observe(conn, cursor, statement, parameters, context, executemany):
+        if any(name in statement.lower() for name in (
+            "agent_graph_runs", "agent_graph_events", "content_items",
+            "metrics_snapshots", "creators",
+        )):
+            seen.append((id(conn), statement.lower()))
+
+    event.listen(engine, "before_cursor_execute", observe)
+    try:
+        for _ in range(4):  # plan, retrieve, analytics, evidence_verify
+            seen.clear()
+            result = next_node(engine)
+            assert result["status"] == "OPEN"
+            assert len({conn_id for conn_id, _ in seen}) == 1, (
+                "LOCAL_GRAPH_SPLIT_TRANSACTION_DETECTED"
+            )
+            assert len(seen) >= 8
+        # The final evidence-verify step includes ranking, retrieval and CAS.
+    finally:
+        event.remove(engine, "before_cursor_execute", observe)
+    for table in ("content_items", "creators", "metrics_snapshots",
+                  "agent_graph_runs", "agent_graph_events"):
+        assert any(table in query for _, query in seen)
+
+
+def test_tool_failure_rolls_back_initial_graph_run_and_all_events(engine, monkeypatch):
+    import tapi_gate0.agent_graph_readonly_runner as runtime
+
+    def abort(*_args, **_kwargs):
+        raise RuntimeError("SYNTHETIC_TOOL_INTERRUPTED")
+
+    monkeypatch.setattr(runtime, "_node_result", abort)
+    with pytest.raises(RuntimeError, match="SYNTHETIC_TOOL_INTERRUPTED"):
+        next_node(engine)
+    with engine.connect() as db:
+        assert not db.execute(select(agent_graph_runs)).first()
+        assert not db.execute(select(agent_graph_events)).first()
+
+
+def test_existing_ledger_does_not_advance_on_tool_error(engine, monkeypatch):
+    import tapi_gate0.agent_graph_readonly_runner as runtime
+    assert next_node(engine)["revision"] == 1
+
+    def abort(*_args, **_kwargs):
+        raise RuntimeError("SYNTHETIC_TOOL_INTERRUPTED")
+
+    monkeypatch.setattr(runtime, "_node_result", abort)
+    with pytest.raises(RuntimeError, match="SYNTHETIC_TOOL_INTERRUPTED"):
+        next_node(engine)
+    with engine.connect() as db:
+        run = db.execute(select(agent_graph_runs)).mappings().one()
+        assert run["revision"] == 1 and run["status"] == "OPEN"
+        assert len(db.execute(select(agent_graph_events)).all()) == 1
+
+
+def test_sqlite_concurrent_source_writer_cannot_cross_checkpoint_commit(engine, monkeypatch):
+    """The second writer must block until source read and ledger commit finish."""
+    import sqlite3
+    import threading
+    import tapi_gate0.agent_graph_readonly_runner as runtime
+
+    assert next_node(engine)["revision"] == 1  # next node is retrieve
+    with engine.connect() as db:
+        raw = db.scalar(select(content_items.c.payload))
+    changed = json.loads(raw)
+    changed["caption"] = "mutated by concurrent local writer"
+    payload = json.dumps(changed)
+    writer_started = threading.Event()
+    writer_finished = threading.Event()
+    failures = []
+    threads = []
+    original = runtime._evidence
+
+    def write_concurrently():
+        try:
+            with sqlite3.connect(engine.url.database, timeout=4.0) as conn:
+                writer_started.set()
+                conn.execute("UPDATE content_items SET payload=? WHERE id=?", (payload, "post1"))
+            writer_finished.set()
+        except Exception as exc:
+            failures.append(type(exc).__name__)
+
+    def observe_in_flight(*args, **kwargs):
+        thread = threading.Thread(target=write_concurrently, daemon=True)
+        thread.start()
+        threads.append(thread)
+        assert writer_started.wait(2)
+        assert not writer_finished.wait(0.15), "SOURCE_WRITTEN_BEFORE_CHECKPOINT_COMMIT"
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(runtime, "_evidence", observe_in_flight)
+    result = next_node(engine)
+    assert result["revision"] == 2
+    for thread in threads:
+        thread.join(timeout=5)
+        assert not thread.is_alive()
+    assert not failures
+    assert writer_finished.is_set()
+    with engine.connect() as db:
+        assert db.scalar(select(content_items.c.payload)) == payload
+        assert len(db.execute(select(agent_graph_events)).all()) == 2
+    monkeypatch.setattr(runtime, "_evidence", original)
+    with pytest.raises(LocalGraphDenied, match="SOURCE_DRIFT_RESTART_REQUIRED"):
+        next_node(engine)
+
+
+@pytest.mark.parametrize("which", ["begin", "resume", "record"])
+def test_checkpoint_rejects_wrong_engine_transaction(engine, tmp_path, which):
+    from tapi_gate0.agent_graph_checkpoints import begin_run, resume_run, record_node
+    other_engine = engine_for(f"sqlite:///{tmp_path / 'other.sqlite'}")
+    try:
+        with other_engine.begin() as db:
+            if which == "begin":
+                fn = lambda: begin_run(engine, tenant=TENANT, actor=ACTOR,
+                    run_id=RUN, mode="analisar", plan_sha256="a" * 64,
+                    connection=db)
+            elif which == "resume":
+                fn = lambda: resume_run(engine, tenant=TENANT, actor=ACTOR,
+                    run_id=RUN, connection=db)
+            else:
+                fn = lambda: record_node(engine, tenant=TENANT, actor=ACTOR,
+                    run_id=RUN, expected_revision=0, node="plan", outcome="PASS",
+                    receipt_sha256="b" * 64, connection=db)
+            with pytest.raises(AgentCheckpointDenied, match="TRUSTED_TRANSACTION_REQUIRED"):
+                fn()
+    finally:
+        other_engine.dispose()
+
+
+def test_checkpoint_rejects_connection_without_active_transaction(engine):
+    from tapi_gate0.agent_graph_checkpoints import begin_run
+    with engine.connect() as db:
+        assert not db.in_transaction()
+        with pytest.raises(AgentCheckpointDenied, match="TRUSTED_TRANSACTION_REQUIRED"):
+            begin_run(engine, tenant=TENANT, actor=ACTOR, run_id=RUN,
+                      mode="analisar", plan_sha256="a" * 64, connection=db)
+
+
+def test_database_failure_rolls_back_and_redacts_provider_message(engine, monkeypatch):
+    from sqlalchemy.exc import OperationalError
+    import tapi_gate0.agent_graph_readonly_runner as runtime
+
+    def break_database(*_args, **_kwargs):
+        raise OperationalError("SELECT private_url", {},
+                               Exception("DO_NOT_EXPOSE_DB_CREDENTIALS"))
+
+    monkeypatch.setattr(runtime, "_node_result", break_database)
+    with pytest.raises(LocalGraphDenied, match="^LOCAL_GRAPH_TRANSACTION_ABORTED$") as exc:
+        next_node(engine)
+    assert "private_url" not in str(exc.value)
+    assert "CREDENTIALS" not in str(exc.value)
+    with engine.connect() as db:
+        assert db.execute(select(agent_graph_runs)).first() is None
+        assert db.execute(select(agent_graph_events)).first() is None

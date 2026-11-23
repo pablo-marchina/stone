@@ -73,7 +73,8 @@ class EvidenceRetriever:
         self.engine = engine
 
     def get(self, tenant_id: str, content_id: str,
-            as_of: datetime | None = None, *, connection=None) -> ObservedEvidence:
+            as_of: datetime | None = None, *, connection=None,
+            lock_rows: bool = False) -> ObservedEvidence:
         as_of = as_of or datetime.now(timezone.utc)
         if as_of.tzinfo is None or as_of.utcoffset() is None:
             raise ValueError("EVIDENCE_AS_OF_TIMEZONE_REQUIRED")
@@ -83,28 +84,40 @@ class EvidenceRetriever:
         # The validation and the subsequent Studio insert then share one view.
         if connection is None:
             with self.engine.connect() as con:
-                return self.get(tenant_id, content_id, as_of, connection=con)
+                return self.get(tenant_id, content_id, as_of,
+                                connection=con, lock_rows=lock_rows)
         con = connection
-        record = con.execute(select(
+        content_query = select(
             content_items.c.creator_id, content_items.c.origin,
             content_items.c.published_at, content_items.c.payload,
         ).where(
             content_items.c.tenant_id == tenant_id,
             content_items.c.id == content_id,
-        )).one_or_none()
-        creator_row = con.execute(select(
+        )
+        if lock_rows:
+            content_query = content_query.with_for_update(read=True)
+        record = con.execute(content_query).one_or_none()
+        creator_query = select(
             creators.c.origin, creators.c.payload,
         ).where(
             creators.c.tenant_id == tenant_id,
             creators.c.id == record[0],
-        )).one_or_none() if record is not None else None
-        snapshot_rows = con.execute(select(
+        ) if record is not None else None
+        snapshot_query = select(
             metrics_snapshots.c.id, metrics_snapshots.c.observed_at,
             metrics_snapshots.c.payload,
         ).where(
             metrics_snapshots.c.tenant_id == tenant_id,
             metrics_snapshots.c.content_id == content_id,
-        )).all() if record is not None else []
+        )
+        if lock_rows:
+            if creator_query is not None:
+                creator_query = creator_query.with_for_update(read=True)
+            snapshot_query = snapshot_query.with_for_update(read=True)
+        creator_row = (con.execute(creator_query).one_or_none()
+                       if creator_query is not None else None)
+        snapshot_rows = (con.execute(snapshot_query).all()
+                         if record is not None else [])
         if record is None:
             raise EvidenceNotFound("EVIDENCE_CONTENT_NOT_FOUND_IN_TENANT")
         if creator_row is None:

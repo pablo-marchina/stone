@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from hashlib import sha256
 import json
 import re
+from contextlib import contextmanager
 
 from sqlalchemy import (
     Column, ForeignKeyConstraint, Integer, String, Table,
@@ -184,7 +185,20 @@ def _receipt(run):
     }
 
 
-def begin_run(engine, *, tenant, actor, run_id, mode, plan_sha256):
+@contextmanager
+def _transaction(engine, connection):
+    """Re-use an already-open trusted transaction or create an isolated one."""
+    if connection is None:
+        with engine.begin() as db:
+            yield db
+    else:
+        if connection.engine is not engine or not connection.in_transaction():
+            _deny("TRUSTED_TRANSACTION_REQUIRED")
+        yield connection
+
+
+def begin_run(engine, *, tenant, actor, run_id, mode, plan_sha256,
+              connection=None):
     """Reserve a tenant-bound synthetic trace; replay the same plan exactly."""
     if (not _id(tenant) or not _id(actor) or not _id(run_id)
             or type(mode) is not str or mode not in MODES
@@ -192,7 +206,7 @@ def begin_run(engine, *, tenant, actor, run_id, mode, plan_sha256):
         _deny("INPUT_INVALID")
     actor_sha = _actor_hash(tenant, actor)
     try:
-        with engine.begin() as db:
+        with _transaction(engine, connection) as db:
             _lock_tenant(db, tenant)
             found = db.execute(select(agent_graph_runs).where(
                 agent_graph_runs.c.tenant_id == tenant,
@@ -218,7 +232,7 @@ def begin_run(engine, *, tenant, actor, run_id, mode, plan_sha256):
 
 
 def record_node(engine, *, tenant, actor, run_id, expected_revision,
-                node, outcome, receipt_sha256):
+                node, outcome, receipt_sha256, connection=None):
     """Record a host-verified node receipt, never execute any tool itself.
 
     A retry with identical (sequence, node, outcome, receipt hash) is safe;
@@ -231,7 +245,7 @@ def record_node(engine, *, tenant, actor, run_id, expected_revision,
             or outcome not in OUTCOMES or not _sha(receipt_sha256)):
         _deny("INPUT_INVALID")
     actor_sha = _actor_hash(tenant, actor)
-    with engine.begin() as db:
+    with _transaction(engine, connection) as db:
         _lock_tenant(db, tenant)
         run, history = _load(db, tenant, run_id, actor_sha)
         if expected_revision < run["revision"]:
@@ -277,10 +291,10 @@ def record_node(engine, *, tenant, actor, run_id, expected_revision,
                          "chain_sha256": next_chain})
 
 
-def resume_run(engine, *, tenant, actor, run_id):
+def resume_run(engine, *, tenant, actor, run_id, connection=None):
     """Recheck full hash chain on read; no tool replay or privilege implied."""
     if not _id(tenant) or not _id(actor) or not _id(run_id):
         _deny("INPUT_INVALID")
-    with engine.connect() as db:
+    with _transaction(engine, connection) as db:
         run, _ = _load(db, tenant, run_id, _actor_hash(tenant, actor))
         return _receipt(run)
