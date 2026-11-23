@@ -93,6 +93,11 @@ def test_rejects_native_checkpoint_ahead_of_sql(engine):
     {"next_node": "studio_handoff"},
     {"production_approved": True},
     {"rights_verified": True},
+    {"model_calls_performed": 1},
+    {"model_calls_performed": False},
+    {"independent_gold_available": True},
+    {"synthetic_or_technical_trace_only": False},
+    {"external_grant_id": "fabricated"},
 ])
 def test_detects_native_receipt_forgery(engine, mutation):
     real = reconciled(engine, {})

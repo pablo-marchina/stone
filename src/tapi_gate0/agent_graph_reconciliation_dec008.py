@@ -24,6 +24,20 @@ from .agent_graph_readonly_runner import (
 )
 
 
+# The native receipt must be exactly the technical envelope emitted by Stone.
+# Unknown fields cannot be used to smuggle permissions or source payloads via
+# a future change in graph state serialization. No production authority is
+# ever inferred from this receipt, including on a previously acknowledged step.
+_NATIVE_RECEIPT_KEYS = frozenset({
+    "schema_version", "status", "mode", "revision", "next_node",
+    "chain_sha256", "synthetic_or_technical_trace_only",
+    "node_execution_proved", "model_calls_performed",
+    "independent_gold_available", "rights_verified",
+    "scientifically_validated", "studio_write_allowed",
+    "publication_allowed", "production_approved", "global_gates_released",
+})
+
+
 class Dec008ReconciliationDenied(ValueError):
     """Fixed error codes: never embed source or native state in exceptions."""
 
@@ -37,6 +51,13 @@ def _native_revision(native_receipt, *, plan, history):
         return 0
     if type(native_receipt) is not dict:
         _deny("NATIVE_RECEIPT_INVALID")
+    if frozenset(native_receipt) != _NATIVE_RECEIPT_KEYS:
+        _deny("NATIVE_RECEIPT_INVALID")
+    if (native_receipt["synthetic_or_technical_trace_only"] is not True
+            or native_receipt["independent_gold_available"] is not False
+            or type(native_receipt["model_calls_performed"]) is not int
+            or native_receipt["model_calls_performed"] != 0):
+        _deny("NATIVE_AUTHORITY_FORGERY")
     revision = native_receipt.get("revision")
     if type(revision) is not int or revision < 1:
         _deny("NATIVE_RECEIPT_INVALID")
