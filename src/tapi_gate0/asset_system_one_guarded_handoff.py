@@ -61,8 +61,8 @@ def _project_guarded(guard: dict) -> dict:
     rejections = guard.get("quality_rejections")
     if type(rejections) is not dict or set(rejections) - {"asr_vad"}:
         _deny("QUALITY_REJECTION_INVALID")
-    if rejections and (coverage["asr_vad"] != "abstained"
-                       or details["asr_vad"].get("reason") != "fixture_quality_rejected"):
+    if bool(rejections) != (coverage["asr_vad"] == "abstained"
+                            and details["asr_vad"].get("reason") == "fixture_quality_rejected"):
         _deny("QUALITY_REJECTION_INVALID")
     suppressed = guard.get("suppressed_fields")
     if (type(suppressed) not in (tuple, list) or len(set(suppressed)) != len(suppressed)
@@ -126,8 +126,9 @@ def _project_guarded(guard: dict) -> dict:
                            "vetoes": [projection(s) for s in vetoes]})})
     return {
         "schema_version": VERSION,
-        "status": ("PARTIAL_GUARDED_CANDIDATES_ONLY" if rejections
-                   else "GUARDED_CANDIDATES_ONLY"),
+        "status": ("PARTIAL_GUARDED_CANDIDATES_ONLY" if any(
+            coverage[p] == "abstained" and details[p].get("reason") != "no_observable_signal"
+            for p in PROCESSORS) else "GUARDED_CANDIDATES_ONLY"),
         "tenant_id": guarded.tenant_id, "content_id": guarded.content_id,
         "object_id": guarded.object_id, "purpose": guarded.purpose,
         "source_fingerprint": fingerprint,
@@ -158,9 +159,11 @@ def bridge_guarded_av_to_system_one(store, tenant: str, object_id: str,
     from .asset_candidate_fusion import CandidateDecisions, evaluate_shared_av_coverage_guard
 
     if (type(artifact_ids) not in (tuple, list) or len(artifact_ids) != 4
-            or len(set(artifact_ids)) != 4
-            or any(type(x) is not str or not _ARTIFACT.fullmatch(x) for x in artifact_ids)):
+            or any(type(x) is not str or not _ARTIFACT.fullmatch(x) for x in artifact_ids)
+            or len(set(artifact_ids)) != 4):
         _deny("FOUR_DISTINCT_ARTIFACTS_REQUIRED")
+    if purpose != "research_analysis":
+        _deny("RESEARCH_SCOPE_REQUIRED")
     guard = evaluate_shared_av_coverage_guard(
         store, tenant, object_id, artifact_ids, purpose=purpose)
     if (type(guard) is not dict or not isinstance(guard.get("guarded"), CandidateDecisions)
