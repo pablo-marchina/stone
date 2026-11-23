@@ -30,6 +30,8 @@ VERSION = "tapi-imp074-agent-checkpoint-baseline.v1"
 _SHA = re.compile(r"[0-9a-f]{64}\Z")
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}\Z")
 MODES = {
+    # Trusted in-process AV candidate review; intentionally excluded from LocalGraphPlan/API.
+    "av_candidate_review": ("plan", "retrieve", "evidence_verify", "output_verify"),
     "analisar": ("plan", "retrieve", "analytics", "evidence_verify", "output_verify"),
     "recomendar": ("plan", "retrieve", "analytics", "evidence_verify",
                   "recommendation_draft", "output_verify"),
