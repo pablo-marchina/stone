@@ -23,6 +23,11 @@ from tapi_gate0.domain import MediaType
 from tapi_gate0.ingestion import IngestionStore, GrantCreate, source_grants, ingestion_records
 from tapi_gate0.sa_store import SqlDomainStore, engine_for, domain_events, outbox
 from tapi_gate0.storage import now_utc
+from tapi_gate0.agent_graph_checkpoints import AgentCheckpointDenied, agent_graph_events, agent_graph_runs
+from tapi_gate0.agent_graph_protected_av_dec008 import (
+    ProtectedAVReviewPlan, ProtectedAVReviewDenied,
+    execute_protected_av_review_step, execute_protected_av_review,
+)
 
 TENANT="rights-fixture"
 ACCOUNT="17841400011122233"
@@ -2578,7 +2583,7 @@ def test_shared_av_rechecks_revocation_between_decode_and_finish(queue_fixture,m
     ("audio_insufficient",None,"Organize suas vendas","vendas",None),
     ("audio_no_signal",None,"Organize suas vendas","vendas",None),
 ])
-def test_shared_av_ablation_policy_and_rights(queue_fixture,case,spoken,screen,expected_topic,expected_cta):
+def test_shared_av_ablation_policy_and_rights(queue_fixture,case,spoken,screen,expected_topic,expected_cta,monkeypatch):
     """Persist authored surrogate observations: contract/policy test, not native inference."""
     from tapi_gate0.asset_processor_results import (SharedAVSource,SharedAVBinding,SHARED_AV_METHOD,
         ProcessorResult,ASR,Speech,Interval,OCR,Word,VLM,Frame,Temporal,Abstention,encode)
@@ -2660,6 +2665,47 @@ def test_shared_av_ablation_policy_and_rights(queue_fixture,case,spoken,screen,e
     assert handoff["production_approved"] is False
     with pytest.raises(GuardedHandoffDenied,match="FOUR_DISTINCT_ARTIFACTS_REQUIRED"):
         bridge_guarded_av_to_system_one(store,TENANT,f.q.ref.object_id,ids[1:],purpose=f.spec.purpose)
+    # DEC-008: the same live encrypted selection and current rights must
+    # produce a digest-only technical ledger, not a new science decision.
+    plan=ProtectedAVReviewPlan(content_id=f.q.ref.target.content_id,
+        object_id=f.q.ref.object_id,artifact_ids=tuple(ids))
+    kwargs=dict(tenant=TENANT,actor="fixture-operator",run_id="av-review",plan=plan)
+    first=execute_protected_av_review_step(store,**kwargs)
+    assert (first["revision"],first["next_node"])==(1,"retrieve")
+    if case=="agreement":
+        # Test drift of the projected semantics, not an alternative grant.
+        # A changed fingerprint must prevent advancement of the old run.
+        from tapi_gate0 import agent_graph_protected_av_dec008 as review
+        project=review._project_guarded
+        with monkeypatch.context() as m:
+            def changed(guard):
+                return {**project(guard),"source_fingerprint":"f"*64}
+            m.setattr(review,"_project_guarded",changed)
+            with pytest.raises(ProtectedAVReviewDenied,match="SOURCE_DRIFT_RESTART_REQUIRED"):
+                execute_protected_av_review_step(store,**kwargs)
+        with f.q.f.engine.connect() as db:
+            assert db.scalar(select(func.count()).select_from(agent_graph_events))==1
+        with pytest.raises(AgentCheckpointDenied,match="RUN_ID_CONFLICT"):
+            execute_protected_av_review_step(store,**{**kwargs,"actor":"another-actor"})
+        wrong=plan.model_copy(update={"content_id":"unrelated.post"})
+        with pytest.raises(ProtectedAVReviewDenied,match="CANDIDATE_SCOPE_MISMATCH"):
+            execute_protected_av_review_step(store,**{**kwargs,"run_id":"wrong-content","plan":wrong})
+        with f.q.f.engine.connect() as db:
+            assert db.scalar(select(func.count()).select_from(agent_graph_runs))==1
+    final=execute_protected_av_review(store,**kwargs)
+    assert final["mode"]=="av_candidate_review"
+    assert (final["status"],final["revision"])==(
+        ("ABSTAINED",3) if case=="audio_insufficient" else ("TRACE_RECORDED",4))
+    assert not any(final[k] for k in (
+        "rights_verified","scientifically_validated","studio_write_allowed",
+        "publication_allowed","production_approved","global_gates_released"))
+    assert execute_protected_av_review_step(store,**kwargs)==final
+    with f.q.f.engine.connect() as db:
+        events=db.execute(select(agent_graph_events)).mappings().all()
+        assert len(events)==final["revision"]
+        assert all(len(e["receipt_sha256"])==64 for e in events)
+        assert spoken is None or spoken not in str(events)
+        assert screen not in str(events)
     missing=evaluate_shared_av_coverage_guard(store,TENANT,f.q.ref.object_id,ids[1:],purpose=f.spec.purpose)
     m={x.field_id:x for x in missing["guarded"].fields}
     assert missing["coverage"]["asr_vad"]=="missing"
@@ -2682,6 +2728,13 @@ def test_shared_av_ablation_policy_and_rights(queue_fixture,case,spoken,screen,e
         evaluate_shared_av_coverage_guard(store,TENANT,f.q.ref.object_id,ids[1:],purpose=f.spec.purpose)
     with pytest.raises(AssetRightsDenied,match="ASSET_RIGHTS_REVOKED"):
         bridge_guarded_av_to_system_one(store,TENANT,f.q.ref.object_id,ids,purpose=f.spec.purpose)
+    with pytest.raises(AssetRightsDenied,match="ASSET_RIGHTS_REVOKED"):
+        execute_protected_av_review_step(store,**kwargs)
+    with pytest.raises(AssetRightsDenied,match="ASSET_RIGHTS_REVOKED"):
+        execute_protected_av_review_step(store,**{**kwargs,"run_id":"revoked-new"})
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(agent_graph_events))==final["revision"]
+        assert db.scalar(select(func.count()).select_from(agent_graph_runs))==1
 
 
 @_WINDOWS_JOB
