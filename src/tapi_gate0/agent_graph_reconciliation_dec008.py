@@ -140,3 +140,48 @@ def execute_reconciled_step(engine, *, tenant: str, actor: str, run_id: str,
                            expected_revision=nativerev, node=node,
                            outcome=outcome, receipt_sha256=digest,
                            connection=db)
+
+
+def validate_native_resume(engine, *, tenant: str, actor: str, run_id: str,
+                           plan: LocalGraphPlan, native_receipt=None):
+    """Read-only resume guard, even if LangGraph has NO scheduled next node.
+
+    SqliteSaver may expose successful pending writes after put() raises.
+    Checking only the next node misses drift when invoke(None) is a no-op.
+    The authoritative ledger, plan and all existing source hashes are
+    validated BEFORE allowing the native graph to resume or return state.
+    No step, grant or checkpoint is created by this preflight.
+    """
+    from .agent_graph_checkpoints import agent_graph_runs
+
+    if not isinstance(plan, LocalGraphPlan):
+        _deny("VALIDATED_PLAN_REQUIRED")
+    with _consistent_step(engine) as db:
+        sql = resume_run(engine, tenant=tenant, actor=actor, run_id=run_id,
+                         connection=db)
+        plan_sha = db.scalar(select(agent_graph_runs.c.plan_sha256).where(
+            agent_graph_runs.c.tenant_id == tenant,
+            agent_graph_runs.c.run_id == run_id))
+        if sql["mode"] != plan.mode or plan_sha != plan_digest(plan):
+            _deny("NATIVE_PLAN_MISMATCH")
+        history = db.execute(select(
+            agent_graph_events.c.node, agent_graph_events.c.outcome,
+            agent_graph_events.c.receipt_sha256, agent_graph_events.c.chain_sha256,
+        ).where(agent_graph_events.c.tenant_id == tenant,
+                agent_graph_events.c.run_id == run_id).order_by(
+                agent_graph_events.c.sequence)).mappings().all()
+        if len(history) != sql["revision"]:
+            _deny("LEDGER_REVISION_DRIFT")
+        native_revision = _native_revision(native_receipt, plan=plan,
+                                           history=history)
+        gap = sql["revision"] - native_revision
+        if gap > 1:
+            _deny("NATIVE_TOO_FAR_BEHIND")
+        if gap < 0:
+            _deny("NATIVE_AHEAD_OF_SQL_LEDGER")
+        for event in history:
+            outcome, digest = _node_result(engine, tenant, plan, event["node"],
+                                           connection=db)
+            if outcome != event["outcome"] or digest != event["receipt_sha256"]:
+                _deny("SOURCE_DRIFT_RESTART_REQUIRED")
+        return sql
