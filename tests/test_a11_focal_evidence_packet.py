@@ -424,3 +424,25 @@ def test_pytest_imports_repo_src_before_editable_package():
         (root / "pyproject.toml").read_text(encoding="utf-8"))
     assert configuration["tool"]["pytest"]["ini_options"]["pythonpath"] == ["src"]
     assert "pyproject.toml" in packet.SOURCE_FILES
+
+
+def test_critical_portable_frontier_and_export_coverage_is_mandatory():
+    # A11's synthetic packet must include the new tests in its exact-count
+    # focal stage, not merely pin the files while leaving them unexecuted.
+    for path in (
+        "tests/test_a11_architecture_frontier.py",
+        "tests/test_dec008_resume_preflight.py",
+        "tests/test_architecture_vertical_synthetic.py",
+    ):
+        assert path in packet.PY_A05_A07
+        assert path in packet.SOURCE_FILES
+    for source in (
+        "scripts/a11_architecture_frontier.py",
+        "scripts/a11_studio_export_probe.mjs",
+        "planning/base_atemporal/BACKLOG_UNICO_IMPORTAVEL.csv",
+        "planning/base_atemporal/DEPENDENCIAS.csv",
+        "planning/base_atemporal/MATRIZ_CAPACIDADES.csv",
+    ):
+        assert source in packet.SOURCE_FILES
+    assert packet.EXPECTED["python_a05_a07"] == 406
+    assert packet.GATES["IMP-131"] == "BLOCKED"
