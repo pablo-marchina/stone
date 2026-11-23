@@ -91,6 +91,44 @@ def test_native_plan_mismatch_and_receipt_forgery_denied(case):
         validate(engine, plan, forged)
 
 
+def test_native_receipt_authority_and_shape_forgery_leave_sql_untouched(case):
+    """An already committed read-only receipt never grants external authority.
+
+    Each forged native value must be rejected before any ledger mutation.
+    A native checkpoint is not a grant, gold, creative approval or evidence of
+    an executed side-effectful tool.
+    """
+    engine, plan = case
+    first = step(engine, plan)
+    candidates = [
+        dict(first, **{field: True}) for field in (
+            "rights_verified", "independent_gold_available",
+            "scientifically_validated", "studio_write_allowed",
+            "publication_allowed", "production_approved",
+            "global_gates_released", "node_execution_proved",
+        )
+    ]
+    candidates.extend((
+        dict(first, model_calls_performed=1),
+        dict(first, model_calls_performed=True),
+        dict(first, unexpected_field="do-not-trust"),
+        dict(first, revision=True),
+        dict(first, revision=999),
+        dict(first, next_node="unauthorized"),
+        dict(first, chain_sha256="0"*64),
+        dict(first, synthetic_or_technical_trace_only=False),
+    ))
+    with engine.connect() as db:
+        before = len(db.execute(select(agent_graph_events)).all())
+    assert before == 1
+    for candidate in candidates:
+        with pytest.raises(Dec008ReconciliationDenied):
+            validate(engine, plan, candidate)
+    with engine.connect() as db:
+        assert len(db.execute(select(agent_graph_events)).all()) == before
+    assert validate(engine, plan, first) == first
+
+
 def test_wrapper_blocks_drifts_before_noop_native_resume(case):
     engine, plan = case
     first = step(engine, plan)
