@@ -1,8 +1,9 @@
 """DEC-008 optional real LangGraph saver fault-injection regression.
 
-A genuine SqliteSaver.put is made to raise *after* the Stone SQL transaction
-commits a read-only step, but *before* that saver commits the matching native
-checkpoint. This is a controlled Python exception, NOT a hard process kill,
+A genuine SqliteSaver.put is made to raise after Stone SQL commits its second
+read-only step. LangGraph may ALREADY expose this step through pending writes
+or a separately persisted checkpoint: do not assume native revision stays 1.
+This is a controlled Python exception, NOT a hard process kill,
 a distributed transaction, or a guarantee of exactly-once external effects.
 Requires LangGraph 1.2.24 and langgraph-checkpoint-sqlite 3.1.3.
 """
@@ -86,16 +87,25 @@ def test_real_saver_put_failure_reconciles_without_duplicate_step(
         engine = engine_for("sqlite:///" + stone.as_posix())
         with SqliteSaver.from_conn_string(str(native)) as saver:
             restored = _graph(engine, saver, mode)
-            # No checkpoint for step 2 was committed by native .put.
-            assert restored.get_state(_config()).values["receipt"]["revision"] == 1
-            result = restored.invoke(None, _config())
-            assert result["receipt"]["revision"] == 2
-            with engine.connect() as db:
-                assert len(db.execute(select(agent_graph_events)).all()) == 2
-            for revision in range(3, steps + 1):
+            # LangGraph can expose node-2 pending writes even when saver.put
+            # raised; the native snapshot may show revision 1 OR 2. Neither
+            # observation proves the whole graph is safely resumable.
+            observed_revision = restored.get_state(_config()).values["receipt"]["revision"]
+            assert observed_revision in (1, 2)
+            result = None
+            revisions = []
+            for _ in range(steps + 2):
                 result = restored.invoke(None, _config())
-                assert result["receipt"]["revision"] == revision
+                current = result["receipt"]["revision"]
+                revisions.append(current)
+                with engine.connect() as db:
+                    assert len(db.execute(select(agent_graph_events)).all()) == current
+                if result["receipt"]["status"] != "OPEN":
+                    break
+            assert result is not None
+            assert result["receipt"]["revision"] == steps
             assert result["receipt"]["status"] == terminal
+            assert revisions == sorted(set(revisions))
             assert result["receipt"]["production_approved"] is False
             assert result["receipt"]["publication_allowed"] is False
     finally:
