@@ -62,7 +62,7 @@ def test_begin_idempotent_and_explicitly_non_authorizing(engine):
 
 
 @pytest.mark.parametrize("mode", sorted(MODES))
-def test_all_three_modes_have_bounded_replayable_graphs(engine, mode):
+def test_all_registered_modes_have_bounded_replayable_graphs(engine, mode):
     first = begin_run(engine, tenant=TENANT, actor=ACTOR, run_id=RUN,
                       mode=mode, plan_sha256=PLAN)
     assert first["next_node"] == "plan"
