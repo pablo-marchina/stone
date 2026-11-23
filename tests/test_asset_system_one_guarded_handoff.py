@@ -3,6 +3,7 @@
 No ASR/VLM, external rights, model, DB, E1 admission or publication.
 """
 from types import SimpleNamespace as S
+from copy import deepcopy
 
 import pytest
 
@@ -29,7 +30,7 @@ def report(*, partial=False):
         rejects={"asr_vad":{"wer":4/7}}
     return {
         "schema_version":"shared-av-coverage-guard.v1",
-        "source_fingerprint":"a"*64, "baseline":decision, "guarded":decision,
+        "source_fingerprint":"a"*64, "baseline":decision, "guarded":deepcopy(decision),
         "coverage":coverage, "coverage_details":details,
         "quality_rejections":rejects, "suppressed_fields":(),
         "inference_reexecuted":False, "canonical_rubric":False,
@@ -85,6 +86,7 @@ def test_guard_tampering_denied_without_leaking_values(tamper):
     (), ("artifact."+"a"*64,)*4,
     ("artifact."+"a"*64,"artifact."+"b"*64,"artifact."+"c"*64,"bad"),
     tuple("artifact."+(str(n)*64) for n in range(5)),
+    ([], {}, None, "bad"),
 ])
 def test_invalid_selection_denied_before_protected_evaluation(ids,monkeypatch):
     from tapi_gate0 import asset_candidate_fusion as protected
@@ -105,3 +107,48 @@ def test_entrypoint_requires_actual_typed_fusion_results(monkeypatch):
     with pytest.raises(GuardedHandoffDenied,match="GUARD_RESULT_INVALID"):
         bridge_guarded_av_to_system_one(object(),"fixture","b"*64,ids)
     assert called==[("fixture","b"*64,ids,"research_analysis")]
+
+
+def test_guard_suppression_removes_value_but_retains_provenance():
+    case=report()
+    before=case["baseline"].fields[0]
+    after=case["guarded"].fields[0]
+    before.state="candidate"
+    before.value="vendas"
+    before.supports=(S(artifact_id="artifact."+"c"*64,
+                       payload_sha256="d"*64,processor="ocr"),)
+    after.supports=deepcopy(before.supports)
+    case["suppressed_fields"]=("tema_principal",)
+    result=_project_guarded(case)
+    field=result["candidate_fields"][0]
+    assert field["state"]=="abstained"
+    assert field["value"] is None
+    assert field["suppressed_by_guard"] is True
+    assert field["support_count"]==1
+    assert "supports" not in field
+    assert "artifact." not in str(field)
+
+
+def test_insufficient_coverage_is_partial_even_without_wer_rejection():
+    case=report()
+    case["coverage"]["asr_vad"]="abstained"
+    case["coverage_details"]["asr_vad"]={"state":"abstained","reason":"insufficient_evidence"}
+    result=_project_guarded(case)
+    assert result["status"]=="PARTIAL_GUARDED_CANDIDATES_ONLY"
+    assert result["rejected_processors"]==()
+
+
+def test_missing_quality_rejection_receipt_fails_closed():
+    case=report(partial=True)
+    case["quality_rejections"]={}
+    with pytest.raises(GuardedHandoffDenied,match="QUALITY_REJECTION_INVALID"):
+        _project_guarded(case)
+
+
+def test_studio_purpose_cannot_use_research_handoff(monkeypatch):
+    from tapi_gate0 import asset_candidate_fusion as protected
+    monkeypatch.setattr(protected,"evaluate_shared_av_coverage_guard",
+        lambda *a,**kw: pytest.fail("must not evaluate studio creation"))
+    ids=tuple("artifact."+(str(n)*64) for n in range(4))
+    with pytest.raises(GuardedHandoffDenied,match="RESEARCH_SCOPE_REQUIRED"):
+        bridge_guarded_av_to_system_one(None,"fixture","b"*64,ids,purpose="studio_creation")
