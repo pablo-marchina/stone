@@ -4,7 +4,7 @@ from alembic import context
 from sqlalchemy import pool
 from tapi_gate0.sa_store import metadata, engine_for
 # import identity to register its tables in the shared metadata
-from tapi_gate0 import identity, asset_rights_registry, asset_lineage_index, asset_jobs, asset_derived_payloads  # noqa: F401
+from tapi_gate0 import identity, asset_rights_registry, asset_lineage_index, asset_jobs, asset_derived_payloads, agent_graph_checkpoints  # noqa: F401
 
 config=context.config
 target_metadata=metadata

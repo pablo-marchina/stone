@@ -24,7 +24,7 @@ def node_report(passed=19, total=19, failed=0, skipped=0):
             "ℹ todo 0\nℹ duration_ms 400\n")
 
 
-def synthetic_runner(*, pytest_count=270, a06_count=35, a02_count=91,
+def synthetic_runner(*, pytest_count=302, a06_count=35, a02_count=91,
                      a027_count=40, a027_integrated_count=7,
                      a05_fail_count=0, a05_error_count=0,
                      node_count=19, chrome=True,
@@ -111,7 +111,7 @@ def test_packet_assembles_exact_local_counts_and_preserves_all_gate_denials(loca
     assert receipt["validation_status"] == "FOCAL_DIAGNOSTICS_VERIFIED_NO_GATE_RELEASE"
     assert receipt["zero_spend_check_observed"] is True
     assert len(receipt["checks"]) == 10
-    assert [x["observed_pass_count"] for x in receipt["checks"]] == [1, 1, 91, 40, 7, 270, 35, 13, 19, 7]
+    assert [x["observed_pass_count"] for x in receipt["checks"]] == [1, 1, 91, 40, 7, 302, 35, 13, 19, 7]
     assert all(x["passed"] and x["observed_skip_count"] == 0
                for x in receipt["checks"])
     assert receipt["gate_status"] == {**{f"G{i}": "BLOCKED" for i in range(7)},
@@ -149,7 +149,7 @@ def test_missing_results_and_skips_cannot_create_green_packet(
 
 
 def test_incomplete_a05_a07_stops_before_a06_and_preserves_redacted_counts(local_files):
-    # Reproduces the OPERATOR'S INCOMPLETE COUNT SHAPE only. Values are
+    # Historical incomplete counts remain synthetic denial fixtures only. Values are
     # synthetic, not independent evidence of which six tests actually failed.
     run, calls = synthetic_runner(pytest_count=264, a05_fail_count=6)
     receipt = packet.build_packet(root=local_files, run=run)
