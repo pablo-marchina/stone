@@ -82,6 +82,20 @@ def inventory() -> dict:
                 })
             return rows
 
+        # In FastAPI >=0.137, include_router preserves nested routers.
+        # app.routes is a *tree*, not a flat list of HTTP endpoints. Rely
+        # on the framework's own OpenAPI traversal for effective route paths.
+        effective = app.openapi().get("paths", {})
+        if not isinstance(effective, dict):
+            raise ValueError("EFFECTIVE_OPENAPI_ROUTES_INVALID")
+        effective_agent_posts = sorted(
+            path for path, ops in effective.items()
+            if path.startswith("/v1/agent/") and "post" in ops
+        )
+        effective_studio_posts = sorted(
+            path for path, ops in effective.items()
+            if path.startswith("/v1/studio/") and "post" in ops
+        )
         routes = entries(app.routes)
         agent = [r for r in routes if r["path"].startswith("/v1/agent")]
         studio = [r for r in routes if r["path"].startswith("/v1/studio")]
@@ -104,6 +118,16 @@ def inventory() -> dict:
             "app_router_routes_count": len(app.router.routes),
             "agent_routes": agent,
             "studio_routes": studio,
+            "effective_agent_post_paths": effective_agent_posts,
+            "effective_studio_post_paths": effective_studio_posts,
+            "top_level_route_inventory_is_not_flat": (
+                len(effective_agent_posts) > len([
+                    r for r in agent if "POST" in r["methods"]
+                ])
+                or len(effective_studio_posts) > len([
+                    r for r in studio if "POST" in r["methods"]
+                ])
+            ),
             "other_route_sample": sample,
             "suspected_routes_all_prefixes": suspicious,
             "production_approved": False,
