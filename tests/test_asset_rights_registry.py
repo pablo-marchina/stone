@@ -2344,10 +2344,46 @@ def test_shared_av_requires_both_modality_scopes(queue_fixture):
 
 @_WINDOWS_JOB
 @pytest.mark.parametrize("discard_fixture,case",[
+    (("retain","process","all_processors","bundle_rubric","shared_modalities","shared_av_complementary"),"complementary"),
+    (("retain","process","all_processors","bundle_rubric","shared_modalities","shared_av_audio_only"),"audio_only"),
+],indirect=["discard_fixture"])
+def test_shared_av_strict_quality_rejection_no_payload(queue_fixture,case):
+    """Strict mode must reject low-quality ASR, never silently complete the bundle.
+
+    The same cases in shared_av_partial are separately tested for typed
+    abstention plus the coverage guard; strict and partial are distinct contracts.
+    """
+    import os
+    from tapi_gate0.asset_asr_fixture import ASRFixtureQualityError
+    f=queue_fixture
+    paths={k:os.environ.get(v) for k,v in (
+        ("tessdata_dir","TAPI_OCR_TEST_TESSDATA"),("asr_model_dir","TAPI_ASR_TEST_MODEL_DIR"),
+        ("vlm_model_dir","TAPI_VLM_TEST_MODEL_DIR"),("vlm_server_exe","TAPI_VLM_TEST_SERVER_EXE"))}
+    if not all(paths.values()):
+        pytest.skip("explicit shared AV native opt-ins required")
+    pipe=_pipeline(f,mode="shared_av",case=case,**paths)
+    assert [pipe.step("worker")["processor"] for _ in range(2)]==["temporal","ocr"]
+    with pytest.raises(ASRFixtureQualityError,match="ASR_FIXTURE_WER_GATE") as caught:
+        pipe.step("worker")
+    assert caught.value.quality["wer"]>0.50
+    assert caught.value.quality["asr_calls"]==1
+    # A failed strict ASR adapter may retain a fenced running lease for
+    # explicit reconciliation, but cannot persist its result or start VLM.
+    audio_job=pipe.plan.specs[2]
+    row=f.queue.status(TENANT,audio_job.job_id)
+    assert row["receipt_sha256"] is None and row["state"]=="running"
+    with f.q.f.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(payloads))==2
+        assert db.scalar(select(func.count()).select_from(attempts))==3
+        assert db.scalar(select(func.count()).select_from(jobs))==3
+
+
+@_WINDOWS_JOB
+@pytest.mark.parametrize("discard_fixture,case",[
     (("retain","process","all_processors","bundle_rubric","shared_modalities","shared_av_inventory"),"inventory"),
     (("retain","process","all_processors","bundle_rubric","shared_modalities","shared_av_silence"),"silence"),
     *((("retain","process","all_processors","bundle_rubric","shared_modalities","shared_av_"+case),case)
-      for case in ("agreement","conflict","complementary","audio_only","screen_only","tone_negative")),
+      for case in ("agreement","conflict","screen_only","tone_negative")),
 ],indirect=["discard_fixture"])
 def test_shared_av_native_pipeline(queue_fixture,case):
     import os
