@@ -83,32 +83,16 @@ def synthetic_runner(*, pytest_count=407, a06_count=35, a02_count=91,
 
 
 @pytest.fixture
-def local_files(tmp_path, monkeypatch):
-    # Keep mocked source inventory aligned with A02.7 pinning assertions.
-    # Test-only bytes are not evidence of software execution or signed grants.
-    files = (
-        "pyproject.toml",
-        "scripts/a11_focal_evidence_packet.py",
-        "src/tapi_gate0/web/studio_export_e4.js",
-        "src/tapi_gate0/asset_fixture_batch.py",
-        "src/tapi_gate0/asset_fixture_pipeline.py",
-        "tests/test_asset_fixture_batch_integration.py",
-        # New pinned contracts must exist in the mocked file inventory too.
-        # Previously the test replaced SOURCE_FILES with a truncated fixture,
-        # then incorrectly expected these added hashes to be present.
-        "tests/test_a027_shared_av_quality_contract.py",
-        "tests/test_a027_shared_av_decoder_diagnostics.py",
-        "src/tapi_gate0/asset_shared_av_fixture.py",
-        "src/tapi_gate0/asset_asr_fixture.py",
-        "src/tapi_gate0/asset_windows_job.py",
-    )
-    for path in files:
+def local_files(tmp_path):
+    # Exercise the exact production hash inventory in these mocked packet
+    # tests. A truncated hand-maintained SOURCE_FILES list previously hid
+    # newly pinned files and caused an assertion failure after expansion.
+    # Mocked bytes do NOT prove software execution, signed grants or gates.
+    for path in packet.SOURCE_FILES:
         destination = tmp_path / path
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(("fictional fixture for " + path).encode("utf-8"))
-    monkeypatch.setattr(packet, "SOURCE_FILES", files)
     return tmp_path
-
 
 def test_packet_assembles_exact_local_counts_and_preserves_all_gate_denials(local_files):
     run, calls = synthetic_runner()
