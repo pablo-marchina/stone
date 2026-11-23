@@ -93,6 +93,14 @@ def local_files(tmp_path, monkeypatch):
         "src/tapi_gate0/asset_fixture_batch.py",
         "src/tapi_gate0/asset_fixture_pipeline.py",
         "tests/test_asset_fixture_batch_integration.py",
+        # New pinned contracts must exist in the mocked file inventory too.
+        # Previously the test replaced SOURCE_FILES with a truncated fixture,
+        # then incorrectly expected these added hashes to be present.
+        "tests/test_a027_shared_av_quality_contract.py",
+        "tests/test_a027_shared_av_decoder_diagnostics.py",
+        "src/tapi_gate0/asset_shared_av_fixture.py",
+        "src/tapi_gate0/asset_asr_fixture.py",
+        "src/tapi_gate0/asset_windows_job.py",
     )
     for path in files:
         destination = tmp_path / path
