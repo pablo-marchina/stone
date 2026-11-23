@@ -55,11 +55,9 @@ def test_secure_api_imports_and_mounts_creative_routes(tmp_path):
     import tapi_gate0
     from tapi_gate0 import secure_api, agent_api_e1, studio_api
     from tapi_gate0.secure_api import create_secure_app
-    from starlette.routing import Match
+    from fastapi.testclient import TestClient
 
-    # A global editable install of the parent Stone checkout can be cached
-    # before pytest applies its pythonpath config. Reject mixed-source
-    # validation rather than silently checking a different revision.
+    # Never silently test the editable parent checkout.
     source = (ROOT / "src" / "tapi_gate0").resolve()
     for module, filename in (
         (tapi_gate0, "__init__.py"),
@@ -72,35 +70,45 @@ def test_secure_api_imports_and_mounts_creative_routes(tmp_path):
         )
 
     app = create_secure_app(
-        "sqlite:///" + str(tmp_path / "import-smoke.sqlite"),
+        "sqlite:///:memory:",
         initialize_schema=True, allow_http_local=True,
     )
-    # Match real ASGI routes for sample requests, not a textual path
-    # template that may include a Starlette converter ("{id:str}").
-    # Missing actual POST handlers must still fail, never be ignored.
-    required = (
-        "/v1/agent/creative-drafts",
-        "/v1/agent/creative-drafts/diagnostic/text-patches",
-        "/v1/agent/creative-drafts/diagnostic/geometry",
-        "/v1/agent/creative-drafts/diagnostic/reference-recheck",
-    )
-    matching = []
-    for route in app.routes:
-        methods = getattr(route, "methods", None) or ()
-        path = getattr(route, "path", None)
-        if ("POST" not in methods or not isinstance(path, str)
-                or not path.startswith("/v1/agent/creative-drafts")):
-            continue
-        matching.append(route)
+    try:
+        # FastAPI >=0.137 preserves included routers as nested candidates;
+        # app.routes and app.router.routes are NOT flat APIRoute inventories.
+        # The framework's own OpenAPI traversal resolves the effective paths.
+        paths = app.openapi()["paths"]
+        required = {
+            "/v1/agent/creative-drafts":
+                "/v1/agent/creative-drafts",
+            "/v1/agent/creative-drafts/diagnostic/text-patches":
+                "/v1/agent/creative-drafts/{document_id}/text-patches",
+            "/v1/agent/creative-drafts/diagnostic/geometry":
+                "/v1/agent/creative-drafts/{document_id}/geometry",
+            "/v1/agent/creative-drafts/diagnostic/reference-recheck":
+                "/v1/agent/creative-drafts/{document_id}/reference-recheck",
+        }
+        missing = [
+            sample for sample, template in required.items()
+            if "post" not in paths.get(template, {})
+        ]
+        assert not missing, (
+            "A05_CREATIVE_ROUTES_MISSING:" + repr(missing)
+            + "; openapi_agent_posts="
+            + repr(sorted(path for path, ops in paths.items()
+                          if path.startswith("/v1/agent/creative-drafts")
+                          and "post" in ops))
+        )
 
-    def serves(concrete):
-        scope = {"type": "http", "path": concrete, "method": "POST",
-                 "root_path": ""}
-        return any(route.matches(scope)[0] == Match.FULL for route in matching)
-
-    missing = [target for target in required if not serves(target)]
-    assert not missing, (
-        "A05_CREATIVE_ROUTES_MISSING:" + repr(missing)
-        + "; observed_agent_posts="
-        + repr(sorted(route.path for route in matching))
-    )
+        # OpenAPI metadata alone cannot establish that routes actually
+        # dispatch. Exercise each POST without credentials: every mounted
+        # route must deny authentication (401), not fall through to 404.
+        with TestClient(app) as client:
+            for sample in required:
+                response = client.post(sample, json={})
+                assert response.status_code == 401, (
+                    "A05_CREATIVE_ROUTE_NOT_AUTHENTICATED:"
+                    + sample + ":" + str(response.status_code)
+                )
+    finally:
+        app.state.identity_store.engine.dispose()
