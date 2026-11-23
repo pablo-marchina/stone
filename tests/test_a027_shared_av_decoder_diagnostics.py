@@ -46,7 +46,16 @@ def test_decoder_spawn_failure_reports_only_allowlisted_stage(tmp_path):
 
 
 def test_decoder_child_nonzero_reports_only_allowlisted_stage():
+    # Python itself is NOT a deterministic nonzero stand-in for FFmpeg:
+    # `-hide_banner` begins with `-h`, so CPython may print help and exit 0,
+    # causing the decoder to report "size", not "nonzero".
+    # Inject a fixed CompletedProcess strictly inside the synthetic child
+    # to exercise the checked nonzero branch on every supported host.
     code,raw=_code(sys.executable)
+    header="import hashlib, subprocess, sys\n"
+    assert code.startswith(header)
+    code=code.replace(header,header+
+        "subprocess.run=lambda *a, **kw: subprocess.CompletedProcess(a[0],17,b'')\n",1)
     completed=subprocess.run(
         [sys.executable,"-I","-S","-c",code],input=raw,
         stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=False,timeout=10)
