@@ -77,6 +77,10 @@ PY_A027_INTEGRATED = (
     # These never exercise Windows Jobs or load model checkpoints.
     "tests/test_a027_shared_av_quality_contract.py",
     "tests/test_a027_shared_av_decoder_diagnostics.py",
+    "tests/test_asset_system_one_guarded_handoff.py",
+)
+PY_A027_HANDOFF_SELECTION = (
+    "tests/test_asset_rights_registry.py::test_shared_av_ablation_policy_and_rights",
 )
 PY_A06_E1 = (
     "tests/test_multimodal_system_one_bridge.py",
@@ -96,7 +100,7 @@ NODE_A073 = (
 EXPECTED = {"python_a05_a07": 407, "python_a06_e1": 35,
             "python_a02_asr_diagnostic": 91,
             "python_a027_fixture_batch": 40,
-            "python_a027_integrated": 16,
+            "python_a027_integrated": 47,
             "python_a073_cdp": 13, "node_a073": 19}
 SOURCE_FILES = (
     "pyproject.toml",
@@ -118,6 +122,9 @@ SOURCE_FILES = (
     "src/tapi_gate0/asset_asr_fixture.py",
     "src/tapi_gate0/asset_windows_job.py",
     "src/tapi_gate0/asset_candidate_fusion.py",
+    "src/tapi_gate0/asset_candidate_evidence.py",
+    "src/tapi_gate0/asset_system_one_guarded_handoff.py",
+    "tests/test_asset_rights_registry.py",
     "scripts/a07_browser_visual_parity.py",
     "scripts/a07_browser_cdp.py",
     "scripts/verify_zero_spend.py",
@@ -390,7 +397,7 @@ def build_packet(*, root: Path = ROOT, expected_head: str | None = None,
                                        *PY_A027_FIXTURE_BATCH],
          "pytest", EXPECTED["python_a027_fixture_batch"], 90),
         ("python_a027_integrated", [py, "-m", "pytest", "-q", "-rs",
-                                    *PY_A027_INTEGRATED],
+                                    *PY_A027_INTEGRATED, *PY_A027_HANDOFF_SELECTION],
          "pytest", EXPECTED["python_a027_integrated"], 180),
         ("python_a05_a07", [py, "-m", "pytest", "-q", "-rs", *PY_A05_A07],
          "pytest", EXPECTED["python_a05_a07"], 420),
