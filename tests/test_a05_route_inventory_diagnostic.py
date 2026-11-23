@@ -40,6 +40,10 @@ def test_route_inventory_uses_memory_and_disposes_engine(monkeypatch):
         return SimpleNamespace(
             routes=paths,
             router=SimpleNamespace(routes=paths),
+            openapi=lambda: {"paths": {
+                "/v1/agent/creative-drafts": {"post": {}},
+                "/v1/studio/documents/{document_id}/text-patches": {"post": {}},
+            }},
             state=SimpleNamespace(
                 identity_store=SimpleNamespace(engine=Engine())
             ),
@@ -56,6 +60,13 @@ def test_route_inventory_uses_memory_and_disposes_engine(monkeypatch):
     assert result["app_router_routes_count"] == 2
     assert result["agent_routes"][0]["path"] == "/v1/agent/creative-drafts"
     assert result["studio_routes"][0]["signed_guard_present"] is True
+    assert result["effective_agent_post_paths"] == [
+        "/v1/agent/creative-drafts",
+    ]
+    assert result["effective_studio_post_paths"] == [
+        "/v1/studio/documents/{document_id}/text-patches",
+    ]
+    assert result["top_level_route_inventory_is_not_flat"] is False
 
 
 def test_route_inventory_redacts_app_construction_exception(monkeypatch, capsys):
