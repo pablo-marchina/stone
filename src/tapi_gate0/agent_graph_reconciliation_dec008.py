@@ -1,0 +1,121 @@
+"""DEC-008: fail-closed reconciliation for Stone SQL vs LangGraph checkpoint.
+
+A durable Stone SQL step may commit before a SECOND independent LangGraph
+checkpointer records its state. This read-only, synthetic-only bridge treats
+Stone's hash-checked ledger as authoritative and permits at most ONE missing
+native acknowledgement. It repeats read-only source queries to revalidate
+previous receipts but does not write or advance an already committed step.
+
+The native receipt MUST originate from trusted in-process LangGraph state,
+never an API request. There is no distributed transaction, exactly-once
+external effect, native saver verification or publication authorization here.
+Any future side-effectful tool requires an independent idempotency protocol.
+"""
+from __future__ import annotations
+
+from sqlalchemy import select
+
+from .agent_graph_checkpoints import (
+    MODES, VERSION as LEDGER_VERSION, agent_graph_events,
+    begin_run, record_node, resume_run,
+)
+from .agent_graph_readonly_runner import (
+    LocalGraphPlan, _consistent_step, _node_result, plan_digest,
+)
+
+
+class Dec008ReconciliationDenied(ValueError):
+    """Fixed error codes: never embed source or native state in exceptions."""
+
+
+def _deny(code: str) -> None:
+    raise Dec008ReconciliationDenied("DEC008_RECONCILIATION_" + code)
+
+
+def _native_revision(native_receipt, *, plan, history):
+    if native_receipt is None or native_receipt == {}:
+        return 0
+    if type(native_receipt) is not dict:
+        _deny("NATIVE_RECEIPT_INVALID")
+    revision = native_receipt.get("revision")
+    if type(revision) is not int or revision < 1:
+        _deny("NATIVE_RECEIPT_INVALID")
+    if revision > len(history):
+        _deny("NATIVE_AHEAD_OF_SQL_LEDGER")
+    prior = history[revision - 1]
+    if (native_receipt.get("schema_version") != LEDGER_VERSION
+            or native_receipt.get("mode") != plan.mode
+            or native_receipt.get("chain_sha256") != prior["chain_sha256"]):
+        _deny("NATIVE_RECEIPT_MISMATCH")
+    outcome = prior["outcome"]
+    if outcome == "ABSTAIN":
+        expected_status = "ABSTAINED"
+    elif outcome == "BLOCKED":
+        expected_status = "BLOCKED"
+    elif revision == len(MODES[plan.mode]):
+        expected_status = "TRACE_RECORDED"
+    else:
+        expected_status = "OPEN"
+    expected_cursor = (MODES[plan.mode][revision]
+                       if expected_status == "OPEN" else None)
+    if (native_receipt.get("status") != expected_status
+            or native_receipt.get("next_node") != expected_cursor):
+        _deny("NATIVE_RECEIPT_MISMATCH")
+    for field in ("rights_verified", "scientifically_validated",
+                  "studio_write_allowed", "publication_allowed",
+                  "production_approved", "global_gates_released",
+                  "node_execution_proved"):
+        if native_receipt.get(field) is not False:
+            _deny("NATIVE_AUTHORITY_FORGERY")
+    return revision
+
+
+def execute_reconciled_step(engine, *, tenant: str, actor: str, run_id: str,
+                            plan: LocalGraphPlan, native_receipt=None):
+    """Execute one step OR acknowledge a validated one-step SQL/native gap.
+
+    Only in-process synthetic read-only tools. Never expose native_receipt to
+    untrusted callers, and never treat native/SQL parity as scientific gold.
+    """
+    if not isinstance(plan, LocalGraphPlan):
+        _deny("VALIDATED_PLAN_REQUIRED")
+    with _consistent_step(engine) as db:
+        begin_run(engine, tenant=tenant, actor=actor, run_id=run_id,
+                  mode=plan.mode, plan_sha256=plan_digest(plan),
+                  connection=db)
+        sql = resume_run(engine, tenant=tenant, actor=actor, run_id=run_id,
+                         connection=db)
+        history = db.execute(select(
+            agent_graph_events.c.node, agent_graph_events.c.outcome,
+            agent_graph_events.c.receipt_sha256, agent_graph_events.c.chain_sha256,
+        ).where(agent_graph_events.c.tenant_id == tenant,
+                agent_graph_events.c.run_id == run_id).order_by(
+                agent_graph_events.c.sequence)).mappings().all()
+        if len(history) != sql["revision"]:
+            _deny("LEDGER_REVISION_DRIFT")
+        nativerev = _native_revision(native_receipt, plan=plan, history=history)
+        gap = sql["revision"] - nativerev
+        if gap > 1:
+            _deny("NATIVE_TOO_FAR_BEHIND")
+        if gap < 0:
+            _deny("NATIVE_AHEAD_OF_SQL_LEDGER")
+
+        for event in history:
+            outcome, digest = _node_result(engine, tenant, plan, event["node"],
+                                           connection=db)
+            if outcome != event["outcome"] or digest != event["receipt_sha256"]:
+                _deny("SOURCE_DRIFT_RESTART_REQUIRED")
+
+        # Stone already committed this step. Source queries above are rechecked,
+        # but never append or advance its event a second time.
+        if gap == 1 or sql["status"] != "OPEN":
+            return sql
+        node = sql["next_node"]
+        if node not in MODES[plan.mode]:
+            _deny("CURSOR_INVALID")
+        outcome, digest = _node_result(engine, tenant, plan, node,
+                                       connection=db)
+        return record_node(engine, tenant=tenant, actor=actor, run_id=run_id,
+                           expected_revision=nativerev, node=node,
+                           outcome=outcome, receipt_sha256=digest,
+                           connection=db)

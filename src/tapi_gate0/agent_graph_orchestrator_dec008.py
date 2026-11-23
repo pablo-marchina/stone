@@ -106,3 +106,46 @@ def execute_candidate(engine, *, backend: Literal["direct", "langgraph"],
     """Convenience API; actual benchmark excludes prepare/compile overhead."""
     return prepare_candidate(engine, backend=backend, tenant=tenant,
                              actor=actor, run_id=run_id, plan=plan)()
+
+
+def prepare_native_reconciled_graph(engine, *, checkpointer, tenant: str,
+                                    actor: str, run_id: str,
+                                    plan: LocalGraphPlan):
+    """Create an *opt-in diagnostic* StateGraph backed by a genuine saver.
+
+    Unlike the performance-only adapter, this version binds the trusted
+    native receipt revision to Stone's atomic ledger. A one-step SQL-ahead
+    window is reconciled without a second tool invocation. No HTTP endpoint
+    calls this factory; caller must manage the saver, trust scope and thread.
+    """
+    if not isinstance(plan, LocalGraphPlan):
+        raise Dec008BackendDenied("DEC008_VALIDATED_PLAN_REQUIRED")
+    if checkpointer is None:
+        raise Dec008BackendDenied("DEC008_CHECKPOINTER_REQUIRED")
+    try:
+        from langgraph.graph import END, START, StateGraph
+    except ImportError:
+        raise Dec008BackendUnavailable("DEC008_LANGGRAPH_NOT_INSTALLED") from None
+    from .agent_graph_reconciliation_dec008 import execute_reconciled_step
+
+    def invoke_one(state: _State) -> _State:
+        return {"receipt": execute_reconciled_step(
+            engine, tenant=tenant, actor=actor, run_id=run_id, plan=plan,
+            native_receipt=state.get("receipt"),
+        )}
+
+    def route(state: _State) -> str:
+        status = state["receipt"].get("status")
+        if status == "OPEN":
+            return "more"
+        if status in {"TRACE_RECORDED", "ABSTAINED", "BLOCKED"}:
+            return "end"
+        raise Dec008BackendDenied("DEC008_INVALID_TERMINAL_STATE")
+
+    graph = StateGraph(_State)
+    graph.add_node("atomic_sql_checkpoint_step", invoke_one)
+    graph.add_edge(START, "atomic_sql_checkpoint_step")
+    graph.add_conditional_edges("atomic_sql_checkpoint_step", route,
+                                {"more": "atomic_sql_checkpoint_step", "end": END})
+    return graph.compile(checkpointer=checkpointer,
+                         interrupt_after=["atomic_sql_checkpoint_step"])
