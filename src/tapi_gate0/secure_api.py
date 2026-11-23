@@ -30,6 +30,7 @@ from . import asset_rights_registry, asset_lineage_index, asset_jobs, asset_deri
 from .corpus_caption_replay import CaptionReplay, config_from_env as replay_config_from_env
 from .ui import router_for_authenticated_view
 from .agent_api_e1 import router_for_evidence_agent
+from .agent_graph_local_api import router_for_local_graph_diagnostic
 from .creative_reference_pep_a05 import CreativeReferencePEP
 from .creative_reference_trust_a05 import load_reference_trust
 from .studio_e1 import StudioStore  # registers studio tables before schema initialization
@@ -45,7 +46,14 @@ def _token(request:Request):
     return token
 
 
-def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_http_local:bool=False, evidence_lab:EvidenceLab|None=None, caption_replay_config=None, creative_reference_authorities=None) -> FastAPI:
+def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_http_local:bool=False, evidence_lab:EvidenceLab|None=None, caption_replay_config=None, creative_reference_authorities=None, enable_local_graph_diagnostic:bool=False) -> FastAPI:
+    # Explicit test/local factory opt-in only, never read from environment.
+    # The operational from_environment path cannot enable this endpoint.
+    if enable_local_graph_diagnostic and (
+        not allow_http_local or not initialize_schema
+        or not database_url.startswith("sqlite:///")
+    ):
+        raise ValueError("LOCAL_GRAPH_DIAGNOSTIC_REQUIRES_LOCAL_SQLITE_FIXTURE")
     engine=engine_for(database_url)
     domain=SqlDomainStore(engine)
     if initialize_schema:
@@ -128,6 +136,8 @@ def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_ht
                       if creative_reference_authorities is not None else None),
     ))
     app.include_router(router_for_studio(identity,StudioStore(engine)))
+    if enable_local_graph_diagnostic:
+        app.include_router(router_for_local_graph_diagnostic(identity, engine))
     app.include_router(router_for_lab(current_principal,evidence_lab))
 
     @app.exception_handler(ConnectorError)
