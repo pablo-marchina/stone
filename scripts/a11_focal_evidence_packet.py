@@ -73,6 +73,10 @@ PY_A027_FIXTURE_BATCH = (
 )
 PY_A027_INTEGRATED = (
     "tests/test_asset_fixture_batch_integration.py",
+    # Portable fail-closed ASR quality and redacted decoder error contracts.
+    # These never exercise Windows Jobs or load model checkpoints.
+    "tests/test_a027_shared_av_quality_contract.py",
+    "tests/test_a027_shared_av_decoder_diagnostics.py",
 )
 PY_A06_E1 = (
     "tests/test_multimodal_system_one_bridge.py",
@@ -92,7 +96,7 @@ NODE_A073 = (
 EXPECTED = {"python_a05_a07": 406, "python_a06_e1": 35,
             "python_a02_asr_diagnostic": 91,
             "python_a027_fixture_batch": 40,
-            "python_a027_integrated": 7,
+            "python_a027_integrated": 16,
             "python_a073_cdp": 13, "node_a073": 19}
 SOURCE_FILES = (
     "pyproject.toml",
@@ -110,6 +114,9 @@ SOURCE_FILES = (
     "src/tapi_gate0/multimodal_asr.py",
     "src/tapi_gate0/asset_fixture_batch.py",
     "src/tapi_gate0/asset_fixture_pipeline.py",
+    "src/tapi_gate0/asset_shared_av_fixture.py",
+    "src/tapi_gate0/asset_asr_fixture.py",
+    "src/tapi_gate0/asset_windows_job.py",
     "src/tapi_gate0/asset_candidate_fusion.py",
     "scripts/a07_browser_visual_parity.py",
     "scripts/a07_browser_cdp.py",
