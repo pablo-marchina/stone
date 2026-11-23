@@ -18,7 +18,7 @@ from tapi_gate0.secure_api import create_secure_app
 
 
 def test_all_legacy_studio_document_post_routes_have_signed_reference_guard(
-        monkeypatch):
+        monkeypatch, tmp_path):
     checkout_src = Path(__file__).resolve().parents[1] / "src" / "tapi_gate0"
     for module, filename in (
         (secure_api, "secure_api.py"), (studio_api, "studio_api.py"),
@@ -39,8 +39,16 @@ def test_all_legacy_studio_document_post_routes_have_signed_reference_guard(
         return router
 
     monkeypatch.setattr(secure_api, "router_for_studio", capture_router)
+    # TestClient executes synchronous endpoints in worker threads. Stone's
+    # in-memory SQLite StaticPool uses a thread-bound connection, so using it
+    # for an authenticated HTTP request raises sqlite3.ProgrammingError on
+    # Windows. An isolated temporary file database gives each thread its own
+    # connection while preserving a shared transactionally committed fixture.
+    # This is test-only: NEVER use the operational database or modify the
+    # runtime engine's SQLite thread-safety policy.
+    database_url = "sqlite:///" + (tmp_path / "signed-route-guard.sqlite").as_posix()
     app = create_secure_app(
-        "sqlite:///:memory:", initialize_schema=True,
+        database_url, initialize_schema=True,
         allow_http_local=True,
     )
     try:
