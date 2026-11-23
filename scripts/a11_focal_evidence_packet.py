@@ -44,6 +44,7 @@ PY_A05_A07 = (
     "tests/test_agent_graph_checkpoint_migration.py",
     "tests/test_agent_graph_readonly_runner.py",
     "tests/test_agent_graph_local_api.py",
+    "tests/test_dec008_orchestrator.py",
     "tests/test_agent_evidence_e1.py",
     "tests/test_agent_studio_handoff_integration.py",
     "tests/test_discovery_retrieval_scoped.py",
@@ -82,7 +83,7 @@ NODE_A073 = (
 )
 # These are expected collection counts after the A05 B2 hardening tests, NOT
 # required gate acceptance counts or a promise about all future code changes.
-EXPECTED = {"python_a05_a07": 348, "python_a06_e1": 35,
+EXPECTED = {"python_a05_a07": 369, "python_a06_e1": 35,
             "python_a02_asr_diagnostic": 91,
             "python_a027_fixture_batch": 40,
             "python_a027_integrated": 7,
@@ -117,6 +118,9 @@ SOURCE_FILES = (
     "src/tapi_gate0/agent_graph_readonly_runner.py",
     "src/tapi_gate0/sa_store.py",
     "src/tapi_gate0/agent_graph_local_api.py",
+    "src/tapi_gate0/agent_graph_orchestrator_dec008.py",
+    "scripts/dec008_orchestrator_benchmark.py",
+    "tests/test_dec008_langgraph_actual.py",
     "src/tapi_gate0/secure_api.py",
     "src/tapi_gate0/studio_api.py",
     "src/tapi_gate0/studio_e1.py",
