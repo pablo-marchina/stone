@@ -139,3 +139,56 @@ def test_creative_mode_abstains_without_autonomous_draft(local_system):
     assert client.get("/v1/studio/documents/design.vertical", headers=headers).status_code == 404
     with app.state.identity_store.engine.connect() as db:
         assert db.scalar(select(func.count()).select_from(studio_versions)) == 0
+
+
+def test_authenticated_edited_document_reaches_real_offline_svg_engine(
+        local_system):
+    """Python secure API -> exact DesignDocument -> real JS E4 export bytes."""
+    from pathlib import Path
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("NODE_REQUIRED_FOR_STUDIO_EXPORT_E2E")
+    app, client, headers = local_system
+    draft = client.post("/v1/agent/creative-drafts",
+                        headers=headers, json=_brief())
+    assert draft.status_code == 201, draft.text
+    revised = client.post(
+        "/v1/agent/creative-drafts/design.vertical/text-patches",
+        headers={**headers, "If-Match": draft.headers["etag"]},
+        json={"expected_version": 1, "page_id": "page.1",
+              "layer_id": "headline", "text": "Revise seu estoque"},
+    )
+    assert revised.status_code == 200, revised.text
+    doc = client.get("/v1/studio/documents/design.vertical",
+                     headers=headers)
+    assert doc.status_code == 200
+    assert doc.json() == revised.json()
+    assert doc.json()["version"] == 2
+    assert doc.json()["rights_status"] == "pending_review"
+    assert doc.json()["approval_status"] == "draft"
+
+    root = Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [node, "scripts/a11_studio_export_probe.mjs"],
+        input=json.dumps(doc.json(), ensure_ascii=False),
+        cwd=root, capture_output=True, text=True, timeout=30,
+        encoding="utf-8", errors="replace", check=False,
+    )
+    # Keep raw document and SVG out of test logs and A11 receipts.
+    assert result.returncode == 0, "A11_LOCAL_STUDIO_EXPORT_DENIED"
+    output = json.loads(result.stdout)
+    assert output["status"] == "LOCAL_DRAFT_SVG_BYTES_VERIFIED"
+    assert output["version"] == 2
+    assert output["watermark_verified"] is True
+    assert output["edited_headline_verified"] is True
+    assert output["source_immutable"] is True
+    assert len(output["svg_sha256"]) == 64
+    assert output["svg_bytes"] > 100
+    for name in ("external_rights_verified", "publication_allowed",
+                 "production_approved", "gates_released"):
+        assert output[name] is False
+    with app.state.identity_store.engine.connect() as db:
+        assert db.scalar(select(func.count()).select_from(studio_versions)) == 2
