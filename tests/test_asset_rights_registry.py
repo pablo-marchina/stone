@@ -2583,6 +2583,7 @@ def test_shared_av_ablation_policy_and_rights(queue_fixture,case,spoken,screen,e
     from tapi_gate0.asset_processor_results import (SharedAVSource,SharedAVBinding,SHARED_AV_METHOD,
         ProcessorResult,ASR,Speech,Interval,OCR,Word,VLM,Frame,Temporal,Abstention,encode)
     from tapi_gate0.asset_candidate_fusion import evaluate_shared_av_ablation,evaluate_shared_av_coverage_guard
+    from tapi_gate0.asset_system_one_guarded_handoff import bridge_guarded_av_to_system_one, GuardedHandoffDenied
     f=queue_fixture
     store=DerivedPayloadStore(f.queue,b"d"*32)
     src=SharedAVSource(container_sha256=f.q.ref.target.sha256,decoder_sha256="1"*64,
@@ -2641,6 +2642,24 @@ def test_shared_av_ablation_policy_and_rights(queue_fixture,case,spoken,screen,e
         assert g["tema_principal"].value==expected_topic
     assert g["tipo_cta"].value==expected_cta
     assert g["texto_na_tela"].value is True
+    # The new handoff must re-read the encrypted, rights-checked artifacts.
+    # No supplied fusion report or earlier receipt can grant authority.
+    handoff=bridge_guarded_av_to_system_one(store,TENANT,f.q.ref.object_id,ids,purpose=f.spec.purpose)
+    assert handoff["source_fingerprint"]==guarded["source_fingerprint"]
+    assert handoff==bridge_guarded_av_to_system_one(store,TENANT,f.q.ref.object_id,list(reversed(ids)),purpose=f.spec.purpose)
+    projected={x["field_id"]:x for x in handoff["candidate_fields"]}
+    for name,row in projected.items():
+        assert (row["value"],row["state"])==(g[name].value,g[name].state)
+        assert row["suppressed_by_guard"] is (name in guarded["suppressed_fields"])
+        assert row["support_count"]==len(g[name].supports)
+        assert len(row["provenance_sha256"])==64
+    assert handoff["status"]==("PARTIAL_GUARDED_CANDIDATES_ONLY" if case=="audio_insufficient" else "GUARDED_CANDIDATES_ONLY")
+    assert handoff["system_one_e1_text_observations_created"]==0
+    assert handoff["scientific_admissions_created"]==0
+    assert handoff["studio_write_allowed"] is False
+    assert handoff["production_approved"] is False
+    with pytest.raises(GuardedHandoffDenied,match="FOUR_DISTINCT_ARTIFACTS_REQUIRED"):
+        bridge_guarded_av_to_system_one(store,TENANT,f.q.ref.object_id,ids[1:],purpose=f.spec.purpose)
     missing=evaluate_shared_av_coverage_guard(store,TENANT,f.q.ref.object_id,ids[1:],purpose=f.spec.purpose)
     m={x.field_id:x for x in missing["guarded"].fields}
     assert missing["coverage"]["asr_vad"]=="missing"
@@ -2661,6 +2680,8 @@ def test_shared_av_ablation_policy_and_rights(queue_fixture,case,spoken,screen,e
         evaluate_shared_av_ablation(store,TENANT,f.q.ref.object_id,ids,purpose=f.spec.purpose)
     with pytest.raises(AssetRightsDenied,match="ASSET_RIGHTS_REVOKED"):
         evaluate_shared_av_coverage_guard(store,TENANT,f.q.ref.object_id,ids[1:],purpose=f.spec.purpose)
+    with pytest.raises(AssetRightsDenied,match="ASSET_RIGHTS_REVOKED"):
+        bridge_guarded_av_to_system_one(store,TENANT,f.q.ref.object_id,ids,purpose=f.spec.purpose)
 
 
 @_WINDOWS_JOB
