@@ -121,6 +121,8 @@ SOURCE_FILES = (
     "src/tapi_gate0/agent_graph_orchestrator_dec008.py",
     "scripts/dec008_orchestrator_benchmark.py",
     "tests/test_dec008_langgraph_actual.py",
+    # Optional real native saver regression: hashed, NOT a focal acceptance gate.
+    "tests/test_dec008_langgraph_native_sqlite.py",
     "src/tapi_gate0/secure_api.py",
     "src/tapi_gate0/studio_api.py",
     "src/tapi_gate0/studio_e1.py",
