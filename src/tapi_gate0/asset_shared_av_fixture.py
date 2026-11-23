@@ -94,6 +94,26 @@ class AuthoredFixture:
         return RECIPES[self.case][1]
 
 
+_DECODE_FAILURE_PREFIX=b"TAPI_AV_DECODE_FAIL:"
+_DECODE_STAGES={b"video",b"audio",b"frame",b"samples"}
+_DECODE_REASONS={b"spawn",b"nonzero",b"size",b"digest"}
+
+
+def _decode_failure(output,returncode,metrics):
+    """Allowlisted diagnostic only; never echo FFmpeg stderr, output or paths."""
+    if type(output) is bytes and returncode==31 and len(output)<=64 and output.startswith(_DECODE_FAILURE_PREFIX):
+        parts=output[len(_DECODE_FAILURE_PREFIX):].split(b":")
+        if len(parts)==2 and parts[0] in _DECODE_STAGES and parts[1] in _DECODE_REASONS:
+            stage,reason=(part.decode("ascii") for part in parts)
+            peak=metrics.get("peak_job_commit_bytes") if isinstance(metrics,dict) else None
+            peak=peak if type(peak) is int and peak>=0 else "unknown"
+            return windows.JobError(
+                f"AV_DECODE_FAILURE;stage={stage};reason={reason};exit=0x0000001f;peak_commit_bytes={peak}"
+            )
+    # Unknown/malformed failures stay fail-closed, without reflecting untrusted bytes.
+    return windows._model_failure(output,returncode,metrics)
+
+
 def _decoder(binary,data,source):
     # Full lossless RGB/PCM digest checks inside the protected child. The
     # selected frame and point samples are returned from actual decoded bytes.
@@ -103,16 +123,26 @@ def _decoder(binary,data,source):
                 "-pix_fmt","rgb24","-threads","1","-f","rawvideo","pipe:1"]
     audio=base+["-map","0:a:0","-vn","-t","16","-ar","16000","-ac","1","-f","s16le","pipe:1"]
     return f'''import hashlib, subprocess, sys
+def fail(stage,reason):
+    sys.stdout.buffer.write(b"TAPI_AV_DECODE_FAIL:"+stage.encode("ascii")+b":"+reason.encode("ascii"))
+    sys.exit(31)
 x=sys.stdin.buffer.read({len(data)+1})
 if len(x)!={len(data)} or hashlib.sha256(x).hexdigest()!={source.container_sha256!r}:
     sys.exit(2)
-def decode(args,n,digest):
-    p=subprocess.run(args,input=x,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,shell=False,close_fds=True)
-    if p.returncode or len(p.stdout)!=n or hashlib.sha256(p.stdout).hexdigest()!=digest:
-        sys.exit(3)
+def decode(args,n,digest,stage):
+    try:
+        p=subprocess.run(args,input=x,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,shell=False,close_fds=True)
+    except OSError:
+        fail(stage,"spawn")
+    if p.returncode:
+        fail(stage,"nonzero")
+    if len(p.stdout)!=n:
+        fail(stage,"size")
+    if hashlib.sha256(p.stdout).hexdigest()!=digest:
+        fail(stage,"digest")
     return p.stdout
-v=decode({video!r},{source.frame_count*PIXELS*3},{source.rgb_stream_sha256!r})
-a=decode({audio!r},{source.pcm_samples*2},{source.pcm_sha256!r})
+v=decode({video!r},{source.frame_count*PIXELS*3},{source.rgb_stream_sha256!r},"video")
+a=decode({audio!r},{source.pcm_samples*2},{source.pcm_sha256!r},"audio")
 size={PIXELS*3}
 frame=v[4*size:5*size:3]
 samples=[]
@@ -120,9 +150,9 @@ for i in range({len(source.temporal_sample_sha256)}):
     gray=v[i*size:(i+1)*size:3]
     samples.append(bytes(gray[(y*{HEIGHT}//64)*{WIDTH}+(z*{WIDTH}//64)] for y in range(64) for z in range(64)))
 if len(frame)!={PIXELS} or hashlib.sha256(frame).hexdigest()!={source.frame_sha256!r}:
-    sys.exit(4)
+    fail("frame","digest")
 if [hashlib.sha256(f).hexdigest() for f in samples]!={list(source.temporal_sample_sha256)!r}:
-    sys.exit(5)
+    fail("samples","digest")
 sys.stdout.buffer.write(frame+a+b"".join(samples))
 '''
 
@@ -284,7 +314,7 @@ def run(queue,vault,store,lease,*,fixture,paths,quality_policy=STRICT_QUALITY):
         decode_resources={}
         raw=windows._run_fixture_output(fixture.decoder_code,actual,check,limits=LIMITS,
             max_input=MAX_CONTAINER,max_output=MAX_DECODE_OUTPUT,expected=fixture.expected_output,
-            metrics=decode_resources)
+            metrics=decode_resources,failure=_decode_failure)
         gray,pcm,samples=_partition(fixture,raw)
         lease=queue.heartbeat(lease)
         frame=Frame(time_ms=1000,frame_sha256=_digest(gray),timeline="resampled_uniform")
