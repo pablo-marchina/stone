@@ -96,7 +96,7 @@ class AuthoredFixture:
 
 _DECODE_FAILURE_PREFIX=b"TAPI_AV_DECODE_FAIL:"
 _DECODE_STAGES={b"video",b"audio",b"frame",b"samples"}
-_DECODE_REASONS={b"spawn",b"nonzero",b"size",b"digest"}
+_DECODE_REASONS={b"spawn",b"runtime",b"nonzero",b"size",b"digest"}
 
 
 def _decode_failure(output,returncode,metrics):
@@ -134,6 +134,9 @@ def decode(args,n,digest,stage):
         p=subprocess.run(args,input=x,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,shell=False,close_fds=True)
     except OSError:
         fail(stage,"spawn")
+    except Exception:
+        # No stderr/traceback or exception text from the trusted child.
+        fail(stage,"runtime")
     if p.returncode:
         fail(stage,"nonzero")
     if len(p.stdout)!=n:
