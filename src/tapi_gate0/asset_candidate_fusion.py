@@ -230,26 +230,38 @@ def _evaluate_authorized(store,tenant,object_id,artifact_ids,*,purpose,ablation,
     _validate_selection(store,tenant,object_id,artifact_ids,purpose)
     q=store.queue
     with q._transaction() as (db,now):
-        _,_,by_id=_load(db,tenant)
-        if object_id not in by_id or not isinstance(by_id[object_id][1],RetainedAssetRef):
-            raise AssetRightsDenied("ASSET_EVIDENCE_ROOT_UNKNOWN")
-        root=by_id[object_id][1]
-        _ancestors(by_id,object_id,now,purpose)
-        permission=Permission(operation="derive",purpose=purpose,field="rubric_evidence")
-        _grant(db,q.resolve_anchor(root),root,now,permission)
-        bundle,by_id,bindings=_assemble_in_transaction(store,db,now,tenant,object_id,artifact_ids,purpose=purpose,by_id=by_id)
-        if not coverage_guard and any(e.observation.shared_av is not None and
-                e.observation.shared_av.quality_policy==PARTIAL_QUALITY for e in bundle.entries):
-            raise AssetRightsDenied("ASSET_S1_PARTIAL_REQUIRES_COVERAGE_GUARD")
-        try:
-            result=(_routing_replay(bundle) if routing_replay else
-                    _ablation(bundle) if ablation else
-                    _coverage_guard(bundle) if coverage_guard else _evaluate(bundle))
-        except ValueError:
-            raise AssetRightsDenied("ASSET_S1_CONTRACT") from None
-        fresh=_recheck_bundle(store,db,now,by_id,bindings,purpose=purpose)
-        _grant(db,q.resolve_anchor(root),root,fresh,permission)
-        return result
+        return _evaluate_authorized_in_transaction(
+            store,db,now,tenant,object_id,artifact_ids,purpose=purpose,
+            ablation=ablation,coverage_guard=coverage_guard,routing_replay=routing_replay)
+
+
+def _evaluate_authorized_in_transaction(store,db,now,tenant,object_id,artifact_ids,*,
+                                        purpose,ablation=False,coverage_guard=False,routing_replay=False):
+    """Private: caller owns the queue's BEGIN IMMEDIATE transaction."""
+    _validate_selection(store,tenant,object_id,artifact_ids,purpose)
+    q=store.queue
+    if db.engine is not q.index.engine or not db.in_transaction():
+        raise AssetRightsDenied("ASSET_S1_TRUSTED_TRANSACTION_REQUIRED")
+    _,_,by_id=_load(db,tenant)
+    if object_id not in by_id or not isinstance(by_id[object_id][1],RetainedAssetRef):
+        raise AssetRightsDenied("ASSET_EVIDENCE_ROOT_UNKNOWN")
+    root=by_id[object_id][1]
+    _ancestors(by_id,object_id,now,purpose)
+    permission=Permission(operation="derive",purpose=purpose,field="rubric_evidence")
+    _grant(db,q.resolve_anchor(root),root,now,permission)
+    bundle,by_id,bindings=_assemble_in_transaction(store,db,now,tenant,object_id,artifact_ids,purpose=purpose,by_id=by_id)
+    if not coverage_guard and any(e.observation.shared_av is not None and
+            e.observation.shared_av.quality_policy==PARTIAL_QUALITY for e in bundle.entries):
+        raise AssetRightsDenied("ASSET_S1_PARTIAL_REQUIRES_COVERAGE_GUARD")
+    try:
+        result=(_routing_replay(bundle) if routing_replay else
+                _ablation(bundle) if ablation else
+                _coverage_guard(bundle) if coverage_guard else _evaluate(bundle))
+    except ValueError:
+        raise AssetRightsDenied("ASSET_S1_CONTRACT") from None
+    fresh=_recheck_bundle(store,db,now,by_id,bindings,purpose=purpose)
+    _grant(db,q.resolve_anchor(root),root,fresh,permission)
+    return result
 
 
 def _ablation(bundle):
