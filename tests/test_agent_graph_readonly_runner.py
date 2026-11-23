@@ -173,7 +173,8 @@ def test_tenant_actor_and_plan_cannot_replay_other_run(engine):
 
 
 @pytest.mark.parametrize("case", [
-    {"mode": "publish"}, {"content_id": "../other-tenant"},
+    {"mode": "publish"}, {"mode": "av_candidate_review"},
+    {"content_id": "../other-tenant"},
     {"origin": "instagram"}, {"as_of": datetime(2026, 11, 4)},
     {"min_age_days": 13}, {"min_age_days": True},
 ])
