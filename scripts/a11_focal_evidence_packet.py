@@ -56,6 +56,11 @@ PY_A05_A07 = (
     "tests/test_studio_e4.py",
     "tests/test_studio_evidence_integrity_e6.py",
     "tests/test_studio_metadata_scope_e6.py",
+    # Portable, exact-count tests introduced by A11 frontier / DEC-008 guard.
+    # No optional LangGraph installation is required for these files.
+    "tests/test_a11_architecture_frontier.py",
+    "tests/test_dec008_resume_preflight.py",
+    "tests/test_architecture_vertical_synthetic.py",
 )
 PY_A02_ASR_DIAGNOSTIC = (
     "tests/test_asr_strict_diagnostic.py",
@@ -84,7 +89,7 @@ NODE_A073 = (
 )
 # These are expected collection counts after the A05 B2 hardening tests, NOT
 # required gate acceptance counts or a promise about all future code changes.
-EXPECTED = {"python_a05_a07": 391, "python_a06_e1": 35,
+EXPECTED = {"python_a05_a07": 406, "python_a06_e1": 35,
             "python_a02_asr_diagnostic": 91,
             "python_a027_fixture_batch": 40,
             "python_a027_integrated": 7,
@@ -92,6 +97,11 @@ EXPECTED = {"python_a05_a07": 391, "python_a06_e1": 35,
 SOURCE_FILES = (
     "pyproject.toml",
     "scripts/a11_focal_evidence_packet.py",
+    "scripts/a11_architecture_frontier.py",
+    "scripts/a11_studio_export_probe.mjs",
+    "planning/base_atemporal/BACKLOG_UNICO_IMPORTAVEL.csv",
+    "planning/base_atemporal/DEPENDENCIAS.csv",
+    "planning/base_atemporal/MATRIZ_CAPACIDADES.csv",
     "scripts/a05_python_source_preflight.py",
     "scripts/a06_system_one_bridge.py",
     "scripts/a02_asr_strict_diagnostic.py",
