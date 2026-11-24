@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator, model_serializer
 from sqlalchemy import (
     Table, Column, String, Integer, Text, ForeignKeyConstraint,
     select, insert, update,
@@ -55,6 +55,18 @@ class TextStyle(Model):
     font_family: Literal["sans-serif"] = "sans-serif"
     font_size: int = Field(default=64, ge=12, le=256)
     color: str = Field(default="#171717", pattern=HEX)
+    weight: Literal[400, 700] | None = None
+    box_fill: str | None = Field(default=None, pattern=HEX)
+    box_radius: int | None = Field(default=None, ge=0, le=64)
+    padding: int | None = Field(default=None, ge=0, le=80)
+
+    @model_serializer(mode="wrap")
+    def preserve_legacy(self, handler):
+        data = handler(self)
+        for name in ("weight", "box_fill", "box_radius", "padding"):
+            if getattr(self, name) is None:
+                data.pop(name, None)
+        return data
 
 
 class TextLayer(Model):
@@ -156,6 +168,9 @@ EDITORIAL_THEMES = {
 def draft_from_spec(spec: CreativeSpec, document_id: str, *,
                     editorial_template: str | None = None) -> DesignDocument:
     """A deterministic starter layout; not generative AI, preview or export."""
+    if editorial_template in {"social-feed", "social-carousel"}:
+        from .studio_social import social_document
+        return social_document(spec, document_id, editorial_template)
     canvas = Canvas()
     safe_margin = 70
     width = canvas.width - 2 * safe_margin

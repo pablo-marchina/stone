@@ -13,6 +13,7 @@ VERSION = 'tapi-demo-experiment-pair.v1'
 LAYOUT_VERSION = 'tapi-demo-experiment-layout.v1'
 CAROUSEL_LAYOUT_VERSION = 'tapi-demo-experiment-carousel-layout.v1'
 FORMATS = ('instagram_feed', 'instagram_carousel')
+VISUAL_STYLES = ('classic', 'social')
 CTA = {'seguir': 'Siga para mais dicas.', 'comentar': 'Comente sua dúvida.',
        'salvar': 'Salve para consultar depois.'}
 TOPIC = {'marketing': ('Planeje sua divulgação', 'Escolha um público e organize uma mensagem clara para esta semana.'),
@@ -37,10 +38,14 @@ def specs(pair, tenant):
 
 
 def template_for(pair):
+    if pair.get('visual_style') == 'social':
+        return 'social-carousel' if pair.get('platform_intent') == 'instagram_carousel' else 'social-feed'
     return 'experiment-carousel' if pair.get('platform_intent') == 'instagram_carousel' else 'experiment'
 
 
-def previews(snapshot, tenant, platform_intent='instagram_feed'):
+def previews(snapshot, tenant, platform_intent='instagram_feed', visual_style='classic'):
+    if visual_style not in VISUAL_STYLES:
+        raise ValueError('DEMO_EXPERIMENT_STYLE_INVALID')
     if platform_intent not in FORMATS:
         raise ValueError('DEMO_EXPERIMENT_FORMAT_INVALID')
     if not snapshot:
@@ -67,6 +72,9 @@ def previews(snapshot, tenant, platform_intent='instagram_feed'):
                     joint_effect_estimated=False, external_rights_verified=False)
         if platform_intent == 'instagram_carousel':
             pair.update(platform_intent=platform_intent, layout_version=CAROUSEL_LAYOUT_VERSION)
+        if visual_style == 'social':
+            pair.update(visual_style='social', layout_version='tapi-social-editorial.v1',
+                        aesthetic_evidence='provisional_design_candidate_not_corpus_validated')
         documents = [draft_from_spec(spec, 'preview.'+label, editorial_template=template_for(pair)).model_dump(mode='json')
                      for label, spec in zip(('A','B'), specs(pair, tenant))]
         rows.append(dict(pair=pair, previews=documents, preview_sha256=digest([pair, documents])))
@@ -74,7 +82,7 @@ def previews(snapshot, tenant, platform_intent='instagram_feed'):
 
 
 def persist(engine, snapshot, tenant, actor, preview_sha256):
-    selected = next((r for fmt in FORMATS for r in previews(snapshot, tenant, fmt)
+    selected = next((r for fmt in FORMATS for style in VISUAL_STYLES for r in previews(snapshot, tenant, fmt, style)
                      if r['preview_sha256']==preview_sha256), None)
     if selected is None:
         raise ValueError('DEMO_EXPERIMENT_PREVIEW_MISMATCH')

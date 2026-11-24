@@ -20,6 +20,14 @@
     }
     return lines;
   }
+  function textGeometry(ctx, layer) {
+    const {style,w,h}=layer,size=style.font_size,pad=style.padding||0;
+    ctx.font=(style.weight?style.weight+' ':'')+size+'px sans-serif';
+    const lines=layout(layer.text,ctx,w-2*pad,size*1.2,h-2*pad);
+    if(style.weight && (lines.map(l=>l.text).join(' ').replace(/\s+/g,' ').trim()!==layer.text.replace(/\s+/g,' ').trim() || lines.some(l=>ctx.measureText(l.text).width>w-2*pad)))
+      throw Error('Texto não cabe na camada '+layer.id);
+    return {size,pad,lines};
+  }
   function drawTo(ctx, doc, page, bitmaps, preview=null) {
     const {width,height,background}=doc.canvas;
     ctx.canvas.width=width;ctx.canvas.height=height;
@@ -28,11 +36,10 @@
       const move=preview?.id===layer.id?preview:{dx:0,dy:0};
       const x=layer.x+(move.dx||0),y=layer.y+(move.dy||0);
       if(layer.kind==='text') {
-        const size=layer.style.font_size;
+        const {pad,lines}=textGeometry(ctx,layer);
+        if(layer.style.box_fill){ctx.fillStyle=layer.style.box_fill;ctx.beginPath();ctx.roundRect(x,y,layer.w,layer.h,layer.style.box_radius||0);ctx.fill();}
         ctx.fillStyle=layer.style.color;ctx.textBaseline='top';
-        ctx.font=size+'px sans-serif';
-        for(const line of layout(layer.text,ctx,layer.w,size*1.2,layer.h))
-          ctx.fillText(line.text,x,y+line.y);
+        for(const line of lines)ctx.fillText(line.text,x+pad,y+pad+line.y);
       } else if(layer.kind==='image') {
         if(!bitmaps.has(layer.asset_id)) {
           ctx.fillStyle='#E6EFE9';ctx.fillRect(x,y,layer.w,layer.h);
@@ -69,10 +76,10 @@
     for(const layer of page.layers) {
       const {x,y,w,h}=layer;
       if(layer.kind==='text') {
-        const size=layer.style.font_size;
-        ctx.font=size+'px sans-serif';
-        for(const line of layout(layer.text,ctx,w,size*1.2,h)) {
-          body+=`<text x="${x}" y="${y+line.y+size}" fill="${layer.style.color}" font-family="sans-serif" font-size="${size}">${escapeXml(line.text)}</text>`;
+        const {size,pad,lines}=textGeometry(ctx,layer);
+        if(layer.style.box_fill)body+=`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${layer.style.box_radius||0}" fill="${layer.style.box_fill}"/>`;
+        for(const line of lines) {
+          body+=`<text x="${x+pad}" y="${y+pad+line.y+size}" fill="${layer.style.color}" font-family="sans-serif" font-size="${size}"${layer.style.weight?' font-weight="'+layer.style.weight+'"':''}>${escapeXml(line.text)}</text>`;
         }
       } else {
         const bmp=bitmaps.get(layer.asset_id);
