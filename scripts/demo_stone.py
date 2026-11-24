@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import argparse
+import os
+import shutil
+from threading import Lock
 from hashlib import sha256
 import json
 from datetime import datetime, timedelta, timezone
@@ -22,7 +25,9 @@ from tapi_gate0.secure_api import create_secure_app
 from tapi_gate0.discovery_retrieval_fts import TransientScopedFts, RetrievalBaselineError
 from sqlalchemy import select, func
 from tapi_gate0.agent_graph_checkpoints import agent_graph_runs, agent_graph_events
-from tapi_gate0.studio_e1 import studio_documents, studio_versions
+from tapi_gate0.studio_e1 import studio_documents, studio_versions, StudioError
+from tapi_gate0.studio_render_e6 import LocalDraftRenderer, studio_render_artifacts
+from tapi_gate0.studio_video_e5 import storyboards
 from tapi_gate0.sa_store import domain_events
 
 TENANT = 'stone-demo'
@@ -30,9 +35,13 @@ USERNAME = 'demo'
 AS_OF = datetime(2026, 11, 23, 12, tzinfo=timezone.utc)
 
 
-def build_demo(path: Path, password: str, technical_snapshot=None):
+def build_demo(path: Path, password: str, technical_snapshot=None, *, video_enabled=False):
     if path.exists():
         raise ValueError('DEMO_REQUIRES_NEW_DATABASE')
+    if video_enabled:
+        LocalDraftRenderer._gates()
+        if not shutil.which("ffmpeg"):
+            raise ValueError("DEMO_FFMPEG_REQUIRED")
     app = create_secure_app('sqlite:///' + path.resolve().as_posix(),
                             initialize_schema=True, allow_http_local=True,
                             enable_local_graph_diagnostic=True)
@@ -62,6 +71,7 @@ def build_demo(path: Path, password: str, technical_snapshot=None):
         principal = app.state.identity_store.resolve(token)
         if principal.tenant_id != TENANT or principal.role not in {"admin", "editor"}:
             raise IdentityFailure("FORBIDDEN", 403)
+        return principal
 
     @app.get("/v1/demo/rubric/{content_id}")
     def rubric(content_id: str, request: Request, response: Response):
@@ -115,6 +125,33 @@ def build_demo(path: Path, password: str, technical_snapshot=None):
         return {**result, "indexed_posts": len(rows), "hits": [details[cid] for cid in result["content_ids"]],
                 "synthetic_local": True, "publication_allowed": False}
 
+    render_lock = Lock()
+
+    @app.get("/v1/demo/video-status")
+    def video_status(request: Request, response: Response):
+        p = authorize(request)
+        response.headers["Cache-Control"] = "private, no-store"
+        return {"enabled": video_enabled and p.role == "admin"}
+
+    @app.post("/v1/demo/render-next")
+    def render_next(request: Request, response: Response):
+        p = authorize(request)
+        if not video_enabled or p.role != "admin":
+            raise IdentityFailure("FORBIDDEN", 403)
+        if not render_lock.acquire(blocking=False):
+            raise HTTPException(409, "DEMO_RENDER_BUSY")
+        try:
+            renderer = LocalDraftRenderer(app.state.identity_store.engine)
+            result = renderer.process_next(TENANT, p.actor_id)
+            if result is None:
+                raise HTTPException(409, "DEMO_NO_QUEUED_RENDER")
+            response.headers["Cache-Control"] = "private, no-store"
+            return result
+        except StudioError as exc:
+            raise HTTPException(exc.status, exc.code) from None
+        finally:
+            render_lock.release()
+
     @app.get("/v1/demo/session-results")
     def session_results(request: Request, response: Response):
         authorize(request)
@@ -128,7 +165,8 @@ def build_demo(path: Path, password: str, technical_snapshot=None):
                 completed_traces=count(agent_graph_runs, agent_graph_runs.c.status == "TRACE_RECORDED"),
                 checkpoint_events=count(agent_graph_events),
                 editable_drafts=count(studio_documents), document_versions=count(studio_versions),
-                generated_draft_events=count(domain_events, domain_events.c.aggregate_type == "agent_generated_draft"))
+                generated_draft_events=count(domain_events, domain_events.c.aggregate_type == "agent_generated_draft"),
+                storyboards=count(storyboards), rendered_videos=count(studio_render_artifacts))
         return {"schema_version": "tapi-demo-session-results.v1", "as_of": AS_OF.isoformat(),
                 "synthetic_counters": counters, "historical_technical_snapshot": technical_snapshot,
                 "scientifically_validated": False, "production_approved": False, "publication_allowed": False}
@@ -145,17 +183,23 @@ def build_demo(path: Path, password: str, technical_snapshot=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--port', type=int, default=8765)
+    parser.add_argument('--video', action='store_true', help='Ativa explicitamente o worker FFmpeg de rascunho local neste processo isolado.')
     parser.add_argument('--technical-report', type=Path, help='Relatório privado A6 existente; somente agregados históricos serão mostrados.')
     args = parser.parse_args()
     try:
         snapshot = project_report(args.technical_report) if args.technical_report else None
     except ValueError as exc:
         parser.error(str(exc))
+    if args.video:
+        if not shutil.which("ffmpeg"):
+            parser.error("FFmpeg não encontrado no PATH")
+        os.environ["TAPI_LOCAL_RENDER_ENABLED"] = "1"
+        os.environ["TAPI_ZERO_BILLING_CONFIRMED"] = "1"
     password = getpass('Crie uma senha local de demonstração (12+ caracteres): ')
     if len(password) < 12:
         parser.error('senha deve ter pelo menos 12 caracteres')
     with TemporaryDirectory(prefix='stone-demo-') as directory:
-        app = build_demo(Path(directory) / 'demo.sqlite', password, snapshot)
+        app = build_demo(Path(directory) / 'demo.sqlite', password, snapshot, video_enabled=args.video)
         print(f'Abra http://127.0.0.1:{args.port}/app/demo.html — tenant {TENANT}, usuário {USERNAME}.')
         print('Banco temporário e dados sintéticos; Ctrl+C encerra e descarta o ambiente.')
         try:
