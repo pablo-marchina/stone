@@ -2,7 +2,7 @@
 
 The application factory is the ONLY opt-in. Production from_environment never
 registers this router. No external origin, LLM, media or publication.
-The separate draft endpoint accepts only an explicit operator-authored brief.
+Draft endpoints require explicit operator authorship or selection of a local proposal.
 Tenant/actor are taken exclusively from a revocable bearer session.
 """
 from __future__ import annotations
@@ -23,6 +23,8 @@ from .agent_evidence_b2 import EvidenceNotFound
 from .agent_trace_draft_handoff import create_trace_bound_draft, TraceDraftDenied
 from .studio_e1 import DesignDocument, StudioError
 from .studio_e4 import studio_etag
+from .domain import Id
+from .agent_creative_proposals_local import preview_proposals, accept_proposal, ProposalDenied
 
 
 def _strict_json_plan(value):
@@ -46,6 +48,11 @@ class StepRequest(BaseModel):
 
 class TraceDraftRequest(StepRequest):
     draft: CreateAgentDraft
+
+
+class ProposalDraftRequest(StepRequest):
+    document_id: Id
+    proposal_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
 
 
 def router_for_local_graph_diagnostic(identity, engine) -> APIRouter:
@@ -98,6 +105,40 @@ def router_for_local_graph_diagnostic(identity, engine) -> APIRouter:
         except StudioError as exc:
             raise HTTPException(status_code=exc.status, detail=exc.code) from None
 
+        response.headers["ETag"] = studio_etag(doc)
+        response.headers["Cache-Control"] = "private, no-store"
+        return doc
+
+    @router.post("/creative-proposals")
+    def propose_local_creatives(body: StepRequest, response: Response,
+                                p: Principal = Depends(principal)):
+        if p.role not in {"admin", "editor"}:
+            raise IdentityFailure("FORBIDDEN", 403)
+        try:
+            result = preview_proposals(engine, tenant=p.tenant_id, actor=p.actor_id,
+                                       run_id=body.run_id, plan=body.plan)
+        except (AgentCheckpointDenied, LocalGraphDenied, TraceDraftDenied, ProposalDenied) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from None
+        except EvidenceNotFound:
+            raise HTTPException(status_code=422, detail="CREATIVE_REFERENCE_NOT_VERIFIED") from None
+        response.headers["Cache-Control"] = "private, no-store"
+        return result
+
+    @router.post("/creative-proposal-draft", response_model=DesignDocument, status_code=201)
+    def accept_local_proposal(body: ProposalDraftRequest, response: Response,
+                              p: Principal = Depends(principal)):
+        if p.role not in {"admin", "editor"}:
+            raise IdentityFailure("FORBIDDEN", 403)
+        try:
+            doc = accept_proposal(engine, tenant=p.tenant_id, actor=p.actor_id,
+                                  run_id=body.run_id, plan=body.plan,
+                                  proposal_sha256=body.proposal_sha256, document_id=body.document_id)
+        except (AgentCheckpointDenied, LocalGraphDenied, TraceDraftDenied, ProposalDenied) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from None
+        except EvidenceNotFound:
+            raise HTTPException(status_code=422, detail="CREATIVE_REFERENCE_NOT_VERIFIED") from None
+        except StudioError as exc:
+            raise HTTPException(status_code=exc.status, detail=exc.code) from None
         response.headers["ETag"] = studio_etag(doc)
         response.headers["Cache-Control"] = "private, no-store"
         return doc
