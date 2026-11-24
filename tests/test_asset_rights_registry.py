@@ -2583,7 +2583,7 @@ def test_shared_av_rechecks_revocation_between_decode_and_finish(queue_fixture,m
     ("audio_insufficient",None,"Organize suas vendas","vendas",None),
     ("audio_no_signal",None,"Organize suas vendas","vendas",None),
 ])
-def test_shared_av_ablation_policy_and_rights(queue_fixture,case,spoken,screen,expected_topic,expected_cta,monkeypatch):
+def test_shared_av_ablation_policy_and_rights(queue_fixture,case,spoken,screen,expected_topic,expected_cta,monkeypatch,record_property):
     """Persist authored surrogate observations: contract/policy test, not native inference."""
     from tapi_gate0.asset_processor_results import (SharedAVSource,SharedAVBinding,SHARED_AV_METHOD,
         ProcessorResult,ASR,Speech,Interval,OCR,Word,VLM,Frame,Temporal,Abstention,encode)
@@ -2735,6 +2735,17 @@ def test_shared_av_ablation_policy_and_rights(queue_fixture,case,spoken,screen,e
     with f.q.f.engine.connect() as db:
         assert db.scalar(select(func.count()).select_from(agent_graph_events))==final["revision"]
         assert db.scalar(select(func.count()).select_from(agent_graph_runs))==1
+    # Presentation-only: serialize observations authored by this fixture and
+    # actual policy/ledger outcomes after every rights assertion has passed.
+    import json
+    record_property("demo_av_case", json.dumps({
+        "case":case,"authored_audio":spoken,"authored_screen":screen,
+        "coverage":handoff["coverage"],"fields":[{**row,
+            "baseline_value":fields[row["field_id"]].value,
+            "reason":g[row["field_id"]].reason} for row in handoff["candidate_fields"]],
+        "source_fingerprint":handoff["source_fingerprint"],"ledger_status":final["status"],
+        "ledger_revision":final["revision"],"chain_sha256":final["chain_sha256"],
+        "revocation_denied":True,"native_inference":False}, ensure_ascii=False))
 
 
 @_WINDOWS_JOB
