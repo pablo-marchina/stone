@@ -21,6 +21,7 @@ from tapi_gate0.classification import TOPICS, CTA
 from tapi_gate0.discovery_editorial_descriptive import caption_features
 from tapi_gate0.discovery_rubric_coverage import REQUIREMENTS
 from scripts.demo_technical_snapshot import project_report
+from scripts.demo_av_report import read_report, validate as validate_av_report
 from tapi_gate0.secure_api import create_secure_app
 from tapi_gate0.discovery_retrieval_fts import TransientScopedFts, RetrievalBaselineError
 from sqlalchemy import select, func
@@ -35,7 +36,9 @@ USERNAME = 'demo'
 AS_OF = datetime(2026, 11, 23, 12, tzinfo=timezone.utc)
 
 
-def build_demo(path: Path, password: str, technical_snapshot=None, *, video_enabled=False):
+def build_demo(path: Path, password: str, technical_snapshot=None, *, video_enabled=False, av_report=None):
+    if av_report is not None:
+        av_report = validate_av_report(av_report)
     if path.exists():
         raise ValueError('DEMO_REQUIRES_NEW_DATABASE')
     if video_enabled:
@@ -171,6 +174,12 @@ def build_demo(path: Path, password: str, technical_snapshot=None, *, video_enab
                 "synthetic_counters": counters, "historical_technical_snapshot": technical_snapshot,
                 "scientifically_validated": False, "production_approved": False, "publication_allowed": False}
 
+    @app.get("/v1/demo/av-report")
+    def av_evidence(request: Request, response: Response):
+        authorize(request)
+        response.headers["Cache-Control"] = "private, no-store"
+        return {"available": av_report is not None, "report": av_report}
+
     @app.get("/v1/demo/technical-snapshot")
     def snapshot(request: Request, response: Response):
         authorize(request)
@@ -185,9 +194,11 @@ def main():
     parser.add_argument('--port', type=int, default=8765)
     parser.add_argument('--video', action='store_true', help='Ativa explicitamente o worker FFmpeg de rascunho local neste processo isolado.')
     parser.add_argument('--technical-report', type=Path, help='Relatório privado A6 existente; somente agregados históricos serão mostrados.')
+    parser.add_argument("--av-report", type=Path, help="Relatório dos nove testes sintéticos de fusão e direitos.")
     args = parser.parse_args()
     try:
         snapshot = project_report(args.technical_report) if args.technical_report else None
+        av_report = read_report(args.av_report) if args.av_report else None
     except ValueError as exc:
         parser.error(str(exc))
     if args.video:
@@ -199,7 +210,7 @@ def main():
     if len(password) < 12:
         parser.error('senha deve ter pelo menos 12 caracteres')
     with TemporaryDirectory(prefix='stone-demo-') as directory:
-        app = build_demo(Path(directory) / 'demo.sqlite', password, snapshot, video_enabled=args.video)
+        app = build_demo(Path(directory) / 'demo.sqlite', password, snapshot, video_enabled=args.video, av_report=av_report)
         print(f'Abra http://127.0.0.1:{args.port}/app/demo.html — tenant {TENANT}, usuário {USERNAME}.')
         print('Banco temporário e dados sintéticos; Ctrl+C encerra e descarta o ambiente.')
         try:
