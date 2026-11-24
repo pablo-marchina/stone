@@ -2,14 +2,16 @@
 from __future__ import annotations
 
 import argparse
+from hashlib import sha256
+import json
 from datetime import datetime, timedelta, timezone
 from getpass import getpass
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import uvicorn
-from fastapi import HTTPException, Request, Response
-from tapi_gate0.domain import CreatorCreate, ContentCreate, MetricsCreate, RUBRIC_FIELD_NAMES
+from fastapi import HTTPException, Request, Response, Query
+from tapi_gate0.domain import CreatorCreate, ContentCreate, MetricsCreate, RUBRIC_FIELD_NAMES, RankingRequest
 from tapi_gate0.identity import IdentityFailure
 from tapi_gate0.agent_evidence_b2 import EvidenceRetriever, EvidenceNotFound
 from tapi_gate0.classification import TOPICS, CTA
@@ -17,6 +19,11 @@ from tapi_gate0.discovery_editorial_descriptive import caption_features
 from tapi_gate0.discovery_rubric_coverage import REQUIREMENTS
 from scripts.demo_technical_snapshot import project_report
 from tapi_gate0.secure_api import create_secure_app
+from tapi_gate0.discovery_retrieval_fts import TransientScopedFts, RetrievalBaselineError
+from sqlalchemy import select, func
+from tapi_gate0.agent_graph_checkpoints import agent_graph_runs, agent_graph_events
+from tapi_gate0.studio_e1 import studio_documents, studio_versions
+from tapi_gate0.sa_store import domain_events
 
 TENANT = 'stone-demo'
 USERNAME = 'demo'
@@ -80,6 +87,51 @@ def build_demo(path: Path, password: str, technical_snapshot=None):
                 fields["tipo_cta"].update(state="lexical_candidate", value=features["cta"])
         return {"fields": fields, "field_count": len(fields), "canonical": False,
                 "media_assessed": False, "scientifically_validated": False}
+
+    @app.get("/v1/demo/search")
+    def search(request: Request, response: Response, q: str = Query(min_length=1, max_length=300)):
+        authorize(request)
+        response.headers["Cache-Control"] = "private, no-store"
+        engine = app.state.identity_store.engine
+        with engine.connect() as db:
+            ranking = store.ranking(RankingRequest(tenant_id=TENANT, as_of=AS_OF), connection=db)
+            if len(ranking.rows) > 1000:
+                raise HTTPException(409, "DEMO_CORPUS_LIMIT")
+            rows, details = [], {}
+            for row in ranking.rows:
+                e = EvidenceRetriever(engine).get(TENANT, row.content_id, AS_OF, connection=db)
+                if e.origin != "synthetic_local" or e.source_url is not None or e.snapshot_id != row.snapshot_id:
+                    raise HTTPException(409, "DEMO_REFERENCE_SCOPE_INVALID")
+                if e.caption_excerpt and not e.caption_was_truncated:
+                    rows.append(dict(content_id=e.content_id, snapshot_id=e.snapshot_id, caption=e.caption_excerpt))
+                    details[e.content_id] = dict(content_id=e.content_id, snapshot_id=e.snapshot_id,
+                        caption=e.caption_excerpt, engagement_rate=str(row.engagement_rate), top=row.is_top_decile)
+            digest = sha256(json.dumps(rows, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
+            try:
+                with TransientScopedFts(rows, manifest_sha256=digest) as index:
+                    result = index.search(q, limit=10)
+            except RetrievalBaselineError:
+                raise HTTPException(422, "DEMO_QUERY_INVALID") from None
+        return {**result, "indexed_posts": len(rows), "hits": [details[cid] for cid in result["content_ids"]],
+                "synthetic_local": True, "publication_allowed": False}
+
+    @app.get("/v1/demo/session-results")
+    def session_results(request: Request, response: Response):
+        authorize(request)
+        response.headers["Cache-Control"] = "private, no-store"
+        with app.state.identity_store.engine.connect() as db:
+            ranking = store.ranking(RankingRequest(tenant_id=TENANT, as_of=AS_OF), connection=db)
+            def count(table, *filters):
+                return db.scalar(select(func.count()).select_from(table).where(table.c.tenant_id == TENANT, *filters))
+            counters = dict(eligible_posts=ranking.n_posts, profiles=ranking.n_creators,
+                top_posts=ranking.top_count,
+                completed_traces=count(agent_graph_runs, agent_graph_runs.c.status == "TRACE_RECORDED"),
+                checkpoint_events=count(agent_graph_events),
+                editable_drafts=count(studio_documents), document_versions=count(studio_versions),
+                generated_draft_events=count(domain_events, domain_events.c.aggregate_type == "agent_generated_draft"))
+        return {"schema_version": "tapi-demo-session-results.v1", "as_of": AS_OF.isoformat(),
+                "synthetic_counters": counters, "historical_technical_snapshot": technical_snapshot,
+                "scientifically_validated": False, "production_approved": False, "publication_allowed": False}
 
     @app.get("/v1/demo/technical-snapshot")
     def snapshot(request: Request, response: Response):
