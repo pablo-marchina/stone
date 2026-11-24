@@ -36,6 +36,36 @@ def _deny(code):
     raise TraceDraftDenied("TRACE_DRAFT_" + code)
 
 
+def verified_recommendation_trace(engine, db, *, tenant, actor, run_id, plan):
+    """Trusted transaction: replay a terminal recommendation and pin its source."""
+    if (db.engine is not engine or not db.in_transaction()
+            or engine.dialect.name != "sqlite" or plan.mode != "recomendar"):
+        _deny("SYNTHETIC_RECOMMENDATION_REQUIRED")
+    # SQLite RESERVED write lock before any evidence or ledger read.
+    _lock_tenant(db, tenant)
+    trace = resume_run(engine, tenant=tenant, actor=actor, run_id=run_id,
+                       connection=db)
+    plan_sha = plan_digest(plan)
+    stored_plan = db.scalar(select(agent_graph_runs.c.plan_sha256).where(
+        agent_graph_runs.c.tenant_id == tenant,
+        agent_graph_runs.c.run_id == run_id))
+    if trace["mode"] != plan.mode or stored_plan != plan_sha:
+        _deny("PLAN_MISMATCH")
+    if trace["status"] != "TRACE_RECORDED":
+        _deny("TERMINAL_TRACE_REQUIRED")
+    history = db.execute(select(agent_graph_events.c.node,
+        agent_graph_events.c.outcome, agent_graph_events.c.receipt_sha256).where(
+            agent_graph_events.c.tenant_id == tenant,
+            agent_graph_events.c.run_id == run_id).order_by(
+                agent_graph_events.c.sequence)).all()
+    if len(history) != trace["revision"]:
+        _deny("LEDGER_DRIFT")
+    for node, outcome, digest in history:
+        if _node_result(engine, tenant, plan, node, connection=db) != (outcome, digest):
+            _deny("SOURCE_DRIFT_RESTART_REQUIRED")
+    return trace, plan_sha
+
+
 def create_trace_bound_draft(engine, *, tenant: str, actor: str, run_id: str,
                              plan: LocalGraphPlan, payload: CreateAgentDraft):
     """Revalidate terminal trace, B2 reference and write draft + audit atomically.
@@ -59,28 +89,8 @@ def create_trace_bound_draft(engine, *, tenant: str, actor: str, run_id: str,
         _deny("REFERENCE_SCOPE_MISMATCH")
     try:
         with engine.begin() as db:
-            # SQLite RESERVED write lock before any evidence or ledger read.
-            _lock_tenant(db, tenant)
-            trace = resume_run(engine, tenant=tenant, actor=actor, run_id=run_id,
-                               connection=db)
-            plan_sha = plan_digest(plan)
-            stored_plan = db.scalar(select(agent_graph_runs.c.plan_sha256).where(
-                agent_graph_runs.c.tenant_id == tenant,
-                agent_graph_runs.c.run_id == run_id))
-            if trace["mode"] != plan.mode or stored_plan != plan_sha:
-                _deny("PLAN_MISMATCH")
-            if trace["status"] != "TRACE_RECORDED":
-                _deny("TERMINAL_TRACE_REQUIRED")
-            history = db.execute(select(agent_graph_events.c.node,
-                agent_graph_events.c.outcome, agent_graph_events.c.receipt_sha256).where(
-                    agent_graph_events.c.tenant_id == tenant,
-                    agent_graph_events.c.run_id == run_id).order_by(
-                        agent_graph_events.c.sequence)).all()
-            if len(history) != trace["revision"]:
-                _deny("LEDGER_DRIFT")
-            for node, outcome, digest in history:
-                if _node_result(engine, tenant, plan, node, connection=db) != (outcome, digest):
-                    _deny("SOURCE_DRIFT_RESTART_REQUIRED")
+            trace, plan_sha = verified_recommendation_trace(
+                engine, db, tenant=tenant, actor=actor, run_id=run_id, plan=plan)
             # Existing B2 gate is authoritative independently of the trace.
             handoff = EvidenceRetriever(engine).handoff(tenant, payload.brief, connection=db)
             spec = CreativeSpec.model_validate(handoff.model_dump(mode="json"))
