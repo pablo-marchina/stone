@@ -46,10 +46,13 @@ def run(browser_path, output):
                     page.wait_for_function("document.querySelectorAll('#ranking tr').length===20 && document.querySelector('#status').textContent.includes('Ranking e análise')")
                     assert page.locator('#chart progress').count()==10
                     assert page.locator('#evidence').inner_text().startswith('Snapshot: demo.snapshot.01')
+                    assert page.locator('#rubric-fields article').count()==20
+                    page.locator('.rubric-panel').screenshot(path=output/'stone_demo_rubrica.png')
                     page.screenshot(path=output/'stone_demo_ranking.png')
                     page.locator('#run').click()
                     page.wait_for_function("document.querySelectorAll('#proposals article').length===5")
                     assert page.locator('#trace li').count()==6
+                    assert page.locator('#proposals canvas').count()==5
                     page.locator('#proposal-panel').screenshot(path=output/'stone_demo_propostas.png')
                     page.get_by_role('button',name='Selecionar rascunho').first.click()
                     page.wait_for_selector('#editor:visible')
