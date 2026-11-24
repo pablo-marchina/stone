@@ -149,6 +149,7 @@ EDITORIAL_THEMES = {
     "pricing": ("04 / PRECIFICAÇÃO", "#F1E8F8", "#402653", "#75439C"),
     "planning": ("05 / PLANEJAMENTO", "#E5F4F1", "#174A46", "#117A71"),
     "experiment": ("GESTÃO NA PRÁTICA", "#F4F7EC", "#103C29", "#007545"),
+    "experiment-carousel": ("GESTÃO NA PRÁTICA", "#F4F7EC", "#103C29", "#007545"),
 }
 
 
@@ -172,7 +173,7 @@ def draft_from_spec(spec: CreativeSpec, document_id: str, *,
     if editorial_template is not None:
         # Trusted synthetic proposal path only. All visual elements are real
         # editable, typed layers, shared by preview and persisted export.
-        if editorial_template not in EDITORIAL_THEMES or (spec.platform_intent == "instagram_carousel" and editorial_template != "planning"):
+        if editorial_template not in EDITORIAL_THEMES or (spec.platform_intent == "instagram_carousel" and editorial_template not in {"planning", "experiment-carousel"}) or (editorial_template == "experiment-carousel" and spec.platform_intent != "instagram_carousel"):
             raise ValueError("STUDIO_EDITORIAL_TEMPLATE_INVALID")
         label, background, ink, accent = EDITORIAL_THEMES[editorial_template]
         canvas = Canvas(background=background)
@@ -188,7 +189,7 @@ def draft_from_spec(spec: CreativeSpec, document_id: str, *,
             TextLayer(id="section", x=80, y=170, w=920, h=65,
                       text=label, style=TextStyle(font_size=40, color=accent)),
         ])
-    if editorial_template == "experiment":
+    if editorial_template in {"experiment", "experiment-carousel"}:
         # Independent presentation layout; old document versions and other templates
         # are untouched. All typography is part of the typed document, not CSS.
         page = DesignPage(id="page.1", layers=[
@@ -208,6 +209,24 @@ def draft_from_spec(spec: CreativeSpec, document_id: str, *,
                       text="SUA PRÓXIMA AÇÃO", style=TextStyle(font_size=32, color=ink)),
         ])
     pages = [page]
+    if editorial_template == "experiment-carousel":
+        # Same three-page sequence across variants. CTA differs only on page 3;
+        # theme changes only the headline on page 1 and the guidance on page 2.
+        pages = []
+        for index, values in enumerate((
+            {"body": "Uma orientação prática para organizar a sua próxima ação.",
+             "cta": "Deslize para continuar.", "step": "01 / ENTENDA", "action-label": "PRÓXIMA PÁGINA"},
+            {"headline": "Coloque em\nprática", "body": spec.body, "cta": "Deslize para concluir.",
+             "step": "02 / APLIQUE", "action-label": "PRÓXIMA PÁGINA"},
+            {"headline": "Faça acontecer", "body": "Reserve um momento para revisar o que fez e ajustar a próxima ação.",
+             "cta": spec.cta, "step": "03 / REVISE", "action-label": "SUA PRÓXIMA AÇÃO"},
+        ), start=1):
+            raw = page.model_dump(mode="json")
+            raw["id"] = f"page.{index}"
+            for layer in raw["layers"]:
+                if layer["id"] in values:
+                    layer["text"] = values[layer["id"]]
+            pages.append(DesignPage.model_validate(raw))
     if editorial_template == "planning" and spec.platform_intent == "instagram_carousel":
         for index, (headline, body, cta) in enumerate((
             ("Escolha uma prioridade", "Defina a tarefa mais importante para a próxima semana.", "Anote sua escolha."),

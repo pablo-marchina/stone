@@ -11,6 +11,8 @@ from tapi_gate0.studio_e4 import studio_etag
 
 VERSION = 'tapi-demo-experiment-pair.v1'
 LAYOUT_VERSION = 'tapi-demo-experiment-layout.v1'
+CAROUSEL_LAYOUT_VERSION = 'tapi-demo-experiment-carousel-layout.v1'
+FORMATS = ('instagram_feed', 'instagram_carousel')
 CTA = {'seguir': 'Siga para mais dicas.', 'comentar': 'Comente sua dúvida.',
        'salvar': 'Salve para consultar depois.'}
 TOPIC = {'marketing': ('Planeje sua divulgação', 'Escolha um público e organize uma mensagem clara para esta semana.'),
@@ -30,10 +32,17 @@ def specs(pair, tenant):
         cta = CTA[value] if pair['field']=='cta' else 'Escolha uma ação para esta semana.'
         yield CreativeSpec(spec_id='experiment.'+digest([tenant, pair, label])[:32], tenant_id=tenant,
                            objective='Comparação editorial exploratória de um fator; rascunho original.',
-                           headline=headline.rsplit(' ', 1)[0]+'\n'+headline.rsplit(' ', 1)[1], body=body, cta=cta)
+                           headline=headline.rsplit(' ', 1)[0]+'\n'+headline.rsplit(' ', 1)[1], body=body, cta=cta,
+                           platform_intent=pair.get('platform_intent', 'instagram_feed'))
 
 
-def previews(snapshot, tenant):
+def template_for(pair):
+    return 'experiment-carousel' if pair.get('platform_intent') == 'instagram_carousel' else 'experiment'
+
+
+def previews(snapshot, tenant, platform_intent='instagram_feed'):
+    if platform_intent not in FORMATS:
+        raise ValueError('DEMO_EXPERIMENT_FORMAT_INVALID')
     if not snapshot:
         return []
     packet = snapshot['editorial_hypotheses']
@@ -56,21 +65,24 @@ def previews(snapshot, tenant):
                     qa_fixture=snapshot.get('qa_fixture', False), model_calls_performed=0,
                     publication_allowed=False, scientifically_validated=False,
                     joint_effect_estimated=False, external_rights_verified=False)
-        documents = [draft_from_spec(spec, 'preview.'+label, editorial_template='experiment').model_dump(mode='json')
+        if platform_intent == 'instagram_carousel':
+            pair.update(platform_intent=platform_intent, layout_version=CAROUSEL_LAYOUT_VERSION)
+        documents = [draft_from_spec(spec, 'preview.'+label, editorial_template=template_for(pair)).model_dump(mode='json')
                      for label, spec in zip(('A','B'), specs(pair, tenant))]
         rows.append(dict(pair=pair, previews=documents, preview_sha256=digest([pair, documents])))
     return rows
 
 
 def persist(engine, snapshot, tenant, actor, preview_sha256):
-    selected = next((r for r in previews(snapshot, tenant) if r['preview_sha256']==preview_sha256), None)
+    selected = next((r for fmt in FORMATS for r in previews(snapshot, tenant, fmt)
+                     if r['preview_sha256']==preview_sha256), None)
     if selected is None:
         raise ValueError('DEMO_EXPERIMENT_PREVIEW_MISMATCH')
     pair = selected['pair']
     pair_id = 'demo.experiment.'+uuid4().hex
     with engine.begin() as db:
         documents = [StudioStore(engine).create(tenant, actor, spec, pair_id+'.'+label,
-                     connection=db, editorial_template='experiment') for label, spec in zip(('A','B'), specs(pair, tenant))]
+                     connection=db, editorial_template=template_for(pair)) for label, spec in zip(('A','B'), specs(pair, tenant))]
         proof = dict(**pair, preview_sha256=preview_sha256, pair_id=pair_id,
                      operator_selected=True, documents=[{'document_id':d.document_id, 'version':1,
                      'initial_document_sha256':studio_etag(d).strip('"')} for d in documents])

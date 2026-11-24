@@ -115,3 +115,28 @@ def test_persistent_launcher_recovers_pair_and_revision(tmp_path):
                 assert counters['editorial_experiment_pairs']==1
         finally:
             app.state.identity_store.engine.dispose()
+
+
+def test_carousel_api_preserves_feed_and_persists_selected_format(tmp_path):
+    snapshot=fixture_snapshot(tmp_path)
+    app=build_demo(tmp_path/'demo.sqlite','fixture-only-not-real-password',snapshot)
+    try:
+        with TestClient(app) as c:
+            h={'Authorization':'Bearer '+c.post('/v1/auth/sessions',json={'tenant_id':TENANT,'username':USERNAME,'password':'fixture-only-not-real-password'}).json()['access_token']}
+            url='/v1/demo/experiments'
+            assert c.get(url+'?platform_intent=instagram_carousel').status_code==401
+            assert c.get(url+'?platform_intent=reels',headers=h).status_code==422
+            feed=c.get(url,headers=h).json()['pairs']
+            carousels=c.get(url+'?platform_intent=instagram_carousel',headers=h).json()['pairs']
+            assert len(feed)==len(carousels)==2
+            assert all(len(d['pages'])==1 for row in feed for d in row['previews'])
+            assert all(len(d['pages'])==3 for row in carousels for d in row['previews'])
+            row=next(r for r in carousels if r['pair']['field']=='cta')
+            created=c.post(url,headers=h,json={'preview_sha256':row['preview_sha256']})
+            assert created.status_code==201,created.text
+            pair=created.json()
+            assert pair['proof']['platform_intent']=='instagram_carousel'
+            assert all(len(d['pages'])==3 for d in pair['documents'])
+            assert c.get('/v1/demo/saved-library',headers=h).json()['pairs']==[pair['proof']]
+    finally:
+        app.state.identity_store.engine.dispose()

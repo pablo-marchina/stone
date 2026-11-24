@@ -200,10 +200,10 @@ def build_demo(path: Path, password: str, technical_snapshot=None, *, video_enab
         return {"available": av_report is not None, "report": av_report}
 
     @app.get("/v1/demo/experiments")
-    def experiments(request: Request, response: Response):
+    def experiments(request: Request, response: Response, platform_intent: str = Query(default="instagram_feed", pattern=r"^(instagram_feed|instagram_carousel)$")):
         authorize(request)
         response.headers["Cache-Control"] = "private, no-store"
-        return {"pairs": previews(technical_snapshot, TENANT)}
+        return {"pairs": previews(technical_snapshot, TENANT, platform_intent)}
 
     @app.post("/v1/demo/experiments", status_code=201)
     def create_experiment(payload: ExperimentSelection, request: Request, response: Response):
