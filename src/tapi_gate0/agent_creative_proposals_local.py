@@ -21,7 +21,7 @@ from .agent_trace_draft_handoff import verified_recommendation_trace
 from .domain import Id
 from .sa_store import domain_events, outbox
 from .storage import now_utc
-from .studio_e1 import CreativeSpec, StudioStore
+from .studio_e1 import CreativeSpec, StudioStore, draft_from_spec, EDITORIAL_LAYOUT_VERSION
 
 VERSION = "tapi-local-creative-proposals.v1"
 AGGREGATE = "agent_generated_draft"
@@ -80,20 +80,23 @@ def _generate(engine, db, *, tenant, actor, run_id, plan):
     proposals = []
     for key, headline, body, cta in TEMPLATES:
         scope = dict(tenant=tenant, actor=actor, run=run_id, plan=plan_sha,
-                     trace=trace["chain_sha256"], template=key, version=VERSION)
+                     trace=trace["chain_sha256"], template=key, version=VERSION,
+                     layout_version=EDITORIAL_LAYOUT_VERSION)
         brief = CreativeBriefRequest(
             spec_id="spec." + _digest(scope)[:32],
             objective="Proposta educativa sintética para revisão editorial de MPEs",
             headline=headline, body=body, cta=cta,
             reference_content_ids=[plan.content_id])
-        EvidenceRetriever(engine).handoff(tenant, brief, connection=db)
+        handoff = EvidenceRetriever(engine).handoff(tenant, brief, connection=db)
+        spec = CreativeSpec.model_validate(handoff.model_dump(mode="json"))
+        preview = draft_from_spec(spec, "preview." + key, editorial_template=key).model_dump(mode="json")
         proposal = EditorialProposal(template_id=key, brief=brief,
             script=(headline, body, cta), caption=body + " " + cta,
             citation=citation,
             hypothesis="Testar clareza educativa; a referência é apenas exemplo para inspeção, não prova de eficácia.")
         raw = proposal.model_dump(mode="json")
-        proposals.append({"proposal_sha256": _digest({"scope": scope, "proposal": raw}),
-                          "proposal": raw})
+        proposals.append({"proposal_sha256": _digest({"scope": scope, "proposal": raw, "preview": preview}),
+                          "proposal": raw, "preview_document": preview})
     return trace, plan_sha, proposals
 
 
@@ -126,10 +129,11 @@ def accept_proposal(engine, *, tenant, actor, run_id, plan, proposal_sha256, doc
             proposal = EditorialProposal.model_validate_json(json.dumps(selected["proposal"]))
             handoff = EvidenceRetriever(engine).handoff(tenant, proposal.brief, connection=db)
             spec = CreativeSpec.model_validate(handoff.model_dump(mode="json"))
-            doc = StudioStore(engine).create(tenant, actor, spec, document_id, connection=db)
+            doc = StudioStore(engine).create(tenant, actor, spec, document_id, connection=db,
+                                             editorial_template=proposal.template_id)
             proof = dict(schema_version=VERSION, trace_chain_sha256=trace["chain_sha256"],
                          plan_sha256=plan_sha, proposal_sha256=proposal_sha256,
-                         template_id=proposal.template_id,
+                         template_id=proposal.template_id, layout_version=EDITORIAL_LAYOUT_VERSION,
                          citation_sha256=_digest(proposal.citation.model_dump(mode="json")),
                          initial_document_sha256=sha256(doc.model_dump_json().encode()).hexdigest(),
                          initial_document_version=1, operator_authored_brief=False,
