@@ -4,6 +4,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import shutil
+import json
+import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -47,8 +49,13 @@ def run(browser_path, output):
                     assert page.locator('#chart progress').count()==10
                     assert page.locator('#evidence').inner_text().startswith('Snapshot: demo.snapshot.01')
                     assert page.locator('#rubric-fields article').count()==20
-                    page.locator('.rubric-panel').screenshot(path=output/'stone_demo_rubrica.png')
+                    page.locator('.rubric-panel').filter(has=page.locator('#rubric-fields')).screenshot(path=output/'stone_demo_rubrica.png')
                     page.screenshot(path=output/'stone_demo_ranking.png')
+                    page.locator('#search-form button').click()
+                    page.wait_for_function("document.querySelectorAll('#search-results article').length===5")
+                    page.locator('#search-results article button').first.click()
+                    page.wait_for_function("document.querySelector('#evidence').textContent.includes('demo.snapshot.01')")
+                    page.locator('#search-form').locator('..').screenshot(path=output/'stone_demo_busca.png')
                     page.locator('#run').click()
                     page.wait_for_function("document.querySelectorAll('#proposals article').length===5")
                     assert page.locator('#trace li').count()==6
@@ -69,10 +76,33 @@ def run(browser_path, output):
                         assert hashlib.sha256(data).hexdigest() in page.locator('#export-proof').inner_text()
                     assert b'RASCUNHO' in (output/'stone_demo_criativo.svg').read_bytes()
                     assert (output/'stone_demo_criativo.png').read_bytes().startswith(b'\x89PNG')
+                    page.get_by_role('button',name='Selecionar rascunho').nth(4).click()
+                    page.wait_for_function("document.querySelectorAll('#page-select option').length===3")
+                    page.locator('#page-select').select_option('page.2')
+                    page.locator('#headline').fill('Priorize sua semana')
+                    page.locator('#save').click()
+                    page.wait_for_function("document.querySelector('#document-meta').textContent.includes('versão 2')")
+                    page.locator('#editor').screenshot(path=output/'stone_demo_carrossel.png')
+                    with page.expect_download() as download:
+                        page.locator('#export-zip').click()
+                    archive=output/'stone_demo_carrossel.zip'
+                    download.value.save_as(archive)
+                    page.wait_for_function("document.querySelector('#export-proof').textContent.includes('SHA-256')")
+                    assert hashlib.sha256(archive.read_bytes()).hexdigest() in page.locator('#export-proof').inner_text()
+                    with zipfile.ZipFile(archive) as z:
+                        manifest=json.loads(z.read('manifest.json'))
+                        assert len(manifest['pages'])==3 and manifest['version']==2
+                        assert all(hashlib.sha256(z.read(p['file'])).hexdigest()==p['sha256'] for p in manifest['pages'])
+                    page.locator('#session-panel').screenshot(path=output/'stone_demo_resultados.png')
+                    with page.expect_download() as download:
+                        page.locator('#session-download').click()
+                    report=output/'stone_demo_resultados.json'
+                    download.value.save_as(report)
+                    assert json.loads(report.read_bytes())['synthetic_counters']['document_versions']==4
                     with app.state.identity_store.engine.connect() as db:
                         assert db.scalar(select(func.count()).select_from(agent_graph_events))==6
-                        assert db.scalar(select(func.count()).select_from(studio_versions))==2
-                        assert db.scalar(select(func.count()).select_from(domain_events).where(domain_events.c.aggregate_type=='agent_generated_draft'))==1
+                        assert db.scalar(select(func.count()).select_from(studio_versions))==4
+                        assert db.scalar(select(func.count()).select_from(domain_events).where(domain_events.c.aggregate_type=='agent_generated_draft'))==2
                     page.locator('#logout').click()
                     page.wait_for_selector('#login:visible')
                     assert page.locator('#workspace').is_hidden() and not errors, errors
@@ -80,7 +110,7 @@ def run(browser_path, output):
                     browser.close()
         finally:
             app.state.identity_store.engine.dispose()
-    print('PASS — Chromium + FastAPI em processo: ranking 20/4/2, seis checkpoints, cinco propostas, duas versões, SVG/PNG com hash e logout.')
+    print('PASS — Chromium + FastAPI em processo: ranking 20/4/2, seis checkpoints, cinco propostas, quatro versões, busca FTS5, carrossel ZIP e resumo JSON, hashes e logout.')
 
 
 def main():
