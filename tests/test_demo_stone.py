@@ -23,6 +23,8 @@ def test_demo_vertical(tmp_path):
             assert client.get('/v1/demo/technical-snapshot').status_code == 401
             assert client.get('/v1/demo/search?q=estoque').status_code == 401
             assert client.get('/v1/demo/session-results').status_code == 401
+            assert client.get('/v1/demo/video-status').status_code == 401
+            assert client.post('/v1/demo/render-next',json={}).status_code == 401
             assert client.get('/app/demo.html').status_code == 200
             assert client.get('/app/demo.mjs').status_code == 200
             assert client.get('/app/demo.css').status_code == 200
@@ -30,6 +32,8 @@ def test_demo_vertical(tmp_path):
             login = client.post('/v1/auth/sessions', json={'tenant_id':TENANT,'username':USERNAME,'password':password})
             headers = {'Authorization':'Bearer '+login.json()['access_token']}
             assert client.get('/v1/demo/technical-snapshot',headers=headers).json()=={'available':False,'snapshot':None}
+            assert client.get('/v1/demo/video-status',headers=headers).json()=={'enabled':False}
+            assert client.post('/v1/demo/render-next',headers=headers,json={}).status_code==403
             rubric=client.get('/v1/demo/rubric/demo.post.01',headers=headers).json()
             assert rubric['field_count']==20 and rubric['canonical'] is False
             assert rubric['fields']['tipo_post']['state']=='metadata_observed'
@@ -78,7 +82,7 @@ def test_demo_vertical(tmp_path):
             assert edited.json()['pages'][1]['layers'][0]['text']=='Priorize sua semana'
             assert edited.json()['pages'][0]==carousel.json()['pages'][0]
             report=client.get('/v1/demo/session-results',headers=headers).json()
-            assert report['synthetic_counters']==dict(eligible_posts=20,profiles=4,top_posts=2,completed_traces=1,checkpoint_events=6,editable_drafts=2,document_versions=4,generated_draft_events=2)
+            assert report['synthetic_counters']==dict(eligible_posts=20,profiles=4,top_posts=2,completed_traces=1,checkpoint_events=6,editable_drafts=2,document_versions=4,generated_draft_events=2,storyboards=0,rendered_videos=0)
             assert report['historical_technical_snapshot'] is None and report['production_approved'] is False
             assert client.post('/v1/auth/logout',headers=headers).status_code==204
             assert client.get('/v1/auth/me',headers=headers).status_code==401
