@@ -62,6 +62,7 @@ PY_A05_A07 = (
     "tests/test_dec008_resume_preflight.py",
     "tests/test_dec008_protected_av_review.py",
     "tests/test_dec008_process_recovery.py",
+    "tests/test_agent_trace_draft_handoff.py",
     "tests/test_architecture_vertical_synthetic.py",
 )
 PY_A02_ASR_DIAGNOSTIC = (
@@ -99,7 +100,7 @@ NODE_A073 = (
 )
 # These are expected collection counts after the A05 B2 hardening tests, NOT
 # required gate acceptance counts or a promise about all future code changes.
-EXPECTED = {"python_a05_a07": 423, "python_a06_e1": 35,
+EXPECTED = {"python_a05_a07": 435, "python_a06_e1": 35,
             "python_a02_asr_diagnostic": 91,
             "python_a027_fixture_batch": 40,
             "python_a027_integrated": 47,
@@ -146,6 +147,7 @@ SOURCE_FILES = (
     "src/tapi_gate0/agent_graph_readonly_runner.py",
     "src/tapi_gate0/sa_store.py",
     "src/tapi_gate0/agent_graph_local_api.py",
+    "src/tapi_gate0/agent_trace_draft_handoff.py",
     "src/tapi_gate0/agent_graph_orchestrator_dec008.py",
     "src/tapi_gate0/agent_graph_reconciliation_dec008.py",
     "tests/test_dec008_langgraph_dualwrite_actual.py",
