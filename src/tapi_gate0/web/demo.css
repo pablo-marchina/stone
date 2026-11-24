@@ -9,3 +9,7 @@
 .journey-nav{position:sticky;top:0;z-index:3;background:#edf2edee;border:1px solid #d5dfd7;border-radius:10px;padding:10px;gap:8px;margin-bottom:12px;justify-content:space-around}.journey-nav a{font-size:13px;text-decoration:none;padding:6px}.journey-nav a:hover{background:#dbece0;border-radius:6px}.panel{scroll-margin-top:80px}#av-fields tr.suppressed{background:#fff1dc}#av-modalities .kpi strong{font-size:16px}#av-fields td:last-child{white-space:normal;min-width:220px;overflow-wrap:anywhere}
 
 .historical-contrast{margin-top:24px;border-top:1px solid #d5dfd7;padding-top:16px}.contrast-item{border-bottom:1px solid #e3ebe4;padding:12px 0}.contrast-item .bar-row{margin-top:6px;grid-template-columns:100px 1fr 65px}.contrast-item small{font-size:11px;color:#53665c}.contrast-item p{margin:6px 0}
+
+.hypothesis-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:12px 0}.hypothesis-card{background:#f7faf7;border:1px solid #d5dfd7;border-radius:12px;padding:16px}.hypothesis-card h3{margin:4px 0;text-transform:capitalize}.hypothesis-card strong{font-size:25px;color:#16704e}.hypothesis-card p{font-size:13px;line-height:1.4}.hypothesis-card small{color:#53665c;text-transform:uppercase;letter-spacing:.06em}
+
+.hypotheses{margin-top:24px;border-top:1px solid #d5dfd7;padding-top:16px}

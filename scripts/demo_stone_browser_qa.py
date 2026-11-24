@@ -71,6 +71,14 @@ def run(browser_path, output, *, video=False, av_report=None, contrast_fixture=F
                     page.screenshot(path=output/'stone_demo_ranking.png')
                     if contrast_fixture:
                         assert 'FIXTURE SINTÉTICA DE QA' in page.locator('#technical-results').inner_text()
+                        assert page.locator('.hypotheses .hypothesis-card').count()==1
+                        assert '100 p.p.' in page.locator('.hypotheses').inner_text()
+                        page.locator('.hypotheses').screenshot(path=output/'stone_demo_hipoteses_fixture.png')
+                        with page.expect_download() as download:
+                            page.get_by_role('button',name='Baixar plano de hipóteses JSON').click()
+                        saved=output/'stone_demo_hipoteses_fixture.json'
+                        download.value.save_as(saved)
+                        assert json.loads(saved.read_bytes())==snapshot['editorial_hypotheses']
                         picker = page.get_by_label('Atributo para comparar')
                         assert page.locator('.historical-contrast').get_by_text('Diferença: 100 p.p.',exact=True).count()==1
                         page.locator('#technical-panel').screenshot(path=output/'stone_demo_contraste_fixture.png')
@@ -166,7 +174,7 @@ def run(browser_path, output, *, video=False, av_report=None, contrast_fixture=F
                     assert 'Resultados da sessão sintética' in html and 'document versions' in html
                     assert '<script' not in html and 'fixture.profile' not in html
                     if contrast_fixture:
-                        assert 'FIXTURE SINTÉTICA DE QA' in html and 'Comparação top 10%' in html
+                        assert 'FIXTURE SINTÉTICA DE QA' in html and 'Comparação top 10%' in html and 'Hipóteses de teste editorial' in html
                     with app.state.identity_store.engine.connect() as db:
                         assert db.scalar(select(func.count()).select_from(agent_graph_events))==6
                         assert db.scalar(select(func.count()).select_from(studio_versions))==4

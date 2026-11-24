@@ -14,6 +14,7 @@ import re
 from tapi_gate0.discovery_audience_exploratory import POLICY, TIERS, summarize
 from tapi_gate0.discovery_rubric_coverage import rubric_coverage
 from scripts.demo_editorial_contrast import contrast
+from scripts.demo_editorial_hypotheses import hypotheses
 
 STATUSES = {"EXPLORATORY_RANKING_COMPLETED", "EXPLORATORY_EDITORIAL_COMPLETED",
             "EXPLORATORY_AGENT_PREVIEW_COMPLETED", "EXPLORATORY_STUDIO_DRAFTS_COMPLETED"}
@@ -50,11 +51,14 @@ def project_report(path: Path) -> dict:
             if coverage != report["rubric_coverage"]:
                 raise ValueError()
             coverage = coverage["cohorts"]["technical_all"]["fields"]
+        comparison = contrast(rows)
+        report_digest = hashlib.sha256(raw).hexdigest()
         return {"schema_version": "tapi-demo-technical-snapshot.v1",
-                "as_of": date.isoformat(), "report_sha256": hashlib.sha256(raw).hexdigest(),
+                "as_of": date.isoformat(), "report_sha256": report_digest,
                 "manifest_sha256": report["manifest_sha256"], "cohorts": expected["cohorts"],
                 "tier_counts": expected["tier_counts"], "rubric_fields": coverage,
-                "editorial_contrast": contrast(rows),
+                "editorial_contrast": comparison,
+                "editorial_hypotheses": hypotheses(comparison, report_digest),
                 "historical_report_only": True, "current_rights_verified": False,
                 "scientifically_validated": False, "scientific_admissions": 0,
                 "production_approved": False}
