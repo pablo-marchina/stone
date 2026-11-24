@@ -85,6 +85,7 @@ class QueueDraftVideo(StrictModel):
     storyboard_version: int = Field(ge=1)
     frames: list[SceneFrame] = Field(min_length=1, max_length=MAX_RENDER_SCENES)
     audio_asset_id: Id | None = None
+    render_profile: Literal["classic", "social_vertical_v1"] = "classic"
 
 
 class RenderJobInfo(StrictModel):
@@ -323,6 +324,13 @@ class LocalDraftRenderer:
                 'duration_ms':sum(s.duration_ms for s in sb.scenes),
                 'scene_durations_ms':{s.scene_id:s.duration_ms for s in sb.scenes},
                 'draft_only':True}
+            if req.render_profile == 'social_vertical_v1':
+                for frame in checks.values():
+                    _, data = self._active_rights(db,tenant,frame['asset_id'],'png')
+                    _, width, height = decode_png(base64.b64encode(data).decode())
+                    if (width,height) != (1080,1920):
+                        raise StudioError('STUDIO_SOCIAL_VERTICAL_FRAME_REQUIRED',422)
+                manifest['render_profile']=req.render_profile
             raw=json.dumps(manifest,sort_keys=True,separators=(',',':'))
             digest=sha256(raw.encode()).hexdigest()
             try:
@@ -494,7 +502,14 @@ class LocalDraftRenderer:
                     if digest!=manifest['audio']['sha256']:
                         raise StudioError('STUDIO_RENDER_AUDIO_CHANGED',403)
                     _decode_wav(base64.b64encode(audio).decode())
-            rendered=self._encode_frames(frames,audio)
+            profile=manifest.get('render_profile','classic')
+            if profile == 'social_vertical_v1':
+                from .studio_reel_social import encode_social_vertical
+                rendered=encode_social_vertical(frames,audio)
+            elif profile == 'classic':
+                rendered=self._encode_frames(frames,audio)
+            else:
+                raise StudioError('STUDIO_RENDER_PROFILE_INVALID',422)
         except StudioError as exc:
             error=exc.code
         except Exception:

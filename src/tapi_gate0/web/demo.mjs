@@ -41,20 +41,22 @@ function base64Blob(blob){return new Promise((resolve,reject)=>{const r=new File
 $('render-video').onclick=()=>action(async()=>{
   if(!videoEnabled||!doc||doc.platform_intent!=='instagram_carousel'||doc.pages.length!==3||!$('video-rights').checked)throw Error('Confirme os direitos locais e selecione o carrossel de três páginas.');
   if(doc.pages.some(p=>p.layers.some(l=>l.kind!=='text')))throw Error('Somente camadas textuais originais nesta demonstração.');
+  const renderProfile=$('video-profile').value;
+  const frameDoc=renderProfile==='social_vertical_v1'?globalThis.StoneExport.verticalDocument(doc):doc;
   clearVideo();videoKey=doc.document_id+':'+doc.version;
   const {data:story}=await api('/v1/studio/storyboards',{storyboard_id:'demo.story.'+crypto.randomUUID(),source_document_id:doc.document_id,platform_intent:'instagram_reel'});
   if(story.source_document_version!==doc.version||story.scenes.length!==doc.pages.length)throw Error('Versão do storyboard divergente.');
   videoStep(story.scenes.length+' cenas · storyboard v'+story.version);
   const frames=[];
-  for(const [i,p] of doc.pages.entries()){
-    const blob=await globalThis.StoneExport.toRaster(doc,p,new Map(),'png');
+  for(const [i,p] of frameDoc.pages.entries()){
+    const blob=await globalThis.StoneExport.toRaster(frameDoc,p,new Map(),'png');
     const {data:a}=await api('/v1/studio/assets/png',{data_base64:await base64Blob(blob),rights_attested:true});
     if(a.sha256!==await globalThis.StoneExport.sha256(blob))throw Error('PNG divergente.');
-    await api('/v1/studio/assets/draft-render-rights',{asset_id:a.asset_id,evidence_reference:'demo-original-local:'+doc.document_id+':v'+doc.version+':'+p.id,expires_at:new Date(Date.now()+3600000).toISOString(),rights_attested:true});
+    await api('/v1/studio/assets/draft-render-rights',{asset_id:a.asset_id,evidence_reference:'demo-original-local:'+doc.document_id+':v'+doc.version+':'+p.id+':'+renderProfile,expires_at:new Date(Date.now()+3600000).toISOString(),rights_attested:true});
     frames.push({scene_id:story.scenes[i].scene_id,asset_id:a.asset_id});
   }
-  videoStep('3 quadros · hashes e atestações locais');
-  const {data:job}=await api('/v1/studio/render-jobs',{job_id:'demo.render.'+crypto.randomUUID(),storyboard_id:story.storyboard_id,storyboard_version:story.version,frames});
+  videoStep('3 quadros · '+(renderProfile==='social_vertical_v1'?'1080 × 1920':'clássico')+' · hashes e atestações locais');
+  const {data:job}=await api('/v1/studio/render-jobs',{job_id:'demo.render.'+crypto.randomUUID(),storyboard_id:story.storyboard_id,storyboard_version:story.version,frames,render_profile:renderProfile});
   videoStep('Job '+job.status+' · FFmpeg local');message('Renderizando vídeo de 15 segundos…');
   const {data:result}=await api('/v1/demo/render-next',{});
   if(result.job_id!==job.job_id||result.status!=='succeeded'||!result.artifact_id)throw Error('Render não concluído: '+(result.error_code||result.status));
@@ -62,7 +64,7 @@ $('render-video').onclick=()=>action(async()=>{
   if(!response.ok)throw Error('Download do vídeo recusado.');
   const blob=await response.blob();if(await globalThis.StoneExport.sha256(blob)!==result.sha256)throw Error('Hash do MP4 divergente.');
   videoUrl=URL.createObjectURL(blob);$('video-preview').src=videoUrl;$('video-preview').hidden=false;$('download-video').hidden=false;
-  videoStep('MP4 persistido · SHA-256 verificado');$('video-proof').textContent='15 s · sem áudio · SHA-256 '+result.sha256;
+  videoStep('MP4 persistido · SHA-256 verificado');$('video-proof').textContent='15 s · '+(renderProfile==='social_vertical_v1'?'1080 × 1920 · 30 FPS · ':'360 × 640 · 8 FPS · ')+'sem áudio · SHA-256 '+result.sha256;
   await sessionResults();message('Vídeo de rascunho renderizado e verificado.');
 });
 $('download-video').onclick=()=>{if(videoUrl){const a=el('a');a.href=videoUrl;a.download='stone-RASCUNHO.mp4';document.body.append(a);a.click();a.remove();}};

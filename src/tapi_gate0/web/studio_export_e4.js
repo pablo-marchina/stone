@@ -205,5 +205,14 @@
     entries.push({name:'manifest.json',blob:new Blob([JSON.stringify(manifest,null,2)],{type:'application/json'})});
     return {blob:await zipArchive(entries),filename:fileBase+'.zip',manifest};
   }
-  root.StoneExport={drawTo,toRaster,toSvg,zipArchive,sha256,sha256Bytes,exportDocument,crc32};
+  function verticalDocument(doc) {
+    if(doc.canvas.width!==1080||doc.canvas.height!==1350||doc.pages.some(p=>p.layers.some(l=>l.kind!=='text')))
+      throw Error('Reel vertical requer um documento textual 1080 × 1350.');
+    const pages=doc.pages.map(p=>({...p,layers:p.layers.map(l=>({...l,y:160+Math.round(l.y*1.13)}))}));
+    for(const p of pages)for(const l of p.layers){
+      if(l.x<48||l.x+l.w>1032||l.y<160||l.y+l.h>1660)throw Error('Camada fora da área segura do Reel: '+l.id);
+    }
+    return {...doc,canvas:{...doc.canvas,height:1920},pages};
+  }
+  root.StoneExport={verticalDocument,drawTo,toRaster,toSvg,zipArchive,sha256,sha256Bytes,exportDocument,crc32};
 })(globalThis);
