@@ -141,7 +141,7 @@ class TextLayerPatch(Model):
         return self
 
 
-EDITORIAL_LAYOUT_VERSION = "tapi-editorial-layout.v1"
+EDITORIAL_LAYOUT_VERSION = "tapi-editorial-layout.v2"
 EDITORIAL_THEMES = {
     "inventory": ("01 / ESTOQUE", "#E5F4E6", "#103B2B", "#087A50"),
     "cashflow": ("02 / FINANÇAS", "#E3EEF9", "#153957", "#245C9B"),
@@ -171,7 +171,7 @@ def draft_from_spec(spec: CreativeSpec, document_id: str, *,
     if editorial_template is not None:
         # Trusted synthetic proposal path only. All visual elements are real
         # editable, typed layers, shared by preview and persisted export.
-        if editorial_template not in EDITORIAL_THEMES or spec.platform_intent != "instagram_feed":
+        if editorial_template not in EDITORIAL_THEMES or (spec.platform_intent == "instagram_carousel" and editorial_template != "planning"):
             raise ValueError("STUDIO_EDITORIAL_TEMPLATE_INVALID")
         label, background, ink, accent = EDITORIAL_THEMES[editorial_template]
         canvas = Canvas(background=background)
@@ -187,11 +187,24 @@ def draft_from_spec(spec: CreativeSpec, document_id: str, *,
             TextLayer(id="section", x=80, y=170, w=920, h=65,
                       text=label, style=TextStyle(font_size=40, color=accent)),
         ])
+    pages = [page]
+    if editorial_template == "planning" and spec.platform_intent == "instagram_carousel":
+        for index, (headline, body, cta) in enumerate((
+            ("Escolha uma prioridade", "Defina a tarefa mais importante para a próxima semana.", "Anote sua escolha."),
+            ("Acompanhe a execução", "Reserve um momento para revisar o que foi feito e ajustar o plano.", spec.cta),
+        ), start=2):
+            raw = page.model_dump(mode="json")
+            raw["id"] = f"page.{index}"
+            values = {"headline": headline, "body": body, "cta": cta, "section": f"0{index} / PASSO A PASSO"}
+            for layer in raw["layers"]:
+                if layer["id"] in values:
+                    layer["text"] = values[layer["id"]]
+            pages.append(DesignPage.model_validate(raw))
     return DesignDocument(
         document_id=document_id, tenant_id=spec.tenant_id,
         spec_id=spec.spec_id, version=1, canvas=canvas,
         platform_intent=spec.platform_intent,
-        pages=[page], reference_content_ids=spec.reference_content_ids,
+        pages=pages, reference_content_ids=spec.reference_content_ids,
     )
 
 
