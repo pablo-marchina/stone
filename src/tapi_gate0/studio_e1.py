@@ -141,7 +141,18 @@ class TextLayerPatch(Model):
         return self
 
 
-def draft_from_spec(spec: CreativeSpec, document_id: str) -> DesignDocument:
+EDITORIAL_LAYOUT_VERSION = "tapi-editorial-layout.v1"
+EDITORIAL_THEMES = {
+    "inventory": ("01 / ESTOQUE", "#E5F4E6", "#103B2B", "#087A50"),
+    "cashflow": ("02 / FINANÇAS", "#E3EEF9", "#153957", "#245C9B"),
+    "service": ("03 / ATENDIMENTO", "#FFF2DF", "#583D21", "#9C530A"),
+    "pricing": ("04 / PRECIFICAÇÃO", "#F1E8F8", "#402653", "#75439C"),
+    "planning": ("05 / PLANEJAMENTO", "#E5F4F1", "#174A46", "#117A71"),
+}
+
+
+def draft_from_spec(spec: CreativeSpec, document_id: str, *,
+                    editorial_template: str | None = None) -> DesignDocument:
     """A deterministic starter layout; not generative AI, preview or export."""
     canvas = Canvas()
     safe_margin = 70
@@ -157,6 +168,25 @@ def draft_from_spec(spec: CreativeSpec, document_id: str) -> DesignDocument:
                       text=spec.cta, style=TextStyle(font_size=56)),
         ],
     )
+    if editorial_template is not None:
+        # Trusted synthetic proposal path only. All visual elements are real
+        # editable, typed layers, shared by preview and persisted export.
+        if editorial_template not in EDITORIAL_THEMES or spec.platform_intent != "instagram_feed":
+            raise ValueError("STUDIO_EDITORIAL_TEMPLATE_INVALID")
+        label, background, ink, accent = EDITORIAL_THEMES[editorial_template]
+        canvas = Canvas(background=background)
+        page = DesignPage(id="page.1", layers=[
+            TextLayer(id="headline", x=80, y=270, w=920, h=340,
+                      text=spec.headline, style=TextStyle(font_size=100, color=ink)),
+            TextLayer(id="body", x=80, y=650, w=920, h=320,
+                      text=spec.body, style=TextStyle(font_size=52, color=ink)),
+            TextLayer(id="cta", x=80, y=1040, w=920, h=160,
+                      text=spec.cta, style=TextStyle(font_size=60, color=accent)),
+            TextLayer(id="series", x=80, y=85, w=920, h=65,
+                      text="GUIA DO EMPREENDEDOR", style=TextStyle(font_size=36, color=accent)),
+            TextLayer(id="section", x=80, y=170, w=920, h=65,
+                      text=label, style=TextStyle(font_size=40, color=accent)),
+        ])
     return DesignDocument(
         document_id=document_id, tenant_id=spec.tenant_id,
         spec_id=spec.spec_id, version=1, canvas=canvas,
@@ -200,10 +230,10 @@ class StudioStore:
         self.engine = engine
 
     def create(self, tenant: str, actor: str, spec: CreativeSpec,
-               document_id: str, *, connection=None):
+               document_id: str, *, connection=None, editorial_template=None):
         if spec.tenant_id != tenant:
             raise StudioError("STUDIO_TENANT_MISMATCH", 403)
-        doc = draft_from_spec(spec, document_id)
+        doc = draft_from_spec(spec, document_id, editorial_template=editorial_template)
         try:
             if connection is None:
                 with self.engine.begin() as conn:
