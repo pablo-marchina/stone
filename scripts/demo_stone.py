@@ -1,4 +1,4 @@
-"""Opt-in local demonstration. Fresh disposable SQLite, synthetic data only."""
+"""Opt-in local demonstration. Disposable or dedicated persistent SQLite."""
 from __future__ import annotations
 
 import argparse
@@ -11,6 +11,9 @@ from datetime import datetime, timedelta, timezone
 from getpass import getpass
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from contextlib import ExitStack
+from scripts.demo_workspace import open_workspace, WorkspaceError, fingerprint
+from scripts.demo_saved_library import saved_library
 
 import uvicorn
 from fastapi import HTTPException, Request, Response, Query
@@ -43,10 +46,16 @@ class ExperimentSelection(BaseModel):
     preview_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
 
 
-def build_demo(path: Path, password: str, technical_snapshot=None, *, video_enabled=False, av_report=None):
+def build_demo(path: Path, password: str, technical_snapshot=None, *, video_enabled=False, av_report=None, workspace=None):
     if av_report is not None:
         av_report = validate_av_report(av_report)
-    if path.exists():
+    resume = workspace is not None and workspace.resume
+    if workspace is not None:
+        if path.absolute() != workspace.path or workspace.digest != fingerprint(technical_snapshot, av_report):
+            raise WorkspaceError('DEMO_WORKSPACE_INPUT_MISMATCH')
+        if resume:
+            workspace.verify()
+    if not resume and path.exists():
         raise ValueError('DEMO_REQUIRES_NEW_DATABASE')
     if video_enabled:
         LocalDraftRenderer._gates()
@@ -55,23 +64,24 @@ def build_demo(path: Path, password: str, technical_snapshot=None, *, video_enab
     app = create_secure_app('sqlite:///' + path.resolve().as_posix(),
                             initialize_schema=True, allow_http_local=True,
                             enable_local_graph_diagnostic=True)
-    app.state.identity_store.bootstrap(TENANT, 'Stone · Laboratório sintético', USERNAME, password)
     store = app.state.local_domain_store
-    topics = ('Gestão de estoque. Salve este exemplo.', 'Fluxo de caixa. Comente sua dúvida.', 'Atendimento. Siga para novos exemplos.', 'Vendas e precificação. Salve para revisar.')
-    for i in range(4):
-        store.create_creator(CreatorCreate(creator_id=f'demo.perfil.{i+1}', tenant_id=TENANT,
-            origin='synthetic_local', handle=f'perfil_ficticio_{i+1}'))
-    for i in range(20):
-        cid = f'demo.post.{i+1:02d}'
-        store.create_content(ContentCreate(content_id=cid, tenant_id=TENANT,
-            creator_id=f'demo.perfil.{i%4+1}', origin='synthetic_local',
-            media_type=('imagem','carrossel','reels')[i%3],
-            published_at=AS_OF-timedelta(days=20+i), is_synthetic=True,
-            caption=f'Exemplo fictício de material educativo: {topics[i%4]}.'))
-        store.create_metrics(MetricsCreate(snapshot_id=f'demo.snapshot.{i+1:02d}', tenant_id=TENANT,
-            content_id=cid, observed_at=AS_OF-timedelta(days=1),
-            followers_measured_at=AS_OF-timedelta(days=1), likes=150-i*5,
-            comments=20-i//2, follower_count=1000))
+    if not resume:
+        app.state.identity_store.bootstrap(TENANT, 'Stone · Laboratório sintético', USERNAME, password)
+        topics = ('Gestão de estoque. Salve este exemplo.', 'Fluxo de caixa. Comente sua dúvida.', 'Atendimento. Siga para novos exemplos.', 'Vendas e precificação. Salve para revisar.')
+        for i in range(4):
+            store.create_creator(CreatorCreate(creator_id=f'demo.perfil.{i+1}', tenant_id=TENANT,
+                origin='synthetic_local', handle=f'perfil_ficticio_{i+1}'))
+        for i in range(20):
+            cid = f'demo.post.{i+1:02d}'
+            store.create_content(ContentCreate(content_id=cid, tenant_id=TENANT,
+                creator_id=f'demo.perfil.{i%4+1}', origin='synthetic_local',
+                media_type=('imagem','carrossel','reels')[i%3],
+                published_at=AS_OF-timedelta(days=20+i), is_synthetic=True,
+                caption=f'Exemplo fictício de material educativo: {topics[i%4]}.'))
+            store.create_metrics(MetricsCreate(snapshot_id=f'demo.snapshot.{i+1:02d}', tenant_id=TENANT,
+                content_id=cid, observed_at=AS_OF-timedelta(days=1),
+                followers_measured_at=AS_OF-timedelta(days=1), likes=150-i*5,
+                comments=20-i//2, follower_count=1000))
     def authorize(request: Request):
         if request.client is None or request.client.host not in {"127.0.0.1", "::1", "testclient"}:
             raise IdentityFailure("FORBIDDEN", 403)
@@ -206,6 +216,14 @@ def build_demo(path: Path, password: str, technical_snapshot=None, *, video_enab
         except StudioError as exc:
             raise HTTPException(exc.status, exc.code) from None
 
+    @app.get("/v1/demo/saved-library")
+    def library(request: Request, response: Response):
+        authorize(request)
+        response.headers["Cache-Control"] = "private, no-store"
+        result = saved_library(app.state.identity_store.engine, TENANT,
+                               technical_snapshot["report_sha256"] if technical_snapshot else None)
+        return {**result, "persistent_workspace": workspace is not None}
+
     @app.get("/v1/demo/technical-snapshot")
     def snapshot(request: Request, response: Response):
         authorize(request)
@@ -221,6 +239,7 @@ def main():
     parser.add_argument('--video', action='store_true', help='Ativa explicitamente o worker FFmpeg de rascunho local neste processo isolado.')
     parser.add_argument('--technical-report', type=Path, help='Relatório privado A6 existente; somente agregados históricos serão mostrados.')
     parser.add_argument("--av-report", type=Path, help="Relatório dos nove testes sintéticos de fusão e direitos.")
+    parser.add_argument("--workspace", type=Path, help="Pasta exclusiva nova ou workspace de demonstração já inicializado.")
     args = parser.parse_args()
     try:
         snapshot = project_report(args.technical_report) if args.technical_report else None
@@ -232,17 +251,30 @@ def main():
             parser.error("FFmpeg não encontrado no PATH")
         os.environ["TAPI_LOCAL_RENDER_ENABLED"] = "1"
         os.environ["TAPI_ZERO_BILLING_CONFIRMED"] = "1"
-    password = getpass('Crie uma senha local de demonstração (12+ caracteres): ')
-    if len(password) < 12:
-        parser.error('senha deve ter pelo menos 12 caracteres')
-    with TemporaryDirectory(prefix='stone-demo-') as directory:
-        app = build_demo(Path(directory) / 'demo.sqlite', password, snapshot, video_enabled=args.video, av_report=av_report)
-        print(f'Abra http://127.0.0.1:{args.port}/app/demo.html — tenant {TENANT}, usuário {USERNAME}.')
-        print('Banco temporário e dados sintéticos; Ctrl+C encerra e descarta o ambiente.')
-        try:
+    password = None
+    if args.workspace is None or not args.workspace.exists():
+        password = getpass('Crie uma senha local de demonstração (12+ caracteres): ')
+        if len(password) < 12:
+            parser.error('senha deve ter pelo menos 12 caracteres')
+    try:
+        with ExitStack() as stack:
+            work = stack.enter_context(open_workspace(args.workspace, snapshot, av_report)) if args.workspace else None
+            path = work.path if work else Path(stack.enter_context(TemporaryDirectory(prefix='stone-demo-'))) / 'demo.sqlite'
+            if (work is None or not work.resume) and password is None:
+                raise WorkspaceError('DEMO_WORKSPACE_NEW_PASSWORD_REQUIRED')
+            app = build_demo(path, password, snapshot, video_enabled=args.video, av_report=av_report, workspace=work)
+            stack.callback(app.state.identity_store.engine.dispose)
+            if work is not None and not work.resume:
+                work.seal()
+            print(f'Abra http://127.0.0.1:{args.port}/app/demo.html — tenant {TENANT}, usuário {USERNAME}.')
+            if work:
+                print('Workspace persistente de demonstração; use a senha original ao entrar novamente.')
+                print('Ctrl+C encerra o servidor sem descartar os documentos. Preserve a pasta e os relatórios originais.')
+            else:
+                print('Banco temporário e dados sintéticos; Ctrl+C encerra e descarta o ambiente.')
             uvicorn.run(app, host='127.0.0.1', port=args.port, proxy_headers=False)
-        finally:
-            app.state.identity_store.engine.dispose()
+    except (WorkspaceError, OSError) as exc:
+        parser.error(str(exc))
 
 
 if __name__ == '__main__':

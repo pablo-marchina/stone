@@ -76,3 +76,42 @@ def test_second_document_failure_rolls_back_pair(tmp_path,monkeypatch):
             assert db.scalar(select(func.count()).select_from(domain_events).where(domain_events.c.aggregate_type=='demo_editorial_experiment'))==0
     finally:
         engine.dispose()
+
+
+def test_persistent_launcher_recovers_pair_and_revision(tmp_path):
+    from scripts.demo_workspace import open_workspace
+    snapshot=fixture_snapshot(tmp_path)
+    root=tmp_path/'presentation'
+    with open_workspace(root, snapshot, None) as work:
+        app=build_demo(work.path,'fixture-only-not-real-password',snapshot,workspace=work)
+        try:
+            work.seal()
+            with TestClient(app) as c:
+                h={'Authorization':'Bearer '+c.post('/v1/auth/sessions',json={'tenant_id':TENANT,'username':USERNAME,'password':'fixture-only-not-real-password'}).json()['access_token']}
+                url='/v1/demo/experiments'
+                row=next(r for r in c.get(url,headers=h).json()['pairs'] if r['pair']['field']=='cta')
+                created=c.post(url,headers=h,json={'preview_sha256':row['preview_sha256']})
+                assert created.status_code==201
+                r=created.json()
+                d=r['documents'][1]
+                assert c.post('/v1/agent/creative-drafts/'+d['document_id']+'/text-patches',headers={**h,'If-Match':r['etags'][1]},json={'expected_version':1,'page_id':'page.1','layer_id':'headline','text':'Revise sua rotina'}).status_code==200
+        finally:
+            app.state.identity_store.engine.dispose()
+    with open_workspace(root, snapshot, None) as work:
+        assert work.resume
+        app=build_demo(work.path,None,snapshot,workspace=work)
+        try:
+            with TestClient(app) as c:
+                assert c.get('/v1/demo/saved-library').status_code==401
+                h={'Authorization':'Bearer '+c.post('/v1/auth/sessions',json={'tenant_id':TENANT,'username':USERNAME,'password':'fixture-only-not-real-password'}).json()['access_token']}
+                library=c.get('/v1/demo/saved-library',headers=h).json()
+                assert library['persistent_workspace'] is True
+                assert library['pairs']==[r['proof']]
+                assert len(library['documents'])==2
+                assert next(x for x in library['documents'] if x['document_id']==d['document_id'])['version']==2
+                counters=c.get('/v1/demo/session-results',headers=h).json()
+                assert counters['synthetic_counters']['eligible_posts']==20
+                assert counters['synthetic_counters']['document_versions']==3
+                assert counters['editorial_experiment_pairs']==1
+        finally:
+            app.state.identity_store.engine.dispose()

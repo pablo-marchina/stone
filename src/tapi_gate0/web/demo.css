@@ -15,3 +15,5 @@
 .hypotheses{margin-top:24px;border-top:1px solid #d5dfd7;padding-top:16px}
 
 .experiment-pair{border:1px solid #d5dfd7;border-radius:12px;padding:16px;margin:12px 0}.experiment-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0}.experiment-variant canvas{display:block;width:100%;height:auto;max-width:290px;margin:8px auto;border-radius:8px}.experiment-pair button{margin:5px 6px 5px 0}.experiment-variant strong{font-size:14px}
+
+#saved-documents .rubric-cell{display:flex;flex-direction:column;justify-content:space-between;gap:8px;overflow-wrap:anywhere}#saved-documents button{margin-top:auto}#saved-pairs .experiment-pair{display:flex;flex-direction:column;gap:8px}.saved-pair-actions{display:flex;flex-wrap:wrap;gap:8px}
