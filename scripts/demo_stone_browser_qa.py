@@ -34,7 +34,7 @@ def run(browser_path, output, *, video=False, av_report=None, contrast_fixture=F
         if contrast_fixture:
             rows = [dict(content_id=f'fixture.{i}', username=f'fixture.profile.{i%4}', tier='unresolved',
                          likes=20-i, comments=0, followers=100, format='reels' if i<2 else 'imagem',
-                         topic='vendas' if i==0 else None, cta=None, age_band='14-29') for i in range(20)]
+                         topic='vendas' if i==0 else None, cta='seguir' if i<2 else 'comentar', age_band='14-29') for i in range(20)]
             fixture = {**summarize(rows), 'private_rows': rows, 'status': 'EXPLORATORY_RANKING_COMPLETED',
                        'as_of':'2026-11-19T12:00:00+00:00', 'manifest_sha256':'a'*64, 'production_approved':False}
             path = Path(directory) / 'fixture.json'
@@ -71,9 +71,9 @@ def run(browser_path, output, *, video=False, av_report=None, contrast_fixture=F
                     page.screenshot(path=output/'stone_demo_ranking.png')
                     if contrast_fixture:
                         assert 'FIXTURE SINTÉTICA DE QA' in page.locator('#technical-results').inner_text()
-                        assert page.locator('.hypotheses .hypothesis-card').count()==1
-                        assert '100 p.p.' in page.locator('.hypotheses').inner_text()
-                        page.locator('.hypotheses').screenshot(path=output/'stone_demo_hipoteses_fixture.png')
+                        assert page.locator('.hypotheses .hypothesis-card').count()==2
+                        assert '100 p.p.' in page.locator('.hypotheses').first.inner_text()
+                        page.locator('.hypotheses').first.screenshot(path=output/'stone_demo_hipoteses_fixture.png')
                         with page.expect_download() as download:
                             page.get_by_role('button',name='Baixar plano de hipóteses JSON').click()
                         saved=output/'stone_demo_hipoteses_fixture.json'
@@ -85,7 +85,7 @@ def run(browser_path, output, *, video=False, av_report=None, contrast_fixture=F
                         picker.select_option('topic')
                         assert 'Diferença indisponível' in page.locator('.historical-contrast').inner_text()
                         picker.select_option('cta')
-                        assert 'Nenhum valor conhecido' in page.locator('.historical-contrast').inner_text()
+                        assert 'seguir' in page.locator('.historical-contrast').inner_text()
                     if av_report:
                         assert page.locator('#av-case option').count()==9
                         assert page.locator('#av-fields tr.suppressed').count()==1
@@ -179,6 +179,27 @@ def run(browser_path, output, *, video=False, av_report=None, contrast_fixture=F
                         assert db.scalar(select(func.count()).select_from(agent_graph_events))==6
                         assert db.scalar(select(func.count()).select_from(studio_versions))==4
                         assert db.scalar(select(func.count()).select_from(domain_events).where(domain_events.c.aggregate_type=='agent_generated_draft'))==2
+                    if contrast_fixture:
+                        assert page.locator('.experiment-pair canvas').count()==2
+                        page.locator('.experiment-pair').screenshot(path=output/'stone_demo_experimento_fixture.png')
+                        page.get_by_role('button',name='Persistir variantes A/B').click()
+                        page.get_by_role('button',name='Editar variante A').wait_for()
+                        with page.expect_download() as download:
+                            page.get_by_role('button',name='Baixar proveniência do par').click()
+                        proof=output/'stone_demo_experimento_proveniencia.json';download.value.save_as(proof)
+                        packet=json.loads(proof.read_bytes());assert packet['field']=='cta' and packet['candidate']=='seguir' and packet['qa_fixture']
+                        for label in ('A','B'):
+                            page.get_by_role('button',name='Editar variante '+label).click()
+                            page.wait_for_function("document.querySelector('#document-meta').textContent.includes('demo.experiment.') && !document.querySelector('#save').disabled")
+                            with page.expect_download() as download:
+                                page.locator('#export-png').click()
+                            download.value.save_as(output/('stone_demo_experimento_'+label+'.png'))
+                        page.locator('#headline').fill('Ajuste editorial após seleção')
+                        page.locator('#save').click()
+                        page.wait_for_function("document.querySelector('#document-meta').textContent.includes('versão 2')")
+                        with app.state.identity_store.engine.connect() as db:
+                            assert db.scalar(select(func.count()).select_from(studio_versions))==7
+                            assert db.scalar(select(func.count()).select_from(domain_events).where(domain_events.c.aggregate_type=='demo_editorial_experiment'))==1
                     page.locator('#logout').click()
                     page.wait_for_selector('#login:visible')
                     assert page.locator('#workspace').is_hidden() and not errors, errors

@@ -13,3 +13,5 @@
 .hypothesis-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:12px 0}.hypothesis-card{background:#f7faf7;border:1px solid #d5dfd7;border-radius:12px;padding:16px}.hypothesis-card h3{margin:4px 0;text-transform:capitalize}.hypothesis-card strong{font-size:25px;color:#16704e}.hypothesis-card p{font-size:13px;line-height:1.4}.hypothesis-card small{color:#53665c;text-transform:uppercase;letter-spacing:.06em}
 
 .hypotheses{margin-top:24px;border-top:1px solid #d5dfd7;padding-top:16px}
+
+.experiment-pair{border:1px solid #d5dfd7;border-radius:12px;padding:16px;margin:12px 0}.experiment-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0}.experiment-variant canvas{display:block;width:100%;height:auto;max-width:290px;margin:8px auto;border-radius:8px}.experiment-pair button{margin:5px 6px 5px 0}.experiment-variant strong{font-size:14px}

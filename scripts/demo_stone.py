@@ -14,6 +14,8 @@ from tempfile import TemporaryDirectory
 
 import uvicorn
 from fastapi import HTTPException, Request, Response, Query
+from pydantic import BaseModel, ConfigDict, Field
+from scripts.demo_experiment_pairs import previews, persist
 from tapi_gate0.domain import CreatorCreate, ContentCreate, MetricsCreate, RUBRIC_FIELD_NAMES, RankingRequest
 from tapi_gate0.identity import IdentityFailure
 from tapi_gate0.agent_evidence_b2 import EvidenceRetriever, EvidenceNotFound
@@ -34,6 +36,11 @@ from tapi_gate0.sa_store import domain_events
 TENANT = 'stone-demo'
 USERNAME = 'demo'
 AS_OF = datetime(2026, 11, 23, 12, tzinfo=timezone.utc)
+
+
+class ExperimentSelection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    preview_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
 
 
 def build_demo(path: Path, password: str, technical_snapshot=None, *, video_enabled=False, av_report=None):
@@ -170,8 +177,10 @@ def build_demo(path: Path, password: str, technical_snapshot=None, *, video_enab
                 editable_drafts=count(studio_documents), document_versions=count(studio_versions),
                 generated_draft_events=count(domain_events, domain_events.c.aggregate_type == "agent_generated_draft"),
                 storyboards=count(storyboards), rendered_videos=count(studio_render_artifacts))
+            count_experiments = count(domain_events, domain_events.c.aggregate_type == "demo_editorial_experiment")
         return {"schema_version": "tapi-demo-session-results.v1", "as_of": AS_OF.isoformat(),
                 "synthetic_counters": counters, "historical_technical_snapshot": technical_snapshot,
+                "editorial_experiment_pairs": count_experiments,
                 "scientifically_validated": False, "production_approved": False, "publication_allowed": False}
 
     @app.get("/v1/demo/av-report")
@@ -179,6 +188,23 @@ def build_demo(path: Path, password: str, technical_snapshot=None, *, video_enab
         authorize(request)
         response.headers["Cache-Control"] = "private, no-store"
         return {"available": av_report is not None, "report": av_report}
+
+    @app.get("/v1/demo/experiments")
+    def experiments(request: Request, response: Response):
+        authorize(request)
+        response.headers["Cache-Control"] = "private, no-store"
+        return {"pairs": previews(technical_snapshot, TENANT)}
+
+    @app.post("/v1/demo/experiments", status_code=201)
+    def create_experiment(payload: ExperimentSelection, request: Request, response: Response):
+        p = authorize(request)
+        response.headers["Cache-Control"] = "private, no-store"
+        try:
+            return persist(app.state.identity_store.engine, technical_snapshot, TENANT, p.actor_id, payload.preview_sha256)
+        except ValueError:
+            raise HTTPException(409, "DEMO_EXPERIMENT_PREVIEW_MISMATCH") from None
+        except StudioError as exc:
+            raise HTTPException(exc.status, exc.code) from None
 
     @app.get("/v1/demo/technical-snapshot")
     def snapshot(request: Request, response: Response):
