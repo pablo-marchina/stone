@@ -1,7 +1,8 @@
 """IMP-074: explicit loopback-only diagnostic binding to the local graph runner.
 
 The application factory is the ONLY opt-in. Production from_environment never
-registers this router. No external origin, LLM, media, Studio or publication.
+registers this router. No external origin, LLM, media or publication.
+The separate draft endpoint accepts only an explicit operator-authored brief.
 Tenant/actor are taken exclusively from a revocable bearer session.
 """
 from __future__ import annotations
@@ -9,7 +10,7 @@ from __future__ import annotations
 import json
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, BeforeValidator, ValidationError
 
 from .agent_graph_checkpoints import AgentCheckpointDenied
@@ -17,6 +18,11 @@ from .agent_graph_readonly_runner import (
     LocalGraphDenied, LocalGraphPlan, execute_next,
 )
 from .identity import IdentityFailure, Principal
+from .agent_draft_a05 import CreateAgentDraft
+from .agent_evidence_b2 import EvidenceNotFound
+from .agent_trace_draft_handoff import create_trace_bound_draft, TraceDraftDenied
+from .studio_e1 import DesignDocument, StudioError
+from .studio_e4 import studio_etag
 
 
 def _strict_json_plan(value):
@@ -36,6 +42,10 @@ class StepRequest(BaseModel):
     run_id: str = Field(min_length=1, max_length=128,
                         pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")
     plan: Annotated[LocalGraphPlan, BeforeValidator(_strict_json_plan)]
+
+
+class TraceDraftRequest(StepRequest):
+    draft: CreateAgentDraft
 
 
 def router_for_local_graph_diagnostic(identity, engine) -> APIRouter:
@@ -68,5 +78,28 @@ def router_for_local_graph_diagnostic(identity, engine) -> APIRouter:
         except (AgentCheckpointDenied, LocalGraphDenied) as exc:
             # Both classes expose fixed reason codes, not captions or inputs.
             raise HTTPException(status_code=409, detail=str(exc)) from None
+
+    @router.post("/creative-draft", response_model=DesignDocument, status_code=201)
+    def create_local_trace_draft(body: TraceDraftRequest, response: Response,
+                                 p: Principal = Depends(principal)):
+        # A trace is never authority. A separate authenticated editor/admin
+        # request supplies an original brief, and replays the trace inside the
+        # transaction that creates the initial draft and its provenance event.
+        if p.role not in {"admin", "editor"}:
+            raise IdentityFailure("FORBIDDEN", 403)
+        try:
+            doc = create_trace_bound_draft(
+                engine, tenant=p.tenant_id, actor=p.actor_id,
+                run_id=body.run_id, plan=body.plan, payload=body.draft)
+        except (AgentCheckpointDenied, LocalGraphDenied, TraceDraftDenied) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from None
+        except EvidenceNotFound:
+            raise HTTPException(status_code=422, detail="CREATIVE_REFERENCE_NOT_VERIFIED") from None
+        except StudioError as exc:
+            raise HTTPException(status_code=exc.status, detail=exc.code) from None
+
+        response.headers["ETag"] = studio_etag(doc)
+        response.headers["Cache-Control"] = "private, no-store"
+        return doc
 
     return router
