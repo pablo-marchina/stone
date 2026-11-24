@@ -21,6 +21,8 @@ def test_demo_vertical(tmp_path):
         with TestClient(app) as client:
             assert client.get('/v1/demo/rubric/demo.post.01').status_code == 401
             assert client.get('/v1/demo/technical-snapshot').status_code == 401
+            assert client.get('/v1/demo/search?q=estoque').status_code == 401
+            assert client.get('/v1/demo/session-results').status_code == 401
             assert client.get('/app/demo.html').status_code == 200
             assert client.get('/app/demo.mjs').status_code == 200
             assert client.get('/app/demo.css').status_code == 200
@@ -40,6 +42,13 @@ def test_demo_vertical(tmp_path):
             ranking = client.post('/v1/analyses/rankings', headers=headers, json=request).json()
             assert (ranking['n_posts'],ranking['n_creators'],ranking['top_count']) == (20,4,2)
             assert float(ranking['rows'][0]['engagement_rate']) == .17
+            search = client.get('/v1/demo/search?q=estoque', headers=headers).json()
+            assert search['hit_count'] == 5 and search['indexed_posts'] == 20
+            assert all('estoque' in hit['caption'] for hit in search['hits'])
+            assert search['hits'][0]['top'] is True and search['scientifically_validated'] is False
+            assert client.get('/v1/demo/search?q=impossivel', headers=headers).json()['hit_count'] == 0
+            assert client.get('/v1/demo/search?q=!!!', headers=headers).status_code == 422
+            assert client.get('/v1/demo/session-results', headers=headers).json()['synthetic_counters']['editable_drafts'] == 0
             for row in ranking['rows'][:2]:
                 assert row['is_top_decile']
                 detail = client.get('/v1/agent/evidence/'+row['content_id'],headers=headers).json()
@@ -52,6 +61,7 @@ def test_demo_vertical(tmp_path):
             assert response.json()['status']=='TRACE_RECORDED'
             result=client.post('/v1/agent/local-graph/creative-proposals',headers=headers,json=plan).json()
             assert len(result['proposals'])==5 and result['scientifically_validated'] is False
+            assert [len(p['preview_document']['pages']) for p in result['proposals']] == [1,1,1,1,3]
             created=client.post('/v1/agent/local-graph/creative-proposal-draft',headers=headers,json={**plan,'document_id':'demo.test.draft','proposal_sha256':result['proposals'][0]['proposal_sha256']})
             assert created.status_code==201
             edited=client.post('/v1/agent/creative-drafts/demo.test.draft/text-patches',headers={**headers,'If-Match':created.headers['etag']},json={'expected_version':1,'page_id':'page.1','layer_id':'headline','text':'Organize seu estoque hoje'})
@@ -61,6 +71,15 @@ def test_demo_vertical(tmp_path):
                 assert db.scalar(select(func.count()).select_from(agent_graph_events))==6
                 assert db.scalar(select(func.count()).select_from(studio_versions))==2
                 assert db.scalar(select(func.count()).select_from(domain_events).where(domain_events.c.aggregate_type=='agent_generated_draft'))==1
+            carousel=client.post('/v1/agent/local-graph/creative-proposal-draft',headers=headers,json={**plan,'document_id':'demo.carousel','proposal_sha256':result['proposals'][4]['proposal_sha256']})
+            assert carousel.status_code==201 and len(carousel.json()['pages'])==3
+            edited=client.post('/v1/agent/creative-drafts/demo.carousel/text-patches',headers={**headers,'If-Match':carousel.headers['etag']},json={'expected_version':1,'page_id':'page.2','layer_id':'headline','text':'Priorize sua semana'})
+            assert edited.status_code==200 and edited.json()['version']==2
+            assert edited.json()['pages'][1]['layers'][0]['text']=='Priorize sua semana'
+            assert edited.json()['pages'][0]==carousel.json()['pages'][0]
+            report=client.get('/v1/demo/session-results',headers=headers).json()
+            assert report['synthetic_counters']==dict(eligible_posts=20,profiles=4,top_posts=2,completed_traces=1,checkpoint_events=6,editable_drafts=2,document_versions=4,generated_draft_events=2)
+            assert report['historical_technical_snapshot'] is None and report['production_approved'] is False
             assert client.post('/v1/auth/logout',headers=headers).status_code==204
             assert client.get('/v1/auth/me',headers=headers).status_code==401
     finally:
