@@ -86,6 +86,7 @@ def _generate(engine, db, *, tenant, actor, run_id, plan):
             spec_id="spec." + _digest(scope)[:32],
             objective="Proposta educativa sintética para revisão editorial de MPEs",
             headline=headline, body=body, cta=cta,
+            platform_intent="instagram_carousel" if key == "planning" else "instagram_feed",
             reference_content_ids=[plan.content_id])
         handoff = EvidenceRetriever(engine).handoff(tenant, brief, connection=db)
         spec = CreativeSpec.model_validate(handoff.model_dump(mode="json"))
