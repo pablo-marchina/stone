@@ -19,12 +19,23 @@ def test_demo_vertical(tmp_path):
         with pytest.raises(ValueError, match='DEMO_REQUIRES_NEW_DATABASE'):
             build_demo(path, password)
         with TestClient(app) as client:
+            assert client.get('/v1/demo/rubric/demo.post.01').status_code == 401
+            assert client.get('/v1/demo/technical-snapshot').status_code == 401
             assert client.get('/app/demo.html').status_code == 200
             assert client.get('/app/demo.mjs').status_code == 200
             assert client.get('/app/demo.css').status_code == 200
             assert client.post('/v1/agent/local-graph/step', json={}).status_code in (401, 422)
             login = client.post('/v1/auth/sessions', json={'tenant_id':TENANT,'username':USERNAME,'password':password})
             headers = {'Authorization':'Bearer '+login.json()['access_token']}
+            assert client.get('/v1/demo/technical-snapshot',headers=headers).json()=={'available':False,'snapshot':None}
+            rubric=client.get('/v1/demo/rubric/demo.post.01',headers=headers).json()
+            assert rubric['field_count']==20 and rubric['canonical'] is False
+            assert rubric['fields']['tipo_post']['state']=='metadata_observed'
+            assert rubric['fields']['tema_principal']['value']=='gestão'
+            assert rubric['fields']['tem_cta']['value'] is True
+            assert rubric['fields']['tem_rosto']['value'] is None
+            assert rubric['fields']['tem_rosto']['state']=='not_assessed'
+            assert client.get('/v1/demo/rubric/unknown',headers=headers).status_code==404
             request = {'tenant_id':TENANT,'origin':'synthetic_local','as_of':AS_OF.isoformat(),'min_age_days':14}
             ranking = client.post('/v1/analyses/rankings', headers=headers, json=request).json()
             assert (ranking['n_posts'],ranking['n_creators'],ranking['top_count']) == (20,4,2)
