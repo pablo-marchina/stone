@@ -15,6 +15,7 @@ from tempfile import TemporaryDirectory
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from scripts.demo_stone import build_demo
+from scripts.demo_av_report import read_report
 from tapi_gate0.agent_graph_checkpoints import agent_graph_events
 from tapi_gate0.sa_store import domain_events
 from tapi_gate0.studio_e1 import studio_versions
@@ -22,12 +23,12 @@ from tapi_gate0.studio_e1 import studio_versions
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def run(browser_path, output, *, video=False):
+def run(browser_path, output, *, video=False, av_report=None):
     from playwright.sync_api import sync_playwright
     static = ROOT / 'src/tapi_gate0/web'
     output.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(prefix='stone-demo-qa-') as directory:
-        app = build_demo(Path(directory) / 'demo.sqlite', 'fixture-only-not-real-password', video_enabled=video)
+        app = build_demo(Path(directory) / 'demo.sqlite', 'fixture-only-not-real-password', video_enabled=video, av_report=av_report)
         try:
             with TestClient(app) as backend, sync_playwright() as pw:
                 browser = pw.chromium.launch(executable_path=browser_path, args=['--no-sandbox'])
@@ -56,6 +57,18 @@ def run(browser_path, output, *, video=False):
                     assert page.locator('#rubric-fields article').count()==20
                     page.locator('.rubric-panel').filter(has=page.locator('#rubric-fields')).screenshot(path=output/'stone_demo_rubrica.png')
                     page.screenshot(path=output/'stone_demo_ranking.png')
+                    if av_report:
+                        assert page.locator('#av-case option').count()==9
+                        assert page.locator('#av-fields tr.suppressed').count()==1
+                        page.locator('#av-panel').screenshot(path=output/'stone_demo_multimodal.png')
+                        page.locator('#av-case').select_option('audio_insufficient')
+                        assert 'ABSTAINED' in page.locator('#av-ledger').inner_text()
+                        page.locator('#av-panel').screenshot(path=output/'stone_demo_abstencao.png')
+                        with page.expect_download() as download:
+                            page.locator('#av-download').click()
+                        saved=output/'stone_demo_av_report.json'
+                        download.value.save_as(saved)
+                        assert json.loads(saved.read_bytes())==av_report
                     page.locator('#search-form button').click()
                     page.wait_for_function("document.querySelectorAll('#search-results article').length===5")
                     page.locator('#search-results article button').first.click()
@@ -143,13 +156,14 @@ def main():
     parser.add_argument('--browser', default=shutil.which('chromium') or shutil.which('chrome'))
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--video', action='store_true')
+    parser.add_argument('--av-report', type=Path)
     args = parser.parse_args()
     if not args.browser:
         parser.error('indique o executável Chromium/Chrome com --browser')
     if args.video:
         os.environ["TAPI_LOCAL_RENDER_ENABLED"]="1"
         os.environ["TAPI_ZERO_BILLING_CONFIRMED"]="1"
-    run(args.browser,args.output,video=args.video)
+    run(args.browser,args.output,video=args.video, av_report=read_report(args.av_report) if args.av_report else None)
 
 
 if __name__=='__main__':
