@@ -45,7 +45,11 @@ def test_five_original_proposals_deterministic_sql_citations_no_writes(local_sys
     rows = first['proposals']
     assert len(rows) == len({p['proposal_sha256'] for p in rows}) == 5
     assert len({p['proposal']['brief']['headline'] for p in rows}) == 5
+    assert len({r['preview_document']['canvas']['background'] for r in rows}) == 5
     for row in rows:
+        preview = row['preview_document']
+        assert preview['approval_status'] == 'draft' and len(preview['pages'][0]['layers']) == 5
+        assert preview['pages'][0]['layers'][0]['text'] == row['proposal']['brief']['headline']
         p = row['proposal']
         assert p['citation']['snapshot_id'] == 'fixture.metrics'
         assert float(p['citation']['engagement_rate']) == .25
@@ -69,6 +73,8 @@ def test_explicit_selection_creates_matching_draft_and_provenance(local_system, 
     doc = res.json()
     assert doc['version'] == 1 and doc['approval_status'] == 'draft'
     assert doc['rights_status'] == 'pending_review'
+    expected = preview['proposals'][index]['preview_document']
+    assert doc == {**expected, 'document_id':req['document_id']}
     assert doc['pages'][0]['layers'][0]['text'] == preview['proposals'][index]['proposal']['brief']['headline']
     assert res.headers['etag'] and counts(app) == tuple(a+b for a,b in zip(before,(1,1,1,1,0)))
     with app.state.identity_store.engine.connect() as db:
