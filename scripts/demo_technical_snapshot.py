@@ -13,6 +13,7 @@ import re
 
 from tapi_gate0.discovery_audience_exploratory import POLICY, TIERS, summarize
 from tapi_gate0.discovery_rubric_coverage import rubric_coverage
+from scripts.demo_editorial_contrast import contrast
 
 STATUSES = {"EXPLORATORY_RANKING_COMPLETED", "EXPLORATORY_EDITORIAL_COMPLETED",
             "EXPLORATORY_AGENT_PREVIEW_COMPLETED", "EXPLORATORY_STUDIO_DRAFTS_COMPLETED"}
@@ -53,6 +54,7 @@ def project_report(path: Path) -> dict:
                 "as_of": date.isoformat(), "report_sha256": hashlib.sha256(raw).hexdigest(),
                 "manifest_sha256": report["manifest_sha256"], "cohorts": expected["cohorts"],
                 "tier_counts": expected["tier_counts"], "rubric_fields": coverage,
+                "editorial_contrast": contrast(rows),
                 "historical_report_only": True, "current_rights_verified": False,
                 "scientifically_validated": False, "scientific_admissions": 0,
                 "production_approved": False}

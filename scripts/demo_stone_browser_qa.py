@@ -16,6 +16,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from scripts.demo_stone import build_demo
 from scripts.demo_av_report import read_report
+from scripts.demo_technical_snapshot import project_report
+from tapi_gate0.discovery_audience_exploratory import summarize
 from tapi_gate0.agent_graph_checkpoints import agent_graph_events
 from tapi_gate0.sa_store import domain_events
 from tapi_gate0.studio_e1 import studio_versions
@@ -23,12 +25,22 @@ from tapi_gate0.studio_e1 import studio_versions
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def run(browser_path, output, *, video=False, av_report=None):
+def run(browser_path, output, *, video=False, av_report=None, contrast_fixture=False):
     from playwright.sync_api import sync_playwright
     static = ROOT / 'src/tapi_gate0/web'
     output.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(prefix='stone-demo-qa-') as directory:
-        app = build_demo(Path(directory) / 'demo.sqlite', 'fixture-only-not-real-password', video_enabled=video, av_report=av_report)
+        snapshot = None
+        if contrast_fixture:
+            rows = [dict(content_id=f'fixture.{i}', username=f'fixture.profile.{i%4}', tier='unresolved',
+                         likes=20-i, comments=0, followers=100, format='reels' if i<2 else 'imagem',
+                         topic='vendas' if i==0 else None, cta=None, age_band='14-29') for i in range(20)]
+            fixture = {**summarize(rows), 'private_rows': rows, 'status': 'EXPLORATORY_RANKING_COMPLETED',
+                       'as_of':'2026-11-19T12:00:00+00:00', 'manifest_sha256':'a'*64, 'production_approved':False}
+            path = Path(directory) / 'fixture.json'
+            path.write_text(json.dumps(fixture),encoding='utf-8')
+            snapshot = {**project_report(path), 'qa_fixture': True}
+        app = build_demo(Path(directory) / 'demo.sqlite', 'fixture-only-not-real-password', snapshot, video_enabled=video, av_report=av_report)
         try:
             with TestClient(app) as backend, sync_playwright() as pw:
                 browser = pw.chromium.launch(executable_path=browser_path, args=['--no-sandbox'])
@@ -57,6 +69,15 @@ def run(browser_path, output, *, video=False, av_report=None):
                     assert page.locator('#rubric-fields article').count()==20
                     page.locator('.rubric-panel').filter(has=page.locator('#rubric-fields')).screenshot(path=output/'stone_demo_rubrica.png')
                     page.screenshot(path=output/'stone_demo_ranking.png')
+                    if contrast_fixture:
+                        assert 'FIXTURE SINTÉTICA DE QA' in page.locator('#technical-results').inner_text()
+                        picker = page.get_by_label('Atributo para comparar')
+                        assert page.locator('.historical-contrast').get_by_text('Diferença: 100 p.p.',exact=True).count()==1
+                        page.locator('#technical-panel').screenshot(path=output/'stone_demo_contraste_fixture.png')
+                        picker.select_option('topic')
+                        assert 'Diferença indisponível' in page.locator('.historical-contrast').inner_text()
+                        picker.select_option('cta')
+                        assert 'Nenhum valor conhecido' in page.locator('.historical-contrast').inner_text()
                     if av_report:
                         assert page.locator('#av-case option').count()==9
                         assert page.locator('#av-fields tr.suppressed').count()==1
@@ -137,6 +158,15 @@ def run(browser_path, output, *, video=False, av_report=None):
                     counters=json.loads(report.read_bytes())['synthetic_counters']
                     assert counters['document_versions']==4
                     assert counters['storyboards']==counters['rendered_videos']==int(video)
+                    with page.expect_download() as download:
+                        page.locator('#executive-download').click()
+                    executive=output/'stone_relatorio_executivo.html'
+                    download.value.save_as(executive)
+                    html=executive.read_text(encoding='utf-8')
+                    assert 'Resultados da sessão sintética' in html and 'document versions' in html
+                    assert '<script' not in html and 'fixture.profile' not in html
+                    if contrast_fixture:
+                        assert 'FIXTURE SINTÉTICA DE QA' in html and 'Comparação top 10%' in html
                     with app.state.identity_store.engine.connect() as db:
                         assert db.scalar(select(func.count()).select_from(agent_graph_events))==6
                         assert db.scalar(select(func.count()).select_from(studio_versions))==4
@@ -157,13 +187,14 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--video', action='store_true')
     parser.add_argument('--av-report', type=Path)
+    parser.add_argument('--contrast-fixture', action='store_true', help='QA only; display explicitly labelled synthetic historical fixture')
     args = parser.parse_args()
     if not args.browser:
         parser.error('indique o executável Chromium/Chrome com --browser')
     if args.video:
         os.environ["TAPI_LOCAL_RENDER_ENABLED"]="1"
         os.environ["TAPI_ZERO_BILLING_CONFIRMED"]="1"
-    run(args.browser,args.output,video=args.video, av_report=read_report(args.av_report) if args.av_report else None)
+    run(args.browser,args.output,video=args.video, av_report=read_report(args.av_report) if args.av_report else None, contrast_fixture=args.contrast_fixture)
 
 
 if __name__=='__main__':
