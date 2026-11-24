@@ -24,7 +24,7 @@ def node_report(passed=19, total=19, failed=0, skipped=0):
             "ℹ todo 0\nℹ duration_ms 400\n")
 
 
-def synthetic_runner(*, pytest_count=423, a06_count=35, a02_count=91,
+def synthetic_runner(*, pytest_count=435, a06_count=35, a02_count=91,
                      a027_count=40, a027_integrated_count=47,
                      a05_fail_count=0, a05_error_count=0,
                      node_count=19, chrome=True,
@@ -103,7 +103,7 @@ def test_packet_assembles_exact_local_counts_and_preserves_all_gate_denials(loca
     assert receipt["validation_status"] == "FOCAL_DIAGNOSTICS_VERIFIED_NO_GATE_RELEASE"
     assert receipt["zero_spend_check_observed"] is True
     assert len(receipt["checks"]) == 10
-    assert [x["observed_pass_count"] for x in receipt["checks"]] == [1, 1, 91, 40, 47, 423, 35, 13, 19, 7]
+    assert [x["observed_pass_count"] for x in receipt["checks"]] == [1, 1, 91, 40, 47, 435, 35, 13, 19, 7]
     assert all(x["passed"] and x["observed_skip_count"] == 0
                for x in receipt["checks"])
     assert receipt["gate_status"] == {**{f"G{i}": "BLOCKED" for i in range(7)},
@@ -441,6 +441,7 @@ def test_critical_portable_frontier_and_export_coverage_is_mandatory():
         "tests/test_dec008_resume_preflight.py",
         "tests/test_dec008_protected_av_review.py",
         "tests/test_dec008_process_recovery.py",
+        "tests/test_agent_trace_draft_handoff.py",
         "tests/test_architecture_vertical_synthetic.py",
     ):
         assert path in packet.PY_A05_A07
@@ -453,7 +454,7 @@ def test_critical_portable_frontier_and_export_coverage_is_mandatory():
         "planning/base_atemporal/MATRIZ_CAPACIDADES.csv",
     ):
         assert source in packet.SOURCE_FILES
-    assert packet.EXPECTED["python_a05_a07"] == 423
+    assert packet.EXPECTED["python_a05_a07"] == 435
     assert packet.EXPECTED["python_a027_integrated"] == 47
     for path in (
         "tests/test_a027_shared_av_quality_contract.py",
