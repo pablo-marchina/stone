@@ -148,6 +148,7 @@ EDITORIAL_THEMES = {
     "service": ("03 / ATENDIMENTO", "#FFF2DF", "#583D21", "#9C530A"),
     "pricing": ("04 / PRECIFICAÇÃO", "#F1E8F8", "#402653", "#75439C"),
     "planning": ("05 / PLANEJAMENTO", "#E5F4F1", "#174A46", "#117A71"),
+    "experiment": ("GESTÃO NA PRÁTICA", "#F4F7EC", "#103C29", "#007545"),
 }
 
 
@@ -186,6 +187,25 @@ def draft_from_spec(spec: CreativeSpec, document_id: str, *,
                       text="GUIA DO EMPREENDEDOR", style=TextStyle(font_size=36, color=accent)),
             TextLayer(id="section", x=80, y=170, w=920, h=65,
                       text=label, style=TextStyle(font_size=40, color=accent)),
+        ])
+    if editorial_template == "experiment":
+        # Independent presentation layout; old document versions and other templates
+        # are untouched. All typography is part of the typed document, not CSS.
+        page = DesignPage(id="page.1", layers=[
+            TextLayer(id="headline", x=96, y=230, w=888, h=320,
+                      text=spec.headline, style=TextStyle(font_size=112, color=ink)),
+            TextLayer(id="body", x=96, y=650, w=888, h=270,
+                      text=spec.body, style=TextStyle(font_size=52, color=ink)),
+            TextLayer(id="cta", x=96, y=1040, w=888, h=180,
+                      text=spec.cta, style=TextStyle(font_size=64, color=accent)),
+            TextLayer(id="series", x=96, y=82, w=888, h=50,
+                      text="GUIA PRÁTICO", style=TextStyle(font_size=34, color=accent)),
+            TextLayer(id="section", x=96, y=145, w=888, h=50,
+                      text=label, style=TextStyle(font_size=32, color=ink)),
+            TextLayer(id="step", x=96, y=570, w=888, h=48,
+                      text="01  /  FAÇA HOJE", style=TextStyle(font_size=34, color=accent)),
+            TextLayer(id="action-label", x=96, y=970, w=888, h=48,
+                      text="SUA PRÓXIMA AÇÃO", style=TextStyle(font_size=32, color=ink)),
         ])
     pages = [page]
     if editorial_template == "planning" and spec.platform_intent == "instagram_carousel":

@@ -97,6 +97,9 @@ def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_ht
             "default-src 'none'; script-src 'self'; style-src 'self'; "
             "connect-src 'self'; img-src 'self' data:; font-src 'self'; "
             "base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
+        if allow_http_local and request.url.path == "/app/demo.html":
+            # Only the opt-in local demo uses verified MP4 object URLs.
+            response.headers["Content-Security-Policy"] += "; media-src blob:"
         return response
     app.title="TAPI Stone — Secure Unified Domain"
     app.version="0.3.0"

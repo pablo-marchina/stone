@@ -10,6 +10,7 @@ from tapi_gate0.studio_e1 import CreativeSpec, StudioStore, draft_from_spec
 from tapi_gate0.studio_e4 import studio_etag
 
 VERSION = 'tapi-demo-experiment-pair.v1'
+LAYOUT_VERSION = 'tapi-demo-experiment-layout.v1'
 CTA = {'seguir': 'Siga para mais dicas.', 'comentar': 'Comente sua dúvida.',
        'salvar': 'Salve para consultar depois.'}
 TOPIC = {'marketing': ('Planeje sua divulgação', 'Escolha um público e organize uma mensagem clara para esta semana.'),
@@ -29,7 +30,7 @@ def specs(pair, tenant):
         cta = CTA[value] if pair['field']=='cta' else 'Escolha uma ação para esta semana.'
         yield CreativeSpec(spec_id='experiment.'+digest([tenant, pair, label])[:32], tenant_id=tenant,
                            objective='Comparação editorial exploratória de um fator; rascunho original.',
-                           headline=headline, body=body, cta=cta)
+                           headline=headline.rsplit(' ', 1)[0]+'\n'+headline.rsplit(' ', 1)[1], body=body, cta=cta)
 
 
 def previews(snapshot, tenant):
@@ -50,12 +51,12 @@ def previews(snapshot, tenant):
             continue
         control = sorted(alternatives, key=lambda r: (-r['rest_count'], r['value']))[0]['value']
         pair = dict(schema_version=VERSION, report_sha256=packet['report_sha256'], field=field,
-                    candidate=candidate, control=control, hypothesis=h,
+                    candidate=candidate, control=control, hypothesis=h, layout_version=LAYOUT_VERSION,
                     control_selection='most_frequent_supported_alternative_in_rest',
                     qa_fixture=snapshot.get('qa_fixture', False), model_calls_performed=0,
                     publication_allowed=False, scientifically_validated=False,
                     joint_effect_estimated=False, external_rights_verified=False)
-        documents = [draft_from_spec(spec, 'preview.'+label, editorial_template='planning').model_dump(mode='json')
+        documents = [draft_from_spec(spec, 'preview.'+label, editorial_template='experiment').model_dump(mode='json')
                      for label, spec in zip(('A','B'), specs(pair, tenant))]
         rows.append(dict(pair=pair, previews=documents, preview_sha256=digest([pair, documents])))
     return rows
@@ -69,7 +70,7 @@ def persist(engine, snapshot, tenant, actor, preview_sha256):
     pair_id = 'demo.experiment.'+uuid4().hex
     with engine.begin() as db:
         documents = [StudioStore(engine).create(tenant, actor, spec, pair_id+'.'+label,
-                     connection=db, editorial_template='planning') for label, spec in zip(('A','B'), specs(pair, tenant))]
+                     connection=db, editorial_template='experiment') for label, spec in zip(('A','B'), specs(pair, tenant))]
         proof = dict(**pair, preview_sha256=preview_sha256, pair_id=pair_id,
                      operator_selected=True, documents=[{'document_id':d.document_id, 'version':1,
                      'initial_document_sha256':studio_etag(d).strip('"')} for d in documents])
