@@ -1,0 +1,845 @@
+{
+  "schema": "stone-documentation-inventory.v1",
+  "date": "2026-11-24",
+  "kind": "historical_git_tree_inventory_not_semantic_audit",
+  "repository": "pablo-marchina/stone",
+  "main": {
+    "commit": "ed77e4e6ff3ceb24616264d9d04b38d0fba57209",
+    "documents": [
+      {
+        "path": "docs/00_MAPA_E_STATUS.md",
+        "git_blob_sha1": "03e23a4f5fc4f74ffd188a261d8b2bfb2978bac6"
+      },
+      {
+        "path": "docs/01_ACOES_DO_RESPONSAVEL_E_STONE.md",
+        "git_blob_sha1": "7e300a1a5c2235aeb7a3655288151cf7dea72414"
+      },
+      {
+        "path": "docs/02_MATRIZ_DIREITOS_E_POLICY_GATES.md",
+        "git_blob_sha1": "fdda899f6c79debd5e85883be812ef2442a1c120"
+      },
+      {
+        "path": "docs/03_OBJETIVO_RASTREABILIDADE_E_CONTRATOS.md",
+        "git_blob_sha1": "12211d8a8caaee4053b8fc7c0a4d083ed20d961a"
+      },
+      {
+        "path": "docs/04_BENCHMARK_INFRA_FINOPS.md",
+        "git_blob_sha1": "41ab4a1def80a2d2b3b3b263f403f037137fe815"
+      },
+      {
+        "path": "docs/05_EDD_E_AVALIACOES.md",
+        "git_blob_sha1": "b5d5b799aff9f44804306c3f09024b169185cfe5"
+      },
+      {
+        "path": "docs/06_SEGURANCA_E_IDENTIDADE.md",
+        "git_blob_sha1": "cf9d3bd461a9009d1ced1c7bed64e43d16b1f10e"
+      },
+      {
+        "path": "docs/07_DICIONARIO_RUBRICA_E_PENDENCIAS.md",
+        "git_blob_sha1": "abb4b47d60abc3f1db1944d4f7fb7ada88df1e04"
+      },
+      {
+        "path": "docs/08_PROXIMAS_ACOES_E_LIGACAO_COM_PLANO.md",
+        "git_blob_sha1": "e87c81662a8f3a65cbacefbe4353f5bcb53bc90e"
+      },
+      {
+        "path": "docs/09_ORIGENS_REFERENCIAS_E_LIMITES.md",
+        "git_blob_sha1": "d22d6452da197e4f1bd6b02443450511e4d6a967"
+      },
+      {
+        "path": "docs/10_QUALIDADE_ISO_GATE0.md",
+        "git_blob_sha1": "eb7098f0ded542c8f164573a48eb541e4e59d328"
+      },
+      {
+        "path": "docs/11_DECISOES_E_PESQUISA_ARQUITETURAL.md",
+        "git_blob_sha1": "5b8ebc3eaa6f816ced044d19ea0c194f21028187"
+      },
+      {
+        "path": "docs/12_PRE_REGISTRO_EXP_G0.md",
+        "git_blob_sha1": "009cfd3e56b9d376ad9ef80e6f43b2c0b76484a1"
+      },
+      {
+        "path": "docs/13_BLOQUEIOS_E_REGRA_DE_SAIDA.md",
+        "git_blob_sha1": "84b9259e8f04fda3d8e47a453c403b9bc608f499"
+      },
+      {
+        "path": "docs/14_POLITICA_CUSTO_ZERO.md",
+        "git_blob_sha1": "9f56d1c06e0d0a8e3852628737bc06d2bc86ad37"
+      },
+      {
+        "path": "docs/15_REPOSITORIO_GITHUB.md",
+        "git_blob_sha1": "dc1b8abd0588aec8c5424010b1cd2e15135f438b"
+      },
+      {
+        "path": "docs/16_ESCOPO_APROVADO_E_AUTORIZACOES.md",
+        "git_blob_sha1": "a7a37ac48ea4498592373e86637ab036456aa492"
+      },
+      {
+        "path": "docs/17_STATUS_GATE0_ATUALIZADO.md",
+        "git_blob_sha1": "c8a120c2891c9d0dbd7598ad40c1145e82e18958"
+      },
+      {
+        "path": "docs/18_DOMINIO_E_CONTRATOS_EXECUTAVEIS.md",
+        "git_blob_sha1": "96d6f5a46666858c2b24b6a041c178b46a80c4c6"
+      },
+      {
+        "path": "docs/19_IDENTIDADE_PERSISTENCIA_EVENTOS.md",
+        "git_blob_sha1": "b2b7264da806b9bb685072cf0aa95f024ef411b6"
+      },
+      {
+        "path": "docs/20_FRONTEND_OPERACIONAL.md",
+        "git_blob_sha1": "b5cc0f4f169bcb479f7cd7cb5ef41d7b91cabd07"
+      },
+      {
+        "path": "docs/21_AQUISICAO_OFICIAL_MULTIMODAL.md",
+        "git_blob_sha1": "c3726084a6d82f01df4b50cae67d121408916f37"
+      },
+      {
+        "path": "docs/22_STUDIO_CRIATIVO_EDITAVEL_E_STACK_ALVO.md",
+        "git_blob_sha1": "669852acdd4cd9e59b1ef74b4ef6a1e82684e3ac"
+      },
+      {
+        "path": "docs/23_ARQUITETURA_UNIFICADA_REVISADA_V5_2_2026-10-30.md",
+        "git_blob_sha1": "2b002d507b94887aae440ef9d9b8cdcd14f6eae1"
+      },
+      {
+        "path": "docs/24_PLANO_UNICO_IMPLEMENTACAO_V5_2_2026-10-30.md",
+        "git_blob_sha1": "cddd06ba53fa0fdf328972c319284fd8898854c5"
+      },
+      {
+        "path": "docs/25_EXECUCAO_V52_INCREMENTO_01.md",
+        "git_blob_sha1": "271b129b5561ad494eb7d309b07193735ff0adfb"
+      },
+      {
+        "path": "docs/26_CORPUS_AUTORIZADO_PLANO_V52.md",
+        "git_blob_sha1": "69e6c4bfb98150f2ac90d34f5090746eecc4fac6"
+      },
+      {
+        "path": "docs/27_META_FACEBOOK_LOGIN_PRE_FLIGHT.md",
+        "git_blob_sha1": "3d89a2ead239ce4495051384255eb2749eed14ef"
+      },
+      {
+        "path": "docs/28_META_PRE_FLIGHT_PAGE_DIAGNOSTICO.md",
+        "git_blob_sha1": "94ffca329d71afa28fa4333ba9798f8b629ce073"
+      },
+      {
+        "path": "docs/29_META_PRE_FLIGHT_PAGINA_DIRETA.md",
+        "git_blob_sha1": "094577975dfe480743c13271f54863f88e307515"
+      },
+      {
+        "path": "docs/30_MPE_CANDIDATES_FIRST_ELIGIBLE_V52.md",
+        "git_blob_sha1": "dbc02a5ed5b223fcf5d7958b9e31f727815a63fa"
+      },
+      {
+        "path": "docs/31_IMP167_APPROVAL_FIRST_SOURCE_V52.md",
+        "git_blob_sha1": "dbe3bfff12d8638c7d29190e449a149c3503f217"
+      },
+      {
+        "path": "docs/33_DEC016_IMPLEMENTACAO_FONTE_ELEGIBILIDADE_DATA_CARD_V2.md",
+        "git_blob_sha1": "f005ec25c0ced0072dacb391b54243aea767e364"
+      },
+      {
+        "path": "docs/34_IMP170_DISCOVERY_PERSISTENCE_V2_MIGRATION_0006.md",
+        "git_blob_sha1": "ab997593eec68f0e810cc9e191c495e85a84b06e"
+      },
+      {
+        "path": "docs/35_DEC017_E1_SYSTEM_ONE_LAB.md",
+        "git_blob_sha1": "9e905b2b8622d86c5b311e49352cbc32a33166cd"
+      },
+      {
+        "path": "docs/36_DEC017_E11_VALIDACAO_GLINER_PESOS_REAIS.md",
+        "git_blob_sha1": "21dad9918aca535b94ae34e60becf4536b89824f"
+      },
+      {
+        "path": "docs/37_DEC017_E12_BENCHMARK_PTBR_GOLD_HUMANO.md",
+        "git_blob_sha1": "c0c684453922a2de2729ad8047e0bad95e7c62d5"
+      },
+      {
+        "path": "docs/42_TRILHA_A_GATE0B_PRONTIDAO_TECNICA.md",
+        "git_blob_sha1": "885c049fb273fa8051abcbee9ccdb8470d19840f"
+      },
+      {
+        "path": "docs/43_TRILHA_B_AGENT_EVIDENCE_E1.md",
+        "git_blob_sha1": "c14040376b4e5ab408612afce8c905850f871c24"
+      },
+      {
+        "path": "docs/44_TRILHA_C_STUDIO_E1_EDITAVEL.md",
+        "git_blob_sha1": "3adfa64304b41db2cafbe53a6bfee9ca4922bbb5"
+      },
+      {
+        "path": "docs/45_A3_BUSINESS_DISCOVERY_PRIMEIRO_LOTE_TECNICO.md",
+        "git_blob_sha1": "35e54f952e20f9878ec13ae021ad14fd5bf6a784"
+      },
+      {
+        "path": "docs/46_CAP023_IMP182_183_HISTORICO_E_CARROSSEL.md",
+        "git_blob_sha1": "f390eeab888948d92f6fba9b40a858324381fb6a"
+      },
+      {
+        "path": "docs/47_CAP023_E4_E5_EXECUCAO_IMPLEMENTADA.md",
+        "git_blob_sha1": "ecaeaa522091d2a8417307b8cda10a7e59f1cc4c"
+      },
+      {
+        "path": "docs/48_CAP023_E6_RENDER_EVIDENCIA_DIREITOS_TESTES.md",
+        "git_blob_sha1": "628cc1459f13838f979e5649d0f465bd87ed90df"
+      },
+      {
+        "path": "docs/49_CAP023_E7_EDICAO_VIDEO_MULTIFAIXA_RECUPERACAO.md",
+        "git_blob_sha1": "7bac50d4b04d497fdda4921cb788d6e96dba0cff"
+      },
+      {
+        "path": "docs/50_CAP023_E8_TIMELINE_AUDIO_HQ.md",
+        "git_blob_sha1": "7953bf3811bda9c1e4eb950bc7abfb02934a01a5"
+      },
+      {
+        "path": "docs/51_REGISTRO_DECISOES_POS_V52_2026-11-05.md",
+        "git_blob_sha1": "3de7db8a2971cc033681ee6f100861a731926d1f"
+      },
+      {
+        "path": "docs/52_MATRIZ_ALINHAMENTO_FONTES_REPOSITORIO_2026-11-05.md",
+        "git_blob_sha1": "f55848b270bd2bd6144cb51f88b7f71e8b9fee6f"
+      },
+      {
+        "path": "docs/53_DEC018_CONFIRMACAO_ALCANCE_E_CRITERIO_REVISAO_2026-11-05.md",
+        "git_blob_sha1": "f5184c914d71221f363d393c35c54a2a4f2157e1"
+      },
+      {
+        "path": "docs/54_SINCRONIZACAO_MATRIZES_V52_DEC018_2026-11-05.md",
+        "git_blob_sha1": "202a8582e8384a778e487dbb53f70d9bb86a612f"
+      },
+      {
+        "path": "docs/55_CAP001_A4_LOTE_AMPLIADO_BUSINESS_DISCOVERY_2026-11-06.md",
+        "git_blob_sha1": "c87805987a484a1522fdcefe3f4c8bec5676d6f5"
+      },
+      {
+        "path": "docs/base_atemporal/00_Indice_e_Protocolo.md",
+        "git_blob_sha1": "36e3ddbd39f560e1e432eb6ce218fb6fa793f21c"
+      },
+      {
+        "path": "docs/base_atemporal/01_Documento_Mestre_Atemporal.md",
+        "git_blob_sha1": "8674c1731f77c842a3dff35c5148c480a2253fc6"
+      },
+      {
+        "path": "docs/base_atemporal/02_Registro_Decisoes_Atemporal.md",
+        "git_blob_sha1": "a4e46545ab2c34239dcfc38725fff2fd2cdc5092"
+      },
+      {
+        "path": "docs/base_atemporal/03_Pesquisa_Tecnica_Atemporal.md",
+        "git_blob_sha1": "58e5673b6587a017c4606876494ba722218f462c"
+      },
+      {
+        "path": "docs/base_atemporal/04_Benchmark_Competitivo_Atemporal.md",
+        "git_blob_sha1": "44678b0f0cf88c6fcbabee4ec792b09c872b1b29"
+      },
+      {
+        "path": "docs/base_atemporal/05_Metodologia_Cientifica_Atemporal.md",
+        "git_blob_sha1": "9b7c1c9fbd7f446aa55d61f15d419fe607b0af9b"
+      },
+      {
+        "path": "docs/base_atemporal/06_SystemOne_StoneS1_Atemporal.md",
+        "git_blob_sha1": "f4054fb3516fb914feff0bb8ae95a2614e33b748"
+      },
+      {
+        "path": "docs/base_atemporal/07_Arquitetura_Unificada_Atemporal.md",
+        "git_blob_sha1": "c693a026ec41bf14fbfd568b12fc10b988de7303"
+      },
+      {
+        "path": "docs/base_atemporal/08_Contexto_Editorial_Stone.md",
+        "git_blob_sha1": "f3ee132944167f046f268f613a1e0879dd194681"
+      },
+      {
+        "path": "docs/base_atemporal/11_Plano_Unico_Atemporal.md",
+        "git_blob_sha1": "d955b350bf0c211fff7b2338ecc92a21e96a56ae"
+      },
+      {
+        "path": "docs/base_atemporal/INTEGRACAO.md",
+        "git_blob_sha1": "3924877d94c9d675ae28e9d2fae12e7dda911833"
+      },
+      {
+        "path": "docs/base_atemporal/PROCESSO_ATUALIZACAO.md",
+        "git_blob_sha1": "3383d24b6a1aaf839a7d6cb0ad275bf7e47564d8"
+      },
+      {
+        "path": "docs/base_atemporal/README.md",
+        "git_blob_sha1": "3d6db3766cbd6ef7981f89ccccc8fd57b4b804c8"
+      },
+      {
+        "path": "docs/REPOSITORY_WORKFLOW.md",
+        "git_blob_sha1": "071be083123ec9ad650be9afcb3f59fef268f020"
+      }
+    ]
+  },
+  "development": {
+    "commit": "4622d0171c8b1ea72f7c892c77fd7118fd12ae5e",
+    "pr": 98,
+    "documents": [
+      {
+        "path": "docs/00_MAPA_E_STATUS.md",
+        "git_blob_sha1": "03e23a4f5fc4f74ffd188a261d8b2bfb2978bac6"
+      },
+      {
+        "path": "docs/01_ACOES_DO_RESPONSAVEL_E_STONE.md",
+        "git_blob_sha1": "7e300a1a5c2235aeb7a3655288151cf7dea72414"
+      },
+      {
+        "path": "docs/02_MATRIZ_DIREITOS_E_POLICY_GATES.md",
+        "git_blob_sha1": "fdda899f6c79debd5e85883be812ef2442a1c120"
+      },
+      {
+        "path": "docs/03_OBJETIVO_RASTREABILIDADE_E_CONTRATOS.md",
+        "git_blob_sha1": "12211d8a8caaee4053b8fc7c0a4d083ed20d961a"
+      },
+      {
+        "path": "docs/04_BENCHMARK_INFRA_FINOPS.md",
+        "git_blob_sha1": "41ab4a1def80a2d2b3b3b263f403f037137fe815"
+      },
+      {
+        "path": "docs/05_EDD_E_AVALIACOES.md",
+        "git_blob_sha1": "b5d5b799aff9f44804306c3f09024b169185cfe5"
+      },
+      {
+        "path": "docs/06_SEGURANCA_E_IDENTIDADE.md",
+        "git_blob_sha1": "cf9d3bd461a9009d1ced1c7bed64e43d16b1f10e"
+      },
+      {
+        "path": "docs/07_DICIONARIO_RUBRICA_E_PENDENCIAS.md",
+        "git_blob_sha1": "abb4b47d60abc3f1db1944d4f7fb7ada88df1e04"
+      },
+      {
+        "path": "docs/08_PROXIMAS_ACOES_E_LIGACAO_COM_PLANO.md",
+        "git_blob_sha1": "e87c81662a8f3a65cbacefbe4353f5bcb53bc90e"
+      },
+      {
+        "path": "docs/09_ORIGENS_REFERENCIAS_E_LIMITES.md",
+        "git_blob_sha1": "d22d6452da197e4f1bd6b02443450511e4d6a967"
+      },
+      {
+        "path": "docs/10_QUALIDADE_ISO_GATE0.md",
+        "git_blob_sha1": "eb7098f0ded542c8f164573a48eb541e4e59d328"
+      },
+      {
+        "path": "docs/100_DEC008_IMPL027_ORCHESTRATOR_PROTOCOL_2026-11-22.md",
+        "git_blob_sha1": "c03dd796d7d67bfd83a49dcab3a501094e42cbb0"
+      },
+      {
+        "path": "docs/101_DEC008_LANGGRAPH_NATIVE_CHECKPOINT_DIAGNOSTIC_2026-11-23.md",
+        "git_blob_sha1": "75943d16a1255acec051bee75d541a04019986e0"
+      },
+      {
+        "path": "docs/102_DEC008_RECONCILIACAO_SQL_NATIVE_2026-11-23.md",
+        "git_blob_sha1": "9d762a45c96fcf18a0afa6718fcba2dcad8af69c"
+      },
+      {
+        "path": "docs/103_DEC008_SAVER_FAULT_INJECTION_AND_RECEIPT_HARDENING_2026-11-23.md",
+        "git_blob_sha1": "47b352b12960f9902e86e99b47c682b8bf41de61"
+      },
+      {
+        "path": "docs/104_A11_FRONTIER_VERTICAL_REHEARSAL_2026-11-23.md",
+        "git_blob_sha1": "ee38d41216f33a74b3b5a6614b89de6d27853362"
+      },
+      {
+        "path": "docs/105_DEC008_NATIVE_RESUME_PRECHECK_2026-11-23.md",
+        "git_blob_sha1": "47d7106c247f9b19dad2f4ba553503e26dbd6cf9"
+      },
+      {
+        "path": "docs/106_A11_VERTICAL_SVG_AND_FOCAL_PINNING_2026-11-23.md",
+        "git_blob_sha1": "2887edf4f8d90f5ec17cd2803da9a76b75502c77"
+      },
+      {
+        "path": "docs/107_A05_FASTAPI_NESTED_ROUTES_2026-11-23.md",
+        "git_blob_sha1": "6fdc283078b0700a3183aa1a091cc1c404e16a15"
+      },
+      {
+        "path": "docs/108_A11_NATIVE_HOST_PREFLIGHT_2026-11-23.md",
+        "git_blob_sha1": "8b7c9d1390cecb96322c26a9c9a9f77b70dfa394"
+      },
+      {
+        "path": "docs/109_A027_SHARED_AV_STRICT_WER_CONTRACT_2026-11-23.md",
+        "git_blob_sha1": "0413382eb80db063de8df9196cd3299f75f36d66"
+      },
+      {
+        "path": "docs/11_DECISOES_E_PESQUISA_ARQUITETURAL.md",
+        "git_blob_sha1": "5b8ebc3eaa6f816ced044d19ea0c194f21028187"
+      },
+      {
+        "path": "docs/110_A027_SHARED_AV_DECODER_DIAGNOSTICS_2026-11-23.md",
+        "git_blob_sha1": "404e4857653c4bc4fba6943e4d57a2de76bb909a"
+      },
+      {
+        "path": "docs/111_A11_A027_DEC008_PORTABLE_FOCAL_PINNING_2026-11-23.md",
+        "git_blob_sha1": "1ec8889740ce31c2c9a132db8419cc6b110751f1"
+      },
+      {
+        "path": "docs/112_A027_A11_PORTABLE_REGRESSION_REPAIR_2026-11-23.md",
+        "git_blob_sha1": "2740e24f9084b635fe2ea381b5bfdd8fbbb6021d"
+      },
+      {
+        "path": "docs/113_A027_S1_PROTECTED_CANDIDATE_HANDOFF_2026-11-23.md",
+        "git_blob_sha1": "56b6c602cd7ecc195cb6ffb2d0b3d1c6dd5ee4e3"
+      },
+      {
+        "path": "docs/114_DEC008_PROTECTED_AV_RESEARCH_LEDGER_2026-11-23.md",
+        "git_blob_sha1": "7f17bd246db24487874d4ec1e3a9d21f3ee1ce84"
+      },
+      {
+        "path": "docs/115_DEC008_DIRECT_PROCESS_RECOVERY_2026-11-23.md",
+        "git_blob_sha1": "ec00cd361f6ed1fa5f978dfc569cc6e0836c683f"
+      },
+      {
+        "path": "docs/116_AGENT_TRACE_STUDIO_HANDOFF_2026-11-23.md",
+        "git_blob_sha1": "68e13f4b2ebbbcacbe81308cd4d148f43a7a7108"
+      },
+      {
+        "path": "docs/117_LOCAL_CREATIVE_PROPOSAL_REVIEW_2026-11-23.md",
+        "git_blob_sha1": "b8207b6273a42565f3551aea6157162eb6297259"
+      },
+      {
+        "path": "docs/118_DEMO_VISUAL_48H_2026-11-23.md",
+        "git_blob_sha1": "49b21bf490cc932e959882048b3af981a17d9977"
+      },
+      {
+        "path": "docs/119_DEMO_VISUAL_RESULTS_2026-11-23.md",
+        "git_blob_sha1": "a6fc8365801bab201d7adeee11acef863f0001c1"
+      },
+      {
+        "path": "docs/12_PRE_REGISTRO_EXP_G0.md",
+        "git_blob_sha1": "009cfd3e56b9d376ad9ef80e6f43b2c0b76484a1"
+      },
+      {
+        "path": "docs/120_DEMO_RETRIEVAL_CAROUSEL_RESULTS_2026-11-23.md",
+        "git_blob_sha1": "87a1ab8bb1e0c73e5798431d1418f48a256e8bc3"
+      },
+      {
+        "path": "docs/121_DEMO_VIDEO_RENDER_2026-11-23.md",
+        "git_blob_sha1": "1b6b8bc0ac95db47acbac07cde5049935fa0a210"
+      },
+      {
+        "path": "docs/122_DEMO_MULTIMODAL_EVIDENCE_2026-11-23.md",
+        "git_blob_sha1": "d12b02e0fc595aa5f64cf7c0fff1ef8effd93e43"
+      },
+      {
+        "path": "docs/123_DEMO_EXECUTIVE_CONTRAST_2026-11-23.md",
+        "git_blob_sha1": "8425b5811fc8f9cc0d7596b225e0dd1fcacc745d"
+      },
+      {
+        "path": "docs/124_DEMO_EDITORIAL_HYPOTHESES_2026-11-24.md",
+        "git_blob_sha1": "d43d09f1a9223c42e7eaff08595f1b618e98b91f"
+      },
+      {
+        "path": "docs/125_DEMO_EXPERIMENT_PAIRS_2026-11-24.md",
+        "git_blob_sha1": "00e30eff20b66f62a4ae4e19853ac47b8c9b0697"
+      },
+      {
+        "path": "docs/126_DEMO_PERSISTENT_WORKSPACE_2026-11-24.md",
+        "git_blob_sha1": "86b219ac2e89117e884257cad00076ffd1d3b974"
+      },
+      {
+        "path": "docs/127_DEMO_EXECUTIVE_POLISH_2026-11-24.md",
+        "git_blob_sha1": "dfe6c6cf6e2c897fc6bdd44c2f3a5f97201b97f0"
+      },
+      {
+        "path": "docs/128_DEMO_HYPOTHESIS_CAROUSELS_2026-11-24.md",
+        "git_blob_sha1": "a5d8dd885727fc045841f6ba99f92a4361055830"
+      },
+      {
+        "path": "docs/129_DEMO_SOCIAL_VISUAL_2026-11-24.md",
+        "git_blob_sha1": "552928335f5a0363c08acc2157bfac11c6b17889"
+      },
+      {
+        "path": "docs/13_BLOQUEIOS_E_REGRA_DE_SAIDA.md",
+        "git_blob_sha1": "84b9259e8f04fda3d8e47a453c403b9bc608f499"
+      },
+      {
+        "path": "docs/130_DEMO_SOCIAL_VERTICAL_2026-11-24.md",
+        "git_blob_sha1": "e593b497b2b08d489c5ac1887a3746ec89fb1ea7"
+      },
+      {
+        "path": "docs/131_DEMO_SOCIAL_MOTION_2026-11-24.md",
+        "git_blob_sha1": "53b7b1967d22dc30829f35b7cce38a441e37a576"
+      },
+      {
+        "path": "docs/132_DEMO_SOCIAL_EDITORIAL_2026-11-24.md",
+        "git_blob_sha1": "f496509f098a67d0103790c6a522783eec38523f"
+      },
+      {
+        "path": "docs/133_DEMO_SOCIAL_KINETIC_2026-11-24.md",
+        "git_blob_sha1": "53ad72fab079e3d7047f43717c91b7120e9f7383"
+      },
+      {
+        "path": "docs/14_POLITICA_CUSTO_ZERO.md",
+        "git_blob_sha1": "9f56d1c06e0d0a8e3852628737bc06d2bc86ad37"
+      },
+      {
+        "path": "docs/15_REPOSITORIO_GITHUB.md",
+        "git_blob_sha1": "dc1b8abd0588aec8c5424010b1cd2e15135f438b"
+      },
+      {
+        "path": "docs/16_ESCOPO_APROVADO_E_AUTORIZACOES.md",
+        "git_blob_sha1": "a7a37ac48ea4498592373e86637ab036456aa492"
+      },
+      {
+        "path": "docs/17_STATUS_GATE0_ATUALIZADO.md",
+        "git_blob_sha1": "c8a120c2891c9d0dbd7598ad40c1145e82e18958"
+      },
+      {
+        "path": "docs/18_DOMINIO_E_CONTRATOS_EXECUTAVEIS.md",
+        "git_blob_sha1": "96d6f5a46666858c2b24b6a041c178b46a80c4c6"
+      },
+      {
+        "path": "docs/19_IDENTIDADE_PERSISTENCIA_EVENTOS.md",
+        "git_blob_sha1": "b2b7264da806b9bb685072cf0aa95f024ef411b6"
+      },
+      {
+        "path": "docs/20_FRONTEND_OPERACIONAL.md",
+        "git_blob_sha1": "b5cc0f4f169bcb479f7cd7cb5ef41d7b91cabd07"
+      },
+      {
+        "path": "docs/21_AQUISICAO_OFICIAL_MULTIMODAL.md",
+        "git_blob_sha1": "5a77c6672ec76395244a19b5985ab60e84928f2f"
+      },
+      {
+        "path": "docs/22_STUDIO_CRIATIVO_EDITAVEL_E_STACK_ALVO.md",
+        "git_blob_sha1": "669852acdd4cd9e59b1ef74b4ef6a1e82684e3ac"
+      },
+      {
+        "path": "docs/23_ARQUITETURA_UNIFICADA_REVISADA_V5_2_2026-10-30.md",
+        "git_blob_sha1": "2b002d507b94887aae440ef9d9b8cdcd14f6eae1"
+      },
+      {
+        "path": "docs/24_PLANO_UNICO_IMPLEMENTACAO_V5_2_2026-10-30.md",
+        "git_blob_sha1": "cddd06ba53fa0fdf328972c319284fd8898854c5"
+      },
+      {
+        "path": "docs/25_EXECUCAO_V52_INCREMENTO_01.md",
+        "git_blob_sha1": "271b129b5561ad494eb7d309b07193735ff0adfb"
+      },
+      {
+        "path": "docs/26_CORPUS_AUTORIZADO_PLANO_V52.md",
+        "git_blob_sha1": "69e6c4bfb98150f2ac90d34f5090746eecc4fac6"
+      },
+      {
+        "path": "docs/27_META_FACEBOOK_LOGIN_PRE_FLIGHT.md",
+        "git_blob_sha1": "3d89a2ead239ce4495051384255eb2749eed14ef"
+      },
+      {
+        "path": "docs/28_META_PRE_FLIGHT_PAGE_DIAGNOSTICO.md",
+        "git_blob_sha1": "94ffca329d71afa28fa4333ba9798f8b629ce073"
+      },
+      {
+        "path": "docs/29_META_PRE_FLIGHT_PAGINA_DIRETA.md",
+        "git_blob_sha1": "094577975dfe480743c13271f54863f88e307515"
+      },
+      {
+        "path": "docs/30_MPE_CANDIDATES_FIRST_ELIGIBLE_V52.md",
+        "git_blob_sha1": "dbc02a5ed5b223fcf5d7958b9e31f727815a63fa"
+      },
+      {
+        "path": "docs/31_IMP167_APPROVAL_FIRST_SOURCE_V52.md",
+        "git_blob_sha1": "dbe3bfff12d8638c7d29190e449a149c3503f217"
+      },
+      {
+        "path": "docs/33_DEC016_IMPLEMENTACAO_FONTE_ELEGIBILIDADE_DATA_CARD_V2.md",
+        "git_blob_sha1": "f005ec25c0ced0072dacb391b54243aea767e364"
+      },
+      {
+        "path": "docs/34_IMP170_DISCOVERY_PERSISTENCE_V2_MIGRATION_0006.md",
+        "git_blob_sha1": "ab997593eec68f0e810cc9e191c495e85a84b06e"
+      },
+      {
+        "path": "docs/35_DEC017_E1_SYSTEM_ONE_LAB.md",
+        "git_blob_sha1": "9e905b2b8622d86c5b311e49352cbc32a33166cd"
+      },
+      {
+        "path": "docs/36_DEC017_E11_VALIDACAO_GLINER_PESOS_REAIS.md",
+        "git_blob_sha1": "21dad9918aca535b94ae34e60becf4536b89824f"
+      },
+      {
+        "path": "docs/37_DEC017_E12_BENCHMARK_PTBR_GOLD_HUMANO.md",
+        "git_blob_sha1": "c0c684453922a2de2729ad8047e0bad95e7c62d5"
+      },
+      {
+        "path": "docs/42_TRILHA_A_GATE0B_PRONTIDAO_TECNICA.md",
+        "git_blob_sha1": "885c049fb273fa8051abcbee9ccdb8470d19840f"
+      },
+      {
+        "path": "docs/43_TRILHA_B_AGENT_EVIDENCE_E1.md",
+        "git_blob_sha1": "c14040376b4e5ab408612afce8c905850f871c24"
+      },
+      {
+        "path": "docs/44_TRILHA_C_STUDIO_E1_EDITAVEL.md",
+        "git_blob_sha1": "3adfa64304b41db2cafbe53a6bfee9ca4922bbb5"
+      },
+      {
+        "path": "docs/45_A3_BUSINESS_DISCOVERY_PRIMEIRO_LOTE_TECNICO.md",
+        "git_blob_sha1": "35e54f952e20f9878ec13ae021ad14fd5bf6a784"
+      },
+      {
+        "path": "docs/46_CAP023_IMP182_183_HISTORICO_E_CARROSSEL.md",
+        "git_blob_sha1": "f390eeab888948d92f6fba9b40a858324381fb6a"
+      },
+      {
+        "path": "docs/47_CAP023_E4_E5_EXECUCAO_IMPLEMENTADA.md",
+        "git_blob_sha1": "ecaeaa522091d2a8417307b8cda10a7e59f1cc4c"
+      },
+      {
+        "path": "docs/48_CAP023_E6_RENDER_EVIDENCIA_DIREITOS_TESTES.md",
+        "git_blob_sha1": "628cc1459f13838f979e5649d0f465bd87ed90df"
+      },
+      {
+        "path": "docs/49_CAP023_E7_EDICAO_VIDEO_MULTIFAIXA_RECUPERACAO.md",
+        "git_blob_sha1": "7bac50d4b04d497fdda4921cb788d6e96dba0cff"
+      },
+      {
+        "path": "docs/50_CAP023_E8_TIMELINE_AUDIO_HQ.md",
+        "git_blob_sha1": "7953bf3811bda9c1e4eb950bc7abfb02934a01a5"
+      },
+      {
+        "path": "docs/51_REGISTRO_DECISOES_POS_V52_2026-11-05.md",
+        "git_blob_sha1": "3de7db8a2971cc033681ee6f100861a731926d1f"
+      },
+      {
+        "path": "docs/52_MATRIZ_ALINHAMENTO_FONTES_REPOSITORIO_2026-11-05.md",
+        "git_blob_sha1": "f55848b270bd2bd6144cb51f88b7f71e8b9fee6f"
+      },
+      {
+        "path": "docs/53_DEC018_CONFIRMACAO_ALCANCE_E_CRITERIO_REVISAO_2026-11-05.md",
+        "git_blob_sha1": "b0e7ae931226317eb7456356aeea96a011ac3bb2"
+      },
+      {
+        "path": "docs/54_SINCRONIZACAO_MATRIZES_V52_DEC018_2026-11-05.md",
+        "git_blob_sha1": "202a8582e8384a778e487dbb53f70d9bb86a612f"
+      },
+      {
+        "path": "docs/55_CAP001_A4_LOTE_AMPLIADO_BUSINESS_DISCOVERY_2026-11-06.md",
+        "git_blob_sha1": "c87805987a484a1522fdcefe3f4c8bec5676d6f5"
+      },
+      {
+        "path": "docs/56_CAP001_A5_AQUISICAO_HISTORICA_CONTINUA_2026-11-12.md",
+        "git_blob_sha1": "c0919be76a097166859e8d33aca0991909e6c9b9"
+      },
+      {
+        "path": "docs/57_CAP001_A6_EXPANSAO_IDENTIFICACAO_2026-11-12.md",
+        "git_blob_sha1": "63a1011aab658a2cf3bac276b2e32f42992da6e2"
+      },
+      {
+        "path": "docs/58_CT_STUDIO_LIBRARY_01.md",
+        "git_blob_sha1": "1e757eb5e685eb2acb7a7038c1d56e6a802ee3a7"
+      },
+      {
+        "path": "docs/59_CAP003_RUBRICA_GROUNDED_V10_2026-11-17.md",
+        "git_blob_sha1": "eda71c59a5ba166f71c107ca97acf40709faa46a"
+      },
+      {
+        "path": "docs/60_CAP002_003_RUBRICA_CONTRASTES_V10_2026-11-17.md",
+        "git_blob_sha1": "b243229f066710a7ef41040f73f5d5da12d7cd19"
+      },
+      {
+        "path": "docs/61_CAP003_EVIDENCIA_AUDIOVISUAL_TEMPORAL_2026-11-17.md",
+        "git_blob_sha1": "826c9a1549dba47d8ae2c047c50f6151191cbe14"
+      },
+      {
+        "path": "docs/62_CAP003_ASR_LOCAL_WER_2026-11-17.md",
+        "git_blob_sha1": "51837b1ba385b6427c8dea4030f3bd35cec19886"
+      },
+      {
+        "path": "docs/63_CAP003_ASR_COMPARATIVO_OCR_2026-11-17.md",
+        "git_blob_sha1": "1948f96350e91f6c1483d3ebe54d3d5e67445de5"
+      },
+      {
+        "path": "docs/64_CAP003_ASR_GUARD_DIAGNOSTICO_2026-11-17.md",
+        "git_blob_sha1": "b1e4bad9ad1b81716f343ecbd378f31bcf121e29"
+      },
+      {
+        "path": "docs/65_CAP003_ASR_MEDIUM_VAD_2026-11-17.md",
+        "git_blob_sha1": "cd560b994fcb412052af941f1b4a7af3fa76283b"
+      },
+      {
+        "path": "docs/66_CAP003_VAD_ASR_OCR_RENDERER_2026-11-17.md",
+        "git_blob_sha1": "ddafdb3800353e851d214807eee7feb29b957cf6"
+      },
+      {
+        "path": "docs/67_CAP003_AUDIO_INTEGRADO_OCR_CONSENSUAL_2026-11-17.md",
+        "git_blob_sha1": "3b9f051bc1afd0938f2760c9cd234ecd9b2e162f"
+      },
+      {
+        "path": "docs/68_CAP003_OCR_BEST_FUSAO_MULTIMODAL_2026-11-17.md",
+        "git_blob_sha1": "984891e96e0f75f9b7fe0e9f64c6f2f62ed57ded"
+      },
+      {
+        "path": "docs/69_CAP003_FUSAO_PASS_REPLAY_VLM_2026-11-17.md",
+        "git_blob_sha1": "ab6e53b74475675d5997c8e1958ffbcc955c55bb"
+      },
+      {
+        "path": "docs/70_CAP003_REPLAY_SEMANTICO_CTA_CHALLENGE_2026-11-17.md",
+        "git_blob_sha1": "9628c82079bdb51673274c3f622c9e9f38126034"
+      },
+      {
+        "path": "docs/71_CAP003_CTA_VLM_ROBUSTEZ_V2_2026-11-17.md",
+        "git_blob_sha1": "841ebbd570159b0ba5330b2ee13d0020234574fe"
+      },
+      {
+        "path": "docs/72_CAP003_EVIDENCIAS_V2_DIREITOS_2026-11-17.md",
+        "git_blob_sha1": "46c346731c38b98b21aa6332df034f992bddf0e8"
+      },
+      {
+        "path": "docs/73_CAP003_CAP023_RUBRIC_LAB_2026-11-17.md",
+        "git_blob_sha1": "7600b2870bf1592afc6f02a6a01f536d2e96d101"
+      },
+      {
+        "path": "docs/74_A00_BASELINE_REGRESSAO_2026-11-17.md",
+        "git_blob_sha1": "131d70b14f8226595c40152ea0a3068344817d75"
+      },
+      {
+        "path": "docs/75_IMP071_EVIDENCIA_FASTPATH_E_LACUNAS_DE_ACEITE_2026-11-20.md",
+        "git_blob_sha1": "04e5735ece682c9eb3e64a6ab9b3acf129c1b4bd"
+      },
+      {
+        "path": "docs/76_A04_IMP060_GOLD_REGISTRY_SINTETICO_V1_2026-11-20.md",
+        "git_blob_sha1": "fd19773cfa55c7a6c523175f7ef80e830e9564ec"
+      },
+      {
+        "path": "docs/77_A04_IMP060_BENCHMARK_FTS_SINTETICO_2026-11-20.md",
+        "git_blob_sha1": "3d6b527a3476e94b478bfedfcf4b9be3b13f76bc"
+      },
+      {
+        "path": "docs/78_A04_IMP060_COMPARACAO_SINTETICA_FTS5_2026-11-20.md",
+        "git_blob_sha1": "89b77cab265f6355f363cb6bc81124fb2cc77097"
+      },
+      {
+        "path": "docs/79_A04_IMP069_EVAL_ENGINE_V1_2026-11-20.md",
+        "git_blob_sha1": "37545955a9b01e5118702cbdb74f684a9ba928e1"
+      },
+      {
+        "path": "docs/80_CAMINHO_CRITICO_A04_A11_2026-11-21.md",
+        "git_blob_sha1": "5d10135bbfbc215119e70ab96ada9af01314e1c4"
+      },
+      {
+        "path": "docs/81_A11_DOSSIE_FOCAL_REPRODUCAO_2026-11-21.md",
+        "git_blob_sha1": "026087837b5cbf7a1a6bde1feef6a60ed743e55c"
+      },
+      {
+        "path": "docs/82_A11_PREFLIGHT_RELEASE_EVIDENCIA_ASSINADA_2026-11-21.md",
+        "git_blob_sha1": "f431919590dcc97689439f5331eb1527550d97bb"
+      },
+      {
+        "path": "docs/83_A05_PEP_CRIATIVO_TRANSACIONAL_2026-11-21.md",
+        "git_blob_sha1": "d2ddcfb0b6c22582d616520f3863152f0267b0c7"
+      },
+      {
+        "path": "docs/85_A05_TRUST_BUNDLE_EXTERNO_2026-11-21.md",
+        "git_blob_sha1": "87cd1614ca0f41011cb4a860948b9ee15b1cff98"
+      },
+      {
+        "path": "docs/86_A05_REFERENCIAS_ASSINADAS_CICLO_VIDA_2026-11-21.md",
+        "git_blob_sha1": "9af57a067d6eba09246753ad7b72630d6ff77fb6"
+      },
+      {
+        "path": "docs/87_CAP023_EDICAO_COM_PEP_TRANSACIONAL_2026-11-21.md",
+        "git_blob_sha1": "0c32b0c8424ea9de61f535794232f338cb1e0933"
+      },
+      {
+        "path": "docs/88_CAP023_GEOMETRIA_PEP_TRANSACIONAL_2026-11-21.md",
+        "git_blob_sha1": "bfcbc818e1e3acb41804caa7d1bcec2beb20b40c"
+      },
+      {
+        "path": "docs/89_A05_SINTAXE_E_IMPORT_PRECHECK_2026-11-21.md",
+        "git_blob_sha1": "d3f0827765374ab0e4ab7d1d7b9fdbd2d5ea422f"
+      },
+      {
+        "path": "docs/90_A11_PREFLIGHT_PYTHON_OBRIGATORIO_2026-11-21.md",
+        "git_blob_sha1": "e0c8aedee109383790b40fc63e947b42a14f6527"
+      },
+      {
+        "path": "docs/91_A05_CONCORDANCIA_INDICES_E_PAYLOAD_2026-11-21.md",
+        "git_blob_sha1": "7d6344f25f93316386a51daf2cc251f1c9a941ab"
+      },
+      {
+        "path": "docs/92_A06_AV_SYSTEM_ONE_SYNTHETIC_BRIDGE_2026-11-21.md",
+        "git_blob_sha1": "984b6014f65c8ff8b8ba7081ec08413e8cbe7c2b"
+      },
+      {
+        "path": "docs/93_A02_DIAGNOSTICO_ASR_STRICT_OFFLINE_2026-11-22.md",
+        "git_blob_sha1": "b872690ba010a9b5a100cc51f1c1eab2b296df7a"
+      },
+      {
+        "path": "docs/94_A02_SHARED_AV_FAIL_DIAGNOSTICS_2026-11-22.md",
+        "git_blob_sha1": "f8445289ce02dfb7afe9ec29e50b2c9682637a90"
+      },
+      {
+        "path": "docs/95_A027_BATCH_EXPLICITO_SINTETICO_2026-11-22.md",
+        "git_blob_sha1": "4595ee8c2b5b7df60f781122f644556725d46f29"
+      },
+      {
+        "path": "docs/96_A05_IMP074_AGENT_CHECKPOINT_BASELINE_2026-11-22.md",
+        "git_blob_sha1": "94d30c710b4635990cf99c503061530962b62afb"
+      },
+      {
+        "path": "docs/97_A05_IMP074_EXECUTOR_READONLY_TOOL_BINDING_2026-11-22.md",
+        "git_blob_sha1": "9cf94c90adff5f731c9395d99e18d696a598f2b8"
+      },
+      {
+        "path": "docs/98_A05_IMP074_AUTH_LOOPBACK_ADAPTER_2026-11-22.md",
+        "git_blob_sha1": "3a67e4a472366f2a28e80c6dc2b5e7834002f010"
+      },
+      {
+        "path": "docs/99_A05_IMP074_PASSO_ATOMICO_2026-11-22.md",
+        "git_blob_sha1": "4f42909cb32725262578a043f7d26176316872c5"
+      },
+      {
+        "path": "docs/base_atemporal/00_Indice_e_Protocolo.md",
+        "git_blob_sha1": "36e3ddbd39f560e1e432eb6ce218fb6fa793f21c"
+      },
+      {
+        "path": "docs/base_atemporal/01_Documento_Mestre_Atemporal.md",
+        "git_blob_sha1": "8674c1731f77c842a3dff35c5148c480a2253fc6"
+      },
+      {
+        "path": "docs/base_atemporal/02_Registro_Decisoes_Atemporal.md",
+        "git_blob_sha1": "a4e46545ab2c34239dcfc38725fff2fd2cdc5092"
+      },
+      {
+        "path": "docs/base_atemporal/03_Pesquisa_Tecnica_Atemporal.md",
+        "git_blob_sha1": "58e5673b6587a017c4606876494ba722218f462c"
+      },
+      {
+        "path": "docs/base_atemporal/04_Benchmark_Competitivo_Atemporal.md",
+        "git_blob_sha1": "44678b0f0cf88c6fcbabee4ec792b09c872b1b29"
+      },
+      {
+        "path": "docs/base_atemporal/05_Metodologia_Cientifica_Atemporal.md",
+        "git_blob_sha1": "9b7c1c9fbd7f446aa55d61f15d419fe607b0af9b"
+      },
+      {
+        "path": "docs/base_atemporal/06_SystemOne_StoneS1_Atemporal.md",
+        "git_blob_sha1": "f4054fb3516fb914feff0bb8ae95a2614e33b748"
+      },
+      {
+        "path": "docs/base_atemporal/07_Arquitetura_Unificada_Atemporal.md",
+        "git_blob_sha1": "c693a026ec41bf14fbfd568b12fc10b988de7303"
+      },
+      {
+        "path": "docs/base_atemporal/08_Contexto_Editorial_Stone.md",
+        "git_blob_sha1": "f3ee132944167f046f268f613a1e0879dd194681"
+      },
+      {
+        "path": "docs/base_atemporal/11_Plano_Unico_Atemporal.md",
+        "git_blob_sha1": "d955b350bf0c211fff7b2338ecc92a21e96a56ae"
+      },
+      {
+        "path": "docs/base_atemporal/INTEGRACAO.md",
+        "git_blob_sha1": "3924877d94c9d675ae28e9d2fae12e7dda911833"
+      },
+      {
+        "path": "docs/base_atemporal/PROCESSO_ATUALIZACAO.md",
+        "git_blob_sha1": "3383d24b6a1aaf839a7d6cb0ad275bf7e47564d8"
+      },
+      {
+        "path": "docs/base_atemporal/README.md",
+        "git_blob_sha1": "3d6db3766cbd6ef7981f89ccccc8fd57b4b804c8"
+      },
+      {
+        "path": "docs/REPOSITORY_WORKFLOW.md",
+        "git_blob_sha1": "071be083123ec9ad650be9afcb3f59fef268f020"
+      }
+    ]
+  }
+}
