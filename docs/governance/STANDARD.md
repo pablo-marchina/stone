@@ -39,7 +39,7 @@ Antes: consultar HEAD/PR, índice, fonte integral, IDs e dependências; executar
 
 ## 6. Critérios de qualidade e limites
 
-IDs de nós únicos; vínculos explícitos com endpoints existentes; DAG acíclico e sink IMP-131; hashes espelhados exatos; índice da branch regenerável; fonte/escopo e limitações claros. O catálogo valida estrutura, não correção semântica de todos os textos ou validade de URLs externas. Referências históricas privadas e links do espelho são resolvidos pelo pacote integral; não reescrever links automaticamente. Auditoria de qualidade textual, tutoriais finais, revisão de contratos runtime e evidência independente continuam distintas.
+IDs de nós únicos; vínculos explícitos com endpoints existentes; DAG acíclico e sink IMP-131; hashes espelhados exatos; índice da branch regenerável; fonte/escopo e limitações claros. O grafo usa os 15 arquivos tabulares e registra a origem de cada aresta; chaves de projeção para domínio e operação não são IDs normativos novos. Não inferir ligações do texto livre nem equivalências entre contratos e schemas. O catálogo valida estrutura, não correção semântica de todos os textos ou validade de URLs externas. Referências históricas privadas e links do espelho são resolvidos pelo pacote integral; não reescrever links automaticamente. Auditoria de qualidade textual, tutoriais finais, revisão de contratos runtime e evidência independente continuam distintas.
 
 ## Referências metodológicas
 

@@ -5,7 +5,6 @@ import hashlib
 import json
 import subprocess
 import sys
-from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,6 +20,10 @@ REGISTRIES = {
     "F": ("MATRIZ_LACUNAS_F01_F18.csv", "finding_id"),
     "H": ("HIPOTESES_E_EXPERIMENTOS.csv", "id"),
     "SCHEMA": ("INVENTARIO_SCHEMAS_CANDIDATOS.csv", "schema_id"),
+    "ISO": ("MATRIZ_ISO_23x9.csv", "matrix_id"),
+    "CONFLICT": ("MATRIZ_CONFLITOS.csv", "id"),
+    "DOMAIN": ("MATRIZ_DOMINIO.csv", "domain_group"),
+    "CONTRACT": ("CATALOGO_CONTRATOS.csv", "operation"),
 }
 
 
@@ -70,10 +73,17 @@ def index(root):
 def graph(root):
     nodes, edges = {}, set()
     tables = {}
+
+    def identity(kind, row):
+        key = REGISTRIES[kind][1]
+        # These two catalogs have no official row ID; namespace their natural keys.
+        if kind in ("DOMAIN", "CONTRACT"):
+            return kind + ":" + row[key] if row[key] else ""
+        return row[key]
     for kind, (filename, key) in REGISTRIES.items():
         tables[kind] = rows(root, filename)
         for row in tables[kind]:
-            ident = row[key]
+            ident = identity(kind, row)
             if not ident or ident in nodes:
                 raise ValueError("empty or duplicate ID: " + ident)
             nodes[ident] = {"id": ident, "kind": kind, "source": (PLAN / filename).as_posix()}
@@ -87,7 +97,8 @@ def graph(root):
         filename, key = REGISTRIES[kind]
         for row in tables[kind]:
             for target in tokens(row[column]):
-                a, b = (target, row[key]) if reverse else (row[key], target)
+                ident = identity(kind, row)
+                a, b = (target, ident) if reverse else (ident, target)
                 link(a, b, relation, filename + ":" + column)
 
     for column, relation in (("capability_ids", "implements_capability"), ("criterion_ids", "addresses_requirement"),
@@ -104,6 +115,21 @@ def graph(root):
     fields("H", "task_ids", "experiment_task")
     fields("H", "capability_ids", "experiment_capability")
     fields("SCHEMA", "linked_to_capability", "candidate_for")
+    fields("ISO", "capability_id", "measures_capability")
+    fields("ISO", "test_links", "quality_test_link")
+    fields("DOMAIN", "task_ids", "domain_task")
+    fields("DOMAIN", "capability_ids", "domain_capability")
+    fields("CONTRACT", "capability_id", "contract_for")
+    fields("CONTRACT", "task_ids", "contract_task")
+    # Candidate names not present in the schema inventory are not invented nodes.
+    unresolved_candidates = []
+    for row in tables["CONTRACT"]:
+        name = row["proposed_contract"]
+        ident = identity("CONTRACT", row)
+        if name in nodes and nodes[name]["kind"] == "SCHEMA":
+            link(ident, name, "candidate_schema", "CATALOGO_CONTRATOS.csv:proposed_contract")
+        else:
+            unresolved_candidates.append({"contract": ident, "candidate": name})
     for row in rows(root, "DEPENDENCIAS.csv"):
         link(row["predecessor"], row["successor"], "precedes", "DEPENDENCIAS.csv")
     for row in rows(root, "MATRIZ_CRITERIO_CAPACIDADE.csv"):
@@ -111,7 +137,9 @@ def graph(root):
              "MATRIZ_CRITERIO_CAPACIDADE.csv:" + row["relation"])
         for task in tokens(row["intersecting_tasks"]):
             link(row["criterion_id"], task, "matrix_intersection", "MATRIZ_CRITERIO_CAPACIDADE.csv")
-    return {"kind": "planning_projection_not_acceptance", "nodes": sorted(nodes.values(), key=lambda n: n["id"]),
+    return {"kind": "planning_projection_not_acceptance",
+            "candidate_names_not_in_inventory": sorted(unresolved_candidates, key=lambda x: x["contract"]),
+            "nodes": sorted(nodes.values(), key=lambda n: n["id"]),
             "edges": [{"source": a, "target": b, "relation": rel, "origin": origin}
                       for a, b, rel, origin in sorted(edges)]}
 
@@ -132,6 +160,7 @@ def check(root):
         raise ValueError("missing entrypoint: " + ", ".join(sorted(expected - entries)))
     return {"status": "PASS_DOCUMENTATION_STRUCTURE", "mirror_blobs": len(manifest["files"]),
             "markdown_files": len(entries), "nodes": len(g["nodes"]), "edges_with_provenance": len(g["edges"]),
+            "candidate_names_not_in_inventory": len(g["candidate_names_not_in_inventory"]),
             "software_tests": "NOT_RUN", "gates": "NOT_ASSESSED", "semantic_audit": "NOT_PERFORMED"}
 
 

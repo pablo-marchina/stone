@@ -5,7 +5,7 @@ Pré-requisito: checkout íntegro da branch autorizada, Python do projeto e aces
 1. Confirme `git status --short`, `git rev-parse HEAD` e a base do PR. Consulte [portal](../README.md), [fluxo](../REPOSITORY_WORKFLOW.md) e fonte integral.
 2. Execute `python docs/base_atemporal/ferramentas/validar_espelho.py`.
 3. Execute `python scripts/documentation_catalog.py check` e `python scripts/documentation_catalog.py index`. O índice é baseado no checkout local e não deve ser tomado como inventário de outras branches.
-4. Consulte `python scripts/documentation_catalog.py graph` para localizar vínculos explícitos do Plano Único. Para um arquivo local privado, redirecione a saída para um caminho fora do repositório. A ferramenta não grava por conta própria.
+4. Consulte `python scripts/documentation_catalog.py graph` para localizar vínculos explícitos do Plano Único. O grafo inclui contratos, ISO, domínio e conflitos; candidatos com nomes sem correspondência exata são relatados, não inventados. Para um arquivo local privado, redirecione a saída para um caminho fora do repositório. A ferramenta não grava por conta própria.
 5. Registre o trabalho com os [templates](../governance/TEMPLATES.md), rode os testes focais e `python scripts/verify_zero_spend.py`; preserve FAIL/SKIP, SHA e limites.
 6. Revise o diff e PR sem publicar fontes privadas nem modificar gate. Se houver drift, não atualizar hashes para mascarar falha; reconciliar a alteração com a autoridade da base.
 

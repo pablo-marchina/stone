@@ -12,11 +12,13 @@ Este portal é uma visão de navegação, não uma nova fonte de requisitos. A e
 | Consultar critérios e contratos | [Requisitos](../planning/base_atemporal/MATRIZ_REQUISITOS.csv), [CAP](../planning/base_atemporal/MATRIZ_CAPACIDADES.csv), [CT](../planning/base_atemporal/CATALOGO_TESTES_CT.csv), [contratos](../planning/base_atemporal/CATALOGO_CONTRATOS.csv), [gates](../planning/base_atemporal/MATRIZ_GATE_GLOBAL.csv) | Referência |
 | Trabalhar em segurança | [Direitos](02_MATRIZ_DIREITOS_E_POLICY_GATES.md), [segurança](06_SEGURANCA_E_IDENTIDADE.md), [R$0](14_POLITICA_CUSTO_ZERO.md), [fluxo Git](REPOSITORY_WORKFLOW.md) | Referência histórica + regras vigentes na base |
 | Reproduzir/registrar incremento | [Guia documental](governance/STANDARD.md), [templates](governance/TEMPLATES.md), [guia local](guides/README.md) | Guia prático |
-| Consultar progresso | [Corte de 24/11](governance/STATE_2026-11-24.md), [inventário pinado](governance/inventory_2026-11-24.json) | Histórico |
+| Consultar progresso | [Corte de 24/11](governance/STATE_2026-11-24.md), [catálogo temático](governance/CATALOG_2026-11-24.md), [inventário pinado](governance/inventory_2026-11-24.json) | Histórico |
 | Explorar toda a documentação da branch | `python scripts/documentation_catalog.py index` | Referência gerada |
 | Cruzar requisitos, CAP, IMP, DEC, CT e gates | `python scripts/documentation_catalog.py graph` | Referência gerada |
 
 Os arquivos numerados na raiz de docs são registros de diferentes épocas: não assumir que título, número ou data lhes confere autoridade normativa. Os links de fontes integrais no espelho podem exigir o ZIP privado. O mapa de fases é overlay operacional e pode não existir em branches antigas; não inventar um plano alternativo.
+
+**Auditoria desta reorganização:** [registro de validação e limites](governance/VALIDATION_2026-11-24.md).
 
 ## Trilhas de desenvolvimento (referências do corte de 24/11)
 

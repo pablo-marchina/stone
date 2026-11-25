@@ -44,3 +44,13 @@ def test_check_reports_structure_only():
     assert result["mirror_blobs"] == 32
     assert result["gates"] == "NOT_ASSESSED"
     assert result["semantic_audit"] == "NOT_PERFORMED"
+
+
+def test_all_matrix_families_and_candidate_gap():
+    result = catalog.graph(ROOT)
+    kinds = {node["kind"] for node in result["nodes"]}
+    assert {"ISO", "CONFLICT", "DOMAIN", "CONTRACT", "SCHEMA"} <= kinds
+    assert len([node for node in result["nodes"] if node["kind"] == "ISO"]) == 207
+    assert len([node for node in result["nodes"] if node["kind"] == "CONTRACT"]) == 28
+    assert any(edge["relation"] == "candidate_schema" for edge in result["edges"])
+    assert result["candidate_names_not_in_inventory"]
