@@ -7,7 +7,7 @@ Plataforma unificada de pesquisa observacional, inteligência de conteúdo e cri
 - [Portal de documentação](docs/README.md): escolha sua trilha de leitura.
 - [Base Atemporal v6.1](docs/base_atemporal/INTEGRACAO.md): escopo, fontes integrais, autoridade e limites.
 - [Plano Único](planning/base_atemporal/): requisitos U, CAP, IMP, DEC, CT, contratos e gates.
-- [Estado observado em 24/11/2026](docs/governance/STATE_2026-11-24.md): referências pinadas, diferenças main/desenvolvimento e limites. Não é estado vivo.
+- [Consolidação na main (24/11/2026)](docs/governance/CONSOLIDATION_2026-11-24.md): merge #99, evidências e limites. [Corte anterior ao merge](docs/governance/STATE_2026-11-24.md), histórico.
 - [Fluxo GitHub](docs/REPOSITORY_WORKFLOW.md) e [orientações para agentes](AGENTS.md).
 
 ## Invariantes

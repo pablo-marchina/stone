@@ -1,0 +1,813 @@
+{
+  "schema": "stone-branch-consolidation.v1",
+  "kind": "historical_git_disposition_not_semantic_audit",
+  "date": "2026-11-24",
+  "timezone": "America/Sao_Paulo",
+  "previous_main": "ed77e4e6ff3ceb24616264d9d04b38d0fba57209",
+  "merged_head": "3c892e39aa8b655e5132eed0f41e9f5c286c0438",
+  "merge_commit": "98a6f8fb8c3b44e86e3dc960684e3b564ecdfc00",
+  "tree_sha": "5ffa5fcf7ff430a8c1f0f5efb6d50bc753e5afff",
+  "open_prs_after_merge_and_closure": 0,
+  "counts": {
+    "previously_merged_pr": 32,
+    "historical_closed_proposal_preserved": 8,
+    "consolidated_99_by_ancestry": 53,
+    "reconciled_ported_in_71": 3,
+    "historical_unassociated_preserved": 2,
+    "canonical_development": 1
+  },
+  "branches": [
+    {
+      "branch": "docs/alinhamento-fontes-decisoes-20261105",
+      "head": "65b28633e538cd95814a2e82c45cd3c14b1d6b01",
+      "pr": 41,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "docs/arquitetura-revisada-v5-2",
+      "head": "a83b9c244c973216e845e0b0a78d03343cd51695",
+      "pr": 9,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "docs/base-atemporal-v6-1",
+      "head": "ff2810776e9127ce3983299e7178d0a498c5cdc8",
+      "pr": 45,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "docs/creative-studio-editavel-stack-2026",
+      "head": "9414de2d589c9716c30afde139ff23e1ef8d8694",
+      "pr": 7,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "docs/dec017-institutional-decision-gates-20261104",
+      "head": "dd01129143a78a8d4c43264a4a4ce0b1a378be4f",
+      "pr": 32,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "historical_closed_proposal_preserved"
+    },
+    {
+      "branch": "docs/imp167-first-source-approval-pack-20261103",
+      "head": "271ada66940e281545759570b2588a7f73272e0c",
+      "pr": 21,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "docs/ingestion-operational-readiness",
+      "head": "c2405160732638fdabbfd5354b8349690c726793",
+      "pr": 5,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "docs/plano-unico-v5-2-integrado",
+      "head": "c6acecd7210c4912385d3d4e47a845be3fc87abf",
+      "pr": 10,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "historical_closed_proposal_preserved"
+    },
+    {
+      "branch": "docs/tapi-conceptual-methodological-review-stone-evidence-20261103",
+      "head": "3f571f5126ff39fafda95a5e77c936f378c8b304",
+      "pr": 22,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "historical_closed_proposal_preserved"
+    },
+    {
+      "branch": "docs/unified-documentation-20261124",
+      "head": "3c892e39aa8b655e5132eed0f41e9f5c286c0438",
+      "pr": 99,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/a02-asr-chunk-timestamp-binding-20261122",
+      "head": "bb4fc052f1c1f922294ca06a02fcdb1afc216cd3",
+      "pr": 62,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/a02-asr-strict-word-diagnostics-20261122",
+      "head": "34756ed1f60ccbfb43e8ed53ad9d64b8ec52fe1d",
+      "pr": 59,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/a02-checkpoint-manifest-integrity-20261122",
+      "head": "d02becf593624d39a2c6cdb903ac1e667a78c45a",
+      "pr": 67,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/a02-shared-av-asr-segment-order-20261122",
+      "head": "1d8f0c96c35402b9d57dd741d3f7f02816e734e8",
+      "pr": 66,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/a02-shared-av-explicit-science-denials-20261122",
+      "head": "ca1406f6401f2d15f9d2f2fcbe6d559b085d78c9",
+      "pr": 63,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/a02-shared-av-fail-diagnostics-20261122",
+      "head": "adf456ad720604223b25332c89198deecaf319ea",
+      "pr": 60,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/a02-shared-av-guard-receipts-20261122",
+      "head": "b13987b4a5b2c43b4bf320e4a138d133da71435a",
+      "pr": 64,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/a02-shared-av-vad-interval-integrity-20261122",
+      "head": "99942c834090363eef5d23c7e386debaaa0d84ac",
+      "pr": 61,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/a02-vad-duration-receipt-20261122",
+      "head": "10e5a860e0a1477bd207b5372c4544fb960a3aee",
+      "pr": 65,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/a3-business-discovery-technical-batch-20261104",
+      "head": "57e3384eb4974c97b3dbfb37c37ff7b4d079b2bc",
+      "pr": 36,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "feat/a05-atomic-creative-draft-20261122",
+      "head": "27339919aafcddf339ab4655d826db19340a6f7a",
+      "pr": 47,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/a05-creative-reference-pep-20261122",
+      "head": "e0e5c5a76f1ea28405527da68982d2e024bea7ab",
+      "pr": 49,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "reconciled_ported_in_71"
+    },
+    {
+      "branch": "feat/a05-creative-rights-pep-20261121",
+      "head": "1fbd9f0f075f3d9e980c3d109c3c7f3d23833fac",
+      "pr": 48,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/a05-evidence-integrity-20261121",
+      "head": "58d4cc9f1bd3059a30a226a521db9217ee2d634a",
+      "pr": 46,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/a05-signed-reference-lifecycle-20261121",
+      "head": "538bdbae7b4684bcbf99acd418d8d4a65226784c",
+      "pr": 51,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/a05-trust-bootstrap-20261121",
+      "head": "94d9dc5f79885a1b8281fc512cd9d19bb4bfc93d",
+      "pr": 50,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/a06-e1-native-receipt-guard-20261122",
+      "head": "9e4ae308543f512e93db3ffb141a1da146bbdee5",
+      "pr": 68,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/a06-system-one-av-evidence-bridge-20261121",
+      "head": "332ecbf3a959c045416ff941750aa5787828c3ba",
+      "pr": 57,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/a11-a027-portable-focal-pin-20261123",
+      "head": "bfb70e41146e951a2b4df25e7779db69e0568132",
+      "pr": 76,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/a11-native-host-preflight-20261123",
+      "head": "22ecf6d9a9aba4d6a79c9a6377c3dcf842f034a1",
+      "pr": 73,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/a11-vertical-frontier-20261123",
+      "head": "c2815cd3f44379095b78e068306b3d3b84f63c4e",
+      "pr": 72,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/a027-explicit-fixture-batch-20261122",
+      "head": "85817452bc6a458d5dd0a628818cebae0657e02b",
+      "pr": 70,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "reconciled_ported_in_71"
+    },
+    {
+      "branch": "feat/a027-s1-guarded-readonly-handoff-20261123",
+      "head": "decae579f8e1c9809124344b26ca60f4e524d4f4",
+      "pr": null,
+      "pr_state": null,
+      "github_merged": false,
+      "disposition": "historical_unassociated_preserved"
+    },
+    {
+      "branch": "feat/a027-s1-protected-candidate-handoff-20261123",
+      "head": "5d7134e598415ee5d7865ffe16b7f9eb64a958ec",
+      "pr": 78,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/agent-trace-studio-handoff-20261123",
+      "head": "adaf068f1db1575b1501c825b0ece7418106fb2f",
+      "pr": 81,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/cap001-a4-curated-batch-20261106",
+      "head": "d5131e2b8eda51ee25eda5694abeb89b0e2afbb8",
+      "pr": 42,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "feat/cap001-a5-historical-continuous-20261112",
+      "head": "f0e998aa1e6b5af6c9dd6badf055a879c9883dfd",
+      "pr": 43,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/cap001-a6-source-expansion-20261112",
+      "head": "17519068fd7d892269e98ebdcad4d816bc72f4cc",
+      "pr": 44,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/cap023-action-guard-20261121",
+      "head": "b400daafa5136b33ba4e8a2c35ee717931198a06",
+      "pr": 52,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/cap023-e4-e5-version-export-storyboard-20261105",
+      "head": "f018e3f18faac97233416cbb354e554ba7ce7a4f",
+      "pr": 38,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "feat/cap023-e6-offline-render-rights-evidence-20261105",
+      "head": "719d66ca0b2f424f17f677a781021baf2a57a0e8",
+      "pr": 39,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "feat/cap023-e7-e8-advanced-audiovisual-20261105",
+      "head": "e7f7a64e7472a7f7497b4ba451de160638feeda2",
+      "pr": 40,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "feat/cap023-geometry-rights-20261122",
+      "head": "c31c041ca150b02efd8c1197e378c8f37107fa51",
+      "pr": 53,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/corpus-audit-v52-20261103",
+      "head": "75b4bb243318d9d9d0bfb55bd27924aa65254c0d",
+      "pr": 12,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "feat/dec008-protected-av-research-ledger-20261123",
+      "head": "c7e519db1ccb9d645de74a7a55d060c84aff8137",
+      "pr": 79,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/dec016-scientific-eligibility-source-v2-20261103",
+      "head": "1e6588d1b884eaa944512658734b35225914bd97",
+      "pr": 23,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "feat/dec017-e1-system-one-offline-benchmark-20261103",
+      "head": "d47c5db276d3919c25bdc838ff1c77c0f5a66f6f",
+      "pr": 24,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "feat/dec017-e11-real-gliner-local-validation-20261104",
+      "head": "ad983e39d5b7157da1b2f2574a07019b345c096a",
+      "pr": 25,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "feat/dec017-e12-ptbr-goldset-benchmark-20261104",
+      "head": "952298bd3a2ae4d1efcc790abf17712a4fd36420",
+      "pr": 26,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "feat/dec017-e13-cta-diagnostic-ptbr-20261104",
+      "head": "bdb6fa079a3fc1a67ff12ef94c553496625b1e83",
+      "pr": 27,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "historical_closed_proposal_preserved"
+    },
+    {
+      "branch": "feat/dec017-e13-cta-diagnostics-ptbr-20261104",
+      "head": "37f3cc5fcc3c408a6971096886d60b9d041a1731",
+      "pr": 28,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "historical_closed_proposal_preserved"
+    },
+    {
+      "branch": "feat/dec017-e13-unified-cta-pr27-pr28-20261104",
+      "head": "e044666a223fe3ba52a6f520ea2c0b0182a2f0a3",
+      "pr": 29,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "historical_closed_proposal_preserved"
+    },
+    {
+      "branch": "feat/dec017-e14-conservative-cta-policies-20261104",
+      "head": "26592c588b94ad91070f4bf829dbdfd40a106061",
+      "pr": 30,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "historical_closed_proposal_preserved"
+    },
+    {
+      "branch": "feat/dec017-e15-independent-human-cta-validation-20261104",
+      "head": "2c203724bf07cc23156e4c399c93d6b03421424d",
+      "pr": 31,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "historical_closed_proposal_preserved"
+    },
+    {
+      "branch": "feat/demo-av-evidence-20261123",
+      "head": "e8293fbed7b579583ef8c71baa5bb3ffe9bc6fba",
+      "pr": 87,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/demo-editorial-hypotheses-20261124",
+      "head": "599d5252676e047d764fbcbf5e8299c185783fc0",
+      "pr": 89,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/demo-executive-contrast-20261123",
+      "head": "e68e7ccbcd64b7cec312dc96de1ffe7d54cddf9f",
+      "pr": 88,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/demo-executive-polish-20261124",
+      "head": "4cafa4f590140202ddabe900ebf865f298c1c530",
+      "pr": 92,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/demo-experiment-pairs-20261124",
+      "head": "aaa1fa229d12e9ce8c54680f620abd780de429a9",
+      "pr": 90,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/demo-hypothesis-carousels-20261124",
+      "head": "3eecfed84edb024ba6283eac77c3670160552ac3",
+      "pr": 93,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/demo-persistent-workspace-20261124",
+      "head": "afaa87be1424494182ac68c9914cdd4a76c50a24",
+      "pr": 91,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/demo-retrieval-carousel-results-20261123",
+      "head": "2fd06326d16c58fb66eabcf88476b53307c0deb6",
+      "pr": 85,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/demo-social-editorial-20261124",
+      "head": "17cf780be57a75c88e7c815ea8b6607a02445ffd",
+      "pr": 97,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/demo-social-kinetic-20261124",
+      "head": "4622d0171c8b1ea72f7c892c77fd7118fd12ae5e",
+      "pr": 98,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/demo-social-motion-20261124",
+      "head": "e76785f56390f7b41d697b9de94a17f14b9da21c",
+      "pr": 96,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/demo-social-vertical-20261124",
+      "head": "fdbd2c327ab0a9a5ee4b9bd8f589c8d179890407",
+      "pr": 95,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/demo-social-visual-20261124",
+      "head": "f6d0dc2825af707a6a0388a4104da0620b966b9f",
+      "pr": 94,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/demo-video-render-20261123",
+      "head": "05495005db59475fe7996ec0756075fd84fa5c77",
+      "pr": 86,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/demo-visual-results-20261123",
+      "head": "d938952c64b5aadbc263545ef372cc6ee774877f",
+      "pr": 84,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/imp170-authorized-discovery-to-corpus-20261103",
+      "head": "40aed5ac1a8348881fa99af93bf9208b08060518",
+      "pr": 20,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "feat/imp182-183-studio-versioned-carousel-20261105",
+      "head": "e237ce426bf59cf22979528172cbaf8cdfeaad33",
+      "pr": 37,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "feat/ingestion-pagination-v52-20261030",
+      "head": "2c5f05de5a6b534d364c3b7fdd07ec3d36d1f7c3",
+      "pr": 11,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "feat/instagram-business-discovery-preflight-imp167-20261103",
+      "head": "64b84ab0601b778c7784924e83af3a04fdffd40f",
+      "pr": 16,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "feat/local-creative-proposal-review-20261123",
+      "head": "43e68c6f05e27d3c85ffee850ca293c40b7bb150",
+      "pr": 82,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feat/meta-first-read-preflight-v52-20261103",
+      "head": "8d23316fa51d182d8e525a9268b661c722e3049d",
+      "pr": 13,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "feat/mpe-source-frame-first-eligible-20261103",
+      "head": "8a90c29311316d4e0c079993878ed39b59cfb7ca",
+      "pr": 18,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "feat/official-metadata-ingestion",
+      "head": "0304c1cd44dc011ea19e3627f2f221d8455959a3",
+      "pr": 3,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "feat/p0-gate0b-technical-permission-preview-20261104",
+      "head": "df3db38bb222cab245b52c2c405491770db19de7",
+      "pr": 33,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "feat/p1-agent-evidence-first-recommendations-20261104",
+      "head": "46caa6a87ecebcfaaa32cb4c1584c306dbea384a",
+      "pr": 34,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "feat/p1-studio-design-contracts-20261104",
+      "head": "ce1811172d479ad4378a5a09949f72fe7129fc7b",
+      "pr": 35,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "feat/secure-live-console",
+      "head": "a6c1810675eafbb8cfe14c731a5c009acbed3ce8",
+      "pr": 2,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "feat/stone-demo-48h-20261123",
+      "head": "c017e56a91dcec65a1b40fcffdaad4e903962842",
+      "pr": 83,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "feature/identity-db-events",
+      "head": "bbb351e26fff45eeb067cf56517d3f415d1e5caa",
+      "pr": 1,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "fix/a05-pep-syntax-and-import-gates-20261121",
+      "head": "fc78047f261aac4702073107347c6ae2de8bdb58",
+      "pr": 54,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "fix/a05-sql-provenance-integrity-20261121",
+      "head": "61d955a791245d2c0dca9c5079cadc8d5d7d5eb6",
+      "pr": 56,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "fix/a06-atomic-private-receipt-20261121",
+      "head": "fe9556ed5b6b890b59e880517ca40b52a616aed4",
+      "pr": 58,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "reconciled_ported_in_71"
+    },
+    {
+      "branch": "fix/a06-e1-fixture-receipt-parity-20261122",
+      "head": "2a97a55e06ab82e98b0d745eecdcae922f33870b",
+      "pr": 69,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "fix/a11-mandatory-syntax-preflight-20261121",
+      "head": "eb8e70d2e6726aed3a0cc15ca91348ebe8823676",
+      "pr": 55,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "fix/a027-a11-portable-regression-20261123",
+      "head": "a8fb601671e907689679845c4c67f172d77385fd",
+      "pr": 77,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "fix/a027-shared-av-decode-stage-diagnostics-20261123",
+      "head": "351e623eec4bcae62960827eecd3f48e5f98faab",
+      "pr": 75,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "fix/a027-strict-quality-test-contract-20261123",
+      "head": "860c1ce60c3278dfc51184bfb72f22ded3f38c80",
+      "pr": 74,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "fix/business-discovery-cursor-evidence-20261103",
+      "head": "edaeb4955422b2f20a8665ba86e0068d033be1c4",
+      "pr": 17,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "fix/meta-direct-known-page-v52-20261103",
+      "head": "f4850276f78c03bef6b99d85a089925f03dddafd",
+      "pr": 15,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "fix/meta-preflight-page-diagnostic-20261103",
+      "head": "4d6d9ed5a7ad64ed460485ef1f8f85112e0c2c76",
+      "pr": 14,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    },
+    {
+      "branch": "integration/a027-a06-a11-convergence-20261122",
+      "head": "75e0229aff4a08c6c1d0b9c3ef2fccde587ca3eb",
+      "pr": 71,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "main",
+      "head": "98a6f8fb8c3b44e86e3dc960684e3b564ecdfc00",
+      "pr": null,
+      "pr_state": null,
+      "github_merged": false,
+      "disposition": "canonical_development"
+    },
+    {
+      "branch": "rebase/imp170-discovery-v2-0006-20261103",
+      "head": "3665037a024dcd17c3038dbafe454718f44609c1",
+      "pr": null,
+      "pr_state": null,
+      "github_merged": false,
+      "disposition": "historical_unassociated_preserved"
+    },
+    {
+      "branch": "test/dec008-process-recovery-20261123",
+      "head": "060fa8b5a1548e976fe2daead71e277843269a97",
+      "pr": 80,
+      "pr_state": "closed",
+      "github_merged": false,
+      "disposition": "consolidated_99_by_ancestry"
+    },
+    {
+      "branch": "test/ingestion-full-http-contract",
+      "head": "cdfdb1478d042d058eb789138ac5175c7bf81185",
+      "pr": 4,
+      "pr_state": "closed",
+      "github_merged": true,
+      "disposition": "previously_merged_pr"
+    }
+  ]
+}

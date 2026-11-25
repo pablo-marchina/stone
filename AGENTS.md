@@ -18,7 +18,7 @@ Antes de implementar qualquer IMP, consultar [guia de adoção](docs/base_atempo
 
 ## Organização GitHub
 
-Consultar [fluxo de branches e PRs](docs/REPOSITORY_WORKFLOW.md) antes de criar branch, alterar base ou mesclar. Preservar a ordem das branches empilhadas, histórico e aceite por SHA. Não reativar propostas arquivadas como tarefas paralelas.
+Consultar [fluxo de branches e PRs](docs/REPOSITORY_WORKFLOW.md) antes de criar branch, alterar base ou mesclar. Após a consolidação #99, iniciar novos incrementos em main atual; preservar dependências explícitas, histórico e aceite por SHA. Não retomar branches antigas automaticamente. Não reativar propostas arquivadas como tarefas paralelas.
 
 ## Organização documental unificada
 
