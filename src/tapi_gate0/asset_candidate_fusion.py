@@ -1,0 +1,350 @@
+"""Protected deterministic Stone-S1 candidate decisions, never rubric admission.
+
+Only a trusted host can evaluate selected persisted processor results. No
+model invocation, arbitrary caption, API, write, ranking or publication.
+"""
+from typing import Literal
+from itertools import combinations
+from pydantic import Field, model_validator
+from .asset_processor_results import Contract, Digest, Id, PARTIAL_QUALITY
+from .asset_candidate_evidence import (_validate_selection, _assemble_in_transaction,
+    _recheck_bundle)
+from .asset_lineage import RetainedAssetRef
+from .asset_lineage_index import _load, _ancestors, _grant
+from .asset_rights import AssetRightsDenied, Permission
+from .domain import RUBRIC_FIELD_NAMES
+from . import multimodal_fusion as fusion
+from . import multimodal_cta_directed as directed
+from .discovery_rubric_grounded import rule_evidence, UNKNOWN, PATTERNS
+
+VERSION = "asset-s1-candidate-fusion.v1"
+FIELDS = ("tema_principal","tipo_cta","tem_cta","texto_na_tela")
+MAX_FRAGMENTS = 128
+
+
+class Support(Contract):
+    artifact_id: Id
+    payload_sha256: Digest
+    processor: Literal["asr_vad","ocr","vlm"]
+    segment_index: int | None = Field(default=None,ge=0,le=255)
+    start_ms: int | None = Field(default=None,ge=0,le=86400000)
+    end_ms: int | None = Field(default=None,ge=0,le=86400000)
+    frame_sha256: Digest | None = None
+    timeline: Literal["decoded_pcm","image","resampled_uniform"]
+    word_indices: tuple[int,...] = Field(default=(),max_length=256)
+    text_sha256: Digest | None = None
+
+    @model_validator(mode="after")
+    def locator(self):
+        if self.processor == "asr_vad":
+            if (self.segment_index is None or self.start_ms is None or self.end_ms is None
+                    or self.start_ms >= self.end_ms or self.frame_sha256 is not None
+                    or self.timeline != "decoded_pcm" or self.word_indices or not self.text_sha256):
+                raise ValueError("S1_AUDIO_LOCATOR")
+        else:
+            if (self.segment_index is not None or self.start_ms is None or self.end_ms is not None
+                    or not self.frame_sha256 or self.timeline == "decoded_pcm"):
+                raise ValueError("S1_FRAME_LOCATOR")
+            if self.processor == "ocr":
+                if (not self.word_indices or self.word_indices != tuple(sorted(set(self.word_indices)))
+                        or any(not 0<=i<256 for i in self.word_indices)):
+                    raise ValueError("S1_WORD_LOCATOR")
+            elif self.word_indices or self.text_sha256 is not None:
+                raise ValueError("S1_VISUAL_LOCATOR")
+        return self
+
+
+class FieldCandidate(Contract):
+    field_id: str
+    state: Literal["candidate","abstained","not_assessed"]
+    value: str | bool | None = None
+    reason: str = Field(min_length=1,max_length=128)
+    supports: tuple[Support,...] = Field(default=(),max_length=128)
+    vetoes: tuple[Support,...] = Field(default=(),max_length=130)
+
+    @model_validator(mode="after")
+    def decision(self):
+        if self.field_id not in RUBRIC_FIELD_NAMES:
+            raise ValueError("S1_FIELD_UNKNOWN")
+        if self.state == "candidate":
+            if self.field_id not in FIELDS or self.value is None or not self.supports:
+                raise ValueError("S1_CANDIDATE_INVALID")
+            if self.field_id in ("tem_cta","texto_na_tela"):
+                if self.value is not True:
+                    raise ValueError("S1_POSITIVE_ONLY")
+            elif type(self.value) is not str or self.value not in PATTERNS[self.field_id]:
+                raise ValueError("S1_LABEL_INVALID")
+        elif self.value is not None:
+            raise ValueError("S1_NONCANDIDATE_VALUE")
+        if self.state == "not_assessed" and (self.supports or self.vetoes):
+            raise ValueError("S1_NOT_ASSESSED_SUPPORT")
+        return self
+
+
+class CandidateDecisions(Contract):
+    schema_version: Literal["asset-s1-candidate-fusion.v1"] = VERSION
+    evidence_fingerprint: Digest
+    tenant_id: Id
+    content_id: Id
+    object_id: Digest
+    purpose: Literal["research_analysis","studio_creation"]
+    fields: tuple[FieldCandidate,...] = Field(min_length=20,max_length=20)
+    scientific_evidence: Literal[False] = False
+    canonical_rubric: Literal[False] = False
+    calibrated_probability: None = None
+
+    @model_validator(mode="after")
+    def partition(self):
+        if tuple(d.field_id for d in self.fields) != RUBRIC_FIELD_NAMES:
+            raise ValueError("S1_FIELD_PARTITION")
+        by = {d.field_id:d for d in self.fields}
+        if any(by[k].state != "not_assessed" for k in by.keys()-set(FIELDS)):
+            raise ValueError("S1_UNSUPPORTED_FIELD")
+        a,b = by["tipo_cta"],by["tem_cta"]
+        if (a.state,a.supports,a.vetoes)!=(b.state,b.supports,b.vetoes) or b.value is not (True if a.state=="candidate" else None):
+            raise ValueError("S1_CTA_RELATION")
+        return self
+
+
+def _support(entry, **kwargs):
+    return Support(artifact_id=entry.artifact_id,payload_sha256=entry.payload_sha256,
+                   processor=entry.observation.result.processor,**kwargs)
+
+
+def _ocr_line(words):
+    """One horizontal row only; no assembly across rows or large gaps.
+
+    The contract has no OCR line IDs; this conservative geometry rule is an
+    engineering proposal, not a calibrated semantic eligibility classifier.
+    """
+    boxes = [w.box_px for w in words]
+    if max(y for x,y,w,h in boxes) >= min(y+h for x,y,w,h in boxes):
+        return None
+    for (x,y,w,h),(u,v,a,b) in zip(boxes,boxes[1:]):
+        if u<x+w or u-(x+w)>2*max(h,b):
+            return None
+    text = " ".join(w.text for w in words)
+    return text if len(text)<=10000 else None
+
+
+def _evaluate(bundle):
+    entries = {e.observation.result.processor:e for e in bundle.entries
+               if e.observation.result.state=="observed"}
+    fragments, refs = [], []
+    def add(modality,text,ref):
+        if len(fragments)>=MAX_FRAGMENTS:
+            raise AssetRightsDenied("ASSET_S1_FRAGMENT_LIMIT")
+        fragments.append(fusion.fragment(bundle.input_sha256,modality,text,{"index":len(refs)}))
+        refs.append(ref)
+    if "asr_vad" in entries:
+        e=entries["asr_vad"]
+        for i,s in enumerate(e.observation.result.segments):
+            add("audio",s.text,_support(e,segment_index=i,start_ms=s.start_ms,end_ms=s.end_ms,
+                 timeline="decoded_pcm",text_sha256=fusion.digest(s.text)))
+    screen, conflict = (), ()
+    if "ocr" in entries:
+        e=entries["ocr"]; o=e.observation.result
+        loc=dict(start_ms=o.frame.time_ms,frame_sha256=o.frame.frame_sha256,
+                 timeline=o.frame.timeline,word_indices=tuple(range(len(o.words))))
+        screen=(_support(e,**loc),)
+        if "vlm" in entries:
+            v=entries["vlm"]; vr=v.observation.result
+            if vr.frame==o.frame and vr.text_present=="no":
+                conflict=screen+(_support(v,start_ms=vr.frame.time_ms,
+                    frame_sha256=vr.frame.frame_sha256,timeline=vr.frame.timeline),)
+        if not conflict:
+            line=_ocr_line(o.words)
+            if line is not None:
+                add("ocr",line,_support(e,**loc,text_sha256=fusion.digest(line)))
+    fusion.validate_fragments(bundle.input_sha256,fragments)
+    def decision(field,value,reason,supports=(),vetoes=()):
+        return FieldCandidate(field_id=field,state="candidate" if value is not None else "abstained",
+                              value=value,reason=reason,supports=tuple(supports),vetoes=tuple(vetoes))
+    if conflict:
+        topic=decision("tema_principal",None,"SAME_FRAME_MODALITY_CONFLICT",vetoes=conflict)
+        cta=decision("tipo_cta",None,"SAME_FRAME_MODALITY_CONFLICT",vetoes=conflict)
+    else:
+        t=fusion.field_candidate("tema_principal",fragments,("audio","ocr"))
+        topic=decision("tema_principal",t["value"],t["reason"],
+                       [refs[a["locator"]["index"]] for a in t["supports"]],
+                       [refs[a["locator"]["index"]] for a in t["vetoes"]])
+        preds=[{"rule":rule_evidence("tipo_cta",f["text"]),
+                "directed":directed.directed_evidence(f["text"])} for f in fragments]
+        value=directed.directed_decision(preds,hybrid=False)
+        support=[r for p,r in zip(preds,refs) if value is not None and p["directed"]["value"]==value]
+        veto=[r for p,r in zip(preds,refs) if p["directed"]["reason"] in ("CONTEXT_VETO","MULTIPLE_REQUESTS")
+              or (value is None and (p["directed"]["value"]!=UNKNOWN or p["rule"]["rule_value"]!=UNKNOWN))]
+        cta=decision("tipo_cta",value,"DIRECTED_REQUEST_V2" if value is not None else "NO_UNAMBIGUOUS_DIRECTED_REQUEST",support,veto)
+    presence=decision("tem_cta",True if cta.value is not None else None,cta.reason,cta.supports,cta.vetoes)
+    text=decision("texto_na_tela",True if screen and not conflict else None,
+                  "SAME_FRAME_MODALITY_CONFLICT" if conflict else "PARTIAL_OCR_WORDS" if screen else "NO_POSITIVE_OCR_EVIDENCE",
+                  screen if not conflict else (),conflict)
+    assessed={x.field_id:x for x in (topic,cta,presence,text)}
+    return CandidateDecisions(evidence_fingerprint=bundle.fingerprint(),tenant_id=bundle.tenant_id,
+        content_id=bundle.content_id,object_id=bundle.object_id,purpose=bundle.purpose,
+        fields=tuple(assessed[k] if k in assessed else FieldCandidate(field_id=k,state="not_assessed",
+            reason="REQUIRES_ADDITIONAL_EVIDENCE_OR_CALIBRATION") for k in RUBRIC_FIELD_NAMES))
+
+
+def evaluate_candidate_bundle(store,tenant,object_id,artifact_ids,*,purpose):
+    return _evaluate_authorized(store,tenant,object_id,artifact_ids,purpose=purpose,ablation=False)
+
+
+def evaluate_shared_av_ablation(store,tenant,object_id,artifact_ids,*,purpose):
+    """All 15 nonempty subsets of the four persisted shared processors.
+
+    One authorized snapshot, no model invocation, no training or admission.
+    This is retrospective replay; excluding a modality does not establish
+    realized savings or permission to omit its checks in a future router.
+    """
+    return _evaluate_authorized(store,tenant,object_id,artifact_ids,purpose=purpose,ablation=True)
+
+
+def evaluate_shared_av_coverage_guard(store,tenant,object_id,artifact_ids,*,purpose):
+    """Experimental conservative replay; not the default fusion or router.
+
+    Accept an authorized partial shared bundle and explicitly label missing
+    modalities. A selected-frame absence is not absence throughout a video.
+    """
+    return _evaluate_authorized(store,tenant,object_id,artifact_ids,purpose=purpose,
+                                ablation=False,coverage_guard=True)
+
+
+def evaluate_shared_av_routing_replay(store,tenant,object_id,artifact_ids,*,purpose):
+    """Shadow replay only: all guarded subsets of one complete authorized bundle.
+
+    Never launches, skips or schedules a processor. A missing modality in
+    an arm is not a negative result, including an omitted rejected ASR.
+    """
+    return _evaluate_authorized(store,tenant,object_id,artifact_ids,purpose=purpose,
+                                ablation=False,coverage_guard=True,routing_replay=True)
+
+
+def _evaluate_authorized(store,tenant,object_id,artifact_ids,*,purpose,ablation,coverage_guard=False,routing_replay=False):
+    """One local transaction; derive rubric permission before decrypt and after decision.
+
+    Only in-memory candidates, no retain/display/export rights conferred.
+    Never take a caller-constructed bundle as authorization. Re-evaluate on
+    each boundary; returned results cannot be recalled from trusted memory.
+    """
+    _validate_selection(store,tenant,object_id,artifact_ids,purpose)
+    q=store.queue
+    with q._transaction() as (db,now):
+        return _evaluate_authorized_in_transaction(
+            store,db,now,tenant,object_id,artifact_ids,purpose=purpose,
+            ablation=ablation,coverage_guard=coverage_guard,routing_replay=routing_replay)
+
+
+def _evaluate_authorized_in_transaction(store,db,now,tenant,object_id,artifact_ids,*,
+                                        purpose,ablation=False,coverage_guard=False,routing_replay=False):
+    """Private: caller owns the queue's BEGIN IMMEDIATE transaction."""
+    _validate_selection(store,tenant,object_id,artifact_ids,purpose)
+    q=store.queue
+    if db.engine is not q.index.engine or not db.in_transaction():
+        raise AssetRightsDenied("ASSET_S1_TRUSTED_TRANSACTION_REQUIRED")
+    _,_,by_id=_load(db,tenant)
+    if object_id not in by_id or not isinstance(by_id[object_id][1],RetainedAssetRef):
+        raise AssetRightsDenied("ASSET_EVIDENCE_ROOT_UNKNOWN")
+    root=by_id[object_id][1]
+    _ancestors(by_id,object_id,now,purpose)
+    permission=Permission(operation="derive",purpose=purpose,field="rubric_evidence")
+    _grant(db,q.resolve_anchor(root),root,now,permission)
+    bundle,by_id,bindings=_assemble_in_transaction(store,db,now,tenant,object_id,artifact_ids,purpose=purpose,by_id=by_id)
+    if not coverage_guard and any(e.observation.shared_av is not None and
+            e.observation.shared_av.quality_policy==PARTIAL_QUALITY for e in bundle.entries):
+        raise AssetRightsDenied("ASSET_S1_PARTIAL_REQUIRES_COVERAGE_GUARD")
+    try:
+        result=(_routing_replay(bundle) if routing_replay else
+                _ablation(bundle) if ablation else
+                _coverage_guard(bundle) if coverage_guard else _evaluate(bundle))
+    except ValueError:
+        raise AssetRightsDenied("ASSET_S1_CONTRACT") from None
+    fresh=_recheck_bundle(store,db,now,by_id,bindings,purpose=purpose)
+    _grant(db,q.resolve_anchor(root),root,fresh,permission)
+    return result
+
+
+def _ablation(bundle):
+    """Private pure reducer, not an authorization entrypoint."""
+    entries=bundle.entries
+    if (len(entries)!=4 or any(e.observation.shared_av is None for e in entries)
+            or {e.observation.result.processor for e in entries}!={"temporal","ocr","asr_vad","vlm"}):
+        raise AssetRightsDenied("ASSET_S1_SHARED_AV_COMPLETE_REQUIRED")
+    arms={}
+    for size in range(1,5):
+        for selected in combinations(entries,size):
+            processors=tuple(e.observation.result.processor for e in selected)
+            # Selection is exclusively from the authenticated, sorted snapshot.
+            subset=bundle.model_copy(update={"entries":selected})
+            decision=_evaluate(subset)
+            arms["+".join(processors)]=decision
+    return {"schema_version":"shared-av-ablation.v1",
+            "source_fingerprint":bundle.fingerprint(),"arms":arms,
+            "inference_reexecuted":False,"scientific_evidence":False,
+            "canonical_rubric":False}
+
+
+def _coverage_guard(bundle):
+    if any(e.observation.shared_av is None for e in bundle.entries):
+        raise AssetRightsDenied("ASSET_S1_SHARED_AV_REQUIRED")
+    baseline=_evaluate(bundle)
+    by={e.observation.result.processor:e.observation.result for e in bundle.entries}
+    coverage=bundle.coverage()
+    quality_rejections={e.observation.result.processor:e.observation.shared_av_quality_rejection.model_dump(mode="json")
+        for e in bundle.entries if e.observation.shared_av_quality_rejection is not None}
+    coverage_details={k:{"state":state,"reason":by[k].reason if k in by and
+                      by[k].state=="abstained" else None} for k,state in coverage.items()}
+    # A no-observable-signal observation is a bounded negative guard on
+    # the fixture, not proof of absence in real content.
+    usable={k for k,r in by.items() if r.state=="observed" or
+            (r.state=="abstained" and r.reason=="no_observable_signal")}
+    reasons={}
+    if not {"asr_vad","ocr","vlm"}<=usable:
+        reasons.update({k:"INCOMPLETE_MODALITY_EVIDENCE" for k in ("tema_principal","tipo_cta","tem_cta")})
+    if not {"ocr","vlm"}<=usable:
+        reasons["texto_na_tela"]="INCOMPLETE_VISUAL_EVIDENCE"
+    fields={d.field_id:d for d in baseline.fields}
+    topic=fields["tema_principal"]
+    if (coverage["asr_vad"]==coverage["ocr"]=="observed" and topic.state=="candidate"
+            and {s.processor for s in topic.supports}!={"asr_vad","ocr"}):
+        reasons.setdefault("tema_principal","UNCORROBORATED_THEME_WITH_OBSERVED_MODALITIES")
+    suppressed=[]
+    guarded=[]
+    for d in baseline.fields:
+        if d.state=="candidate" and d.field_id in reasons:
+            suppressed.append(d.field_id)
+            guarded.append(FieldCandidate(field_id=d.field_id,state="abstained",
+                reason=reasons[d.field_id],supports=d.supports,vetoes=d.vetoes))
+        else:
+            guarded.append(d)
+    decision=CandidateDecisions.model_validate({**baseline.model_dump(mode="python"),"fields":tuple(guarded)})
+    return {"schema_version":"shared-av-coverage-guard.v1",
+            "source_fingerprint":bundle.fingerprint(),"coverage":coverage,"coverage_details":coverage_details,
+            "quality_rejections":quality_rejections,
+            "baseline":baseline,"guarded":decision,"suppressed_fields":tuple(suppressed),
+            "inference_reexecuted":False,"canonical_rubric":False,"scientific_evidence":False,
+            "policy_promoted":False}
+
+
+def _routing_replay(bundle):
+    entries=bundle.entries
+    if (len(entries)!=4 or any(e.observation.shared_av is None for e in entries)
+            or {e.observation.result.processor for e in entries}!={"temporal","ocr","asr_vad","vlm"}):
+        raise AssetRightsDenied("ASSET_S1_SHARED_AV_COMPLETE_REQUIRED")
+    arms={}
+    for size in range(1,5):
+        for selected in combinations(entries,size):
+            processors=tuple(e.observation.result.processor for e in selected)
+            arms["+".join(processors)]=_coverage_guard(bundle.model_copy(update={"entries":selected}))
+    full=arms["asr_vad+ocr+temporal+vlm"]
+    # Only pre-VLM observations determine the hypothetical route. Do not
+    # choose based on a VLM outcome that would be unavailable if skipped.
+    by={e.observation.result.processor:e.observation.result for e in entries}
+    quiet=all(by[p].state=="abstained" and by[p].reason=="no_observable_signal"
+              for p in ("asr_vad","ocr"))
+    route="asr_vad+ocr+temporal" if quiet else "asr_vad+ocr+temporal+vlm"
+    return {"schema_version":"shared-av-routing-replay.v1","source_fingerprint":bundle.fingerprint(),
+            "arms":arms,"full_quality_rejections":full["quality_rejections"],
+            "shadow_route":route,"shadow_rule":"skip_vlm_only_if_both_text_channels_no_signal",
+            "inference_reexecuted":False,"routing_executed":False,"policy_promoted":False,
+            "scientific_evidence":False,"canonical_rubric":False}

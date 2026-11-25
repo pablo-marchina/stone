@@ -103,6 +103,10 @@ def corpus_data_card(engine, tenant: str, *, as_of: datetime | None = None,
             source_research_contexts.c.tenant_id == tenant)).mappings().all()
         reviews = db.execute(select(post_scientific_reviews).where(
             post_scientific_reviews.c.tenant_id == tenant)).mappings().all()
+        from .discovery_caption_research import documentary_contexts
+        documented = documentary_contexts(db, tenant, as_of,
+            {(p['platform'], p['source_account_id']): p for p in profiles},
+            {(g['platform'], g['source_account_id']): g for g in grants})
 
     registry = {(x['platform'], x['source_account_id']): x for x in profiles}
     grant_map = {(x['platform'], x['source_account_id']): x for x in grants}
@@ -154,6 +158,7 @@ def corpus_data_card(engine, tenant: str, *, as_of: datetime | None = None,
             entry['registered_profiles'] += 1
     technical_accounts = set()
     scientific_accounts = set()
+    documented_posts = 0
     for rec in records:
         key = (rec['platform'], rec['source_account_id'])
         profile = registry.get(key)
@@ -195,8 +200,12 @@ def corpus_data_card(engine, tenant: str, *, as_of: datetime | None = None,
         technical_sectors[profile['sector']] += 1
         strata[profile['sampling_stratum']]['technically_eligible_posts'] += 1
         context = context_map.get(key)
+        if key in documented:
+            documented_posts += 1
         if not context:
-            counts['excluded_source_context_missing'] += 1
+            # Documentary context is not a reviewed context. It can establish
+            # the next missing step, never satisfy the human admission route.
+            counts['excluded_unreviewed_content' if key in documented else 'excluded_source_context_missing'] += 1
             continue
         review = latest_reviews.get(rec['content_id'])
         if not review:
@@ -256,6 +265,9 @@ def corpus_data_card(engine, tenant: str, *, as_of: datetime | None = None,
                            'with_prior_technical_verification': technically_checked,
                            'with_reviewed_source_context': len(context_map)},
         'observed': counts,
+        'documentary_context_coverage': {'active_profiles': len(documented),
+            'technical_posts_with_documentary_context': documented_posts,
+            'human_review': False, 'scientific_admissions_from_context': 0},
         'instagram_posts_by_operator_sector': sectors,
         'instagram_technical_posts_by_operator_sector': technical_sectors,
         'instagram_scientific_posts_by_creator_type': creator_types,
@@ -266,6 +278,7 @@ def corpus_data_card(engine, tenant: str, *, as_of: datetime | None = None,
         'caveats': [
             'Only posts with a reviewed MPE-targeting decision and sufficient observed evidence count scientifically.',
             'Technical metric eligibility is not content/audience eligibility; source type never substitutes a post review.',
+            'DEC-018 documentary contexts and local caption candidate scopes are not reviewed contexts or scientific admissions.',
             'An operator review reference does not independently establish legal reuse rights.',
             'Administrative grants and an API response do not independently establish legal rights.',
             'Instagram follower counts may reflect observation time, not publication time.',

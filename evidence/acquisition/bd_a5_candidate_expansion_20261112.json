@@ -1,0 +1,53 @@
+{
+  "schema_version": "tapi-bd-technical-batch.v1",
+  "sources": [
+    {
+      "username": "nuvemshop",
+      "sampling_stratum": "ecommerce_education",
+      "audience_intent": "mpe_targeted",
+      "source_evidence_reference": "https://www.nuvemshop.com.br/midia/nuvem-na-midia/nuvem-shop-lanca-primeiro-aplicativo-mcommerce-brasil",
+      "audience_rationale_reference": "https://www.nuvemshop.com.br/midia/nuvem-na-midia/nuvem-shop-lanca-primeiro-aplicativo-mcommerce-brasil",
+      "status": "candidate"
+    },
+    {
+      "username": "contaazul",
+      "sampling_stratum": "business_financial_management",
+      "audience_intent": "mpe_targeted",
+      "source_evidence_reference": "https://contaazul.com/sobre/",
+      "audience_rationale_reference": "https://contaazul.com/sobre/",
+      "status": "candidate"
+    },
+    {
+      "username": "abraselnorn",
+      "sampling_stratum": "foodservice_association_regional",
+      "audience_intent": "mpe_targeted",
+      "source_evidence_reference": "https://rn.abrasel.com.br/associe-se/associe-se/",
+      "audience_rationale_reference": "https://rn.abrasel.com.br/associe-se/associe-se/",
+      "status": "candidate"
+    },
+    {
+      "username": "abraseloestepotiguar",
+      "sampling_stratum": "foodservice_association_regional",
+      "audience_intent": "mpe_targeted",
+      "source_evidence_reference": "https://orn.abrasel.com.br/associe-se/como-se-associar/",
+      "audience_rationale_reference": "https://orn.abrasel.com.br/associe-se/como-se-associar/",
+      "status": "candidate"
+    },
+    {
+      "username": "abihpecoficial",
+      "sampling_stratum": "beauty_industry_association",
+      "audience_intent": "uncertain",
+      "source_evidence_reference": "https://abihpec.org.br/institucional/comunicacao-e-marketing-2/",
+      "audience_rationale_reference": "https://abihpec.org.br/institucional/comunicacao-e-marketing-2/",
+      "status": "candidate"
+    },
+    {
+      "username": "sediturmav",
+      "sampling_stratum": "municipal_entrepreneur_support",
+      "audience_intent": "uncertain",
+      "source_evidence_reference": "https://www.matoverde.mg.gov.br/portal/servicos/1016/sala-mineira-do-empreendedor/",
+      "audience_rationale_reference": "https://www.matoverde.mg.gov.br/portal/servicos/1016/sala-mineira-do-empreendedor/",
+      "status": "candidate"
+    }
+  ]
+}

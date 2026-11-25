@@ -58,14 +58,45 @@ def test_agent_creative_spec_to_editable_studio_document(tmp_path):
                  "headline":"Cuide do caixa", "body":"Separe custos e receitas.",
                  "cta":"Revise o planejamento", "platform_intent":"instagram_feed",
                  "reference_content_ids":["sebrae.item"]}
-        spec_response = client.post("/v1/agent/creative-spec", headers=a, json=brief)
-        assert spec_response.status_code == 200, spec_response.text
+        # External metadata remains readable for analysis, but creative
+        # reuse requires a distinct signed, operationally enforced grant.
+        denied = client.post("/v1/agent/creative-spec", headers=a, json=brief)
+        assert denied.status_code == 422
+        assert denied.json()["detail"] == "CREATIVE_REFERENCE_NOT_VERIFIED"
         assert client.post("/v1/agent/creative-spec", headers=b, json=brief).status_code == 422
+
+        # Keep B2→Studio editable-draft integration tested using only local
+        # source-free synthetic records; this is not publication approval.
+        synthetic_creator = Creator(
+            tenant_id="orgA", creator_id="fixture.creator",
+            origin=Origin.SYNTHETIC, handle="fixture", created_at=now,
+        )
+        synthetic_post = ContentItem(
+            tenant_id="orgA", content_id="fixture.item",
+            creator_id="fixture.creator", origin=Origin.SYNTHETIC,
+            media_type=MediaType.IMAGE, published_at=now,
+            caption="Exemplo sintético local.", is_synthetic=True, created_at=now,
+        )
+        with auth.engine.begin() as db:
+            db.execute(insert(creators).values(
+                tenant_id="orgA", id=synthetic_creator.creator_id,
+                origin=synthetic_creator.origin.value,
+                payload=synthetic_creator.model_dump_json(),
+            ))
+            db.execute(insert(content_items).values(
+                tenant_id="orgA", id=synthetic_post.content_id,
+                creator_id=synthetic_post.creator_id, origin=synthetic_post.origin.value,
+                published_at=synthetic_post.published_at.isoformat(),
+                payload=synthetic_post.model_dump_json(),
+            ))
+        safe_brief = {**brief, "reference_content_ids": ["fixture.item"]}
+        spec_response = client.post("/v1/agent/creative-spec", headers=a, json=safe_brief)
+        assert spec_response.status_code == 200, spec_response.text
         drafted = client.post("/v1/studio/documents", headers=a,
                 json={"document_id":"design.handoff", "spec":spec_response.json()})
         assert drafted.status_code == 201, drafted.text
         first = drafted.json()
-        assert first["reference_content_ids"] == ["sebrae.item"]
+        assert first["reference_content_ids"] == ["fixture.item"]
         assert first["reference_status"] == "unverified"
         assert first["rights_status"] == "pending_review"
         assert first["approval_status"] == "draft"

@@ -1,0 +1,48 @@
+{
+  "schema_version": "tapi-imp060-ct04-negative-fixtures.v1",
+  "reference_kind": "synthetic_fixture",
+  "cases": [
+    {
+      "id": "creator_leakage",
+      "target": "documents",
+      "index": 2,
+      "field": "creator_id",
+      "value": "development-creator-1",
+      "expected_error": "CREATOR_SPLIT_LEAKAGE"
+    },
+    {
+      "id": "cross_split_judgment",
+      "target": "judgments",
+      "index": 0,
+      "field": "content_id",
+      "value": "sealed_test-content-1",
+      "expected_error": "CROSS_SPLIT_JUDGMENT_DENIED"
+    },
+    {
+      "id": "false_complete_claim",
+      "action": "remove_last_judgment",
+      "expected_error": "FALSE_COMPLETENESS_CLAIM"
+    },
+    {
+      "id": "non_synthetic_origin",
+      "target": "documents",
+      "index": 0,
+      "field": "origin",
+      "value": "instagram",
+      "expected_error": "NON_SYNTHETIC_REFERENCE_DENIED"
+    },
+    {
+      "id": "duplicate_content_hash",
+      "target": "documents",
+      "index": 2,
+      "field": "content_sha256",
+      "value": null,
+      "source": {
+        "target": "documents",
+        "index": 0,
+        "field": "content_sha256"
+      },
+      "expected_error": "DUPLICATE_DOCUMENT_OR_FINGERPRINT"
+    }
+  ]
+}

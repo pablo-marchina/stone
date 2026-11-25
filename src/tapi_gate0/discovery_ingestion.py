@@ -17,10 +17,11 @@ from sqlalchemy import (Table, Column, String, ForeignKeyConstraint,
                         select, insert, update, inspect)
 from sqlalchemy.exc import IntegrityError
 
+from .discovery_auth_guard import AUTH_INVALID, is_global_auth_failure, record_auth_failure
 from .connectors import ConnectorError, OfficialHttp, NormalizedItem, Platform, credential_for
 from .domain import MediaType
 from .identity import IdentityFailure, Principal
-from .ingestion import IngestionStore, IngestionRequest, source_grants, ingestion_records, ingestion_runs, stable_id
+from .ingestion import A6_BD_GRANT_PREFIX, IngestionStore, IngestionRequest, source_grants, ingestion_records, ingestion_runs, stable_id
 from .mpe_sources import SourceGateError, ResearchSourceEntry, ResearchSourceFrame, authorized_source, load_frame
 from .scientific_corpus import source_research_contexts
 from .corpus import corpus_profiles
@@ -90,6 +91,8 @@ class DiscoveryCorpusService:
         if "corpus_metadata_ingest" not in source.allowed_operations:
             raise ConnectorError("CORPUS_PERSISTENCE_SCOPE_REQUIRED", 403)
         grant = self.store.read_grant(tenant, Platform.INSTAGRAM, req.expected_ig_id)
+        if grant["approval_reference"].startswith(A6_BD_GRANT_PREFIX):
+            raise ConnectorError("BD_GRANT_TECHNICAL_ROUTE_ONLY", 403)
         if grant["approval_reference"] != approval["approval_reference"]:
             raise ConnectorError("SOURCE_GRANT_REFERENCE_MISMATCH", 403)
         if not inspect(self.store.engine).has_table("corpus_profiles"):
@@ -216,7 +219,7 @@ class DiscoveryCorpusService:
                         observed_at=evidence["observed_at"],
                         recorded_at=now_utc().isoformat()))
                 status = self.store._persist_item(
-                    tenant, item, provenance_writer=write_provenance)
+                    tenant, item, provenance_writer=write_provenance, run_key=req.run_key)
                 if status == "created":
                     created += 1
                 elif status == "refreshed":
@@ -224,6 +227,8 @@ class DiscoveryCorpusService:
                 else:
                     duplicates += 1
             with self.store.engine.begin() as db:
+                self.store._lock_reserved_run(db, tenant, req.run_key,
+                    platform=Platform.INSTAGRAM, source=req.expected_ig_id)
                 db.execute(update(source_grants).where(
                     source_grants.c.tenant_id == tenant,
                     source_grants.c.platform == "instagram",
@@ -248,7 +253,12 @@ class DiscoveryCorpusService:
             }
         except (ConnectorError, ValueError, IntegrityError) as exc:
             reason = exc.code if isinstance(exc, ConnectorError) else "DISCOVERY_INGESTION_FAILED"
-            self.store._finish(tenant, req.run_key, "failed", created, duplicates, refreshed, reason)
+            auth_failure = is_global_auth_failure(exc)
+            if auth_failure and not (created or duplicates or refreshed):
+                reason = AUTH_INVALID
+            self.store._finish(tenant, req.run_key, "failed", created, duplicates, refreshed, reason,
+                after_finish=(lambda db: record_auth_failure(db, tenant, exc, req.run_key))
+                if auth_failure else None)
             if isinstance(exc, ConnectorError):
                 raise
             raise ConnectorError(reason, 422) from exc

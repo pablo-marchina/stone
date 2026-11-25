@@ -190,30 +190,50 @@ class StudioCanvasStore:
             raise StudioError("STUDIO_ASSET_NOT_FOUND", 404)
         return bytes(payload)
 
-    def _change(self, tenant, actor, doc_id, expected_version, transform):
-        with self.engine.begin() as db:
-            current = db.execute(select(studio_documents.c.current_version).where(
-                studio_documents.c.tenant_id == tenant,
-                studio_documents.c.document_id == doc_id)).scalar_one_or_none()
-            if current is None:
-                raise StudioError("STUDIO_DOCUMENT_NOT_FOUND", 404)
-            if current != expected_version:
-                raise StudioError("STUDIO_VERSION_CONFLICT", 409)
-            blob = db.execute(select(studio_versions.c.payload).where(
-                studio_versions.c.tenant_id == tenant,
-                studio_versions.c.document_id == doc_id,
-                studio_versions.c.version == current)).scalar_one()
-            raw = DesignDocument.model_validate_json(blob).model_dump()
-            transform(raw, db)
-            raw["version"] = current + 1
-            new = DesignDocument.model_validate(raw)
-            updated = db.execute(update(studio_documents).where(
-                studio_documents.c.tenant_id == tenant,
-                studio_documents.c.document_id == doc_id,
-                studio_documents.c.current_version == current).values(current_version=current + 1))
-            if updated.rowcount != 1:
-                raise StudioError("STUDIO_VERSION_CONFLICT", 409)
-            StudioStore._insert_version(db, new, actor)
+    def _change(self, tenant, actor, doc_id, expected_version, transform,
+                *, connection=None, reference_authorizer=None):
+        if connection is None:
+            with self.engine.begin() as db:
+                return self._change(
+                    tenant, actor, doc_id, expected_version, transform,
+                    connection=db, reference_authorizer=reference_authorizer,
+                )
+        db = connection
+        if db.engine is not self.engine or not db.in_transaction():
+            raise StudioError("STUDIO_TRANSACTION_REQUIRED", 409)
+        # Protect EVERY canvas/page mutation, not just the HTTP router:
+        # external reference grants must be checked inside THIS transaction.
+        from .studio_reference_bindings_a05 import studio_reference_bindings
+        signed = db.execute(select(studio_reference_bindings.c.content_id).where(
+            studio_reference_bindings.c.tenant_id == tenant,
+            studio_reference_bindings.c.document_id == doc_id,
+        ).limit(1)).first()
+        if signed is not None:
+            if reference_authorizer is None:
+                raise StudioError("STUDIO_SIGNED_REFERENCE_RECHECK_REQUIRED", 403)
+            reference_authorizer(db)
+        current = db.execute(select(studio_documents.c.current_version).where(
+            studio_documents.c.tenant_id == tenant,
+            studio_documents.c.document_id == doc_id)).scalar_one_or_none()
+        if current is None:
+            raise StudioError("STUDIO_DOCUMENT_NOT_FOUND", 404)
+        if current != expected_version:
+            raise StudioError("STUDIO_VERSION_CONFLICT", 409)
+        blob = db.execute(select(studio_versions.c.payload).where(
+            studio_versions.c.tenant_id == tenant,
+            studio_versions.c.document_id == doc_id,
+            studio_versions.c.version == current)).scalar_one()
+        raw = DesignDocument.model_validate_json(blob).model_dump()
+        transform(raw, db)
+        raw["version"] = current + 1
+        new = DesignDocument.model_validate(raw)
+        updated = db.execute(update(studio_documents).where(
+            studio_documents.c.tenant_id == tenant,
+            studio_documents.c.document_id == doc_id,
+            studio_documents.c.current_version == current).values(current_version=current + 1))
+        if updated.rowcount != 1:
+            raise StudioError("STUDIO_VERSION_CONFLICT", 409)
+        StudioStore._insert_version(db, new, actor)
         return new
 
     def add_image(self, tenant: str, actor: str, document_id: str,
@@ -237,7 +257,8 @@ class StudioCanvasStore:
         return self._change(tenant, actor, document_id, payload.expected_version, transform)
 
     def move(self, tenant: str, actor: str, document_id: str,
-             payload: MoveLayer) -> DesignDocument:
+             payload: MoveLayer, *, connection=None,
+             reference_authorizer=None) -> DesignDocument:
         def transform(raw, db):
             for page in raw["pages"]:
                 if page["id"] != payload.page_id:
@@ -251,7 +272,10 @@ class StudioCanvasStore:
                         layer["origin"] = "operator_edit"
                         return
             raise StudioError("STUDIO_LAYER_NOT_FOUND", 404)
-        return self._change(tenant, actor, document_id, payload.expected_version, transform)
+        return self._change(
+            tenant, actor, document_id, payload.expected_version, transform,
+            connection=connection, reference_authorizer=reference_authorizer,
+        )
 
     def order(self, tenant: str, actor: str, document_id: str,
               payload: LayerOrder) -> DesignDocument:

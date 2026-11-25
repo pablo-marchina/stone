@@ -11,6 +11,7 @@ No access tokens, raw provider cursor, or approval document bodies are logged.
 from __future__ import annotations
 
 import json
+from contextlib import nullcontext
 import os
 import re
 from datetime import datetime, timedelta, timezone
@@ -26,10 +27,12 @@ from sqlalchemy.exc import IntegrityError
 from .business_discovery import BusinessDiscoveryProbe, CURSOR, IG_ID, USERNAME
 from .connectors import ConnectorError, NormalizedItem, OfficialHttp, Platform, _date, _integer, credential_for
 from .domain import MediaType
-from .ingestion import IngestionRequest, IngestionStore, ingestion_records, source_grants, stable_id
+from .ingestion import A6_BD_GRANT_PREFIX, IngestionRequest, IngestionStore, ingestion_records, source_grants, stable_id
 from .mpe_evidence import _instagram_url, canonical_hash
 from .sa_store import domain_events, outbox, metrics_snapshots, content_items
 from .storage import now_utc
+from .discovery_history import checkpoint_start, advance_checkpoint
+from .discovery_auth_guard import AUTH_INVALID, is_global_auth_failure, record_auth_failure
 
 
 class TechnicalDiscoveryRequest(BaseModel):
@@ -68,7 +71,8 @@ class TechnicalDiscoveryReader:
         self.http = http
 
     def fetch(self, request: TechnicalDiscoveryRequest, token: str,
-              *, observed_at: datetime | None = None) -> tuple[list[TechnicalObservation], dict]:
+              *, observed_at: datetime | None = None, start_cursor: str | None = None,
+              checkpoint_sink=None) -> tuple[list[TechnicalObservation], dict]:
         seen_ids: set[str] = set()
         seen_cursors: set[str] = set()
         entries: list[TechnicalObservation] = []
@@ -77,7 +81,13 @@ class TechnicalDiscoveryReader:
         counts = dict(returned=0, too_recent=0, unsupported_format=0,
                       missing_metrics=0, invalid_metadata=0, duplicate_in_page=0,
                       accepted=0)
-        after = None
+        after = start_cursor
+        if start_cursor is not None:
+            if not CURSOR.fullmatch(start_cursor):
+                raise ConnectorError("BD_HISTORY_INVALID_CHECKPOINT", 409)
+            seen_cursors.add(start_cursor)
+        traversed = []
+        next_cursor = None
         pages = 0
         next_page_possible = False
         for _ in range(request.max_pages):
@@ -169,12 +179,17 @@ class TechnicalDiscoveryReader:
             if paging.get("next") and cursor is None:
                 raise ConnectorError("BD_PAGING_CURSOR_MISSING", 502)
             next_page_possible = bool(cursor and (paging.get("next") or len(rows) == request.page_limit))
+            next_cursor = cursor if next_page_possible else None
+            if next_page_possible:
+                if cursor == after or cursor in seen_cursors:
+                    raise ConnectorError("BD_PAGINATION_STALLED", 502)
+                seen_cursors.add(cursor)
+                traversed.append(cursor)
             if len(entries) >= request.persist_limit or not next_page_possible:
                 break
-            if cursor == after or cursor in seen_cursors:
-                raise ConnectorError("BD_PAGINATION_STALLED", 502)
-            seen_cursors.add(cursor)
             after = cursor
+        if checkpoint_sink is not None:
+            checkpoint_sink(next_cursor, traversed)
         return entries, {"pages_examined": pages, "counts": counts,
                          "next_page_possible":next_page_possible,
                          "provider_data_not_scientifically_reviewed":True}
@@ -227,24 +242,40 @@ class TechnicalDiscoveryService:
         self.store = store
 
     def execute(self, tenant: str, req: TechnicalDiscoveryRequest,
-                *, token: str | None = None, http: OfficialHttp | None = None) -> dict:
+                *, token: str | None = None, http: OfficialHttp | None = None,
+                history: bool = False, cycle_key: str | None = None) -> dict:
         if os.getenv("TAPI_BD_TECHNICAL_INGEST") != "1":
             raise ConnectorError("BD_TECHNICAL_INGEST_DISABLED", 403)
         if os.getenv("TAPI_OFFICIAL_METADATA_READS") != "1":
             raise ConnectorError("OFFICIAL_READS_DISABLED", 403)
         if os.getenv("TAPI_ZERO_BILLING_CONFIRMED") != "1":
             raise ConnectorError("ZERO_BILLING_NOT_CONFIRMED", 403)
+        if history and req.persist_limit != req.page_limit * req.max_pages:
+            raise ConnectorError("BD_HISTORY_FULL_PAGE_BUDGET_REQUIRED", 422)
         # A DEC-018 institutional decision is not itself a database grant.
         grant = self.store.read_grant(tenant, Platform.INSTAGRAM, req.expected_ig_id)
+        reference = grant["approval_reference"]
+        if reference.startswith(A6_BD_GRANT_PREFIX) and reference != A6_BD_GRANT_PREFIX + req.viewer_ig_id + ":" + req.expected_ig_id:
+            raise ConnectorError("BD_GRANT_VIEWER_MISMATCH", 403)
         access_token = token if token is not None else credential_for(Platform.INSTAGRAM)
         run = IngestionRequest(platform=Platform.INSTAGRAM,
                                source_account_id=req.expected_ig_id,
                                run_key=req.run_key, limit=req.page_limit)
-        self.store._reserve(tenant, run)
+        self.store._reserve(tenant, run, cycle_key=cycle_key)
         transport = http or OfficialHttp(instagram_version="v26.0")
         created = refreshed = duplicates = 0
         try:
-            observations, report = TechnicalDiscoveryReader(transport).fetch(req, access_token)
+            prior = None
+            progress = {}
+            if history:
+                with self.store.engine.connect() as db:
+                    prior = checkpoint_start(db, tenant, req.expected_ig_id,
+                        req.viewer_ig_id, grant["approval_reference"])
+            def capture_cursor(next_cursor, traversed):
+                progress.update(next_cursor=next_cursor, traversed=traversed)
+            observations, report = TechnicalDiscoveryReader(transport).fetch(req, access_token,
+                start_cursor=prior["next_cursor"] if prior else None,
+                checkpoint_sink=capture_cursor if history else None)
             # Meta media IDs identify content across profiles. Refuse a media ID
             # already attributed to another external account in this tenant,
             # rather than silently multiplying the batch's unique-post count.
@@ -268,6 +299,8 @@ class TechnicalDiscoveryService:
             # under the same per-source lock used for grant revocation. This does
             # not imply legal reuse rights, human scientific review or production.
             with self.store.engine.begin() as db:
+                self.store._lock_reserved_run(db, tenant, req.run_key,
+                    platform=Platform.INSTAGRAM, source=req.expected_ig_id)
                 locked = db.execute(update(source_grants).where(
                     source_grants.c.tenant_id == tenant,
                     source_grants.c.platform == Platform.INSTAGRAM.value,
@@ -292,15 +325,28 @@ class TechnicalDiscoveryService:
                         source_username=req.username, observation=observation,
                         content_id=content_id, approval_reference=grant["approval_reference"])
                 outcome = self.store._persist_item(tenant, item,
-                                                    provenance_writer=evidence_writer)
+                                                    provenance_writer=evidence_writer, run_key=req.run_key)
                 if outcome == "created":
                     created += 1
                 elif outcome == "refreshed":
                     refreshed += 1
                 else:
                     duplicates += 1
+            def save_checkpoint(db):
+                audited = audit_run(self.store.engine, tenant, req.run_key, connection=db)
+                if not audited["all_traces_valid"] or any(
+                        item["source_account_id"] != req.expected_ig_id or
+                        item["viewer_ig_id"] != req.viewer_ig_id for item in audited["items"]):
+                    raise ConnectorError("BD_HISTORY_AUDIT_FAILED", 409)
+                advance_checkpoint(db, tenant=tenant, source=req.expected_ig_id,
+                    viewer=req.viewer_ig_id, approval=grant["approval_reference"],
+                    run_key=req.run_key, prior=prior, pages=report["pages_examined"], **progress)
             self.store._finish(tenant, req.run_key, "completed",
-                               created, duplicates, refreshed)
+                               created, duplicates, refreshed,
+                               after_finish=save_checkpoint if history else None)
+            if history:
+                report["history_checkpoint_status"] = ("continuation_available"
+                    if progress["next_cursor"] else "frontier_unconfirmed")
             return {
                 "status":("BD_TECHNICAL_METADATA_COMMITTED" if observations
                           else "BD_TECHNICAL_NO_ELIGIBLE_MEDIA"),
@@ -317,20 +363,25 @@ class TechnicalDiscoveryService:
                 "scientifically_validated":False,
                 "production_approved":False,
             }
-        except (ConnectorError, IntegrityError, ValueError):
+        except (ConnectorError, IntegrityError, ValueError) as exc:
+            reason = exc.code if isinstance(exc, ConnectorError) else "BD_TECHNICAL_INGEST_FAILED"
+            auth_failure = is_global_auth_failure(exc)
+            if auth_failure and not (created or duplicates or refreshed):
+                reason = AUTH_INVALID
             self.store._finish(tenant, req.run_key, "failed",
-                               created, duplicates, refreshed,
-                               "BD_TECHNICAL_INGEST_FAILED")
+                               created, duplicates, refreshed, reason,
+                               after_finish=(lambda db: record_auth_failure(db, tenant, exc, req.run_key))
+                               if auth_failure else None)
             raise
         finally:
             if http is None:
                 transport.close()
 
 
-def audit_run(engine, tenant: str, run_key: str) -> dict:
+def audit_run(engine, tenant: str, run_key: str, *, connection=None) -> dict:
     """Read-only correlation check: snapshots, content, outbox and run scope."""
     from .ingestion import ingestion_runs
-    with engine.connect() as db:
+    with (nullcontext(connection) if connection is not None else engine.connect()) as db:
         run = db.execute(select(ingestion_runs).where(
             ingestion_runs.c.tenant_id == tenant,
             ingestion_runs.c.run_key == run_key)).mappings().first()

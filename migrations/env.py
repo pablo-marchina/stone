@@ -4,7 +4,7 @@ from alembic import context
 from sqlalchemy import pool
 from tapi_gate0.sa_store import metadata, engine_for
 # import identity to register its tables in the shared metadata
-from tapi_gate0 import identity  # noqa: F401
+from tapi_gate0 import identity, asset_rights_registry, asset_lineage_index, asset_jobs, asset_derived_payloads, agent_graph_checkpoints  # noqa: F401
 
 config=context.config
 target_metadata=metadata
@@ -17,6 +17,14 @@ def run_offline():
     with context.begin_transaction():context.run_migrations()
 
 def run_online():
+    supplied=config.attributes.get("connection")
+    if supplied is not None:
+        # Trusted offline operator may own an explicit SQLite write transaction.
+        # Alembic must not open another connection or commit that transaction.
+        context.configure(connection=supplied,target_metadata=target_metadata,compare_type=True,
+                          transactional_ddl=True)
+        with context.begin_transaction():context.run_migrations()
+        return
     engine=engine_for(url)
     with engine.connect() as connection:
         context.configure(connection=connection,target_metadata=target_metadata,compare_type=True)

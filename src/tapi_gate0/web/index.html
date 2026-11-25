@@ -6,8 +6,8 @@
     <meta name="theme-color" content="#111b22">
     <meta name="description" content="TAPI Stone — inteligência de conteúdo com evidências verificáveis">
     <title>TAPI Stone · Intelligence Console</title>
-    <link rel="stylesheet" href="/app/style.css">
-    <script type="module" src="/app/main.mjs"></script>
+    <link rel="stylesheet" href="/app/style.css?v=a04-ranking-1">
+    <script type="module" src="/app/main.mjs?v=a04-ranking-1"></script>
   </head>
   <body>
     <div class="shell">
@@ -20,7 +20,7 @@
         <header class="topbar">
           <div class="brand-copy"><span class="eyebrow">INTELIGÊNCIA DE CONTEÚDO / PLATAFORMA ÚNICA</span><h1>TAPI <span>Stone.</span></h1></div>
           <div class="header-right">
-            <span class="scope-tag" title="Somente dados locais autorizados">AMBIENTE LOCAL · DADOS SINTÉTICOS</span>
+            <span class="scope-tag" title="Somente dados locais autorizados">AMBIENTE LOCAL · PESQUISA</span>
             <span class="status-dot" id="connection-dot" aria-hidden="true"></span>
             <span class="connection-label" id="connection-label" role="status">Desconectado</span>
             <button id="logout" class="button ghost hidden" type="button">Sair</button>
@@ -40,8 +40,9 @@
           </form>
         </section>
         <section id="dashboard" class="hidden" aria-label="Visão operacional">
+          <nav class="workspace-nav" aria-label="Áreas da plataforma"><a class="workspace-link current" href="/app/" aria-current="page">Visão operacional</a><a class="workspace-link" href="#data-explorer">Data Explorer</a><a class="workspace-link" href="#ranking-explorer">Ranking Explorer</a><a class="workspace-link" href="/app/studio.html">Creative Studio <span aria-hidden="true">↗</span></a><a class="workspace-link" href="/app/studio.html?view=evidence">Evidence Studio / Rubric Lab <span aria-hidden="true">↗</span></a><p>O Studio usa uma sessão própria; entre com a mesma organização e credenciais.</p></nav>
           <div class="dash-title"><div><span class="overline">OVERVIEW / 01</span><h2>Visão operacional</h2><p id="tenant-label">—</p></div><button id="refresh" class="button outline" type="button">Atualizar <span aria-hidden="true">↻</span></button></div>
-          <div class="notice"><span class="notice-symbol" aria-hidden="true">◆</span><div><strong>Pesquisa local — sem operação externa habilitada</strong><p>Somente atividades sintéticas aparecem aqui. Fontes e publicações externas dependem de configuração técnica e verificação por operação.</p></div></div>
+          <div class="notice"><span class="notice-symbol" aria-hidden="true">◆</span><div><strong>Pesquisa local — sem operação externa habilitada</strong><p>O painel reúne registros locais de metadados e avaliações preliminares, conforme a origem indicada. Ações externas e processamento de mídia real permanecem bloqueados nesta interface.</p></div></div>
           <div class="kpi-grid" id="kpis" aria-live="polite"></div>
           <div class="dashboard-grid">
             <section class="panel flow-panel" aria-labelledby="flow-title"><div class="panel-head"><div><span class="overline">SISTEMA / 02</span><h3 id="flow-title">Fluxo de inteligência</h3></div><span class="mini-status">Linhagem operacional</span></div>
@@ -52,6 +53,36 @@
           </div>
           <section class="panel posts-panel" aria-labelledby="posts-title"><div class="panel-head"><div><span class="overline">DATA EXPLORER / 04</span><h3 id="posts-title">Conteúdos recentes</h3></div><span class="mini-status">Dados rastreáveis</span></div>
             <div class="table-scroll"><table><thead><tr><th>Identificador</th><th>Criador</th><th>Formato</th><th>Publicação</th><th>Origem</th></tr></thead><tbody id="posts-table"><tr><td colspan="5">Sem dados disponíveis.</td></tr></tbody></table></div>
+          </section>
+          <section id="data-explorer" class="panel posts-panel" aria-labelledby="inventory-title">
+            <div class="panel-head"><div><span class="overline">CORPUS / 05 · A01-REPLAY-1</span><h3 id="inventory-title">Data Explorer</h3></div><strong id="inventory-count">—</strong></div>
+            <p class="inventory-hint">Inventário técnico de metadados externos registrados, com grant vigente. Não é ranking nem corpus científico. Mídia e exportação de legendas bloqueadas.</p>
+            <form id="inventory-form" class="inventory-filters">
+              <label>Buscar perfil ou publicação<input id="inventory-search" maxlength="100" placeholder="Nome do perfil ou ID"></label>
+              <label>Plataforma<select id="inventory-platform"><option value="">Todas</option><option value="instagram">Instagram</option><option value="youtube">YouTube</option></select></label>
+              <label>Formato<select id="inventory-format"><option value="">Todos</option><option value="reels">Reels</option><option value="carrossel">Carrossel</option><option value="imagem">Imagem</option><option value="short">Short</option></select></label>
+              <label>Setor de cadastro<select id="inventory-sector"><option value="">Todos</option><option value="commerce">Comércio</option><option value="food">Alimentação</option><option value="services">Serviços</option><option value="beauty">Beleza</option><option value="other">Outros</option></select></label>
+              <label>Conta de origem<input id="inventory-account" maxlength="128" placeholder="ID da conta (opcional)"></label>
+              <button id="inventory-submit" class="button primary" type="submit" disabled>Consultar corpus</button>
+            </form>
+            <p id="inventory-status" class="inventory-hint" role="status" aria-live="polite"></p>
+            <div class="table-scroll"><table><thead><tr><th>Perfil</th><th>Plataforma</th><th>Formato</th><th>Publicado</th><th>Curtidas</th><th>Comentários</th><th>Seguidores</th><th>Maturação</th><th>Consulta</th></tr></thead><tbody id="inventory-rows"></tbody></table></div>
+            <div class="inventory-controls"><button id="inventory-prev" class="button outline" type="button" disabled>Anterior</button><button id="inventory-next" class="button outline" type="button" disabled>Próxima</button></div>
+            <p id="inventory-detail-status" tabindex="-1" class="inventory-hint" role="status" aria-live="polite"></p><div id="inventory-detail"></div>
+          </section>
+          <section id="ranking-explorer" class="panel posts-panel" aria-labelledby="ranking-title">
+            <div class="panel-head"><div><span class="overline">INTELIGÊNCIA / 06 · A04-RANKING-1</span><h3 id="ranking-title">Ranking Explorer</h3></div></div>
+            <p class="inventory-hint">Ranking exploratório local, não corpus científico. ER = (curtidas + comentários) / seguidores observados × 100. Não indica causalidade nem recomendação editorial.</p>
+            <form id="ranking-form" class="inventory-filters">
+              <label>População<select id="ranking-cohort"><option value="technical_all">Técnico reauditorado</option><option value="semantic_exploratory">Semântico exploratório</option></select></label>
+              <label class="ranking-check"><input id="ranking-top-only" type="checkbox" checked>Somente top 10% global</label>
+              <button id="ranking-submit" class="button primary" type="submit" disabled>Consultar ranking</button>
+            </form>
+            <p id="ranking-status" role="status" aria-live="polite" class="inventory-hint"></p>
+            <div id="ranking-summary" class="ranking-summary"></div>
+            <div class="table-scroll"><table><thead><tr><th>Posição</th><th>Perfil</th><th>Formato</th><th>Estrato</th><th>Curtidas</th><th>Comentários</th><th>Seguidores</th><th>ER</th><th>Top global</th><th>Top intraperfil</th><th>Consulta</th></tr></thead><tbody id="ranking-rows"></tbody></table></div>
+            <div class="inventory-controls"><button id="ranking-prev" class="button outline" type="button" disabled>Anterior</button><button id="ranking-next" class="button outline" type="button" disabled>Próxima</button></div>
+            <div id="ranking-contrasts"></div>
           </section>
           <footer><span>TAPI STONE / RESEARCH ENGINEERING</span><span id="footer-status">Estado não verificado</span><span>R$ 0 · PERMISSION-FIRST</span></footer>
         </section>

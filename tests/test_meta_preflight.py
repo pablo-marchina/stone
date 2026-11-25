@@ -87,6 +87,8 @@ def test_invalid_username_and_unsafe_cursor_fail_closed():
 
 
 def test_cli_defaults_to_no_network(monkeypatch, capsys):
+    monkeypatch.setenv("TAPI_OFFICIAL_METADATA_READS", "0")
+    monkeypatch.setenv("TAPI_ZERO_BILLING_CONFIRMED", "0")
     monkeypatch.delenv("TAPI_INSTAGRAM_ACCESS_TOKEN", raising=False)
     assert main([]) == 0
     assert "NOT_EXECUTED" in capsys.readouterr().out

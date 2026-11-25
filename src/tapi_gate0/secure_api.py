@@ -11,7 +11,7 @@ from typing import Annotated
 
 from fastapi import Depends, FastAPI, Header, Request
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
@@ -25,10 +25,17 @@ from .ingestion import IngestionStore, ConnectorError, router_for_ingestion
 from .discovery_ingestion import router_for_discovery_ingestion
 from .discovery_technical import router_for_discovery_technical
 from .corpus import router_for_corpus
+from .corpus_inventory import router_for_inventory
+from . import asset_rights_registry, asset_lineage_index, asset_jobs, asset_derived_payloads  # register schema only; no trust configured
+from .corpus_caption_replay import CaptionReplay, config_from_env as replay_config_from_env
 from .ui import router_for_authenticated_view
 from .agent_api_e1 import router_for_evidence_agent
+from .agent_graph_local_api import router_for_local_graph_diagnostic
+from .creative_reference_pep_a05 import CreativeReferencePEP
+from .creative_reference_trust_a05 import load_reference_trust
 from .studio_e1 import StudioStore  # registers studio tables before schema initialization
 from .studio_api import router_for_studio
+from .evidence_lab import EvidenceLab, config_from_env, router_for_lab
 
 
 def _token(request:Request):
@@ -39,7 +46,14 @@ def _token(request:Request):
     return token
 
 
-def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_http_local:bool=False) -> FastAPI:
+def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_http_local:bool=False, evidence_lab:EvidenceLab|None=None, caption_replay_config=None, creative_reference_authorities=None, enable_local_graph_diagnostic:bool=False) -> FastAPI:
+    # Explicit test/local factory opt-in only, never read from environment.
+    # The operational from_environment path cannot enable this endpoint.
+    if enable_local_graph_diagnostic and (
+        not allow_http_local or not initialize_schema
+        or not database_url.startswith("sqlite:///")
+    ):
+        raise ValueError("LOCAL_GRAPH_DIAGNOSTIC_REQUIRES_LOCAL_SQLITE_FIXTURE")
     engine=engine_for(database_url)
     domain=SqlDomainStore(engine)
     if initialize_schema:
@@ -60,6 +74,10 @@ def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_ht
     if web_dir.is_dir():
         app.mount("/app", StaticFiles(directory=web_dir, html=True), name="product-ui")
 
+        @app.get("/", include_in_schema=False)
+        def product_home():
+            return RedirectResponse(url="/app/", status_code=307)
+
     @app.middleware("http")
     async def require_tls(request:Request,call_next):
         if request.url.scheme!="https":
@@ -68,7 +86,10 @@ def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_ht
                 return JSONResponse(status_code=403, content={"code":"HTTPS_REQUIRED"},
                                     headers={"Cache-Control":"no-store"})
         response=await call_next(request)
-        response.headers["Cache-Control"]="no-store"
+        # Enforce no-store globally without erasing explicitly private responses.
+        # Never preserve cacheable directives supplied by an endpoint.
+        directives={part.strip().lower() for part in response.headers.get("Cache-Control","").split(",")}
+        response.headers["Cache-Control"]="private, no-store" if "private" in directives else "no-store"
         response.headers["X-Content-Type-Options"]="nosniff"
         response.headers["Referrer-Policy"]="no-referrer"
         response.headers["X-Frame-Options"]="DENY"
@@ -76,6 +97,9 @@ def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_ht
             "default-src 'none'; script-src 'self'; style-src 'self'; "
             "connect-src 'self'; img-src 'self' data:; font-src 'self'; "
             "base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
+        if allow_http_local and request.url.path == "/app/demo.html":
+            # Only the opt-in local demo uses verified MP4 object URLs.
+            response.headers["Content-Security-Policy"] += "; media-src blob:"
         return response
     app.title="TAPI Stone — Secure Unified Domain"
     app.version="0.3.0"
@@ -105,8 +129,19 @@ def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_ht
     app.include_router(router_for_discovery_ingestion(identity,ingestion))
     app.include_router(router_for_discovery_technical(identity,ingestion))
     app.include_router(router_for_corpus(identity,engine))
-    app.include_router(router_for_evidence_agent(identity,domain))
+    if caption_replay_config is not None and not allow_http_local:
+        raise ValueError('CAPTION_REPLAY_LOOPBACK_MODE_REQUIRED')
+    caption_replay=CaptionReplay(engine,caption_replay_config) if caption_replay_config is not None else None
+    app.include_router(router_for_inventory(current_principal,engine,caption_replay))
+    app.include_router(router_for_evidence_agent(
+        identity, domain,
+        creative_pep=(CreativeReferencePEP(engine, creative_reference_authorities)
+                      if creative_reference_authorities is not None else None),
+    ))
     app.include_router(router_for_studio(identity,StudioStore(engine)))
+    if enable_local_graph_diagnostic:
+        app.include_router(router_for_local_graph_diagnostic(identity, engine))
+    app.include_router(router_for_lab(current_principal,evidence_lab))
 
     @app.exception_handler(ConnectorError)
     async def handle_connector_error(_request:Request,exc:ConnectorError):
@@ -185,5 +220,17 @@ def create_secure_app(database_url:str,*, initialize_schema:bool=False, allow_ht
 def from_environment():
     url=os.environ.get("TAPI_DATABASE_URL")
     if not url:raise RuntimeError("TAPI_DATABASE_URL is required for secure mode")
+    lab_config=config_from_env(os.environ)
+    if lab_config is not None and os.environ.get("TAPI_ALLOW_HTTP_LOOPBACK")!="1":
+        raise ValueError("EVIDENCE_LAB_LOOPBACK_MODE_REQUIRED")
+    lab=EvidenceLab(lab_config) if lab_config is not None else None
+    # A trusted host may explicitly enable externally pinned PUBLIC anchors.
+    # No trust vars: None -> all external creative references stay denied.
+    # Partial/malformed settings fail application startup, never downgrade.
+    reference_anchors=load_reference_trust(
+        os.environ,repository_root=Path(__file__).resolve().parents[2],
+    )
     return create_secure_app(url,initialize_schema=False,
-        allow_http_local=os.environ.get("TAPI_ALLOW_HTTP_LOOPBACK")=="1")
+        allow_http_local=os.environ.get("TAPI_ALLOW_HTTP_LOOPBACK")=="1",evidence_lab=lab,
+        caption_replay_config=replay_config_from_env(os.environ),
+        creative_reference_authorities=reference_anchors)

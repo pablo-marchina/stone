@@ -1,11 +1,13 @@
 import { SSEParser } from './events.mjs';
+import { initInventory } from './inventory.mjs?v=a04-ranking-1';
+import { initRanking } from './ranking.mjs?v=a04-ranking-1';
 
 const $ = id => document.getElementById(id);
 const state = { token: null, principal: null, overview: null, controller: null, events: new Map(), connected: false, retry: 0, refreshPending: false, generation: 0 };
 const stages = [
   ['Coleta', 'creators', 'Fontes autorizadas'],
   ['Corpus', 'posts', 'Conteúdos registrados'],
-  ['Evidências', 'assessments', 'Rubrica e revisão'],
+  ['Evidências', 'assessments', 'Registros de avaliação, não validações'],
   ['Insights', 'insights', 'Análise fundamentada'],
   ['Criação', 'creatives', 'Produção editorial'],
   ['Publicação', null, 'Pendente de habilitação'],
@@ -31,9 +33,10 @@ function setConnection(connected) {
 }
 async function api(path, options = {}) {
   const headers = { Accept: 'application/json', ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers };
-  if (state.token) headers.Authorization = `Bearer ${state.token}`;
+  const requestToken = state.token;
+  if (requestToken) headers.Authorization = `Bearer ${requestToken}`;
   const response = await fetch(path, { ...options, headers, cache: 'no-store' });
-  if (response.status === 401 && path !== '/v1/auth/sessions') { logout(); throw new Error('Sua sessão expirou. Entre novamente.'); }
+  if (response.status === 401 && path !== '/v1/auth/sessions') { if (requestToken && state.token === requestToken) logout(); throw new Error('Sua sessão expirou. Entre novamente.'); }
   if (!response.ok) throw new Error(response.status === 403 ? 'Operação negada pela política de acesso.' : `Falha na operação (HTTP ${response.status}).`);
   return response.status === 204 ? null : response.json();
 }
@@ -52,6 +55,9 @@ async function login(evt) {
     $('password').value = '';
     state.principal = await api('/v1/auth/me');
     authenticatedView(true);
+    inventory.reset();
+  ranking.reset();
+    void inventory.load();
     await refresh();
     void connectEvents();
   } catch (error) { $('login-error').textContent = error.message; }
@@ -63,6 +69,8 @@ function logout() {
   state.controller?.abort(); state.controller = null;
   state.token = null; state.principal = null; state.overview = null; state.events.clear(); state.retry = 0;
   $('kpis').replaceChildren(); $('events').replaceChildren(); $('posts-table').replaceChildren(); $('pipeline-graph').replaceChildren();
+  inventory.reset();
+  ranking.reset();
   authenticatedView(false); setConnection(false);
   if (oldToken) void fetch('/v1/auth/logout', { method:'POST', headers:{Authorization:`Bearer ${oldToken}`} }).catch(() => {});
 }
@@ -70,7 +78,7 @@ function renderOverview() {
   const data = state.overview;
   if (!data) return;
   $('tenant-label').textContent = `Organização ${data.tenant_id} · Perfil ${state.principal?.role ?? '—'} · Origem ${data.data_scope}`;
-  const cards = [['Criadores', 'creators', 'Perfis no corpus'], ['Conteúdos', 'posts', 'Posts registrados'], ['Snapshots', 'metrics_snapshots', 'Métricas históricas'], ['Avaliações', 'assessments', 'Rubrica multimodal'], ['Insights', 'insights', 'Evidências fundamentadas'], ['Criativos', 'creatives', 'Versões editoriais']];
+  const cards = [['Criadores', 'creators', 'Perfis no corpus'], ['Conteúdos', 'posts', 'Posts registrados'], ['Snapshots', 'metrics_snapshots', 'Métricas históricas'], ['Avaliações', 'assessments', 'Registros, não validações científicas'], ['Insights', 'insights', 'Evidências fundamentadas'], ['Criativos', 'creatives', 'Versões editoriais (fora da biblioteca Studio)']];
   $('kpis').replaceChildren(...cards.map(([name, key, description], i) => {
     const card = el('article', 'kpi-card');
     card.append(el('span', 'kpi-label', name), el('strong', 'kpi-number', fmt(data.counts[key])), el('span', 'kpi-desc', description));
@@ -86,7 +94,7 @@ function renderOverview() {
   });
   const posts = $('posts-table');posts.replaceChildren();
   if (!data.recent_posts.length) {
-    const tr = el('tr'); const td = el('td','empty-cell','Nenhum conteúdo sintético registrado.'); td.colSpan = 5;tr.append(td);posts.append(tr);
+    const tr = el('tr'); const td = el('td','empty-cell','Nenhum conteúdo registrado.'); td.colSpan = 5;tr.append(td);posts.append(tr);
   } else data.recent_posts.forEach(post => {
     const tr = el('tr'); [post.content_id,post.creator_id,post.media_type,when(post.published_at),post.origin].forEach(v=>tr.append(el('td','',v)));posts.append(tr);
   });
@@ -157,6 +165,8 @@ async function connectEvents() {
     await new Promise(resolve=>setTimeout(resolve,Math.min(1000*2**(state.retry-1),10000)));
   }
 }
+const inventory = initInventory({api,getPrincipal:()=>state.principal});
+const ranking = initRanking({api,getPrincipal:()=>state.principal,openDetail:id=>inventory.openDetail(id)});
 $('login-form').addEventListener('submit',login);
 $('logout').addEventListener('click',logout);
 $('refresh').addEventListener('click',()=>refresh().catch(err=>{$('footer-status').textContent=err.message;}));

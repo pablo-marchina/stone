@@ -175,7 +175,8 @@ class TechnicalDiscoveryBatch:
 
     def execute(self, tenant: str, manifest: BatchManifest, limits: BatchLimits,
                 viewer_ig_id: str, *, batch_key: str | None = None,
-                token: str | None = None, http: OfficialHttp | None = None) -> dict:
+                token: str | None = None, http: OfficialHttp | None = None,
+                history: bool = False, cycle_key: str | None = None) -> dict:
         approved = [s for s in manifest.sources if s.status == "approved"]
         selected = approved[:limits.max_sources]
         batch_key = batch_key or ("bdbatch-" + datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
@@ -232,7 +233,7 @@ class TechnicalDiscoveryBatch:
                     tenant, Platform.INSTAGRAM, source.expected_ig_id)
                 if current_grant["approval_reference"] != source.approval_reference:
                     raise ConnectorError("BD_BATCH_GRANT_REFERENCE_MISMATCH", 403)
-                result = service.execute(tenant, req, token=token, http=http)
+                result = service.execute(tenant, req, token=token, http=http, history=history, cycle_key=cycle_key)
                 audit = audit_run(self.store.engine, tenant, req.run_key)
                 if not audit["all_traces_valid"] or any(
                     item["source_account_id"] != source.expected_ig_id or
@@ -270,11 +271,15 @@ class TechnicalDiscoveryBatch:
                                   "metadata_sha256": item["metadata_sha256"]}
                                  for item in audit["items"]],
                 })
+                if history:
+                    report["sources"][-1]["history_checkpoint_status"] = result["sample"]["history_checkpoint_status"]
             except ConnectorError as exc:
                 # No provider payload, credentials or raw error text in report.
                 report["status"] = "BATCH_STOPPED_ON_SOURCE_FAILURE"
                 report["failed_run_key"] = req.run_key
                 report["failure_code"] = exc.code
+                if exc.provider_diagnostic:
+                    report["provider_diagnostic"] = exc.provider_diagnostic
                 break
         after = _unique_posts_by_source(self.store, tenant, selected)
         report["coverage"] = {

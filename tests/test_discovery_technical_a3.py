@@ -23,13 +23,17 @@ VIEWER = "17841459971757521"
 TARGET = "17841403133066329"
 TOKEN = "local-fixture-secret-not-real"
 TENANT = "local-research"
-NOW = datetime(2026, 11, 5, 1, 16, tzinfo=timezone.utc)
+CAPTURE_AS_OF = datetime(2026, 11, 5, 1, 16, tzinfo=timezone.utc)
+NOW = datetime.now(timezone.utc)
+# Replay original capture intervals relative to this run, not as live data.
+# The captured date literals remain in the fixture for traceability.
 
 
 def row(mid, kind, date, likes, comments, url):
     return {"id":mid, "media_type":kind,
             "media_product_type":"REELS" if kind=="VIDEO" else "FEED",
-            "timestamp":date,"like_count":likes,"comments_count":comments,
+            "timestamp":(NOW + (datetime.fromisoformat(date) - CAPTURE_AS_OF)).isoformat(),
+            "like_count":likes,"comments_count":comments,
             "permalink":url,"caption":"Observação sobre MEI e negócios menores."}
 
 RECENT = [
@@ -343,3 +347,210 @@ def test_technical_source_verification_never_admits_scientific_corpus(tmp_path):
     assert data_card["observed"]["excluded_source_context_missing"] == 2
     assert data_card["target_reached"] is False
     client.close(); engine.dispose()
+
+
+def test_technical_reader_maturity_boundary_includes_exactly_fourteen_days():
+    from tapi_gate0.discovery_technical import TechnicalDiscoveryReader
+    cutoff = NOW - timedelta(days=14)
+    rows = [dict(OLD[0], timestamp=cutoff.isoformat()),
+            dict(RECENT[0], timestamp=(cutoff + timedelta(seconds=1)).isoformat())]
+    t, calls, client = transport(pages=[rows])
+    try:
+        observations, report = TechnicalDiscoveryReader(t).fetch(
+            request(pages=1), TOKEN, observed_at=NOW)
+        assert len(calls) == 1
+        assert report["counts"]["too_recent"] == 1
+        assert report["counts"]["accepted"] == 1
+        assert [o.item.source_item_id for o in observations] == [OLD[0]["id"]]
+        assert report["provider_data_not_scientifically_reviewed"] is True
+    finally:
+        client.close()
+
+
+# IMP-071: parity qualification of the separate, non-operational batch auditor.
+# These tests use only the existing synthetic A3 transport and temporary DB.
+
+
+def test_batched_trace_audit_equals_original_and_denies_cross_tenant(tmp_path):
+    from tapi_gate0.discovery_trace_batch import audit_run_batched
+    engine, store = setup(tmp_path)
+    provider, _, client = transport(pages=[OLD])
+    try:
+        TechnicalDiscoveryService(store).execute(
+            TENANT, request(pages=1), token=TOKEN, http=provider
+        )
+        original = audit_run(engine, TENANT, request().run_key)
+        batched = audit_run_batched(engine, TENANT, request().run_key)
+        assert original == batched
+        assert original["all_traces_valid"]
+        assert original["observations"] == 2
+        with pytest.raises(ConnectorError, match="BD_RUN_NOT_FOUND"):
+            audit_run_batched(engine, "another-tenant", request().run_key)
+    finally:
+        client.close()
+        engine.dispose()
+
+
+def test_batched_trace_audit_matches_when_outbox_is_missing(tmp_path):
+    from sqlalchemy import delete
+    from tapi_gate0.discovery_trace_batch import audit_run_batched
+    engine, store = setup(tmp_path)
+    provider, _, client = transport(pages=[OLD])
+    try:
+        TechnicalDiscoveryService(store).execute(
+            TENANT, request(pages=1), token=TOKEN, http=provider
+        )
+        with engine.begin() as db:
+            event_seq = db.execute(select(domain_events.c.seq).where(
+                domain_events.c.tenant_id == TENANT,
+                domain_events.c.aggregate_type == "bd_technical_run",
+            ).limit(1)).scalar_one()
+            db.execute(delete(outbox).where(outbox.c.seq == event_seq))
+        original = audit_run(engine, TENANT, request().run_key)
+        assert not original["all_traces_valid"]
+        assert any(not row["outbox_exists"] for row in original["items"])
+        assert original == audit_run_batched(engine, TENANT, request().run_key)
+    finally:
+        client.close()
+        engine.dispose()
+
+
+def test_batched_trace_audit_matches_wrong_snapshot_to_content(tmp_path):
+    from tapi_gate0.discovery_trace_batch import audit_run_batched
+    engine, store = setup(tmp_path)
+    provider, _, client = transport(pages=[OLD])
+    try:
+        TechnicalDiscoveryService(store).execute(
+            TENANT, request(pages=1), token=TOKEN, http=provider
+        )
+        with engine.begin() as db:
+            events = db.execute(select(domain_events.c.payload).where(
+                domain_events.c.tenant_id == TENANT,
+                domain_events.c.aggregate_type == "bd_technical_run",
+            )).scalars().all()
+            assert len(events) == 2
+            first, second = [json.loads(e) for e in events]
+            assert first["content_id"] != second["content_id"]
+            db.execute(update(metrics_snapshots).where(
+                metrics_snapshots.c.tenant_id == TENANT,
+                metrics_snapshots.c.id == first["snapshot_id"],
+            ).values(content_id=second["content_id"]))
+        original = audit_run(engine, TENANT, request().run_key)
+        assert not original["all_traces_valid"]
+        assert any(not row["snapshot_exists"] for row in original["items"])
+        assert original == audit_run_batched(engine, TENANT, request().run_key)
+    finally:
+        client.close()
+        engine.dispose()
+
+
+def test_batched_trace_audit_chunks_over_400_events_without_changing_result(tmp_path):
+    from uuid import uuid4
+    from tapi_gate0.discovery_trace_batch import audit_run_batched
+    engine, store = setup(tmp_path)
+    provider, _, client = transport(pages=[OLD])
+    try:
+        TechnicalDiscoveryService(store).execute(
+            TENANT, request(pages=1), token=TOKEN, http=provider
+        )
+        with engine.begin() as db:
+            observations = db.execute(select(domain_events).where(
+                domain_events.c.tenant_id == TENANT,
+                domain_events.c.aggregate_type == "bd_technical_run",
+            ).order_by(domain_events.c.aggregate_version)).mappings().all()
+            assert len(observations) == 2
+            template = observations[-1]
+            for i in range(1, 403):
+                seq = db.execute(insert(domain_events).values(
+                    event_id=str(uuid4()),
+                    tenant_id=TENANT,
+                    aggregate_type=template["aggregate_type"],
+                    aggregate_id=template["aggregate_id"],
+                    event_type=template["event_type"],
+                    aggregate_version=template["aggregate_version"] + i,
+                    occurred_at=template["occurred_at"],
+                    payload=template["payload"],
+                )).inserted_primary_key[0]
+                db.execute(insert(outbox).values(
+                    seq=seq, attempts=0, dead_letter=0,
+                ))
+            db.execute(update(ingestion_runs).where(
+                ingestion_runs.c.tenant_id == TENANT,
+                ingestion_runs.c.run_key == request().run_key,
+            ).values(
+                duplicate_records=ingestion_runs.c.duplicate_records + 402,
+            ))
+        original = audit_run(engine, TENANT, request().run_key)
+        batched = audit_run_batched(engine, TENANT, request().run_key)
+        assert original == batched
+        assert original["observations"] == 404
+        assert original["all_traces_valid"]
+    finally:
+        client.close()
+        engine.dispose()
+
+
+def test_trace_batch_chunks_distinct_ids_at_sqlite_safe_boundary():
+    from tapi_gate0.discovery_trace_batch import _chunks, CHUNK
+    groups = list(_chunks(str(i) for i in range(805)))
+    assert CHUNK == 400
+    assert [len(g) for g in groups] == [400, 400, 5]
+    assert [key for group in groups for key in group] == [
+        str(i) for i in range(805)
+    ]
+    assert list(_chunks(["a", "a", "b", "b", "c"])) == [["a", "b", "c"]]
+
+
+def test_full_readiness_original_equals_batched_in_realistic_a3_fixture(tmp_path):
+    from tapi_gate0.discovery_batch import BatchManifest
+    from tapi_gate0.discovery_corpus_readiness import readiness_report
+    from tapi_gate0.discovery_trace_batch import audit_run_batched
+
+    engine, store = setup(tmp_path)
+    provider, _, client = transport(pages=[OLD])
+    try:
+        TechnicalDiscoveryService(store).execute(
+            TENANT, request(pages=1), token=TOKEN, http=provider
+        )
+        with engine.connect() as db:
+            grant = db.execute(select(source_grants).where(
+                source_grants.c.tenant_id == TENANT,
+                source_grants.c.platform == "instagram",
+                source_grants.c.source_account_id == TARGET,
+            )).mappings().one()
+
+        frame = BatchManifest.model_validate({
+            "schema_version": "tapi-bd-technical-batch.v1",
+            "sources": [{
+                "username": "sebrae",
+                "expected_ig_id": TARGET,
+                "sampling_stratum": "cross_sector_institution",
+                "audience_intent": "mpe_targeted",
+                "source_evidence_reference": "docs/local-technical-test",
+                "audience_rationale_reference": "docs/local-technical-rationale",
+                "status": "approved",
+                "approval_reference": grant["approval_reference"],
+                "expires_at": grant["expires_at"],
+                "allowed_operations": ["business_discovery_metadata_read"],
+            }],
+        })
+        canonical = readiness_report(engine, TENANT, frame, VIEWER)
+        shadow = readiness_report(
+            engine, TENANT, frame, VIEWER, _trace_auditor=audit_run_batched
+        )
+        for value in (canonical, shadow):
+            value.pop("as_of")
+            value["canonical_corpus_card"].pop("as_of")
+        assert canonical == shadow
+        assert canonical["completed_runs_without_valid_bd_trace"] == 0
+        assert canonical["audited_completed_nonempty_runs"] == 1
+        assert canonical["first_blocking_stage"][
+            "CAPTION_AVAILABLE_FOR_ASSESSMENT"
+        ] == 2
+        assert canonical["sources"][0]["source_gate"] == "TECHNICAL_SCOPE_MATCHED"
+        assert canonical["database_mutated"] is False
+        with pytest.raises(ValueError, match="BD_READINESS_TRACE_AUDITOR_INVALID"):
+            readiness_report(engine, TENANT, frame, VIEWER, _trace_auditor="no")
+    finally:
+        client.close()
+        engine.dispose()

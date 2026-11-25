@@ -159,11 +159,25 @@ class SqlDomainStore(LocalDomainStore):
                 domain_events.c.seq>after_seq).order_by(domain_events.c.seq).limit(limit)).mappings().all()
         return [{**dict(r),"payload":json.loads(r["payload"])} for r in rows]
 
-    def ranking(self,request:RankingRequest):
-        with self.engine.connect() as con:
-            posts=con.execute(select(content_items.c.payload).where(content_items.c.tenant_id==request.tenant_id,
-                                      content_items.c.origin==request.origin.value)).scalars().all()
-            metrics=con.execute(select(metrics_snapshots.c.payload).where(metrics_snapshots.c.tenant_id==request.tenant_id)).scalars().all()
+    def ranking(self,request:RankingRequest, *, connection=None, lock_rows=False):
+        if connection is None:
+            with self.engine.connect() as con:
+                return self.ranking(request, connection=con, lock_rows=False)
+        if connection.engine is not self.engine:
+            raise ValueError("RANKING_TRUSTED_CONNECTION_REQUIRED")
+        # Locks are explicit opt-in for the atomic agent step. Existing
+        # standalone ranking calls remain read-only and do not lock writers.
+        con = connection
+        posts_query=select(content_items.c.payload).where(
+            content_items.c.tenant_id==request.tenant_id,
+            content_items.c.origin==request.origin.value)
+        metrics_query=select(metrics_snapshots.c.payload).where(
+            metrics_snapshots.c.tenant_id==request.tenant_id)
+        if lock_rows:
+            posts_query=posts_query.with_for_update(read=True)
+            metrics_query=metrics_query.with_for_update(read=True)
+        posts=con.execute(posts_query).scalars().all()
+        metrics=con.execute(metrics_query).scalars().all()
         latest={}
         for raw in metrics:
             m=MetricsCreate.model_validate_json(raw)

@@ -19,3 +19,7 @@ Antes de implementar qualquer IMP, consultar [guia de adoção](docs/base_atempo
 ## Organização GitHub
 
 Consultar [fluxo de branches e PRs](docs/REPOSITORY_WORKFLOW.md) antes de criar branch, alterar base ou mesclar. Preservar a ordem das branches empilhadas, histórico e aceite por SHA. Não reativar propostas arquivadas como tarefas paralelas.
+
+## Organização documental unificada
+
+Use [portal](docs/README.md), [padrão](docs/governance/STANDARD.md) e [templates](docs/governance/TEMPLATES.md). Antes de finalizar alteração documental, execute `python scripts/documentation_catalog.py check` além do validador do espelho. Use `index` e `graph` para visões locais derivadas; não crie segunda fonte de verdade. Preserve documentos históricos e links pinados; registre estado/evidência em corte datado, sem promover ciência, autorização ou gates. Novos registros seguem o template; arquivos normativos só mudam por governança vigente.

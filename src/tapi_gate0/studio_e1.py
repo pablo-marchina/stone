@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator, model_serializer
 from sqlalchemy import (
     Table, Column, String, Integer, Text, ForeignKeyConstraint,
     select, insert, update,
@@ -55,6 +55,18 @@ class TextStyle(Model):
     font_family: Literal["sans-serif"] = "sans-serif"
     font_size: int = Field(default=64, ge=12, le=256)
     color: str = Field(default="#171717", pattern=HEX)
+    weight: Literal[400, 700] | None = None
+    box_fill: str | None = Field(default=None, pattern=HEX)
+    box_radius: int | None = Field(default=None, ge=0, le=64)
+    padding: int | None = Field(default=None, ge=0, le=80)
+
+    @model_serializer(mode="wrap")
+    def preserve_legacy(self, handler):
+        data = handler(self)
+        for name in ("weight", "box_fill", "box_radius", "padding"):
+            if getattr(self, name) is None:
+                data.pop(name, None)
+        return data
 
 
 class TextLayer(Model):
@@ -141,8 +153,24 @@ class TextLayerPatch(Model):
         return self
 
 
-def draft_from_spec(spec: CreativeSpec, document_id: str) -> DesignDocument:
+EDITORIAL_LAYOUT_VERSION = "tapi-editorial-layout.v2"
+EDITORIAL_THEMES = {
+    "inventory": ("01 / ESTOQUE", "#E5F4E6", "#103B2B", "#087A50"),
+    "cashflow": ("02 / FINANÇAS", "#E3EEF9", "#153957", "#245C9B"),
+    "service": ("03 / ATENDIMENTO", "#FFF2DF", "#583D21", "#9C530A"),
+    "pricing": ("04 / PRECIFICAÇÃO", "#F1E8F8", "#402653", "#75439C"),
+    "planning": ("05 / PLANEJAMENTO", "#E5F4F1", "#174A46", "#117A71"),
+    "experiment": ("GESTÃO NA PRÁTICA", "#F4F7EC", "#103C29", "#007545"),
+    "experiment-carousel": ("GESTÃO NA PRÁTICA", "#F4F7EC", "#103C29", "#007545"),
+}
+
+
+def draft_from_spec(spec: CreativeSpec, document_id: str, *,
+                    editorial_template: str | None = None) -> DesignDocument:
     """A deterministic starter layout; not generative AI, preview or export."""
+    if editorial_template in {"social-feed", "social-carousel"}:
+        from .studio_social import social_document
+        return social_document(spec, document_id, editorial_template)
     canvas = Canvas()
     safe_margin = 70
     width = canvas.width - 2 * safe_margin
@@ -157,11 +185,80 @@ def draft_from_spec(spec: CreativeSpec, document_id: str) -> DesignDocument:
                       text=spec.cta, style=TextStyle(font_size=56)),
         ],
     )
+    if editorial_template is not None:
+        # Trusted synthetic proposal path only. All visual elements are real
+        # editable, typed layers, shared by preview and persisted export.
+        if editorial_template not in EDITORIAL_THEMES or (spec.platform_intent == "instagram_carousel" and editorial_template not in {"planning", "experiment-carousel"}) or (editorial_template == "experiment-carousel" and spec.platform_intent != "instagram_carousel"):
+            raise ValueError("STUDIO_EDITORIAL_TEMPLATE_INVALID")
+        label, background, ink, accent = EDITORIAL_THEMES[editorial_template]
+        canvas = Canvas(background=background)
+        page = DesignPage(id="page.1", layers=[
+            TextLayer(id="headline", x=80, y=270, w=920, h=340,
+                      text=spec.headline, style=TextStyle(font_size=100, color=ink)),
+            TextLayer(id="body", x=80, y=650, w=920, h=320,
+                      text=spec.body, style=TextStyle(font_size=52, color=ink)),
+            TextLayer(id="cta", x=80, y=1040, w=920, h=160,
+                      text=spec.cta, style=TextStyle(font_size=60, color=accent)),
+            TextLayer(id="series", x=80, y=85, w=920, h=65,
+                      text="GUIA DO EMPREENDEDOR", style=TextStyle(font_size=36, color=accent)),
+            TextLayer(id="section", x=80, y=170, w=920, h=65,
+                      text=label, style=TextStyle(font_size=40, color=accent)),
+        ])
+    if editorial_template in {"experiment", "experiment-carousel"}:
+        # Independent presentation layout; old document versions and other templates
+        # are untouched. All typography is part of the typed document, not CSS.
+        page = DesignPage(id="page.1", layers=[
+            TextLayer(id="headline", x=96, y=230, w=888, h=320,
+                      text=spec.headline, style=TextStyle(font_size=112, color=ink)),
+            TextLayer(id="body", x=96, y=650, w=888, h=270,
+                      text=spec.body, style=TextStyle(font_size=52, color=ink)),
+            TextLayer(id="cta", x=96, y=1040, w=888, h=180,
+                      text=spec.cta, style=TextStyle(font_size=64, color=accent)),
+            TextLayer(id="series", x=96, y=82, w=888, h=50,
+                      text="GUIA PRÁTICO", style=TextStyle(font_size=34, color=accent)),
+            TextLayer(id="section", x=96, y=145, w=888, h=50,
+                      text=label, style=TextStyle(font_size=32, color=ink)),
+            TextLayer(id="step", x=96, y=570, w=888, h=48,
+                      text="01  /  FAÇA HOJE", style=TextStyle(font_size=34, color=accent)),
+            TextLayer(id="action-label", x=96, y=970, w=888, h=48,
+                      text="SUA PRÓXIMA AÇÃO", style=TextStyle(font_size=32, color=ink)),
+        ])
+    pages = [page]
+    if editorial_template == "experiment-carousel":
+        # Same three-page sequence across variants. CTA differs only on page 3;
+        # theme changes only the headline on page 1 and the guidance on page 2.
+        pages = []
+        for index, values in enumerate((
+            {"body": "Uma orientação prática para organizar a sua próxima ação.",
+             "cta": "Deslize para continuar.", "step": "01 / ENTENDA", "action-label": "PRÓXIMA PÁGINA"},
+            {"headline": "Coloque em\nprática", "body": spec.body, "cta": "Deslize para concluir.",
+             "step": "02 / APLIQUE", "action-label": "PRÓXIMA PÁGINA"},
+            {"headline": "Faça acontecer", "body": "Reserve um momento para revisar o que fez e ajustar a próxima ação.",
+             "cta": spec.cta, "step": "03 / REVISE", "action-label": "SUA PRÓXIMA AÇÃO"},
+        ), start=1):
+            raw = page.model_dump(mode="json")
+            raw["id"] = f"page.{index}"
+            for layer in raw["layers"]:
+                if layer["id"] in values:
+                    layer["text"] = values[layer["id"]]
+            pages.append(DesignPage.model_validate(raw))
+    if editorial_template == "planning" and spec.platform_intent == "instagram_carousel":
+        for index, (headline, body, cta) in enumerate((
+            ("Escolha uma prioridade", "Defina a tarefa mais importante para a próxima semana.", "Anote sua escolha."),
+            ("Acompanhe a execução", "Reserve um momento para revisar o que foi feito e ajustar o plano.", spec.cta),
+        ), start=2):
+            raw = page.model_dump(mode="json")
+            raw["id"] = f"page.{index}"
+            values = {"headline": headline, "body": body, "cta": cta, "section": f"0{index} / PASSO A PASSO"}
+            for layer in raw["layers"]:
+                if layer["id"] in values:
+                    layer["text"] = values[layer["id"]]
+            pages.append(DesignPage.model_validate(raw))
     return DesignDocument(
         document_id=document_id, tenant_id=spec.tenant_id,
         spec_id=spec.spec_id, version=1, canvas=canvas,
         platform_intent=spec.platform_intent,
-        pages=[page], reference_content_ids=spec.reference_content_ids,
+        pages=pages, reference_content_ids=spec.reference_content_ids,
     )
 
 
@@ -199,20 +296,29 @@ class StudioStore:
     def __init__(self, engine):
         self.engine = engine
 
-    def create(self, tenant: str, actor: str, spec: CreativeSpec, document_id: str):
+    def create(self, tenant: str, actor: str, spec: CreativeSpec,
+               document_id: str, *, connection=None, editorial_template=None):
         if spec.tenant_id != tenant:
             raise StudioError("STUDIO_TENANT_MISMATCH", 403)
-        doc = draft_from_spec(spec, document_id)
+        doc = draft_from_spec(spec, document_id, editorial_template=editorial_template)
         try:
-            with self.engine.begin() as conn:
-                conn.execute(insert(studio_documents).values(
-                    tenant_id=tenant, document_id=doc.document_id,
-                    spec_id=spec.spec_id, current_version=1,
-                ))
-                self._insert_version(conn, doc, actor)
+            if connection is None:
+                with self.engine.begin() as conn:
+                    self._create_on_connection(conn, doc, actor)
+            else:
+                # Shared, caller-owned transaction: do not commit independently.
+                self._create_on_connection(connection, doc, actor)
         except IntegrityError as exc:
             raise StudioError("STUDIO_DOCUMENT_ALREADY_EXISTS_OR_TENANT_MISSING", 409) from exc
         return doc
+
+    @staticmethod
+    def _create_on_connection(conn, doc: DesignDocument, actor: str):
+        conn.execute(insert(studio_documents).values(
+            tenant_id=doc.tenant_id, document_id=doc.document_id,
+            spec_id=doc.spec_id, current_version=1,
+        ))
+        StudioStore._insert_version(conn, doc, actor)
 
     @staticmethod
     def _insert_version(conn, doc: DesignDocument, actor: str):
@@ -241,47 +347,75 @@ class StudioStore:
         return DesignDocument.model_validate_json(payload)
 
     def patch_text_layer(self, tenant: str, actor: str, document_id: str,
-                         patch: TextLayerPatch):
-        with self.engine.begin() as conn:
-            current = conn.execute(select(studio_documents.c.current_version).where(
-                studio_documents.c.tenant_id == tenant,
-                studio_documents.c.document_id == document_id,
-            )).scalar_one_or_none()
-            if current is None:
-                raise StudioError("STUDIO_DOCUMENT_NOT_FOUND", 404)
-            if current != patch.expected_version:
-                raise StudioError("STUDIO_VERSION_CONFLICT", 409)
-            payload = conn.execute(select(studio_versions.c.payload).where(
-                studio_versions.c.tenant_id == tenant,
-                studio_versions.c.document_id == document_id,
-                studio_versions.c.version == current,
-            )).scalar_one()
-            original = DesignDocument.model_validate_json(payload)
-            raw = original.model_dump()
-            found = False
-            for page in raw["pages"]:
-                if page["id"] != patch.page_id:
+                         patch: TextLayerPatch, *, connection=None,
+                         reference_authorizer=None):
+        if connection is None:
+            with self.engine.begin() as conn:
+                return self.patch_text_layer(
+                    tenant, actor, document_id, patch, connection=conn,
+                    reference_authorizer=reference_authorizer,
+                )
+        conn = connection
+        if conn.engine is not self.engine or not conn.in_transaction():
+            raise StudioError("STUDIO_TRANSACTION_REQUIRED", 409)
+        # A legacy text patch can never silently reuse a signed reference.
+        # Only a trusted per-action callback that revalidates grants inside
+        # THIS write transaction may update a draft carrying external grants.
+        from .studio_reference_bindings_a05 import studio_reference_bindings
+        linked = conn.execute(select(studio_reference_bindings.c.content_id).where(
+            studio_reference_bindings.c.tenant_id == tenant,
+            studio_reference_bindings.c.document_id == document_id,
+        ).limit(1)).first()
+        if linked is not None:
+            if reference_authorizer is None:
+                raise StudioError("STUDIO_SIGNED_REFERENCE_RECHECK_REQUIRED", 403)
+            reference_authorizer(conn)
+        current = conn.execute(select(studio_documents.c.current_version).where(
+            studio_documents.c.tenant_id == tenant,
+            studio_documents.c.document_id == document_id,
+        )).scalar_one_or_none()
+        if current is None:
+            raise StudioError("STUDIO_DOCUMENT_NOT_FOUND", 404)
+        if current != patch.expected_version:
+            raise StudioError("STUDIO_VERSION_CONFLICT", 409)
+        payload = conn.execute(select(studio_versions.c.payload).where(
+            studio_versions.c.tenant_id == tenant,
+            studio_versions.c.document_id == document_id,
+            studio_versions.c.version == current,
+        )).scalar_one()
+        original = DesignDocument.model_validate_json(payload)
+        raw = original.model_dump()
+        found = False
+        for page in raw["pages"]:
+            if page["id"] != patch.page_id:
+                continue
+            for layer in page["layers"]:
+                if layer["id"] != patch.layer_id:
                     continue
-                for layer in page["layers"]:
-                    if layer["id"] != patch.layer_id:
-                        continue
-                    found = True
-                    for attr in ("text", "x", "y", "w", "h"):
-                        value = getattr(patch, attr)
-                        if value is not None:
-                            layer[attr] = value
-                    layer["origin"] = "operator_edit"
-            if not found:
-                raise StudioError("STUDIO_LAYER_NOT_FOUND", 404)
-            raw["version"] = current + 1
-            # Revalidate the entire document after every edit, not just the layer.
-            next_doc = DesignDocument.model_validate(raw)
-            changed = conn.execute(update(studio_documents).where(
-                studio_documents.c.tenant_id == tenant,
-                studio_documents.c.document_id == document_id,
-                studio_documents.c.current_version == current,
-            ).values(current_version=current + 1))
-            if changed.rowcount != 1:
-                raise StudioError("STUDIO_VERSION_CONFLICT", 409)
-            self._insert_version(conn, next_doc, actor)
+                found = True
+                for attr in ("text", "x", "y", "w", "h"):
+                    value = getattr(patch, attr)
+                    if value is not None:
+                        layer[attr] = value
+                layer["origin"] = "operator_edit"
+        if not found:
+            raise StudioError("STUDIO_LAYER_NOT_FOUND", 404)
+        raw["version"] = current + 1
+        # Revalidate the entire document after every edit, not just the layer.
+        next_doc = DesignDocument.model_validate(raw)
+        changed = conn.execute(update(studio_documents).where(
+            studio_documents.c.tenant_id == tenant,
+            studio_documents.c.document_id == document_id,
+            studio_documents.c.current_version == current,
+        ).values(current_version=current + 1))
+        if changed.rowcount != 1:
+            raise StudioError("STUDIO_VERSION_CONFLICT", 409)
+        self._insert_version(conn, next_doc, actor)
         return next_doc
+
+
+# The standalone StudioStore module can be used without importing secure_api.
+# Register its signed-reference binding schema eagerly in the shared metadata
+# before a local `metadata.create_all()`. This import creates NO tables, grants,
+# permissions, migrations or external side effects.
+from . import studio_reference_bindings_a05 as _studio_reference_bindings_a05

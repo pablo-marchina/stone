@@ -1,0 +1,17 @@
+# Demonstração — carrosséis e vídeos de hipóteses históricas
+
+Base PR #92, 4cafa4f590140202ddabe900ebf865f298c1c530; operador confirmou oito testes PASS em 12,10 s e reinicialização do workspace no Windows.
+
+## Entrega
+- GET /v1/demo/experiments mantém feed de uma página por padrão; parâmetro platform_intent=instagram_carousel seleciona três páginas. Seleção POST permanece vinculada exclusivamente ao hash da prévia reconstruída. Não se aceita formato arbitrário. Os documentos e provas de versões anteriores não mudam.
+- Template experiment-carousel, layout versionado, sete camadas por página. Nos pares de CTA, páginas 1 e 2 idênticas e somente a camada cta da página 3 varia. Nos pares de tema, apenas headline da página 1 e body da página 2 variam. Formato, geometria, CTA (no par de tema), paleta e sequência constantes. Não é teste causal; conteúdo determinístico original. Comparação de formatos permanece plano separado.
+- A interface carrega sob demanda os carrosséis, com seleção sincronizada da página nas duas variantes. Persistência, biblioteca, edição, ZIP e renderização MP4 reutilizam os mecanismos anteriores. O operador deve confirmar direitos locais antes de renderizar; não há mídia externa. O vídeo é uma sequência silenciosa de quadros, não uma geração audiovisual nativa.
+- Sem migração ou alteração do workspace existente; novos pares identificados no comprovante pelo formato e layout_version. Não liberar publicação.
+
+## Evidência efetiva
+17 testes PASS em 7,91 s: test_demo_experiment_carousels, test_demo_presentation_polish, test_studio_e1, test_studio_video_e5, test_studio_e6, sobre núcleo local disponível da PR79 com módulos Studio e pares correspondentes aos blobs da PR92 e incrementos desta rodada. Inclui isolamento de CTA/tema, persistência exata, formato inválido, storyboard, render real e direitos. Zero-spend PASS.
+Ensaio separado com agregados anônimos de 19/11 fornecidos pelo operador, relatório SHA-256 befb7dc794f34a86612d14d58f87dac21a46da5fd1776d19815924e0b500b9c7: dois pares persistidos em banco de teste descartável, quatro ZIPs Studio reais com 12 páginas 1080x1350, dois MP4 (CTA A/B), três cenas, 15 s, H.264 360x640, sem áudio. Chromium executou exportDocument; APIs autenticadas criaram storyboards, ativos, atestações e jobs; FFmpeg real executou e download foi comparado com SHA-256; ffprobe confirmou duração e codec. Primeira tentativa do script de exportação falhou pela assinatura errada de exportDocument, corrigida e reexecutada. Pacote de entrega com 19 arquivos validado por CRC e hashes. Não importou o arquivo privado original nem executou experimento de eficácia.
+Os três blobs de código/teste executados conferem com a publicação. Alterações de launcher e interface foram aplicadas aos arquivos exatos da PR92 via GitHub, porém não executadas na aplicação integral desta rodada; novo teste integrado de API foi adicionado e deve ser executado no Windows. Nenhum deploy público, merge, coleta ou gasto externo.
+
+## Operação
+Atualizar a branch, executar tests/test_demo_experiment_carousels.py tests/test_demo_experiment_pairs.py tests/test_demo_presentation_polish.py tests/test_demo_workspace.py. Reiniciar com os mesmos --workspace, --technical-report e --av-report, e --video. Pesquisa > Da hipótese ao criativo > Mostrar pares em carrossel. Persistir, editar e exportar ZIP. Confirmar direitos locais somente sobre quadros originais e renderizar MP4; baixar antes de encerrar. Não é peça aprovada.
