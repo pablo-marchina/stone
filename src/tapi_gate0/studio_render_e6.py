@@ -85,7 +85,7 @@ class QueueDraftVideo(StrictModel):
     storyboard_version: int = Field(ge=1)
     frames: list[SceneFrame] = Field(min_length=1, max_length=MAX_RENDER_SCENES)
     audio_asset_id: Id | None = None
-    render_profile: Literal["classic", "social_vertical_v1", "social_motion_v2"] = "classic"
+    render_profile: Literal["classic", "social_vertical_v1", "social_motion_v2", "social_editorial_v3"] = "classic"
 
 
 class RenderJobInfo(StrictModel):
@@ -324,8 +324,8 @@ class LocalDraftRenderer:
                 'duration_ms':sum(s.duration_ms for s in sb.scenes),
                 'scene_durations_ms':{s.scene_id:s.duration_ms for s in sb.scenes},
                 'draft_only':True}
-            if req.render_profile in {'social_vertical_v1','social_motion_v2'}:
-                if req.render_profile == 'social_motion_v2' and (
+            if req.render_profile in {'social_vertical_v1','social_motion_v2','social_editorial_v3'}:
+                if req.render_profile in {'social_motion_v2','social_editorial_v3'} and (
                     [s.duration_ms for s in sb.scenes] != [3000,7000,5000] or
                     [c.scene_id for c in sb.clips] != [s.scene_id for s in sb.scenes] or
                     any(c.transition != 'cut' for c in sb.clips)):
@@ -508,9 +508,9 @@ class LocalDraftRenderer:
                         raise StudioError('STUDIO_RENDER_AUDIO_CHANGED',403)
                     _decode_wav(base64.b64encode(audio).decode())
             profile=manifest.get('render_profile','classic')
-            if profile == 'social_motion_v2':
+            if profile in {'social_motion_v2','social_editorial_v3'}:
                 from .studio_reel_motion import encode_social_motion
-                rendered=encode_social_motion(frames,audio)
+                rendered=encode_social_motion(frames,audio,editorial=profile=='social_editorial_v3')
             elif profile == 'social_vertical_v1':
                 from .studio_reel_social import encode_social_vertical
                 rendered=encode_social_vertical(frames,audio)

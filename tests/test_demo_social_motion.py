@@ -21,14 +21,15 @@ def timeline(c,h):
 
 
 @pytest.mark.skipif(not shutil.which('ffmpeg') or not shutil.which('ffprobe'),reason='requires local ffmpeg/ffprobe')
-def test_motion_queue_timeline_rights_and_actual_video(tmp_path,monkeypatch):
+@pytest.mark.parametrize("profile", ["social_motion_v2", "social_editorial_v3"])
+def test_motion_queue_timeline_rights_and_actual_video(tmp_path,monkeypatch,profile):
     monkeypatch.setenv('TAPI_LOCAL_RENDER_ENABLED','1');monkeypatch.setenv('TAPI_ZERO_BILLING_CONFIRMED','1')
     app,c,h=setup(tmp_path)
     try:
         create_storyboard(c,h);story=timeline(c,h)
         assert story['version']==2 and [s['duration_ms'] for s in story['scenes']]==[3000,7000,5000]
         def queue(aid):
-            return c.post('/v1/studio/render-jobs',headers=h,json={'job_id':'job.motion','storyboard_id':'story.one','storyboard_version':2,'frames':[{'scene_id':s['scene_id'],'asset_id':aid} for s in story['scenes']],'render_profile':'social_motion_v2'})
+            return c.post('/v1/studio/render-jobs',headers=h,json={'job_id':'job.motion','storyboard_id':'story.one','storyboard_version':2,'frames':[{'scene_id':s['scene_id'],'asset_id':aid} for s in story['scenes']],'render_profile':profile})
         wrong=asset(c,h);assert queue(wrong).status_code==403
         assert attest(c,h,wrong).status_code==200
         assert queue(wrong).json()['detail']=='STUDIO_SOCIAL_VERTICAL_FRAME_REQUIRED'
@@ -40,7 +41,7 @@ def test_motion_queue_timeline_rights_and_actual_video(tmp_path,monkeypatch):
         r=queue(aid);assert r.status_code==201,r.text
         with app.state.identity_store.engine.connect() as db:
             raw=db.execute(select(studio_render_jobs.c.manifest).where(studio_render_jobs.c.job_id=='job.motion')).scalar_one()
-            assert json.loads(raw)['render_profile']=='social_motion_v2'
+            assert json.loads(raw)['render_profile']==profile
         job=LocalDraftRenderer(app.state.identity_store.engine).process_next('tenantA')
         assert job.status=='succeeded',job
         r=c.get('/v1/studio/render-artifacts/'+job.artifact_id,headers=h);assert r.status_code==200

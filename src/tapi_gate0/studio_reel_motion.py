@@ -10,7 +10,7 @@ from PIL import Image, ImageDraw, ImageFont
 from .studio_e1 import StudioError
 
 
-def encode_social_motion(frames, audio):
+def encode_social_motion(frames, audio, *, editorial=False):
     from .studio_render_e6 import MAX_OUTPUT_BYTES, FFMPEG_TIMEOUT_SECONDS
     if len(frames) != 3 or [d for _,d in frames] != [3000,7000,5000]:
         raise StudioError('STUDIO_MOTION_TIMELINE_REQUIRED',422)
@@ -33,6 +33,9 @@ def encode_social_motion(frames, audio):
                 base=im.convert('RGB')
             card=base.crop((80,1010,1000,1510));card.save(root/'card.png')
             draw=ImageDraw.Draw(base);bg=base.getpixel((20,1010));draw.rectangle((80,1010,999,1509),fill=bg)
+            if editorial:
+                base.crop((80,320,1000,790)).save(root/'title.png')
+                draw.rectangle((80,320,999,789),fill=base.getpixel((20,320)))
             draw.rounded_rectangle((80,1580,1000,1598),radius=9,fill='#A4B7A8')
             draw.rounded_rectangle((80,1580,80+round(920*(i+1)/3),1598),radius=9,fill='#43A878')
             draw.rounded_rectangle((72,1710,580,1772),radius=14,fill='#102D22')
@@ -40,7 +43,11 @@ def encode_social_motion(frames, audio):
             base.save(root/'base.png')
             # The artwork is stationary; only the card translates. All variants use the same easing.
             filt="[0:v][1:v]overlay=x=80:y='1010+54*pow(max(0,1-t/0.40),2)':eval=frame,format=yuv420p,setsar=1[v]"
-            run(['-filter_complex_threads','1','-loop','1','-framerate','30','-i','base.png','-loop','1','-framerate','30','-i','card.png','-filter_complex',filt,'-map','[v]','-an','-c:v','libx264','-threads','2','-preset','veryfast','-crf','23','-r','30','-t',f'{duration/1000:.3f}',f'scene{i}.mp4'])
+            inputs=['-loop','1','-framerate','30','-i','base.png','-loop','1','-framerate','30','-i','card.png']
+            if editorial:
+                inputs+=['-loop','1','-framerate','30','-i','title.png']
+                filt="[0:v][2:v]overlay=x='80-36*pow(max(0,1-t/0.30),2)':y=320:eval=frame[h];[h][1:v]overlay=x=80:y='1010+54*pow(max(0,1-max(0,t-0.16)/0.40),2)':eval=frame,format=yuv420p,setsar=1[v]"
+            run(['-filter_complex_threads','1',*inputs,'-filter_complex',filt,'-map','[v]','-an','-c:v','libx264','-threads','2','-preset','veryfast','-crf','23','-r','30','-t',f'{duration/1000:.3f}',f'scene{i}.mp4'])
         (root/'concat.txt').write_text(''.join(f"file 'scene{i}.mp4'\n" for i in range(3)),encoding='ascii')
         args=['-f','concat','-safe','1','-i','concat.txt']
         if audio is not None:

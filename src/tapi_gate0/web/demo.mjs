@@ -38,20 +38,25 @@ $('session-refresh').onclick=()=>action(()=>sessionResults());$('session-downloa
 function clearVideo(){if($('motion-preview'))$('motion-preview').replaceChildren();if(videoUrl)URL.revokeObjectURL(videoUrl);videoUrl=null;videoKey=null;$('video-preview').removeAttribute('src');$('video-preview').hidden=true;$('download-video').hidden=true;$('video-proof').textContent='';$('video-trace').replaceChildren();$('video-rights').checked=false;}
 function videoStep(text){$('video-trace').append(el('li',text));}
 function base64Blob(blob){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result).split(',')[1]);r.onerror=()=>reject(Error('Falha ao preparar PNG'));r.readAsDataURL(blob);});}
+$('video-profile').onchange=()=>{$('motion-preview').replaceChildren();};
 $('preview-motion').onclick=()=>action(async()=>{
   const host=$('motion-preview');host.replaceChildren();
   if(!doc)throw Error('Abra um carrossel de três páginas.');
-  const frames=doc.pages.map((_,i)=>globalThis.StoneReelMotion.frame(doc,i));
+  const profile=$('video-profile').value;
+  if(!['social_editorial_v3','social_motion_v2'].includes(profile))throw Error('Escolha Editorial v3 ou Motion v2 para a prévia de cenas.');
+  const composer=profile==='social_editorial_v3'?globalThis.StoneReelEditorial:globalThis.StoneReelMotion;
+  const frames=doc.pages.map((_,i)=>composer.frame(doc,i));
   frames.forEach((canvas,i)=>{const v=el('div',undefined,'experiment-variant');v.append(el('strong',['Gancho · 3 s','Orientação · 7 s','CTA · 5 s'][i]),canvas);host.append(v);});
-  message('Prévia Motion derivada da versão atual; sem renderização ou publicação.');
+  message('Prévia derivada da versão atual; sem renderização ou publicação.');
 });
 $('render-video').onclick=()=>action(async()=>{
   if(!videoEnabled||!doc||doc.platform_intent!=='instagram_carousel'||doc.pages.length!==3||!$('video-rights').checked)throw Error('Confirme os direitos locais e selecione o carrossel de três páginas.');
   if(doc.pages.some(p=>p.layers.some(l=>l.kind!=='text')))throw Error('Somente camadas textuais originais nesta demonstração.');
   const renderProfile=$('video-profile').value;
-  const motion=renderProfile==='social_motion_v2';
+  const motion=['social_motion_v2','social_editorial_v3'].includes(renderProfile);
+  const composer=renderProfile==='social_editorial_v3'?globalThis.StoneReelEditorial:globalThis.StoneReelMotion;
   const frameDoc=renderProfile==='social_vertical_v1'?globalThis.StoneExport.verticalDocument(doc):doc;
-  const motionFrames=motion?await Promise.all(doc.pages.map((_,i)=>globalThis.StoneReelMotion.toPng(doc,i))):null;
+  const motionFrames=motion?await Promise.all(doc.pages.map((_,i)=>composer.toPng(doc,i))):null;
   clearVideo();videoKey=doc.document_id+':'+doc.version;
   let {data:story}=await api('/v1/studio/storyboards',{storyboard_id:'demo.story.'+crypto.randomUUID(),source_document_id:doc.document_id,platform_intent:'instagram_reel'});
   if(story.source_document_version!==doc.version||story.scenes.length!==doc.pages.length)throw Error('Versão do storyboard divergente.');
