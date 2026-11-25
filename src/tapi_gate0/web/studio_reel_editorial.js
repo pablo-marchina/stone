@@ -2,7 +2,7 @@
 (function(root){
   'use strict';
   const dark='#12352A', paper='#F7F3E8', lime='#C9F36B', green='#196646', gold='#F4C66A';
-  function frame(doc,index){
+  function frame(doc,index,kinetic=false){
     if(doc.canvas.width!==1080||doc.canvas.height!==1350||doc.platform_intent!=='instagram_carousel'||doc.pages.length!==3||!Number.isInteger(index)||index<0||index>2)throw Error('Editorial requer carrossel textual de três páginas.');
     const p=doc.pages[index], ls=new Map(p.layers.map(l=>[l.id,l]));
     if(p.layers.some(l=>l.kind!=='text')||!['headline','body','cta'].every(id=>ls.has(id)))throw Error('Camadas de conteúdo obrigatórias.');
@@ -22,7 +22,13 @@
     line(80,270,1000,270,accent,3);
     // Title zone (80,320,1000,790): flat background, isolated for the encoder.
     write(['COMECE AQUI','UMA AÇÃO POR VEZ','SEU PRÓXIMO PASSO'][index],80,330,920,60,40,30,accent);
-    write(text('headline'),80,430,920,345,132,64,fg);
+    if(kinetic){
+      const words=text('headline').trim().split(/\s+/);
+      if(words.length<2)throw Error('Kinetic requer título com pelo menos duas palavras.');
+      const split=Math.ceil(words.length/2), lead=words.slice(0,split).join(' '), hero=words.slice(split).join(' ');
+      write(lead,80,414,920,132,106,44,fg);
+      write(hero,80,565,920,205,144,52,accent);
+    }else write(text('headline'),80,430,920,345,132,64,fg);
     // Hand-drawn vector motifs occupy a separate band; no external images or data claims.
     if(index===0){
       box(80,810,920,180,34,'#215544');
@@ -45,6 +51,7 @@
     write(index===2?text('cta'):text('body'),130,1190,820,270,index===2?86:64,36,cardInk,index===2?700:400);
     return canvas;
   }
-  async function toPng(doc,index){const canvas=frame(doc,index);return new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(Error('PNG editorial indisponível')),'image/png'));}
+  async function toPng(doc,index,kinetic=false){const canvas=frame(doc,index,kinetic);return new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(Error('PNG editorial indisponível')),'image/png'));}
   root.StoneReelEditorial={frame,toPng};
+  root.StoneReelKinetic={frame:(doc,index)=>frame(doc,index,true),toPng:(doc,index)=>toPng(doc,index,true)};
 })(globalThis);

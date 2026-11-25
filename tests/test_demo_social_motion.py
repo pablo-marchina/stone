@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw
 import pytest
 from sqlalchemy import select
 from tapi_gate0.studio_render_e6 import LocalDraftRenderer, studio_render_jobs
-from test_studio_e6 import setup, create_storyboard, asset, attest
+from test_studio_e6 import setup, create_storyboard, asset, attest, wav, expiry
 
 
 def timeline(c,h):
@@ -21,15 +21,20 @@ def timeline(c,h):
 
 
 @pytest.mark.skipif(not shutil.which('ffmpeg') or not shutil.which('ffprobe'),reason='requires local ffmpeg/ffprobe')
-@pytest.mark.parametrize("profile", ["social_motion_v2", "social_editorial_v3"])
+@pytest.mark.parametrize("profile", ["social_motion_v2", "social_editorial_v3", "social_kinetic_v4"])
 def test_motion_queue_timeline_rights_and_actual_video(tmp_path,monkeypatch,profile):
     monkeypatch.setenv('TAPI_LOCAL_RENDER_ENABLED','1');monkeypatch.setenv('TAPI_ZERO_BILLING_CONFIRMED','1')
     app,c,h=setup(tmp_path)
     try:
         create_storyboard(c,h);story=timeline(c,h)
         assert story['version']==2 and [s['duration_ms'] for s in story['scenes']]==[3000,7000,5000]
+        audio_id=None
+        if profile=='social_kinetic_v4':
+            uploaded=c.post('/v1/studio/audio/wav',headers=h,json={'data_base64':wav(),'evidence_reference':'original-local-test-audio','expires_at':expiry(),'rights_attested':True})
+            assert uploaded.status_code==201,uploaded.text
+            audio_id=uploaded.json()['asset_id']
         def queue(aid):
-            return c.post('/v1/studio/render-jobs',headers=h,json={'job_id':'job.motion','storyboard_id':'story.one','storyboard_version':2,'frames':[{'scene_id':s['scene_id'],'asset_id':aid} for s in story['scenes']],'render_profile':profile})
+            return c.post('/v1/studio/render-jobs',headers=h,json={'job_id':'job.motion','storyboard_id':'story.one','storyboard_version':2,'frames':[{'scene_id':s['scene_id'],'asset_id':aid} for s in story['scenes']],'render_profile':profile,'audio_asset_id':audio_id})
         wrong=asset(c,h);assert queue(wrong).status_code==403
         assert attest(c,h,wrong).status_code==200
         assert queue(wrong).json()['detail']=='STUDIO_SOCIAL_VERTICAL_FRAME_REQUIRED'
@@ -47,8 +52,9 @@ def test_motion_queue_timeline_rights_and_actual_video(tmp_path,monkeypatch,prof
         r=c.get('/v1/studio/render-artifacts/'+job.artifact_id,headers=h);assert r.status_code==200
         assert sha256(r.content).hexdigest()==job.sha256
         path=tmp_path/'motion.mp4';path.write_bytes(r.content)
-        data=json.loads(subprocess.check_output(['ffprobe','-v','error','-show_entries','stream=width,height,r_frame_rate,nb_frames:format=duration','-of','json',str(path)]))
-        assert data['streams']==[{'width':1080,'height':1920,'r_frame_rate':'30/1','nb_frames':'450'}]
+        data=json.loads(subprocess.check_output(['ffprobe','-v','error','-show_entries','stream=codec_type,width,height,r_frame_rate,nb_frames:format=duration','-of','json',str(path)]))
+        assert [s for s in data['streams'] if s['codec_type']=='video']==[{'codec_type':'video','width':1080,'height':1920,'r_frame_rate':'30/1','nb_frames':'450'}]
+        assert any(s['codec_type']=='audio' for s in data['streams'])==(audio_id is not None)
         assert abs(float(data['format']['duration'])-15)<0.04
     finally:
         c.__exit__(None,None,None);app.state.identity_store.engine.dispose()

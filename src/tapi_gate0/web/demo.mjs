@@ -35,16 +35,28 @@ $('search-form').onsubmit=e=>{e.preventDefault();void action(async()=>{const {da
 async function sessionResults(download=false){const {data:r}=await api('/v1/demo/session-results');const labels={eligible_posts:'Publicações',profiles:'Perfis',top_posts:'Top 10%',completed_traces:'Execuções concluídas',checkpoint_events:'Checkpoints',editable_drafts:'Rascunhos',document_versions:'Versões',generated_draft_events:'Registros de proveniência',storyboards:'Storyboards',rendered_videos:'Vídeos renderizados'};const box=$('session-counters');box.replaceChildren();for(const [key,label] of Object.entries(labels))box.append(kpi(label,r.synthetic_counters[key]));box.append(kpi('Pares editoriais exploratórios',r.editorial_experiment_pairs));await loadSavedLibrary();if(download){const blob=new Blob([JSON.stringify(r,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=el('a');a.href=url;a.download='stone-resultados-demonstracao.json';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}}
 $('session-refresh').onclick=()=>action(()=>sessionResults());$('session-download').onclick=()=>action(()=>sessionResults(true));
 
-function clearVideo(){if($('motion-preview'))$('motion-preview').replaceChildren();if(videoUrl)URL.revokeObjectURL(videoUrl);videoUrl=null;videoKey=null;$('video-preview').removeAttribute('src');$('video-preview').hidden=true;$('download-video').hidden=true;$('video-proof').textContent='';$('video-trace').replaceChildren();$('video-rights').checked=false;}
+function clearVideo(){if($('narration-wav'))$('narration-wav').value='';if($('narration-rights'))$('narration-rights').checked=false;if($('motion-preview'))$('motion-preview').replaceChildren();if(videoUrl)URL.revokeObjectURL(videoUrl);videoUrl=null;videoKey=null;$('video-preview').removeAttribute('src');$('video-preview').hidden=true;$('download-video').hidden=true;$('video-proof').textContent='';$('video-trace').replaceChildren();$('video-rights').checked=false;}
 function videoStep(text){$('video-trace').append(el('li',text));}
 function base64Blob(blob){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result).split(',')[1]);r.onerror=()=>reject(Error('Falha ao preparar PNG'));r.readAsDataURL(blob);});}
-$('video-profile').onchange=()=>{$('motion-preview').replaceChildren();};
+function narrationPacket(d){
+  if(!d||d.platform_intent!=='instagram_carousel'||d.pages.length!==3||d.pages.some(p=>p.layers.some(l=>l.kind!=='text')))throw Error('Abra um carrossel textual de três páginas.');
+  const keys=['headline','body','cta'];
+  const scenes=d.pages.map((p,i)=>{const value=p.layers.find(l=>l.id===keys[i])?.text;if(!value||value.length>320)throw Error('Texto de narração ausente ou longo demais.');return value.replace(/\s+/g,' ').trim();});
+  return {schema_version:'tapi-demo-reel-narration.v1',document_id:d.document_id,document_version:d.version,scenes};
+}
+function reelComposer(profile){return profile==='social_kinetic_v4'?globalThis.StoneReelKinetic:profile==='social_editorial_v3'?globalThis.StoneReelEditorial:globalThis.StoneReelMotion;}
+$('narration-wav').onchange=()=>{$('narration-rights').checked=false;};
+$('video-profile').onchange=()=>{$('motion-preview').replaceChildren();$('narration-panel').hidden=$('video-profile').value!=='social_kinetic_v4';$('narration-wav').value='';$('narration-rights').checked=false;};
+$('download-narration-script').onclick=()=>action(async()=>{
+  const packet=narrationPacket(doc),blob=new Blob([JSON.stringify(packet,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=el('a');
+  a.href=url;a.download='stone-roteiro-narracao.json';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+});
 $('preview-motion').onclick=()=>action(async()=>{
   const host=$('motion-preview');host.replaceChildren();
   if(!doc)throw Error('Abra um carrossel de três páginas.');
   const profile=$('video-profile').value;
-  if(!['social_editorial_v3','social_motion_v2'].includes(profile))throw Error('Escolha Editorial v3 ou Motion v2 para a prévia de cenas.');
-  const composer=profile==='social_editorial_v3'?globalThis.StoneReelEditorial:globalThis.StoneReelMotion;
+  if(!['social_kinetic_v4','social_editorial_v3','social_motion_v2'].includes(profile))throw Error('Escolha Kinetic v4, Editorial v3 ou Motion v2 para a prévia de cenas.');
+  const composer=reelComposer(profile);
   const frames=doc.pages.map((_,i)=>composer.frame(doc,i));
   frames.forEach((canvas,i)=>{const v=el('div',undefined,'experiment-variant');v.append(el('strong',['Gancho · 3 s','Orientação · 7 s','CTA · 5 s'][i]),canvas);host.append(v);});
   message('Prévia derivada da versão atual; sem renderização ou publicação.');
@@ -53,8 +65,12 @@ $('render-video').onclick=()=>action(async()=>{
   if(!videoEnabled||!doc||doc.platform_intent!=='instagram_carousel'||doc.pages.length!==3||!$('video-rights').checked)throw Error('Confirme os direitos locais e selecione o carrossel de três páginas.');
   if(doc.pages.some(p=>p.layers.some(l=>l.kind!=='text')))throw Error('Somente camadas textuais originais nesta demonstração.');
   const renderProfile=$('video-profile').value;
-  const motion=['social_motion_v2','social_editorial_v3'].includes(renderProfile);
-  const composer=renderProfile==='social_editorial_v3'?globalThis.StoneReelEditorial:globalThis.StoneReelMotion;
+  const motion=['social_motion_v2','social_editorial_v3','social_kinetic_v4'].includes(renderProfile);
+  const kinetic=renderProfile==='social_kinetic_v4';
+  const narration=kinetic?narrationPacket(doc):null;
+  const wav=kinetic?$('narration-wav').files[0]:null;
+  if(wav&&(!$('narration-rights').checked||wav.size>2097152||wav.size<44))throw Error('Confirme direitos e selecione WAV de até 2 MiB.');
+  const composer=reelComposer(renderProfile);
   const frameDoc=renderProfile==='social_vertical_v1'?globalThis.StoneExport.verticalDocument(doc):doc;
   const motionFrames=motion?await Promise.all(doc.pages.map((_,i)=>composer.toPng(doc,i))):null;
   clearVideo();videoKey=doc.document_id+':'+doc.version;
@@ -62,7 +78,7 @@ $('render-video').onclick=()=>action(async()=>{
   if(story.source_document_version!==doc.version||story.scenes.length!==doc.pages.length)throw Error('Versão do storyboard divergente.');
   if(motion){
     const times=[3000,7000,5000];let elapsed=0;
-    const scenes=story.scenes.map((s,i)=>({...s,duration_ms:times[i],overlays:[]}));
+    const scenes=story.scenes.map((s,i)=>({...s,duration_ms:times[i],narration:narration?narration.scenes[i]:s.narration,overlays:[]}));
     const clips=scenes.map(s=>{const c={scene_id:s.scene_id,start_ms:elapsed,duration_ms:s.duration_ms,transition:'cut',transition_ms:0};elapsed+=s.duration_ms;return c;});
     const updated=await api('/v1/studio/storyboards/'+encodeURIComponent(story.storyboard_id)+'/timeline',{expected_version:story.version,scenes,clips});
     story=updated.data;
@@ -78,7 +94,13 @@ $('render-video').onclick=()=>action(async()=>{
     frames.push({scene_id:story.scenes[i].scene_id,asset_id:a.asset_id});
   }
   videoStep('3 quadros · '+(renderProfile!=='classic'?'1080 × 1920':'clássico')+' · hashes e atestações locais');
-  const {data:job}=await api('/v1/studio/render-jobs',{job_id:'demo.render.'+crypto.randomUUID(),storyboard_id:story.storyboard_id,storyboard_version:story.version,frames,render_profile:renderProfile});
+  let audioId=null;
+  if(wav){
+    const {data:a}=await api('/v1/studio/audio/wav',{data_base64:await base64Blob(wav),evidence_reference:'demo-local-audio:'+doc.document_id+':v'+doc.version,expires_at:new Date(Date.now()+3600000).toISOString(),rights_attested:true});
+    if(a.sha256!==await globalThis.StoneExport.sha256(wav)||a.duration_ms!==15000)throw Error('O áudio deve ser um WAV de exatamente 15 s, com hash verificado.');
+    audioId=a.asset_id;videoStep('Áudio local atestado · SHA-256 verificado');
+  }
+  const {data:job}=await api('/v1/studio/render-jobs',{job_id:'demo.render.'+crypto.randomUUID(),storyboard_id:story.storyboard_id,storyboard_version:story.version,frames,render_profile:renderProfile,audio_asset_id:audioId});
   videoStep('Job '+job.status+' · FFmpeg local');message('Renderizando vídeo de 15 segundos…');
   const {data:result}=await api('/v1/demo/render-next',{});
   if(result.job_id!==job.job_id||result.status!=='succeeded'||!result.artifact_id)throw Error('Render não concluído: '+(result.error_code||result.status));
@@ -86,7 +108,7 @@ $('render-video').onclick=()=>action(async()=>{
   if(!response.ok)throw Error('Download do vídeo recusado.');
   const blob=await response.blob();if(await globalThis.StoneExport.sha256(blob)!==result.sha256)throw Error('Hash do MP4 divergente.');
   videoUrl=URL.createObjectURL(blob);$('video-preview').src=videoUrl;$('video-preview').hidden=false;$('download-video').hidden=false;
-  videoStep('MP4 persistido · SHA-256 verificado');$('video-proof').textContent='15 s · '+(renderProfile!=='classic'?'1080 × 1920 · 30 FPS · ':'360 × 640 · 8 FPS · ')+'sem áudio · SHA-256 '+result.sha256;
+  videoStep('MP4 persistido · SHA-256 verificado');$('video-proof').textContent='15 s · '+(renderProfile!=='classic'?'1080 × 1920 · 30 FPS · ':'360 × 640 · 8 FPS · ')+(audioId?'áudio local atestado':'sem áudio')+' · SHA-256 '+result.sha256;
   await sessionResults();message('Vídeo de rascunho renderizado e verificado.');
 });
 $('download-video').onclick=()=>{if(videoUrl){const a=el('a');a.href=videoUrl;a.download='stone-RASCUNHO.mp4';document.body.append(a);a.click();a.remove();}};
