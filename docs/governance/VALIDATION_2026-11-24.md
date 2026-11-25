@@ -8,7 +8,7 @@ Escopo exclusivo de organização, sem alteração normativa ou aceitação de s
 - Reconstrução documental descartável: 32 arquivos do ZIP com os hashes originais conferidos, validador existente com blob `4575aca3f4525501eb014fb436fd8c1084af4341`; manifesto de teste com os mesmos pares caminho/hash, páginas de entrada representadas por fixtures de presença. Não é checkout integral.
 - `python scripts/documentation_catalog.py check`: PASS em reconstrução (625 nós, 7181 arestas com proveniência, 16 referências de candidatos de contrato sem correspondência nominal exata na lista de schemas).
 - `python -m pytest -q tests/test_documentation_catalog.py`: 5 PASS em 0.72s na reconstrução. Blobs locais testados: script `4710e2f909038a3a8b9814503f5ce7acd4f2bff6`, teste `beac059ac16088bfce3654c73f99386cf02a3ed0`.
-- Primeira versão: 73 links relativos em Markdown alterado conferidos contra a árvore Git, zero destinos ausentes; a versão final requer a mesma conferência.
+- Versão ampliada: 76 links relativos em Markdown alterado conferidos contra a árvore Git, zero destinos ausentes; os dois blobs de código/testes acima e os 32 blobs normativos conferem com os hashes remotos. Diff de 15 caminhos, nenhuma remoção.
 - Não executados: suíte de produto, CI local integral, operação, verificação de links externos, auditoria semântica de todos os arquivos ou validação científica.
 
 ## Lacunas e limites
